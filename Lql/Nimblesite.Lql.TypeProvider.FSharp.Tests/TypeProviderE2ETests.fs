@@ -88,10 +88,14 @@ module TestFixtures =
         use reader = cmd.ExecuteReader()
         let results = ResizeArray<Map<string, obj>>()
         while reader.Read() do
-            let row =
+            let row : Map<string, obj> =
                 [| for i in 0 .. reader.FieldCount - 1 ->
-                    let name = reader.GetName(i)
-                    let value = if reader.IsDBNull(i) then box DBNull.Value else reader.GetValue(i)
+                    let name : string = reader.GetName(i) |> string
+                    let value : obj =
+                        if reader.IsDBNull(i) then
+                            DBNull.Value :> obj
+                        else
+                            reader.GetValue(i) |> Unchecked.nonNull
                     (name, value) |]
                 |> Map.ofArray
             results.Add(row)

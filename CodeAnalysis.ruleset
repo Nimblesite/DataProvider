@@ -4,7 +4,6 @@
     <!-- IDE Analyzers = IDE0042 etc-->
     <Rules AnalyzerId="Microsoft.CodeAnalysis.CSharp.CodeStyle" RuleNamespace="Microsoft.CodeAnalysis.CSharp.CodeStyle">
         <!-- Remove unused parameter -->
-        <Rule Id="EXHAUSTION001" Action="Error" />
         <Rule Id="IDE0290" Action="None" />
         <Rule Id="CA1031" Action="None" />
         <Rule Id="CA1016" Action="None" />
@@ -21,6 +20,8 @@
         <!-- Mark assemblies with assembly version -->
         <Rule Id="CA1017" Action="None" />
         <Rule Id="CA1848" Action="None" />
+
+        <Rule Id="EXHAUSTION001" Action="Error" />
         <Rule Id="MSB3243" Action="Error" />
         <Rule Id="NU1603" Action="Error" />
         <Rule Id="IDE0037" Action="Error" />
