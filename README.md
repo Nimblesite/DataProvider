@@ -45,6 +45,8 @@ See the [installation guide](./Website/src/docs/installation.md) for the full pa
 
 ## Quick Example
 
+![alt text](lql.png)
+
 Write an LQL query in `GetActiveCustomers.lql`:
 
 ```

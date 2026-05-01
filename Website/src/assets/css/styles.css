@@ -594,6 +594,15 @@ td code {
   font-size: var(--text-sm);
 }
 
+/* Demo video */
+.demo-video {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  margin-bottom: var(--space-6);
+  background: var(--bg-secondary);
+}
+
 /* Breadcrumb */
 .breadcrumb {
   font-size: var(--text-sm);

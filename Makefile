@@ -86,6 +86,11 @@ coverage:
 	@echo "==> Coverage report..."
 	$(MAKE) _coverage
 
+## vsix: Build Rust LSP (release), compile & package the VS Code extension (.vsix), and install it
+vsix:
+	@echo "==> Building and packaging VSIX..."
+	bash Lql/lql-lsp-rust/build-vsix.sh
+
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
 	@echo "==> Setting up development environment..."
@@ -375,3 +380,4 @@ help:
 	@echo "  ci             - lint + test + build (full CI)"
 	@echo "  coverage       - Generate and open HTML coverage report"
 	@echo "  setup          - Post-create dev environment setup"
+	@echo "  vsix           - Build LSP + compile & package VS Code extension (.vsix)"

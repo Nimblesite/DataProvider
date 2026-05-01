@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "node scripts/copy-readmes.cjs && node scripts/generate-api-docs.cjs && eleventy --serve",
     "build": "node scripts/copy-readmes.cjs && node scripts/generate-api-docs.cjs && eleventy",
-    "build:site": "node scripts/copy-readmes.cjs && node scripts/generate-api-docs.cjs && eleventy",
     "generate-api": "node scripts/generate-api-docs.cjs",
     "docfx": "cd docfx && dotnet docfx metadata docfx.json",
     "test:e2e": "playwright test",
