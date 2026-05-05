@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// <summary>
 /// Inspects PostgreSQL database schema and returns a SchemaDefinition.
 /// </summary>
-internal static class PostgresSchemaInspector
+public static class PostgresSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a PostgreSQL database.

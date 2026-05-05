@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.SQLite;
 /// <summary>
 /// Inspects SQLite database schema and returns a SchemaDefinition.
 /// </summary>
-internal static class SqliteSchemaInspector
+public static class SqliteSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a SQLite database.
