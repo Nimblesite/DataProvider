@@ -14,7 +14,7 @@
       "include": "[Nimblesite.Lql.Core]*,[Nimblesite.Lql.Postgres]*,[Nimblesite.Lql.SqlServer]*,[Nimblesite.Lql.SQLite]*"
     },
     "Lql/Nimblesite.Lql.TypeProvider.FSharp": {
-      "threshold": 40,
+      "threshold": 39,
       "include": "[Nimblesite.Lql.TypeProvider.FSharp]*,[Nimblesite.Lql.Core]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Migration/Nimblesite.DataProvider.Migration.Core": {
