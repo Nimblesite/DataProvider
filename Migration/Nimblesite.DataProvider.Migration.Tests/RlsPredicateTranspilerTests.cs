@@ -206,6 +206,61 @@ public sealed class RlsPredicateTranspilerTests
         Assert.Contains("\"OwnerName\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("\"AND\"", sql, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Translate_NapShape_LqlWithCustomFnCalls_PassesThroughUnquoted()
+    {
+        // NAP's exact pattern: tenant_id = app_tenant_id() AND is_member(app_user_id(), app_tenant_id())
+        // Required: column refs quoted, fn names + fn calls emitted verbatim, AND/and lowercase OK.
+        var result = RlsPredicateTranspiler.Translate(
+            "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
+            RlsPlatform.Postgres,
+            "tenant_member"
+        );
+
+        Assert.True(
+            result is TranspileOk,
+            result is TranspileError e ? e.Value.Message : "expected Ok"
+        );
+        var sql = ((TranspileOk)result).Value;
+
+        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
+        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
+        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
+        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"app_tenant_id\"", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"is_member\"", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"app_user_id\"", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Translate_NapShape_LiteralTrue_PassesThrough()
+    {
+        // admin_all policies use literal `true` predicate.
+        var result = RlsPredicateTranspiler.Translate("true", RlsPlatform.Postgres, "admin_all");
+        Assert.True(result is TranspileOk);
+        Assert.Equal("true", ((TranspileOk)result).Value);
+    }
+
+    [Fact]
+    public void Translate_OrCombinationWithFnCalls_PassesThrough()
+    {
+        // tenant_members_self_or_owner shape:
+        // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner(app_user_id(), app_tenant_id()))
+        var result = RlsPredicateTranspiler.Translate(
+            "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner(app_user_id(), app_tenant_id()))",
+            RlsPlatform.Postgres,
+            "self_or_owner"
+        );
+
+        Assert.True(result is TranspileOk);
+        var sql = ((TranspileOk)result).Value;
+        Assert.Contains("\"user_id\"", sql, StringComparison.Ordinal);
+        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
+        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
+        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
+        Assert.Contains("is_owner(", sql, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>

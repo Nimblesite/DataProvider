@@ -114,17 +114,17 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
                         Name = $"{tableName}_member",
                         Operations = [RlsOperation.All],
                         Roles = ["nap_app_user"],
-                        // issue #36 — raw SQL escape hatch for SECURITY DEFINER fn
-                        UsingSql = "tenant_id = app_tenant_id()",
-                        WithCheckSql = "tenant_id = app_tenant_id()",
+                        // LQL form — fn calls (app_tenant_id) pass through verbatim.
+                        UsingLql = "tenant_id = app_tenant_id()",
+                        WithCheckLql = "tenant_id = app_tenant_id()",
                     },
                     new RlsPolicyDefinition
                     {
                         Name = $"{tableName}_admin_all",
                         Operations = [RlsOperation.All],
                         Roles = ["nap_app_admin"],
-                        UsingSql = "true",
-                        WithCheckSql = "true",
+                        UsingLql = "true",
+                        WithCheckLql = "true",
                     },
                 ],
             },
@@ -448,8 +448,8 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
                                 Name = "tenant_members_self_or_owner",
                                 Operations = [RlsOperation.Select],
                                 Roles = ["nap_app_user"],
-                                UsingSql =
-                                    "user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner)",
+                                UsingLql =
+                                    "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner)",
                             },
                         ],
                     },
