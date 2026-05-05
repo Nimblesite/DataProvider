@@ -13,7 +13,7 @@ public sealed record MigrationResult(bool Success, int TablesCreated, IReadOnlyL
 /// <summary>
 /// PostgreSQL DDL generator for schema operations.
 /// </summary>
-public static class PostgresDdlGenerator
+public static partial class PostgresDdlGenerator
 {
     /// <summary>
     /// Migrate a schema definition to PostgreSQL, creating all tables.
@@ -105,6 +105,9 @@ public static class PostgresDdlGenerator
             AddForeignKeyOperation op => GenerateAddForeignKey(op),
             AddCheckConstraintOperation op => GenerateAddCheckConstraint(op),
             AddUniqueConstraintOperation op => GenerateAddUniqueConstraint(op),
+            CreateOrAlterRoleOperation op => GenerateCreateOrAlterRole(op),
+            CreateOrReplaceFunctionOperation op => GenerateCreateOrReplaceFunction(op),
+            GrantPrivilegesOperation op => GenerateGrantPrivileges(op.Grant),
             DropTableOperation op =>
                 $"DROP TABLE IF EXISTS \"{op.Schema}\".\"{op.TableName}\" CASCADE",
             DropColumnOperation op =>
@@ -112,6 +115,8 @@ public static class PostgresDdlGenerator
             DropIndexOperation op => $"DROP INDEX IF EXISTS \"{op.Schema}\".\"{op.IndexName}\"",
             DropForeignKeyOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP CONSTRAINT \"{op.ConstraintName}\"",
+            DropFunctionOperation op => GenerateDropFunction(op),
+            RevokePrivilegesOperation op => GenerateRevokePrivileges(op.Grant),
             EnableRlsOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ENABLE ROW LEVEL SECURITY",
             DisableRlsOperation op =>

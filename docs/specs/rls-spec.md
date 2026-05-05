@@ -216,6 +216,46 @@ CREATE POLICY "group_read_access" ON "public"."Documents"
 
 Generation order per table: `EnableRlsOperation` always precedes `CreateRlsPolicyOperation`.
 
+### 7.1 Declarative Support Objects [RLS-PG-SUPPORT-DDL]
+
+PostgreSQL RLS schemas may declare helper roles, SQL functions, and grants at the top level of `schema.yaml`. This removes the need for application-side bootstrap SQL.
+
+```yaml
+roles:
+  - name: app_user
+    grantTo: [postgres]
+  - name: app_admin
+    grantTo: [postgres]
+functions:
+  - name: app_tenant_id
+    returns: uuid
+    body: SELECT NULLIF(current_setting('rls.tenant_id', true), '')::uuid
+    executeRoles: [app_user, app_admin]
+  - name: is_member
+    arguments:
+      - name: p_tenant_id
+        type: uuid
+      - name: p_user_id
+        type: uuid
+    returns: boolean
+    securityDefiner: true
+    body: |
+      SELECT EXISTS (
+        SELECT 1 FROM public.tenant_members tm
+        WHERE tm.tenant_id = p_tenant_id AND tm.user_id = p_user_id
+      )
+    executeRoles: [app_user, app_admin]
+grants:
+  - target: Schema
+    privileges: [USAGE]
+    roles: [app_user, app_admin]
+  - target: AllTablesInSchema
+    privileges: [SELECT, INSERT, UPDATE, DELETE]
+    roles: [app_user, app_admin]
+```
+
+Operation order is schema-safe: roles first, table DDL second, support functions third, table/schema grants fourth, RLS enable/policy DDL last. Function drops and grant revokes are destructive operations and require the same explicit destructive opt-in as table drops. Role drift is reconciled non-destructively: roles are created if missing, `NOLOGIN`/`NOBYPASSRLS` are reasserted by default, and declared membership grants are applied.
+
 ---
 
 ## 8. SQL Server Implementation [RLS-MSSQL]

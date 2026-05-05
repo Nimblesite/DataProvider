@@ -10,6 +10,126 @@ public sealed record SchemaDefinition
 
     /// <summary>Tables in this schema.</summary>
     public IReadOnlyList<TableDefinition> Tables { get; init; } = [];
+
+    /// <summary>
+    /// PostgreSQL roles managed by this schema. Implements [RLS-PG-SUPPORT-DDL].
+    /// </summary>
+    public IReadOnlyList<PostgresRoleDefinition> Roles { get; init; } = [];
+
+    /// <summary>
+    /// PostgreSQL helper functions managed by this schema. Implements [RLS-PG-SUPPORT-DDL].
+    /// </summary>
+    public IReadOnlyList<PostgresFunctionDefinition> Functions { get; init; } = [];
+
+    /// <summary>
+    /// PostgreSQL grants managed by this schema. Implements [RLS-PG-SUPPORT-DDL].
+    /// </summary>
+    public IReadOnlyList<PostgresGrantDefinition> Grants { get; init; } = [];
+}
+
+/// <summary>
+/// PostgreSQL role definition for migration-managed application roles.
+/// Implements [RLS-PG-SUPPORT-DDL].
+/// </summary>
+public sealed record PostgresRoleDefinition
+{
+    /// <summary>Role name.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Whether the role can log in directly.</summary>
+    public bool Login { get; init; }
+
+    /// <summary>Whether the role can bypass row-level security.</summary>
+    public bool BypassRls { get; init; }
+
+    /// <summary>Roles or users that receive membership in this role.</summary>
+    public IReadOnlyList<string> GrantTo { get; init; } = [];
+}
+
+/// <summary>
+/// PostgreSQL SQL-language function definition for RLS helper functions.
+/// Implements [RLS-PG-SUPPORT-DDL].
+/// </summary>
+public sealed record PostgresFunctionDefinition
+{
+    /// <summary>Function schema.</summary>
+    public string Schema { get; init; } = "public";
+
+    /// <summary>Function name.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Function arguments in declaration order.</summary>
+    public IReadOnlyList<PostgresFunctionArgumentDefinition> Arguments { get; init; } = [];
+
+    /// <summary>PostgreSQL return type, such as <c>uuid</c> or <c>boolean</c>.</summary>
+    public string Returns { get; init; } = "void";
+
+    /// <summary>Function language. NAP RLS helpers use <c>sql</c>.</summary>
+    public string Language { get; init; } = "sql";
+
+    /// <summary>PostgreSQL volatility keyword: <c>volatile</c>, <c>stable</c>, or <c>immutable</c>.</summary>
+    public string Volatility { get; init; } = "stable";
+
+    /// <summary>Whether to emit <c>SECURITY DEFINER</c>.</summary>
+    public bool SecurityDefiner { get; init; }
+
+    /// <summary>Function body placed between PostgreSQL dollar quotes.</summary>
+    public string Body { get; init; } = string.Empty;
+
+    /// <summary>Roles granted EXECUTE on this function.</summary>
+    public IReadOnlyList<string> ExecuteRoles { get; init; } = [];
+
+    /// <summary>Whether PUBLIC execute must be revoked.</summary>
+    public bool RevokePublicExecute { get; init; } = true;
+}
+
+/// <summary>
+/// PostgreSQL function argument definition.
+/// </summary>
+public sealed record PostgresFunctionArgumentDefinition
+{
+    /// <summary>Argument name. Optional for inspected function identities.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>PostgreSQL argument type.</summary>
+    public string Type { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// PostgreSQL grant definition for schema and table privileges.
+/// Implements [RLS-PG-SUPPORT-DDL].
+/// </summary>
+public sealed record PostgresGrantDefinition
+{
+    /// <summary>Target schema.</summary>
+    public string Schema { get; init; } = "public";
+
+    /// <summary>Grant target kind.</summary>
+    public PostgresGrantTarget Target { get; init; } = PostgresGrantTarget.Table;
+
+    /// <summary>Table name when <see cref="Target" /> is <see cref="PostgresGrantTarget.Table" />.</summary>
+    public string? ObjectName { get; init; }
+
+    /// <summary>Privileges to grant, such as <c>USAGE</c>, <c>SELECT</c>, or <c>INSERT</c>.</summary>
+    public IReadOnlyList<string> Privileges { get; init; } = [];
+
+    /// <summary>Roles receiving the privileges.</summary>
+    public IReadOnlyList<string> Roles { get; init; } = [];
+}
+
+/// <summary>
+/// PostgreSQL grant target kind.
+/// </summary>
+public enum PostgresGrantTarget
+{
+    /// <summary>Target is a schema.</summary>
+    Schema,
+
+    /// <summary>Target is one table.</summary>
+    Table,
+
+    /// <summary>Target is every current table in the schema.</summary>
+    AllTablesInSchema,
 }
 
 /// <summary>

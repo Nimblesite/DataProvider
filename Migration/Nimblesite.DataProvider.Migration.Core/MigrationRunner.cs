@@ -111,6 +111,8 @@ public static class MigrationRunner
                 or DropColumnOperation
                 or DropIndexOperation
                 or DropForeignKeyOperation
+                or DropFunctionOperation
+                or RevokePrivilegesOperation
                 or DropRlsPolicyOperation
                 or DisableRlsOperation
                 or DisableForceRlsOperation;

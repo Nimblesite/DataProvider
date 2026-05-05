@@ -18,6 +18,7 @@ public static class SchemaYamlSerializer
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
         .WithTypeConverter(new RlsOperationYamlConverter())
+        .WithTypeConverter(new PostgresGrantTargetYamlConverter())
         .ConfigureDefaultValuesHandling(
             DefaultValuesHandling.OmitDefaults
                 | DefaultValuesHandling.OmitNull
@@ -34,7 +35,18 @@ public static class SchemaYamlSerializer
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
         .WithTypeConverter(new RlsOperationYamlConverter())
+        .WithTypeConverter(new PostgresGrantTargetYamlConverter())
         .WithTypeMapping<IReadOnlyList<TableDefinition>, List<TableDefinition>>()
+        .WithTypeMapping<IReadOnlyList<PostgresRoleDefinition>, List<PostgresRoleDefinition>>()
+        .WithTypeMapping<
+            IReadOnlyList<PostgresFunctionDefinition>,
+            List<PostgresFunctionDefinition>
+        >()
+        .WithTypeMapping<
+            IReadOnlyList<PostgresFunctionArgumentDefinition>,
+            List<PostgresFunctionArgumentDefinition>
+        >()
+        .WithTypeMapping<IReadOnlyList<PostgresGrantDefinition>, List<PostgresGrantDefinition>>()
         .WithTypeMapping<IReadOnlyList<ColumnDefinition>, List<ColumnDefinition>>()
         .WithTypeMapping<IReadOnlyList<IndexDefinition>, List<IndexDefinition>>()
         .WithTypeMapping<IReadOnlyList<ForeignKeyDefinition>, List<ForeignKeyDefinition>>()
@@ -315,6 +327,37 @@ internal sealed class RlsOperationYamlConverter : IYamlTypeConverter
 }
 
 /// <summary>
+/// YAML type converter for the <see cref="PostgresGrantTarget"/> enum.
+/// Implements [RLS-PG-SUPPORT-DDL].
+/// </summary>
+internal sealed class PostgresGrantTargetYamlConverter : IYamlTypeConverter
+{
+    /// <inheritdoc />
+    public bool Accepts(Type type) => type == typeof(PostgresGrantTarget);
+
+    /// <inheritdoc />
+    public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
+    {
+        var scalar = parser.Consume<Scalar>();
+        return scalar.Value.ToUpperInvariant() switch
+        {
+            "SCHEMA" => PostgresGrantTarget.Schema,
+            "TABLE" => PostgresGrantTarget.Table,
+            "ALLTABLESINSCHEMA" or "ALL_TABLES_IN_SCHEMA" or "ALL TABLES IN SCHEMA" =>
+                PostgresGrantTarget.AllTablesInSchema,
+            _ => PostgresGrantTarget.Table,
+        };
+    }
+
+    /// <inheritdoc />
+    public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
+    {
+        var target = (PostgresGrantTarget)(value ?? PostgresGrantTarget.Table);
+        emitter.Emit(new Scalar(target.ToString()));
+    }
+}
+
+/// <summary>
 /// Filters out properties that have their semantic default values.
 /// This handles cases where the property initializer differs from the type default.
 /// </summary>
@@ -340,6 +383,10 @@ internal sealed class PropertyDefaultValueFilter(IObjectGraphVisitor<IEmitter> n
             // RlsPolicySetDefinition / RlsPolicyDefinition semantic defaults
             { "enabled", (typeof(bool), true) },
             { "isPermissive", (typeof(bool), true) },
+            // PostgreSQL support object semantic defaults
+            { "language", (typeof(string), "sql") },
+            { "volatility", (typeof(string), "stable") },
+            { "revokePublicExecute", (typeof(bool), true) },
         };
 
     /// <inheritdoc />

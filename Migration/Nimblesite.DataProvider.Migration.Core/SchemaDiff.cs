@@ -31,7 +31,7 @@ namespace Nimblesite.DataProvider.Migration.Core;
 ///     currentSchema, desiredSchema, allowDestructive: true);
 /// </code>
 /// </example>
-public static class SchemaDiff
+public static partial class SchemaDiff
 {
     /// <summary>
     /// Calculate operations needed to transform current schema into desired schema.
@@ -52,6 +52,9 @@ public static class SchemaDiff
         try
         {
             var operations = new List<SchemaOperation>();
+            var rlsOperations = new List<SchemaOperation>();
+
+            operations.AddRange(CalculateRoleDiff(current, desired, logger));
 
             // Use table name only for matching (schema-agnostic comparison)
             // This handles differences between SQLite (main) and Postgres (public) default schemas
@@ -86,7 +89,7 @@ public static class SchemaDiff
                         );
                     }
 
-                    operations.AddRange(
+                    rlsOperations.AddRange(
                         CalculateRlsDiff(null, desiredTable, allowDestructive, logger)
                     );
                 }
@@ -119,7 +122,7 @@ public static class SchemaDiff
                     );
                     operations.AddRange(fkOps);
 
-                    operations.AddRange(
+                    rlsOperations.AddRange(
                         CalculateRlsDiff(currentTable, desiredTable, allowDestructive, logger)
                     );
                 }
@@ -150,6 +153,16 @@ public static class SchemaDiff
                     }
                 }
             }
+
+            var functionOps = CalculateFunctionDiff(current, desired, allowDestructive, logger)
+                .ToList();
+            var grantOps = CalculateGrantDiff(current, desired, allowDestructive, logger).ToList();
+
+            operations.AddRange(functionOps.Where(op => !IsSupportCleanupOperation(op)));
+            operations.AddRange(grantOps.Where(op => !IsSupportCleanupOperation(op)));
+            operations.AddRange(rlsOperations);
+            operations.AddRange(functionOps.Where(IsSupportCleanupOperation));
+            operations.AddRange(grantOps.Where(IsSupportCleanupOperation));
 
             return new OperationsResult.Ok<IReadOnlyList<SchemaOperation>, MigrationError>(
                 operations.AsReadOnly()

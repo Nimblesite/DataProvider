@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// <summary>
 /// Inspects PostgreSQL database schema and returns a SchemaDefinition.
 /// </summary>
-public static class PostgresSchemaInspector
+public static partial class PostgresSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a PostgreSQL database.
@@ -62,7 +62,17 @@ public static class PostgresSchemaInspector
             }
 
             return new SchemaResult.Ok<SchemaDefinition, MigrationError>(
-                new SchemaDefinition { Name = schemaName, Tables = tables.AsReadOnly() }
+                new SchemaDefinition
+                {
+                    Name = schemaName,
+                    Tables = tables.AsReadOnly(),
+                    Roles = PostgresSupportSchemaInspector.InspectRoles(connection),
+                    Functions = PostgresSupportSchemaInspector.InspectFunctions(
+                        connection,
+                        schemaName
+                    ),
+                    Grants = PostgresSupportSchemaInspector.InspectGrants(connection, schemaName),
+                }
             );
         }
         catch (Exception ex)

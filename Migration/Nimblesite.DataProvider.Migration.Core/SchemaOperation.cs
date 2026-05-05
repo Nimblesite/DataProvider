@@ -57,6 +57,26 @@ public sealed record AddUniqueConstraintOperation(
 ) : SchemaOperation;
 
 // ═══════════════════════════════════════════════════════════════════
+// POSTGRES SUPPORT OBJECTS - Implements [RLS-PG-SUPPORT-DDL]
+// ═══════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Create or alter a PostgreSQL role and its declared membership grants.
+/// </summary>
+public sealed record CreateOrAlterRoleOperation(PostgresRoleDefinition Role) : SchemaOperation;
+
+/// <summary>
+/// Create or replace a PostgreSQL function and declared EXECUTE grants.
+/// </summary>
+public sealed record CreateOrReplaceFunctionOperation(PostgresFunctionDefinition Function)
+    : SchemaOperation;
+
+/// <summary>
+/// Apply a PostgreSQL schema or table grant.
+/// </summary>
+public sealed record GrantPrivilegesOperation(PostgresGrantDefinition Grant) : SchemaOperation;
+
+// ═══════════════════════════════════════════════════════════════════
 // ROW-LEVEL SECURITY - Implements [RLS-CORE-OPS]
 // ═══════════════════════════════════════════════════════════════════
 
@@ -106,6 +126,20 @@ public sealed record DropIndexOperation(string Schema, string TableName, string 
 /// </summary>
 public sealed record DropForeignKeyOperation(string Schema, string TableName, string ConstraintName)
     : SchemaOperation;
+
+/// <summary>
+/// Drop a PostgreSQL function. DESTRUCTIVE - requires explicit opt-in.
+/// </summary>
+public sealed record DropFunctionOperation(
+    string Schema,
+    string Name,
+    IReadOnlyList<string> ArgumentTypes
+) : SchemaOperation;
+
+/// <summary>
+/// Revoke a PostgreSQL schema or table grant. DESTRUCTIVE - requires explicit opt-in.
+/// </summary>
+public sealed record RevokePrivilegesOperation(PostgresGrantDefinition Grant) : SchemaOperation;
 
 /// <summary>
 /// Drop a row-level security policy. DESTRUCTIVE - requires explicit opt-in.
