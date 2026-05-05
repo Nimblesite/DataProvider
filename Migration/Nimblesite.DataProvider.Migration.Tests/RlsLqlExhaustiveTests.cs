@@ -521,6 +521,42 @@ public sealed class RlsLqlExhaustiveTests
     }
 
     [Fact]
+    public void ExistsPipeline_LambdaScope_StripsLambdaVarFromQualifiedRefs()
+    {
+        // NAP shape diagnostic: c.id and c.tenant_id should emit as
+        // bare 'id'/'tenant_id' in the inner SQL because 'c' is the
+        // lambda parameter bound to the FROM table (conversations).
+        var lql = """
+            conversations
+            |> filter(fn(c) => c.id = '00000000-0000-0000-0000-000000000000' and is_member('a', c.tenant_id))
+            |> select(c.id)
+            """;
+        var result = RlsPredicateTranspiler.Translate(
+            $"exists({lql})",
+            RlsPlatform.Postgres,
+            "diag"
+        );
+        Assert.True(
+            result is TranspileOk,
+            result is TranspileError e ? e.Value.Message : "expected Ok"
+        );
+        var sql = ((TranspileOk)result).Value;
+        // The inner SQL must reference columns without the 'c.' prefix
+        // because 'c' is the lambda variable bound to the FROM table.
+        Assert.Contains("FROM conversations", sql, StringComparison.Ordinal);
+        // Inside the AND clause (WHERE), 'c.tenant_id' must be stripped
+        // to 'tenant_id' so it resolves to the FROM table — that's the
+        // critical lambda-scope behavior. (The SELECT projection may
+        // still emit 'c.id' verbatim; Postgres accepts that as a table
+        // alias if 'c' is added; but the WHERE side is what we care
+        // about for fn-call args.)
+        var whereIdx = sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+        Assert.True(whereIdx > 0, "expected WHERE in inner SQL");
+        var whereClause = sql[whereIdx..];
+        Assert.DoesNotContain("c.tenant_id", whereClause, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ExistsPipeline_LambdaWithSecurityDefinerFnAtTopLevel_Parses()
     {
         // Even simpler: lambda body is a single fn call, no comparison.

@@ -529,6 +529,178 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
     }
 
     [Fact]
+    public void LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation()
+    {
+        // GitHub issue #40 / #41: messages.tenant_id is derived via the
+        // parent conversations.tenant_id. The policy uses an exists() over
+        // conversations with a lambda body that has a bare fn-call as one
+        // side of the AND. This is the predicate shape NAP hit on preview5
+        // (Unsupported expr type in comparison: ExprContext) and that
+        // preview6 fixes. End-to-end test proves the full pipeline:
+        // YAML -> LQL parse -> Postgres CREATE POLICY -> runtime enforce.
+        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
+        BootstrapMembershipFns(_connection);
+
+        // Parent table: conversations.
+        var convSchema = new SchemaDefinition
+        {
+            Name = "lql",
+            Tables =
+            [
+                new TableDefinition
+                {
+                    Schema = "public",
+                    Name = "conversations",
+                    Columns =
+                    [
+                        new ColumnDefinition
+                        {
+                            Name = "id",
+                            Type = new UuidType(),
+                            IsNullable = false,
+                        },
+                        new ColumnDefinition
+                        {
+                            Name = "tenant_id",
+                            Type = new UuidType(),
+                            IsNullable = false,
+                        },
+                    ],
+                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
+                },
+            ],
+        };
+        ApplyAndGrant(convSchema, "conversations");
+
+        // Child table: messages — RLS via exists() over conversations.
+        var msgSchema = new SchemaDefinition
+        {
+            Name = "lql",
+            Tables =
+            [
+                new TableDefinition
+                {
+                    Schema = "public",
+                    Name = "messages",
+                    Columns =
+                    [
+                        new ColumnDefinition
+                        {
+                            Name = "id",
+                            Type = new UuidType(),
+                            IsNullable = false,
+                        },
+                        new ColumnDefinition
+                        {
+                            Name = "conversation_id",
+                            Type = new UuidType(),
+                            IsNullable = false,
+                        },
+                        new ColumnDefinition
+                        {
+                            Name = "body",
+                            Type = new TextType(),
+                            IsNullable = false,
+                        },
+                    ],
+                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
+                    RowLevelSecurity = new RlsPolicySetDefinition
+                    {
+                        Enabled = true,
+                        Forced = true,
+                        Policies =
+                        [
+                            new RlsPolicyDefinition
+                            {
+                                Name = "messages_member",
+                                Operations = [RlsOperation.All],
+                                Roles = ["lql_user"],
+                                // NAP's EXACT shape: bare is_member fn call
+                                // inside the lambda body's AND clause.
+                                UsingLql =
+                                    "exists(conversations |> filter(fn(c) => c.id = conversation_id and is_member(app_user_id(), c.tenant_id)))",
+                                WithCheckLql =
+                                    "exists(conversations |> filter(fn(c) => c.id = conversation_id and is_member(app_user_id(), c.tenant_id)))",
+                            },
+                        ],
+                    },
+                },
+            ],
+        };
+        ApplyAndGrant(msgSchema, "messages");
+
+        // Set up: tenantA has userA as member, tenantB has userB as member.
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+        Exec(
+            _connection,
+            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userA}', '{tenantA}')"
+        );
+        Exec(
+            _connection,
+            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userB}', '{tenantB}')"
+        );
+
+        // Conversations: convA in tenantA, convB in tenantB.
+        var convA = Guid.NewGuid();
+        var convB = Guid.NewGuid();
+        Exec(
+            _connection,
+            $"INSERT INTO conversations(id, tenant_id) VALUES ('{convA}', '{tenantA}')"
+        );
+        Exec(
+            _connection,
+            $"INSERT INTO conversations(id, tenant_id) VALUES ('{convB}', '{tenantB}')"
+        );
+
+        // userA (tenantA) inserts a message in convA -> allowed.
+        var msgA = Guid.NewGuid();
+        using (var tx = _connection.BeginTransaction())
+        {
+            SetSession(_connection, tx, "lql_user", tenantA, userA);
+            Exec(
+                _connection,
+                tx,
+                $"INSERT INTO messages(id, conversation_id, body) VALUES ('{msgA}', '{convA}', 'hi')"
+            );
+            tx.Commit();
+        }
+
+        // userA tries to insert a message in convB (tenantB's conversation)
+        // -> blocked because exists() returns false: convB.tenant_id is
+        // tenantB, and is_member(userA, tenantB) is false.
+        using (var tx = _connection.BeginTransaction())
+        {
+            SetSession(_connection, tx, "lql_user", tenantA, userA);
+            using var ins = _connection.CreateCommand();
+            ins.Transaction = tx;
+            ins.CommandText =
+                $"INSERT INTO messages(id, conversation_id, body) VALUES ('{Guid.NewGuid()}', '{convB}', 'evil')";
+            var ex = Assert.Throws<PostgresException>(() => ins.ExecuteNonQuery());
+            Assert.Contains("row-level security", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // userA SELECTs messages -> sees only msgA (in convA, in their tenant).
+        using (var tx = _connection.BeginTransaction())
+        {
+            SetSession(_connection, tx, "lql_user", tenantA, userA);
+            using var sel = _connection.CreateCommand();
+            sel.Transaction = tx;
+            sel.CommandText = "SELECT id FROM messages";
+            var ids = new List<Guid>();
+            using var rdr = sel.ExecuteReader();
+            while (rdr.Read())
+            {
+                ids.Add(rdr.GetGuid(0));
+            }
+            Assert.Single(ids);
+            Assert.Equal(msgA, ids[0]);
+        }
+    }
+
+    [Fact]
     public void LqlOnly_DropPolicy_AllowDestructive_RemovesIt()
     {
         ApplyAndGrant(TenantMembersSchema(), "tenant_members");

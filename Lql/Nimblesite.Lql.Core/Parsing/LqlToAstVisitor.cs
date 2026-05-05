@@ -746,6 +746,31 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         HashSet<string>? lambdaScope
     )
     {
+        // arg grammar matches `columnAlias` first when the arg is a
+        // qualified identifier like c.tenant_id. The columnAlias rule
+        // itself wraps qualifiedIdent / IDENT / arithmeticExpr / functionCall.
+        // Walk through to find the actual shape and apply lambda-scope
+        // stripping for qualified idents.
+        if (arg.columnAlias() != null)
+        {
+            var ca = arg.columnAlias();
+            if (ca.qualifiedIdent() != null)
+            {
+                return ProcessQualifiedIdentifierToSql(ca.qualifiedIdent(), lambdaScope);
+            }
+            if (ca.arithmeticExpr() != null)
+            {
+                return ProcessArithmeticExpressionToSql(ca.arithmeticExpr(), lambdaScope);
+            }
+            if (ca.functionCall() != null)
+            {
+                return ExtractFunctionCall(ca.functionCall());
+            }
+            if (ca.IDENT() != null && ca.IDENT().Length > 0)
+            {
+                return ca.IDENT()[0].GetText();
+            }
+        }
         if (arg.arithmeticExpr() != null)
         {
             return ProcessArithmeticExpressionToSql(arg.arithmeticExpr(), lambdaScope);
