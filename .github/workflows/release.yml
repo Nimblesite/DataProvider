@@ -70,12 +70,31 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           set -euo pipefail
+          # Tag-triggered runs check out a detached HEAD. Find the unique remote
+          # branch that contains the tagged commit so we know where to push the
+          # version-bump back to. If 0 or >1 branches contain it, fail loudly —
+          # we will not guess.
+          git fetch --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          mapfile -t BRANCHES < <(git branch -r --contains HEAD --format='%(refname:short)' \
+            | sed 's|^origin/||' \
+            | grep -vx 'HEAD' \
+            | sort -u)
+          if [ ${#BRANCHES[@]} -eq 0 ]; then
+            echo "No remote branch contains the tagged commit. Refusing to push." >&2
+            exit 1
+          fi
+          if [ ${#BRANCHES[@]} -gt 1 ]; then
+            echo "Tagged commit belongs to multiple branches: ${BRANCHES[*]}. Refusing to guess." >&2
+            exit 1
+          fi
+          TARGET_BRANCH="${BRANCHES[0]}"
+          echo "Pushing version bump to origin/$TARGET_BRANCH"
           sed -i 's|<Version>.*</Version>|<Version>'"$VERSION"'</Version>|' Directory.Build.props
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Directory.Build.props
           git diff --cached --quiet || git commit -m "chore: bump version to $VERSION [skip ci]"
-          git push
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
 
       - name: Create GitHub Release
         env:
@@ -94,7 +113,7 @@ jobs:
 
   deploy-website:
     needs: [publish, deploy-lql-website]
-    uses: ./.github/workflows/deploy-website.yml
+    uses: ./.github/workflows/deploy-pages.yml
     with:
       version: ${{ needs.publish.outputs.version }}
     secrets: inherit
