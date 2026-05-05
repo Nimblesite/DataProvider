@@ -96,8 +96,18 @@ public static class Program
 
         return args.Provider.ToLowerInvariant() switch
         {
-            "sqlite" => MigrateSqliteDatabase(schema, args.OutputPath, args.AllowDestructive),
-            "postgres" => MigratePostgresDatabase(schema, args.OutputPath, args.AllowDestructive),
+            "sqlite" => MigrateSqliteDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
+            "postgres" => MigratePostgresDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
             _ => ShowProviderError(args.Provider),
         };
     }
@@ -105,7 +115,8 @@ public static class Program
     private static int MigrateSqliteDatabase(
         SchemaDefinition schema,
         string outputPath,
-        bool allowDestructive
+        bool allowDestructive,
+        MigratePhase phase
     )
     {
         try
@@ -124,6 +135,7 @@ public static class Program
             return ApplyDiff(
                 schema,
                 allowDestructive,
+                phase,
                 () => SqliteSchemaInspector.Inspect(connection),
                 ops =>
                     MigrationRunner.Apply(
@@ -144,7 +156,8 @@ public static class Program
     private static int MigratePostgresDatabase(
         SchemaDefinition schema,
         string connectionString,
-        bool allowDestructive
+        bool allowDestructive,
+        MigratePhase phase
     )
     {
         try
@@ -156,6 +169,7 @@ public static class Program
             return ApplyDiff(
                 schema,
                 allowDestructive,
+                phase,
                 () => PostgresSchemaInspector.Inspect(connection, "public"),
                 ops =>
                     MigrationRunner.Apply(
@@ -174,14 +188,17 @@ public static class Program
     }
 
     /// <summary>
-    /// Inspect → diff → apply pipeline shared between SQLite and Postgres.
-    /// This is the only correct migration path: it surfaces RLS, indexes,
-    /// FKs, and column adds via SchemaDiff and respects --allow-destructive.
-    /// Implements GitHub issue #39.
+    /// Inspect → diff → filter → apply pipeline shared between SQLite and
+    /// Postgres. <paramref name="phase"/> filters operations so callers can
+    /// run structural changes first (tables, columns, FKs, indexes), drop in
+    /// SECURITY DEFINER functions out-of-band, then re-run with rls phase to
+    /// land policies that reference those functions. Implements #39 + #40
+    /// (NAP two-pass requirement).
     /// </summary>
     private static int ApplyDiff(
         SchemaDefinition schema,
         bool allowDestructive,
+        MigratePhase phase,
         Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
         Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply
     )
@@ -217,20 +234,28 @@ public static class Program
             Console.WriteLine($"Error: schema diff failed: {diffErr.Value}");
             return 1;
         }
-        var operations = (
+        var allOps = (
             (Outcome.Result<IReadOnlyList<SchemaOperation>, MigrationError>.Ok<
                 IReadOnlyList<SchemaOperation>,
                 MigrationError
             >)diff
         ).Value;
 
+        var operations = FilterByPhase(allOps, phase);
+
         if (operations.Count == 0)
         {
-            Console.WriteLine("Schema is up to date — no operations needed");
+            Console.WriteLine(
+                phase == MigratePhase.All
+                    ? "Schema is up to date — no operations needed"
+                    : $"Schema is up to date for phase '{phase.ToString().ToLowerInvariant()}' — no operations needed"
+            );
             return 0;
         }
 
-        Console.WriteLine($"Applying {operations.Count} operation(s):");
+        Console.WriteLine(
+            $"Phase: {phase.ToString().ToLowerInvariant()} — applying {operations.Count} of {allOps.Count} operation(s):"
+        );
         foreach (var op in operations)
         {
             Console.WriteLine($"  {op.GetType().Name}");
@@ -248,6 +273,27 @@ public static class Program
         Console.WriteLine("Migration completed successfully");
         return 0;
     }
+
+    private static IReadOnlyList<SchemaOperation> FilterByPhase(
+        IReadOnlyList<SchemaOperation> ops,
+        MigratePhase phase
+    ) =>
+        phase switch
+        {
+            MigratePhase.All => ops,
+            MigratePhase.Structural => ops.Where(o => !IsRlsOperation(o)).ToList(),
+            MigratePhase.Rls => ops.Where(IsRlsOperation).ToList(),
+            _ => ops,
+        };
+
+    private static bool IsRlsOperation(SchemaOperation op) =>
+        op
+            is EnableRlsOperation
+                or EnableForceRlsOperation
+                or CreateRlsPolicyOperation
+                or DropRlsPolicyOperation
+                or DisableRlsOperation
+                or DisableForceRlsOperation;
 
     private static int ShowProviderError(string provider)
     {
@@ -388,15 +434,20 @@ public static class Program
               --provider, -p       Database provider: sqlite or postgres (default: sqlite)
               --allow-destructive  Permit DROP/DISABLE operations (drift cleanup, FORCE removal,
                                    policy drops). Off by default for safety.
+              --phase              Operations to apply: all (default), structural, rls.
+                                   Use 'structural' to apply tables/columns/indexes/FKs only,
+                                   then run a separate bootstrap that creates SECURITY DEFINER
+                                   functions, then re-run with '--phase rls' to land policies
+                                   that reference those functions.
 
-            Behaviour: Inspect → Diff → Apply. Re-running against a converged database emits zero
-            operations (idempotent). Adds new tables/columns/indexes/FKs/RLS policies. Drift drops
-            (FKs, columns, RLS policies, FORCE removal, DISABLE RLS) require --allow-destructive.
+            Behaviour: Inspect → Diff → Filter (by phase) → Apply. Re-running against a converged
+            database emits zero operations (idempotent). Drift drops require --allow-destructive.
 
             Examples:
               DataProviderMigrate migrate --schema my-schema.yaml --output ./build.db --provider sqlite
-              DataProviderMigrate migrate --schema my-schema.yaml --output "Host=localhost;Database=mydb;Username=user;Password=pass" --provider postgres
-              DataProviderMigrate migrate --schema my-schema.yaml --output "$PG_URL" --provider postgres --allow-destructive
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --allow-destructive
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase structural
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase rls
             """
         );
         return 1;
@@ -438,6 +489,7 @@ public static class Program
         string? outputPath = null;
         var provider = "sqlite";
         var allowDestructive = false;
+        var phase = MigratePhase.All;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -480,6 +532,29 @@ public static class Program
                     allowDestructive = true;
                     break;
 
+                case "--phase":
+                    if (i + 1 >= args.Length)
+                    {
+                        return new MigrateParseResult.Failure(
+                            "--phase requires an argument (all, structural, or rls)"
+                        );
+                    }
+                    var phaseArg = args[++i].ToLowerInvariant();
+                    phase = phaseArg switch
+                    {
+                        "all" => MigratePhase.All,
+                        "structural" => MigratePhase.Structural,
+                        "rls" => MigratePhase.Rls,
+                        _ => MigratePhase.All,
+                    };
+                    if (phaseArg is not "all" and not "structural" and not "rls")
+                    {
+                        return new MigrateParseResult.Failure(
+                            $"Unknown --phase value: {phaseArg}. Valid: all, structural, rls"
+                        );
+                    }
+                    break;
+
                 case "--help"
                 or "-h":
                     return new MigrateParseResult.HelpRequested();
@@ -504,7 +579,13 @@ public static class Program
             return new MigrateParseResult.Failure("--output is required");
         }
 
-        return new MigrateParseResult.Success(schemaPath, outputPath, provider, allowDestructive);
+        return new MigrateParseResult.Success(
+            schemaPath,
+            outputPath,
+            provider,
+            allowDestructive,
+            phase
+        );
     }
 
     private static ExportParseResult ParseExportArguments(string[] args)
@@ -595,7 +676,8 @@ public abstract record MigrateParseResult
         string SchemaPath,
         string OutputPath,
         string Provider,
-        bool AllowDestructive
+        bool AllowDestructive,
+        MigratePhase Phase
     ) : MigrateParseResult;
 
     /// <summary>Parse error.</summary>
@@ -621,4 +703,28 @@ public abstract record ExportParseResult
 
     /// <summary>Help requested.</summary>
     public sealed record HelpRequested : ExportParseResult;
+}
+
+/// <summary>
+/// Two-phase migrate selector. Implements the NAP requirement that
+/// SECURITY DEFINER functions referenced by RLS policies be created out
+/// of band between structural DDL and policy creation.
+/// </summary>
+public enum MigratePhase
+{
+    /// <summary>Apply every operation (default).</summary>
+    All,
+
+    /// <summary>
+    /// Apply only structural operations (tables, columns, indexes, FKs,
+    /// constraints) — skip RLS enable/disable/policy/force.
+    /// </summary>
+    Structural,
+
+    /// <summary>
+    /// Apply only RLS operations (enable/disable, force/no-force, create/drop
+    /// policy). Use after structural phase + SDF function bootstrap so policy
+    /// predicates can resolve.
+    /// </summary>
+    Rls,
 }
