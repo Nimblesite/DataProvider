@@ -112,10 +112,127 @@ public static class PostgresDdlGenerator
             DropIndexOperation op => $"DROP INDEX IF EXISTS \"{op.Schema}\".\"{op.IndexName}\"",
             DropForeignKeyOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP CONSTRAINT \"{op.ConstraintName}\"",
+            EnableRlsOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ENABLE ROW LEVEL SECURITY",
+            DisableRlsOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DISABLE ROW LEVEL SECURITY",
+            EnableForceRlsOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" FORCE ROW LEVEL SECURITY",
+            DisableForceRlsOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" NO FORCE ROW LEVEL SECURITY",
+            DropRlsPolicyOperation op =>
+                $"DROP POLICY IF EXISTS \"{op.PolicyName}\" ON \"{op.Schema}\".\"{op.TableName}\"",
+            CreateRlsPolicyOperation op => GenerateCreateRlsPolicy(op),
             _ => throw new NotSupportedException(
                 $"Unknown operation type: {operation.GetType().Name}"
             ),
         };
+
+    private static string GenerateCreateRlsPolicy(CreateRlsPolicyOperation op)
+    {
+        // Implements [RLS-PG]. Transpiles LQL predicates to PostgreSQL using
+        // RlsPredicateTranspiler and emits a CREATE POLICY statement.
+        ValidatePolicyPredicates(op.Policy);
+
+        var sb = new StringBuilder();
+        sb.Append(
+            CultureInfo.InvariantCulture,
+            $"CREATE POLICY \"{op.Policy.Name}\" ON \"{op.Schema}\".\"{op.TableName}\""
+        );
+        sb.Append(op.Policy.IsPermissive ? " AS PERMISSIVE" : " AS RESTRICTIVE");
+        sb.Append(
+            CultureInfo.InvariantCulture,
+            $" FOR {RlsOperationsToPgClause(op.Policy.Operations)}"
+        );
+        sb.Append(CultureInfo.InvariantCulture, $" TO {RlsRolesToPgClause(op.Policy.Roles)}");
+
+        // Raw-SQL escape hatch (issue #36) takes precedence over LQL.
+        if (!string.IsNullOrWhiteSpace(op.Policy.UsingSql))
+        {
+            sb.Append(CultureInfo.InvariantCulture, $" USING ({op.Policy.UsingSql})");
+        }
+        else if (!string.IsNullOrWhiteSpace(op.Policy.UsingLql))
+        {
+            var sql = TranslateOrThrow(op.Policy.UsingLql, op.Policy.Name);
+            sb.Append(CultureInfo.InvariantCulture, $" USING ({sql})");
+        }
+
+        if (!string.IsNullOrWhiteSpace(op.Policy.WithCheckSql))
+        {
+            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({op.Policy.WithCheckSql})");
+        }
+        else if (!string.IsNullOrWhiteSpace(op.Policy.WithCheckLql))
+        {
+            var sql = TranslateOrThrow(op.Policy.WithCheckLql, op.Policy.Name);
+            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({sql})");
+        }
+        return sb.ToString();
+    }
+
+    private static void ValidatePolicyPredicates(RlsPolicyDefinition policy)
+    {
+        var needsUsing = policy.Operations.Any(o =>
+            o
+                is RlsOperation.All
+                    or RlsOperation.Select
+                    or RlsOperation.Update
+                    or RlsOperation.Delete
+        );
+        var hasUsing =
+            !string.IsNullOrWhiteSpace(policy.UsingLql)
+            || !string.IsNullOrWhiteSpace(policy.UsingSql);
+        if (needsUsing && !hasUsing)
+        {
+            throw new InvalidOperationException(
+                MigrationError.RlsEmptyPredicate(policy.Name).Message
+            );
+        }
+
+        var needsWithCheck = policy.Operations.Any(o =>
+            o is RlsOperation.All or RlsOperation.Insert or RlsOperation.Update
+        );
+        var hasWithCheck =
+            !string.IsNullOrWhiteSpace(policy.WithCheckLql)
+            || !string.IsNullOrWhiteSpace(policy.WithCheckSql);
+        if (needsWithCheck && !hasWithCheck)
+        {
+            throw new InvalidOperationException(MigrationError.RlsEmptyCheck(policy.Name).Message);
+        }
+    }
+
+    private static string TranslateOrThrow(string lql, string policyName)
+    {
+        var result = RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, policyName);
+        return result switch
+        {
+            Outcome.Result<string, MigrationError>.Ok<string, MigrationError> ok => ok.Value,
+            Outcome.Result<string, MigrationError>.Error<string, MigrationError> err =>
+                throw new InvalidOperationException(err.Value.Message),
+        };
+    }
+
+    private static string RlsOperationsToPgClause(IReadOnlyList<RlsOperation> ops)
+    {
+        if (ops.Count == 0 || ops.Contains(RlsOperation.All))
+        {
+            return "ALL";
+        }
+        // Postgres FOR clause supports a single operation. Multiple require
+        // multiple CREATE POLICY statements. For v1 we pick the first and
+        // require callers to split policies if they need many — same behavior
+        // as native CREATE POLICY semantics.
+        return ops[0] switch
+        {
+            RlsOperation.Select => "SELECT",
+            RlsOperation.Insert => "INSERT",
+            RlsOperation.Update => "UPDATE",
+            RlsOperation.Delete => "DELETE",
+            _ => "ALL",
+        };
+    }
+
+    private static string RlsRolesToPgClause(IReadOnlyList<string> roles) =>
+        roles.Count == 0 ? "PUBLIC" : string.Join(", ", roles.Select(r => $"\"{r}\""));
 
     private static string GenerateCreateTable(TableDefinition table)
     {

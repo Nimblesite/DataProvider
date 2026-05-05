@@ -73,26 +73,26 @@ Predicates that query other tables (e.g. group membership) MUST use LQL, transpi
 
 ## TODO
 
-- [ ] Create `RlsPolicySetDefinition`, `RlsPolicyDefinition`, `RlsOperation` in new `Migration/Nimblesite.DataProvider.Migration.Core/RlsDefinition.cs`
-- [ ] Add `RlsPolicySetDefinition? RowLevelSecurity` property to `TableDefinition` in `SchemaDefinition.cs`
-- [ ] Add `EnableRlsOperation`, `CreateRlsPolicyOperation`, `DropRlsPolicyOperation`, `DisableRlsOperation` to `SchemaOperation.cs`
-- [ ] Extend `IsDestructive` in `DdlGenerator.cs` for `DropRlsPolicyOperation` and `DisableRlsOperation`
-- [ ] Add YAML converters and type mappings for RLS types in `SchemaYamlSerializer.cs`
-- [ ] Write failing YAML round-trip tests in `SchemaYamlSerializerTests.cs`
-- [ ] Make YAML round-trip tests pass
-- [ ] Create `RlsPredicateTranspiler.cs` with `current_user_id()` per-platform substitution and LQL subquery delegation
-- [ ] Add `ProjectReference` entries for `Nimblesite.Lql.Core`, `.Postgres`, `.SQLite`, `.SqlServer` to `Migration.Core.csproj`
-- [ ] Write failing `RlsPredicateTranspiler` unit tests in new `RlsPredicateTranspilerTests.cs`
-- [ ] Make `RlsPredicateTranspiler` tests pass
-- [ ] Implement RLS operation handling in `PostgresDdlGenerator.cs` (Enable, Create, Drop, Disable)
+- [x] Create `RlsPolicySetDefinition`, `RlsPolicyDefinition`, `RlsOperation` in new `Migration/Nimblesite.DataProvider.Migration.Core/RlsDefinition.cs`
+- [x] Add `RlsPolicySetDefinition? RowLevelSecurity` property to `TableDefinition` in `SchemaDefinition.cs`
+- [x] Add `EnableRlsOperation`, `CreateRlsPolicyOperation`, `DropRlsPolicyOperation`, `DisableRlsOperation` to `SchemaOperation.cs`
+- [x] Extend `IsDestructive` in `MigrationRunner.cs` for `DropRlsPolicyOperation` and `DisableRlsOperation`
+- [x] Add YAML converters and type mappings for RLS types in `SchemaYamlSerializer.cs`
+- [x] Write failing YAML round-trip tests in `RlsYamlSerializerTests.cs`
+- [x] Make YAML round-trip tests pass
+- [x] Create `RlsPredicateTranspiler.cs` with `current_user_id()` per-platform substitution and LQL subquery delegation
+- [x] Add `ProjectReference` entries for `Nimblesite.Lql.Core`, `.Postgres`, `.SQLite`, `.SqlServer` to `Migration.Core.csproj`
+- [x] Write failing `RlsPredicateTranspiler` unit tests in new `RlsPredicateTranspilerTests.cs`
+- [x] Make `RlsPredicateTranspiler` tests pass
+- [x] Implement RLS operation handling in `PostgresDdlGenerator.cs` (Enable, Create, Drop, Disable)
 - [ ] Write failing Postgres RLS E2E tests in `PostgresMigrationTests.cs`
-- [ ] Extend `PostgresSchemaInspector.cs` to read `pg_policies` into `RlsPolicySetDefinition`
+- [x] Extend `PostgresSchemaInspector.cs` to read `pg_policies` into `RlsPolicySetDefinition`
 - [ ] Make Postgres E2E tests pass
-- [ ] Extend `SchemaDiff.Calculate` in `SchemaDiff.cs` with RLS diff logic
-- [ ] Write failing SQLite RLS E2E tests in `SqliteMigrationTests.cs`
-- [ ] Implement `__rls_context` table, trigger generation, and `_secure` view generation in `SqliteDdlGenerator.cs`
-- [ ] Extend `SqliteSchemaInspector.cs` to reverse-map `rls_*` triggers
-- [ ] Make SQLite E2E tests pass
+- [x] Extend `SchemaDiff.Calculate` in `SchemaDiff.cs` with RLS diff logic
+- [x] Write failing SQLite RLS E2E tests in `SqliteRlsMigrationTests.cs`
+- [x] Implement `__rls_context` table, trigger generation, and `_secure` view generation in `SqliteDdlGenerator.cs`
+- [x] Extend `SqliteSchemaInspector.cs` to reverse-map `rls_*` triggers
+- [x] Make SQLite E2E tests pass
 - [ ] Add `MIG-E-RLS-MSSQL-UNSUPPORTED` error guard for SQL Server
 - [ ] Run `make ci` -- all tests pass, coverage thresholds maintained
 - [ ] Update `Migration/README.md` with RLS usage examples

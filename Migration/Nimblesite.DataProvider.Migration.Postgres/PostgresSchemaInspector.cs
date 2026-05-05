@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// <summary>
 /// Inspects PostgreSQL database schema and returns a SchemaDefinition.
 /// </summary>
-internal static class PostgresSchemaInspector
+public static class PostgresSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a PostgreSQL database.
@@ -309,6 +309,9 @@ internal static class PostgresSchemaInspector
                 }
             }
 
+            // [RLS-DIFF] read pg_policies + relrowsecurity into RowLevelSecurity.
+            var rls = InspectRls(connection, schemaName, tableName);
+
             return new TableResult.Ok<TableDefinition, MigrationError>(
                 new TableDefinition
                 {
@@ -318,6 +321,7 @@ internal static class PostgresSchemaInspector
                     Indexes = indexes.AsReadOnly(),
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
+                    RowLevelSecurity = rls,
                 }
             );
         }
@@ -461,4 +465,98 @@ internal static class PostgresSchemaInspector
 
         return expressions;
     }
+
+    /// <summary>
+    /// Read RLS state for a table from pg_class.relrowsecurity + pg_policies.
+    /// Returns null when RLS is disabled and no policies exist.
+    /// Implements [RLS-DIFF].
+    /// </summary>
+    private static RlsPolicySetDefinition? InspectRls(
+        NpgsqlConnection connection,
+        string schemaName,
+        string tableName
+    )
+    {
+        var enabled = false;
+        var forced = false;
+        using (var enabledCmd = connection.CreateCommand())
+        {
+            enabledCmd.CommandText = """
+                SELECT c.relrowsecurity, c.relforcerowsecurity
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = @schema AND c.relname = @table
+                """;
+            enabledCmd.Parameters.AddWithValue("@schema", schemaName);
+            enabledCmd.Parameters.AddWithValue("@table", tableName);
+            using var reader = enabledCmd.ExecuteReader();
+            if (reader.Read())
+            {
+                enabled = !reader.IsDBNull(0) && reader.GetBoolean(0);
+                forced = !reader.IsDBNull(1) && reader.GetBoolean(1);
+            }
+        }
+
+        var policies = new List<RlsPolicyDefinition>();
+        using (var polCmd = connection.CreateCommand())
+        {
+            polCmd.CommandText = """
+                SELECT policyname, permissive, cmd, roles, qual, with_check
+                FROM pg_policies
+                WHERE schemaname = @schema AND tablename = @table
+                ORDER BY policyname
+                """;
+            polCmd.Parameters.AddWithValue("@schema", schemaName);
+            polCmd.Parameters.AddWithValue("@table", tableName);
+            using var reader = polCmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var policyName = reader.GetString(0);
+                var permissive = reader.GetString(1) == "PERMISSIVE";
+                var cmd = reader.GetString(2);
+                var rolesArr = reader.GetValue(3) as string[] ?? [];
+                var qual = reader.IsDBNull(4) ? null : reader.GetString(4);
+                var withCheck = reader.IsDBNull(5) ? null : reader.GetString(5);
+
+                policies.Add(
+                    new RlsPolicyDefinition
+                    {
+                        Name = policyName,
+                        IsPermissive = permissive,
+                        Operations = [PgCmdToRlsOperation(cmd)],
+                        Roles = rolesArr.Where(r => r != "public").ToArray(),
+                        // pg_policies returns the parsed qual/with_check as
+                        // SQL text — round-trip them as raw-SQL escape hatch
+                        // (issue #36), not LQL. We do not attempt SQL→LQL
+                        // round-tripping; predicates that originated as LQL
+                        // come back as their raw-SQL form on diff.
+                        UsingSql = qual,
+                        WithCheckSql = withCheck,
+                    }
+                );
+            }
+        }
+
+        if (!enabled && policies.Count == 0 && !forced)
+        {
+            return null;
+        }
+        return new RlsPolicySetDefinition
+        {
+            Enabled = enabled,
+            Forced = forced,
+            Policies = policies.AsReadOnly(),
+        };
+    }
+
+    private static RlsOperation PgCmdToRlsOperation(string cmd) =>
+        cmd.ToUpperInvariant() switch
+        {
+            "ALL" => RlsOperation.All,
+            "SELECT" => RlsOperation.Select,
+            "INSERT" => RlsOperation.Insert,
+            "UPDATE" => RlsOperation.Update,
+            "DELETE" => RlsOperation.Delete,
+            _ => RlsOperation.All,
+        };
 }

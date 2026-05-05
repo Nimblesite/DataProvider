@@ -17,6 +17,7 @@ public static class SchemaYamlSerializer
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
+        .WithTypeConverter(new RlsOperationYamlConverter())
         .ConfigureDefaultValuesHandling(
             DefaultValuesHandling.OmitDefaults
                 | DefaultValuesHandling.OmitNull
@@ -32,6 +33,7 @@ public static class SchemaYamlSerializer
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
+        .WithTypeConverter(new RlsOperationYamlConverter())
         .WithTypeMapping<IReadOnlyList<TableDefinition>, List<TableDefinition>>()
         .WithTypeMapping<IReadOnlyList<ColumnDefinition>, List<ColumnDefinition>>()
         .WithTypeMapping<IReadOnlyList<IndexDefinition>, List<IndexDefinition>>()
@@ -44,6 +46,8 @@ public static class SchemaYamlSerializer
             IReadOnlyList<CheckConstraintDefinition>,
             List<CheckConstraintDefinition>
         >()
+        .WithTypeMapping<IReadOnlyList<RlsPolicyDefinition>, List<RlsPolicyDefinition>>()
+        .WithTypeMapping<IReadOnlyList<RlsOperation>, List<RlsOperation>>()
         .WithTypeMapping<IReadOnlyList<string>, List<string>>()
         .Build();
 
@@ -279,6 +283,38 @@ internal sealed class ForeignKeyActionYamlConverter : IYamlTypeConverter
 }
 
 /// <summary>
+/// YAML type converter for the <see cref="RlsOperation"/> enum. Maps
+/// to/from a single scalar like <c>All</c>, <c>Select</c>, etc.
+/// </summary>
+internal sealed class RlsOperationYamlConverter : IYamlTypeConverter
+{
+    /// <inheritdoc />
+    public bool Accepts(Type type) => type == typeof(RlsOperation);
+
+    /// <inheritdoc />
+    public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
+    {
+        var scalar = parser.Consume<Scalar>();
+        return scalar.Value.ToUpperInvariant() switch
+        {
+            "ALL" => RlsOperation.All,
+            "SELECT" => RlsOperation.Select,
+            "INSERT" => RlsOperation.Insert,
+            "UPDATE" => RlsOperation.Update,
+            "DELETE" => RlsOperation.Delete,
+            _ => RlsOperation.All,
+        };
+    }
+
+    /// <inheritdoc />
+    public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)
+    {
+        var op = (RlsOperation)(value ?? RlsOperation.All);
+        emitter.Emit(new Scalar(op.ToString()));
+    }
+}
+
+/// <summary>
 /// Filters out properties that have their semantic default values.
 /// This handles cases where the property initializer differs from the type default.
 /// </summary>
@@ -301,6 +337,9 @@ internal sealed class PropertyDefaultValueFilter(IObjectGraphVisitor<IEmitter> n
             { "referencedSchema", (typeof(string), "public") },
             { "onDelete", (typeof(ForeignKeyAction), ForeignKeyAction.NoAction) },
             { "onUpdate", (typeof(ForeignKeyAction), ForeignKeyAction.NoAction) },
+            // RlsPolicySetDefinition / RlsPolicyDefinition semantic defaults
+            { "enabled", (typeof(bool), true) },
+            { "isPermissive", (typeof(bool), true) },
         };
 
     /// <inheritdoc />

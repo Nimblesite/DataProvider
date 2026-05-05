@@ -104,6 +104,81 @@ tables:
 - Foreign keys reference tables by name; `onDelete` accepts `NoAction`, `Cascade`, `SetNull`, or `Restrict`.
 - Supported column types include `Text`, `Integer`, `Real`, `Blob`, `Boolean`, `DateTime`, `Guid`, and vector types on PostgreSQL.
 
+## Row-Level Security (RLS)
+
+Declare row-level access control directly in YAML. The same definition produces native `CREATE POLICY` on PostgreSQL and trigger-based emulation on SQLite. Spec: [docs/specs/rls-spec.md](../docs/specs/rls-spec.md).
+
+```yaml
+tables:
+  - name: documents
+    schema: public
+    columns:
+      - { name: id, type: Uuid, isNullable: false }
+      - { name: tenant_id, type: Uuid, isNullable: false }
+      - { name: title, type: VarChar(200), isNullable: false }
+    primaryKey: { columns: [id] }
+    rowLevelSecurity:
+      enabled: true
+      forced: true                 # Postgres only — forces RLS on table owner too
+      policies:
+        - name: documents_member
+          operations: [All]
+          roles: [app_user]
+          # LQL — portable. current_user_id() expands per-platform.
+          using: "tenant_id = current_user_id()"
+          withCheck: "tenant_id = current_user_id()"
+        - name: documents_admin_all
+          operations: [All]
+          roles: [app_admin]
+          # Raw SQL escape hatch — Postgres only. Required for SECURITY
+          # DEFINER function calls (is_member, is_owner, ...) where LQL
+          # exists() rewrites would evaluate under the caller's RLS context.
+          usingSql: "true"
+          withCheckSql: "true"
+```
+
+### Session context
+
+Application code sets the current user identity per-transaction so policies have something to compare against:
+
+| Platform | Set context |
+|---|---|
+| PostgreSQL | `SET LOCAL rls.current_user_id = '...'` |
+| SQLite | `INSERT OR REPLACE INTO [__rls_context](current_user_id) VALUES ('...')` |
+
+The LQL builtin `current_user_id()` expands to the appropriate read-side expression on each platform.
+
+### Predicate expressions
+
+- **LQL** (`using`, `withCheck`) — portable. Comparisons against columns, `current_user_id()`, and `exists(pipeline)` for cross-table membership checks.
+- **Raw SQL** (`usingSql`, `withCheckSql`) — Postgres only, emitted verbatim. Use when you need `SECURITY DEFINER` function calls or platform-specific syntax. Takes precedence over the LQL form when both are set.
+
+### Drift handling
+
+`SchemaDiff.Calculate` compares the live database (via `pg_policies` / SQLite `sqlite_master`) against your YAML and emits the minimal operation set:
+
+- New table with RLS → `CreateTableOperation` then `EnableRlsOperation` then `CreateRlsPolicyOperation` per policy
+- Re-running against a converged database → **zero operations** (idempotent)
+- Policy renamed in YAML → `DropRlsPolicyOperation` (old name) + `CreateRlsPolicyOperation` (new name) — but only when `allowDestructive: true`. Forward-only mode never drops orphans
+
+### SQLite emulation
+
+SQLite has no native RLS. The migration tool emits:
+
+- `__rls_context` shadow table to hold the current user id
+- `BEFORE INSERT/UPDATE/DELETE` triggers per policy that `RAISE(ABORT, ...)` when the predicate is violated
+- `{TableName}_secure` view filtering `SELECT` (SQLite triggers don't intercept reads — applications query the `_secure` view for row-level read enforcement)
+
+### Error codes
+
+| Code | Meaning |
+|---|---|
+| `MIG-E-RLS-EMPTY-PREDICATE` | Policy targets SELECT/UPDATE/DELETE without `using`/`usingSql` |
+| `MIG-E-RLS-LQL-PARSE` / `-LQL-TRANSPILE` | LQL predicate failed to parse/transpile |
+| `MIG-E-RLS-RAW-SQL-UNSUPPORTED-ON-PLATFORM` | `usingSql`/`withCheckSql` declared on a non-Postgres target |
+| `MIG-E-RLS-FORCE-UNSUPPORTED-ON-PLATFORM` | `forced: true` declared on a non-Postgres target |
+| `MIG-E-RLS-MSSQL-UNSUPPORTED` | SQL Server RLS attempted (deferred until `Nimblesite.DataProvider.Migration.SqlServer` ships) |
+
 ## Wiring into MSBuild
 
 Regenerate the database on every build so developers never run migrations manually:

@@ -110,5 +110,8 @@ public static class MigrationRunner
             is DropTableOperation
                 or DropColumnOperation
                 or DropIndexOperation
-                or DropForeignKeyOperation;
+                or DropForeignKeyOperation
+                or DropRlsPolicyOperation
+                or DisableRlsOperation
+                or DisableForceRlsOperation;
 }

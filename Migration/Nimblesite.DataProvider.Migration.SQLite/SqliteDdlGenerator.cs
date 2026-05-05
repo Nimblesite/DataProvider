@@ -33,6 +33,10 @@ public static class SqliteDdlGenerator
             DropForeignKeyOperation => throw new NotSupportedException(
                 "SQLite does not support dropping foreign keys. Recreate the table instead."
             ),
+            EnableRlsOperation => SqliteRlsDdlBuilder.GenerateEnable(),
+            CreateRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateCreatePolicy(op),
+            DropRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateDropPolicy(op),
+            DisableRlsOperation op => SqliteRlsDdlBuilder.GenerateDisable(op),
             _ => throw new NotSupportedException(
                 $"Unknown operation type: {operation.GetType().Name}"
             ),

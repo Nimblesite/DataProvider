@@ -96,22 +96,31 @@ public static class Program
 
         return args.Provider.ToLowerInvariant() switch
         {
-            "sqlite" => CreateSqliteDatabase(schema, args.OutputPath),
-            "postgres" => CreatePostgresDatabase(schema, args.OutputPath),
+            "sqlite" => MigrateSqliteDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
+            "postgres" => MigratePostgresDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
             _ => ShowProviderError(args.Provider),
         };
     }
 
-    private static int CreateSqliteDatabase(SchemaDefinition schema, string outputPath)
+    private static int MigrateSqliteDatabase(
+        SchemaDefinition schema,
+        string outputPath,
+        bool allowDestructive,
+        MigratePhase phase
+    )
     {
         try
         {
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-                Console.WriteLine($"Deleted existing database: {outputPath}");
-            }
-
             var directory = Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
@@ -121,22 +130,21 @@ public static class Program
             var connectionString = $"Data Source={outputPath}";
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
+            Console.WriteLine($"Connected to SQLite: {outputPath}");
 
-            var tablesCreated = 0;
-            foreach (var table in schema.Tables)
-            {
-                var ddl = SqliteDdlGenerator.Generate(new CreateTableOperation(table));
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = ddl;
-                cmd.ExecuteNonQuery();
-                Console.WriteLine($"  Created table: {table.Name}");
-                tablesCreated++;
-            }
-
-            Console.WriteLine(
-                $"\nSuccessfully created SQLite database with {tablesCreated} tables\n  Output: {outputPath}"
+            return ApplyDiff(
+                schema,
+                allowDestructive,
+                phase,
+                () => SqliteSchemaInspector.Inspect(connection),
+                ops =>
+                    MigrationRunner.Apply(
+                        connection,
+                        ops,
+                        SqliteDdlGenerator.Generate,
+                        new MigrationOptions { AllowDestructive = allowDestructive }
+                    )
             );
-            return 0;
         }
         catch (Exception ex)
         {
@@ -145,41 +153,32 @@ public static class Program
         }
     }
 
-    private static int CreatePostgresDatabase(SchemaDefinition schema, string connectionString)
+    private static int MigratePostgresDatabase(
+        SchemaDefinition schema,
+        string connectionString,
+        bool allowDestructive,
+        MigratePhase phase
+    )
     {
         try
         {
             using var connection = new NpgsqlConnection(connectionString);
             connection.Open();
-
             Console.WriteLine("Connected to PostgreSQL database");
 
-            var result = PostgresDdlGenerator.MigrateSchema(
-                connection: connection,
-                schema: schema,
-                onTableCreated: table => Console.WriteLine($"  Created table: {table}"),
-                onTableFailed: (table, ex) => Console.WriteLine($"  Failed table: {table} - {ex}")
+            return ApplyDiff(
+                schema,
+                allowDestructive,
+                phase,
+                () => PostgresSchemaInspector.Inspect(connection, "public"),
+                ops =>
+                    MigrationRunner.Apply(
+                        connection,
+                        ops,
+                        PostgresDdlGenerator.Generate,
+                        new MigrationOptions { AllowDestructive = allowDestructive }
+                    )
             );
-
-            if (result.Success)
-            {
-                Console.WriteLine(
-                    $"\nSuccessfully created PostgreSQL database with {result.TablesCreated} tables"
-                );
-                return 0;
-            }
-
-            Console.WriteLine("PostgreSQL migration completed with errors:");
-            foreach (var error in result.Errors)
-            {
-                Console.WriteLine($"  {error}");
-            }
-
-            // Bug #11: ANY failed table is a hard failure for CI / make.
-            // Previously this returned 0 if at least one table succeeded,
-            // which let downstream targets (like codegen) run against an
-            // incomplete schema and produce confusing follow-on errors.
-            return 1;
         }
         catch (Exception ex)
         {
@@ -187,6 +186,114 @@ public static class Program
             return 1;
         }
     }
+
+    /// <summary>
+    /// Inspect → diff → filter → apply pipeline shared between SQLite and
+    /// Postgres. <paramref name="phase"/> filters operations so callers can
+    /// run structural changes first (tables, columns, FKs, indexes), drop in
+    /// SECURITY DEFINER functions out-of-band, then re-run with rls phase to
+    /// land policies that reference those functions. Implements #39 + #40
+    /// (NAP two-pass requirement).
+    /// </summary>
+    private static int ApplyDiff(
+        SchemaDefinition schema,
+        bool allowDestructive,
+        MigratePhase phase,
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
+        Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply
+    )
+    {
+        var inspectResult = inspect();
+        if (
+            inspectResult
+            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
+                SchemaDefinition,
+                MigrationError
+            > inspectErr
+        )
+        {
+            Console.WriteLine($"Error: schema inspection failed: {inspectErr.Value}");
+            return 1;
+        }
+        var current = (
+            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                SchemaDefinition,
+                MigrationError
+            >)inspectResult
+        ).Value;
+
+        var diff = SchemaDiff.Calculate(current, schema, allowDestructive);
+        if (
+            diff
+            is Outcome.Result<IReadOnlyList<SchemaOperation>, MigrationError>.Error<
+                IReadOnlyList<SchemaOperation>,
+                MigrationError
+            > diffErr
+        )
+        {
+            Console.WriteLine($"Error: schema diff failed: {diffErr.Value}");
+            return 1;
+        }
+        var allOps = (
+            (Outcome.Result<IReadOnlyList<SchemaOperation>, MigrationError>.Ok<
+                IReadOnlyList<SchemaOperation>,
+                MigrationError
+            >)diff
+        ).Value;
+
+        var operations = FilterByPhase(allOps, phase);
+
+        if (operations.Count == 0)
+        {
+            Console.WriteLine(
+                phase == MigratePhase.All
+                    ? "Schema is up to date — no operations needed"
+                    : $"Schema is up to date for phase '{phase.ToString().ToLowerInvariant()}' — no operations needed"
+            );
+            return 0;
+        }
+
+        Console.WriteLine(
+            $"Phase: {phase.ToString().ToLowerInvariant()} — applying {operations.Count} of {allOps.Count} operation(s):"
+        );
+        foreach (var op in operations)
+        {
+            Console.WriteLine($"  {op.GetType().Name}");
+        }
+
+        var applyResult = apply(operations);
+        if (
+            applyResult is Outcome.Result<bool, MigrationError>.Error<bool, MigrationError> applyErr
+        )
+        {
+            Console.WriteLine($"Error: migration apply failed: {applyErr.Value}");
+            return 1;
+        }
+
+        Console.WriteLine("Migration completed successfully");
+        return 0;
+    }
+
+    private static IReadOnlyList<SchemaOperation> FilterByPhase(
+        IReadOnlyList<SchemaOperation> ops,
+        MigratePhase phase
+    ) =>
+        phase switch
+        {
+            MigratePhase.All => ops,
+            MigratePhase.Structural => ops.Where(o => !IsRlsOperation(o)).ToList(),
+            MigratePhase.Rls => ops.Where(IsRlsOperation).ToList(),
+            _ => ops,
+        };
+
+    private static bool IsRlsOperation(SchemaOperation op) =>
+        op
+            is EnableRlsOperation
+                or EnableForceRlsOperation
+                or CreateRlsPolicyOperation
+                or DropRlsPolicyOperation
+                or DisableRlsOperation
+                or DisableForceRlsOperation;
 
     private static int ShowProviderError(string provider)
     {
@@ -322,13 +429,25 @@ public static class Program
             Usage: DataProviderMigrate migrate [options]
 
             Options:
-              --schema, -s    Path to YAML schema definition file (required)
-              --output, -o    Path to output database file (SQLite) or connection string (Postgres)
-              --provider, -p  Database provider: sqlite or postgres (default: sqlite)
+              --schema, -s         Path to YAML schema definition file (required)
+              --output, -o         Path to output database file (SQLite) or connection string (Postgres)
+              --provider, -p       Database provider: sqlite or postgres (default: sqlite)
+              --allow-destructive  Permit DROP/DISABLE operations (drift cleanup, FORCE removal,
+                                   policy drops). Off by default for safety.
+              --phase              Operations to apply: all (default), structural, rls.
+                                   Use 'structural' to apply tables/columns/indexes/FKs only,
+                                   then run a separate bootstrap that creates SECURITY DEFINER
+                                   functions, then re-run with '--phase rls' to land policies
+                                   that reference those functions.
+
+            Behaviour: Inspect → Diff → Filter (by phase) → Apply. Re-running against a converged
+            database emits zero operations (idempotent). Drift drops require --allow-destructive.
 
             Examples:
               DataProviderMigrate migrate --schema my-schema.yaml --output ./build.db --provider sqlite
-              DataProviderMigrate migrate --schema my-schema.yaml --output "Host=localhost;Database=mydb;Username=user;Password=pass" --provider postgres
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --allow-destructive
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase structural
+              DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase rls
             """
         );
         return 1;
@@ -369,6 +488,8 @@ public static class Program
         string? schemaPath = null;
         string? outputPath = null;
         var provider = "sqlite";
+        var allowDestructive = false;
+        var phase = MigratePhase.All;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -407,6 +528,33 @@ public static class Program
                     provider = args[++i];
                     break;
 
+                case "--allow-destructive":
+                    allowDestructive = true;
+                    break;
+
+                case "--phase":
+                    if (i + 1 >= args.Length)
+                    {
+                        return new MigrateParseResult.Failure(
+                            "--phase requires an argument (all, structural, or rls)"
+                        );
+                    }
+                    var phaseArg = args[++i].ToLowerInvariant();
+                    phase = phaseArg switch
+                    {
+                        "all" => MigratePhase.All,
+                        "structural" => MigratePhase.Structural,
+                        "rls" => MigratePhase.Rls,
+                        _ => MigratePhase.All,
+                    };
+                    if (phaseArg is not "all" and not "structural" and not "rls")
+                    {
+                        return new MigrateParseResult.Failure(
+                            $"Unknown --phase value: {phaseArg}. Valid: all, structural, rls"
+                        );
+                    }
+                    break;
+
                 case "--help"
                 or "-h":
                     return new MigrateParseResult.HelpRequested();
@@ -431,7 +579,13 @@ public static class Program
             return new MigrateParseResult.Failure("--output is required");
         }
 
-        return new MigrateParseResult.Success(schemaPath, outputPath, provider);
+        return new MigrateParseResult.Success(
+            schemaPath,
+            outputPath,
+            provider,
+            allowDestructive,
+            phase
+        );
     }
 
     private static ExportParseResult ParseExportArguments(string[] args)
@@ -518,8 +672,13 @@ public abstract record MigrateParseResult
     private MigrateParseResult() { }
 
     /// <summary>Successfully parsed migrate arguments.</summary>
-    public sealed record Success(string SchemaPath, string OutputPath, string Provider)
-        : MigrateParseResult;
+    public sealed record Success(
+        string SchemaPath,
+        string OutputPath,
+        string Provider,
+        bool AllowDestructive,
+        MigratePhase Phase
+    ) : MigrateParseResult;
 
     /// <summary>Parse error.</summary>
     public sealed record Failure(string Message) : MigrateParseResult;
@@ -544,4 +703,28 @@ public abstract record ExportParseResult
 
     /// <summary>Help requested.</summary>
     public sealed record HelpRequested : ExportParseResult;
+}
+
+/// <summary>
+/// Two-phase migrate selector. Implements the NAP requirement that
+/// SECURITY DEFINER functions referenced by RLS policies be created out
+/// of band between structural DDL and policy creation.
+/// </summary>
+public enum MigratePhase
+{
+    /// <summary>Apply every operation (default).</summary>
+    All,
+
+    /// <summary>
+    /// Apply only structural operations (tables, columns, indexes, FKs,
+    /// constraints) — skip RLS enable/disable/policy/force.
+    /// </summary>
+    Structural,
+
+    /// <summary>
+    /// Apply only RLS operations (enable/disable, force/no-force, create/drop
+    /// policy). Use after structural phase + SDF function bootstrap so policy
+    /// predicates can resolve.
+    /// </summary>
+    Rls,
 }
