@@ -47,7 +47,10 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           if [ -n "${VERSION:-}" ]; then
-            dotnet build ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release --no-restore -p:Version="$VERSION" -p:AssemblyVersion="$VERSION"
+            # AssemblyVersion only accepts numeric major[.minor[.build[.revision]]] —
+            # strip any -prerelease suffix (e.g. 0.9.7-beta -> 0.9.7).
+            ASM_VERSION="${VERSION%%-*}"
+            dotnet build ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release --no-restore -p:Version="$VERSION" -p:AssemblyVersion="$ASM_VERSION" -p:FileVersion="$ASM_VERSION"
           else
             dotnet build ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release --no-restore
           fi
@@ -57,7 +60,8 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           if [ -n "${VERSION:-}" ]; then
-            dotnet publish ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release -o release --nologo -p:Version="$VERSION" -p:AssemblyVersion="$VERSION"
+            ASM_VERSION="${VERSION%%-*}"
+            dotnet publish ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release -o release --nologo -p:Version="$VERSION" -p:AssemblyVersion="$ASM_VERSION" -p:FileVersion="$ASM_VERSION"
           else
             dotnet publish ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release -o release --nologo
           fi
