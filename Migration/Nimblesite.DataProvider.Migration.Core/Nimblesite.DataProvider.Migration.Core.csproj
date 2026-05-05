@@ -12,4 +12,12 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
     <PackageReference Include="YamlDotNet" Version="16.2.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- LQL transpilers used by RlsPredicateTranspiler. Implements [RLS-CORE-LQL]. -->
+    <ProjectReference Include="..\..\Lql\Nimblesite.Lql.Core\Nimblesite.Lql.Core.csproj" />
+    <ProjectReference Include="..\..\Lql\Nimblesite.Lql.Postgres\Nimblesite.Lql.Postgres.csproj" />
+    <ProjectReference Include="..\..\Lql\Nimblesite.Lql.SQLite\Nimblesite.Lql.SQLite.csproj" />
+    <ProjectReference Include="..\..\Lql\Nimblesite.Lql.SqlServer\Nimblesite.Lql.SqlServer.csproj" />
+  </ItemGroup>
 </Project>

@@ -85,6 +85,10 @@ public static class SchemaDiff
                             new CreateIndexOperation(desiredTable.Schema, desiredTable.Name, index)
                         );
                     }
+
+                    operations.AddRange(
+                        CalculateRlsDiff(null, desiredTable, allowDestructive, logger)
+                    );
                 }
                 else
                 {
@@ -114,6 +118,10 @@ public static class SchemaDiff
                         logger
                     );
                     operations.AddRange(fkOps);
+
+                    operations.AddRange(
+                        CalculateRlsDiff(currentTable, desiredTable, allowDestructive, logger)
+                    );
                 }
             }
 
@@ -257,6 +265,106 @@ public static class SchemaDiff
                         currentIndex.Name
                     );
                 }
+            }
+        }
+    }
+
+    // Implements [RLS-DIFF].
+    private static IEnumerable<SchemaOperation> CalculateRlsDiff(
+        TableDefinition? current,
+        TableDefinition desired,
+        bool allowDestructive,
+        ILogger? logger
+    )
+    {
+        var desiredRls = desired.RowLevelSecurity;
+        var currentRls = current?.RowLevelSecurity;
+
+        var desiredEnabled = desiredRls?.Enabled == true;
+        var currentEnabled = currentRls?.Enabled == true;
+
+        if (desiredEnabled && !currentEnabled)
+        {
+            logger?.LogDebug("Enabling RLS on {Schema}.{Table}", desired.Schema, desired.Name);
+            yield return new EnableRlsOperation(desired.Schema, desired.Name);
+        }
+
+        // Implements [RLS-DIFF] for FORCE (issue #37).
+        var desiredForced = desiredRls?.Forced == true;
+        var currentForced = currentRls?.Forced == true;
+        if (desiredEnabled && desiredForced && !currentForced)
+        {
+            logger?.LogDebug("Setting FORCE RLS on {Schema}.{Table}", desired.Schema, desired.Name);
+            yield return new EnableForceRlsOperation(desired.Schema, desired.Name);
+        }
+
+        var currentPolicyNames =
+            currentRls?.Policies.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (desiredEnabled)
+        {
+            foreach (var policy in desiredRls!.Policies)
+            {
+                if (!currentPolicyNames.Contains(policy.Name))
+                {
+                    logger?.LogDebug(
+                        "Creating RLS policy {Policy} on {Schema}.{Table}",
+                        policy.Name,
+                        desired.Schema,
+                        desired.Name
+                    );
+                    yield return new CreateRlsPolicyOperation(desired.Schema, desired.Name, policy);
+                }
+            }
+        }
+
+        if (allowDestructive)
+        {
+            var desiredPolicyNames =
+                desiredRls?.Policies.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (currentRls is not null)
+            {
+                foreach (var policy in currentRls.Policies)
+                {
+                    if (!desiredPolicyNames.Contains(policy.Name))
+                    {
+                        logger?.LogWarning(
+                            "RLS policy {Policy} on {Schema}.{Table} will be DROPPED",
+                            policy.Name,
+                            desired.Schema,
+                            desired.Name
+                        );
+                        yield return new DropRlsPolicyOperation(
+                            desired.Schema,
+                            desired.Name,
+                            policy.Name
+                        );
+                    }
+                }
+            }
+
+            // FORCE flip true -> false (issue #37, destructive).
+            if (currentForced && !desiredForced)
+            {
+                logger?.LogWarning(
+                    "FORCE RLS will be REMOVED on {Schema}.{Table}",
+                    desired.Schema,
+                    desired.Name
+                );
+                yield return new DisableForceRlsOperation(desired.Schema, desired.Name);
+            }
+
+            if (currentEnabled && !desiredEnabled)
+            {
+                logger?.LogWarning(
+                    "RLS will be DISABLED on {Schema}.{Table}",
+                    desired.Schema,
+                    desired.Name
+                );
+                yield return new DisableRlsOperation(desired.Schema, desired.Name);
             }
         }
     }

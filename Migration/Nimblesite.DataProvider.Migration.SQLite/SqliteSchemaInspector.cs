@@ -23,6 +23,7 @@ internal static class SqliteSchemaInspector
                 SELECT name FROM sqlite_master 
                 WHERE type = 'table' 
                 AND name NOT LIKE 'sqlite_%'
+                AND name <> '__rls_context'
                 ORDER BY name
                 """;
 
@@ -252,6 +253,7 @@ internal static class SqliteSchemaInspector
                     Indexes = indexes.AsReadOnly(),
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
+                    RowLevelSecurity = SqliteRlsSchemaInspector.Inspect(connection, tableName),
                 }
             );
         }

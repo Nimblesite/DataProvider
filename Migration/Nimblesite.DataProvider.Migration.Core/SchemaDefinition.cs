@@ -43,6 +43,12 @@ public sealed record TableDefinition
 
     /// <summary>Table comment/description for documentation.</summary>
     public string? Comment { get; init; }
+
+    /// <summary>
+    /// Row-level security policy set. When non-null, RLS is enabled on the
+    /// table and each contained policy is applied. Implements [RLS-CORE-POLICY].
+    /// </summary>
+    public RlsPolicySetDefinition? RowLevelSecurity { get; init; }
 }
 
 /// <summary>

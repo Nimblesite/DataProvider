@@ -632,4 +632,67 @@ public sealed class SchemaDiffTests
             op => op is DropTableOperation dropTable && dropTable.TableName == "obsolete_table"
         );
     }
+
+    [Fact]
+    public void Calculate_DesiredForcedRls_EmitsEnableForceRls()
+    {
+        var current = new SchemaDefinition
+        {
+            Name = "Current",
+            Tables = [RlsTable(new RlsPolicySetDefinition { Enabled = false })],
+        };
+
+        var desired = new SchemaDefinition
+        {
+            Name = "Desired",
+            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
+        };
+
+        var result = SchemaDiff.Calculate(current, desired);
+
+        Assert.True(result is OperationsResultOk);
+        var ops = ((OperationsResultOk)result).Value;
+        Assert.Contains(ops, op => op is EnableRlsOperation);
+        Assert.Contains(ops, op => op is EnableForceRlsOperation);
+    }
+
+    [Fact]
+    public void Calculate_CurrentForcedRls_AllowDestructive_EmitsDisableForceRls()
+    {
+        var current = new SchemaDefinition
+        {
+            Name = "Current",
+            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
+        };
+
+        var desired = new SchemaDefinition
+        {
+            Name = "Desired",
+            Tables = [RlsTable(new RlsPolicySetDefinition())],
+        };
+
+        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
+
+        Assert.True(result is OperationsResultOk);
+        var ops = ((OperationsResultOk)result).Value;
+        Assert.Contains(ops, op => op is DisableForceRlsOperation);
+    }
+
+    private static TableDefinition RlsTable(RlsPolicySetDefinition rls) =>
+        new()
+        {
+            Schema = "public",
+            Name = "documents",
+            Columns =
+            [
+                new ColumnDefinition
+                {
+                    Name = "id",
+                    Type = PortableTypes.Uuid,
+                    IsNullable = false,
+                },
+            ],
+            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
+            RowLevelSecurity = rls,
+        };
 }
