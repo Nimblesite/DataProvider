@@ -4,7 +4,7 @@
     <NuGetAudit>false</NuGetAudit>
     <NuGetAuditMode>disabled</NuGetAuditMode>
     <RestoreAuditProperties>false</RestoreAuditProperties>
-    <Version>0.9.7-beta</Version>
+    <Version>0.9.8-beta</Version>
     <Authors>ChristianFindlay</Authors>
     <Company>Nimblesite</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
