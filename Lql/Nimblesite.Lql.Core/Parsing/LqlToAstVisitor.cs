@@ -355,6 +355,19 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             {
                 return ProcessCaseExpressionToSql(expr.caseExpr(), lambdaScope);
             }
+
+            // expr matched the `IDENT '(' argList? ')'` branch — a bare
+            // function call (e.g. is_member(u, t)) used as a boolean predicate
+            // inside a lambda body without an explicit comparison operator.
+            // GitHub issue #40: NAP needs SECURITY DEFINER fn calls to
+            // survive LQL transpilation; rewriting via exists() loses
+            // SECURITY DEFINER semantics. Emit the call verbatim so RLS
+            // policy bodies can call user-defined Postgres functions.
+            if (expr.IDENT() != null && expr.ChildCount >= 3)
+            {
+                return ProcessFnCallExprToSql(expr, lambdaScope);
+            }
+
             // No fallback - fail hard if expr type is not handled
             throw new SqlErrorException(
                 CreateSqlErrorStatic(
@@ -704,6 +717,76 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
                     ?? throw new ArgumentException("Context must be ParserRuleContext")
             )
         );
+    }
+
+    /// <summary>
+    /// Process an expr that matched the <c>IDENT '(' argList? ')'</c> branch
+    /// (a function call) into SQL text. Lambda-scope-aware so qualified
+    /// idents like <c>p.tenant_id</c> strip the <c>p.</c> prefix when
+    /// <c>p</c> is bound. Implements GitHub issue #40 — RLS policies must
+    /// be able to call user-defined SECURITY DEFINER functions verbatim.
+    /// </summary>
+    private static string ProcessFnCallExprToSql(
+        LqlParser.ExprContext expr,
+        HashSet<string>? lambdaScope
+    )
+    {
+        var fnName = expr.IDENT().GetText();
+        var args = expr.argList();
+        if (args == null)
+        {
+            return $"{fnName}()";
+        }
+        var argTexts = args.arg().Select(a => ProcessFnCallArgToSql(a, lambdaScope)).ToList();
+        return $"{fnName}({string.Join(", ", argTexts)})";
+    }
+
+    private static string ProcessFnCallArgToSql(
+        LqlParser.ArgContext arg,
+        HashSet<string>? lambdaScope
+    )
+    {
+        if (arg.arithmeticExpr() != null)
+        {
+            return ProcessArithmeticExpressionToSql(arg.arithmeticExpr(), lambdaScope);
+        }
+        if (arg.functionCall() != null)
+        {
+            return ExtractFunctionCall(arg.functionCall());
+        }
+        if (arg.expr() != null)
+        {
+            var inner = arg.expr();
+            if (inner.IDENT() != null && inner.ChildCount >= 3)
+            {
+                return ProcessFnCallExprToSql(inner, lambdaScope);
+            }
+            if (inner.qualifiedIdent() != null)
+            {
+                return ProcessQualifiedIdentifierToSql(inner.qualifiedIdent(), lambdaScope);
+            }
+            if (inner.IDENT() != null)
+            {
+                return inner.IDENT().GetText();
+            }
+            if (inner.STRING() != null)
+            {
+                return inner.STRING().GetText();
+            }
+            if (inner.INT() != null)
+            {
+                return inner.INT().GetText();
+            }
+            if (inner.DECIMAL() != null)
+            {
+                return inner.DECIMAL().GetText();
+            }
+        }
+        if (arg.comparison() != null)
+        {
+            return ProcessComparisonToSql(arg.comparison(), lambdaScope);
+        }
+        return ExtractIdentifier(arg);
     }
 
     /// <summary>

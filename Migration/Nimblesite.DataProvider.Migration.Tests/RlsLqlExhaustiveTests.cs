@@ -492,4 +492,52 @@ public sealed class RlsLqlExhaustiveTests
         var sql = Mssql("user_id = current_user_id()");
         Assert.DoesNotContain("__RLS_CURRENT_USER_ID__", sql, StringComparison.Ordinal);
     }
+
+    // ── 26. NAP P0: exists() pipeline with fn calls inside lambda ──
+    // NAP shape: messages.tenant_id derived via parent conversations table.
+    // Predicate: exists(conversations |> filter(fn(p) => p.id = conversation_id
+    //   and is_member(app_user_id(), p.tenant_id)))
+    // LQL parser must accept fn-call expressions inside lambda bodies that
+    // aren't part of a comparison.
+
+    [Fact]
+    public void ExistsPipeline_LambdaWithFnCallInAndClause_Parses()
+    {
+        var lql = """
+            conversations
+            |> filter(fn(p) => p.id = '00000000-0000-0000-0000-000000000000' and is_member('a', p.tenant_id))
+            |> select(p.id)
+            """;
+        var result = RlsPredicateTranspiler.Translate(
+            $"exists({lql})",
+            RlsPlatform.Postgres,
+            "messages_member"
+        );
+
+        Assert.True(
+            result is TranspileOk,
+            result is TranspileError e ? e.Value.Message : "expected Ok"
+        );
+    }
+
+    [Fact]
+    public void ExistsPipeline_LambdaWithSecurityDefinerFnAtTopLevel_Parses()
+    {
+        // Even simpler: lambda body is a single fn call, no comparison.
+        var lql = """
+            conversations
+            |> filter(fn(p) => is_member('a', p.tenant_id))
+            |> select(p.id)
+            """;
+        var result = RlsPredicateTranspiler.Translate(
+            $"exists({lql})",
+            RlsPlatform.Postgres,
+            "test"
+        );
+
+        Assert.True(
+            result is TranspileOk,
+            result is TranspileError e ? e.Value.Message : "expected Ok"
+        );
+    }
 }
