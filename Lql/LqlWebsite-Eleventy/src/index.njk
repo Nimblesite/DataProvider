@@ -1,257 +1,350 @@
 ---
 layout: layouts/base.njk
-title: "Lambda Query Language - Functional Data Querying"
-description: "Functional programming meets data querying. Write elegant, composable queries with pipeline operators and lambda expressions."
+title: "Lambda Query Language (LQL) - Functional Data Querying"
+description: "LQL documentation, syntax, migrations, tooling, and transpilation examples for the Lambda Query Language."
 ---
 
 <section class="hero">
-  <div class="container">
-    <h1>Lambda Query Language</h1>
-    <p class="hero-subtitle">
-      Functional programming meets data querying. Write elegant, composable queries with the power of lambda expressions and pipeline operators.
-    </p>
-    <div class="hero-buttons">
-      <a href="/docs/quick-start/" class="btn btn-primary btn-large">Get Started</a>
-      <a href="/playground/" class="btn btn-secondary btn-large">Try Playground</a>
-    </div>
+    <div class="container">
+        <div class="hero-content">
+            <h1>Lambda Query Language</h1>
+            <p class="subtitle">A functional pipeline language for database queries, migration logic, RLS predicates, and portable SQL generation.</p>
 
-    <div class="hero-code">
-      <div class="code-window">
-        <div class="code-header">
-          <div class="code-dot"></div>
-          <div class="code-dot"></div>
-          <div class="code-dot"></div>
-          <span class="code-title">complex_analytics.lql</span>
-        </div>
-        <div class="code-block"><span class="comment">-- Join users + orders, filter only completed orders</span>
-<span class="keyword">let</span> <span class="identifier">joined</span> <span class="operator">=</span>
+            <div class="cta-buttons">
+                <a href="#docs" class="btn btn-primary">Read Docs</a>
+                <a href="/playground/" class="btn btn-secondary">Try Transpiler</a>
+            </div>
+
+            <div class="hero-code">
+                <div class="code-header">
+                    <div class="code-dot"></div>
+                    <div class="code-dot"></div>
+                    <div class="code-dot"></div>
+                    <span class="code-title">tenant_orders.lql</span>
+                </div>
+                <div class="code-block"><span class="comment">-- Join, filter, aggregate, and emit dialect-specific SQL</span>
+<span class="keyword">let</span> <span class="identifier">completed_orders</span> <span class="operator">=</span>
     <span class="identifier">users</span>
     <span class="operator">|></span> <span class="function">join</span>(<span class="identifier">orders</span>, <span class="identifier">on</span> <span class="operator">=</span> <span class="identifier">users</span>.<span class="identifier">id</span> <span class="operator">=</span> <span class="identifier">orders</span>.<span class="identifier">user_id</span>)
     <span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span> <span class="identifier">row</span>.<span class="identifier">orders</span>.<span class="identifier">status</span> <span class="operator">=</span> <span class="string">'completed'</span>)
 
-<span class="comment">-- Aggregate and analyze</span>
-<span class="identifier">joined</span>
-<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">users</span>.<span class="identifier">id</span>)
+<span class="identifier">completed_orders</span>
+<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">users</span>.<span class="identifier">id</span>, <span class="identifier">users</span>.<span class="identifier">name</span>)
 <span class="operator">|></span> <span class="function">select</span>(
     <span class="identifier">users</span>.<span class="identifier">name</span>,
-    <span class="function">count</span>(*) <span class="keyword">as</span> <span class="identifier">total_orders</span>,
+    <span class="function">count</span>(*) <span class="keyword">as</span> <span class="identifier">order_count</span>,
     <span class="function">sum</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">revenue</span>
-)</div>
-      </div>
+)
+<span class="operator">|></span> <span class="function">order_by</span>(<span class="identifier">revenue</span> <span class="keyword">desc</span>)</div>
+            </div>
+        </div>
     </div>
-  </div>
 </section>
 
-<section id="features" class="features-alt">
-  <div class="container">
-    <div class="section-header">
-      <h2>Why LQL?</h2>
-      <p>Functional programming principles applied to data querying for cleaner, more maintainable code.</p>
+<section id="features" class="features">
+    <div class="container">
+        <div class="section-header">
+            <h2>What LQL Is For</h2>
+            <p>Use one expression language for query pipelines, database-portable SQL, and migration-time predicates.</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">|></div>
+                <h3>Pipeline Queries</h3>
+                <p>Start from a table or binding and pass rows through select, filter, join, grouping, ordering, pagination, and set operations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">SQL</div>
+                <h3>Dialect Output</h3>
+                <p>The same LQL statement emits PostgreSQL, SQL Server, or SQLite SQL through the dialect packages.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">RLS</div>
+                <h3>Migrations</h3>
+                <p>Migration YAML can use LQL for RLS policies and PostgreSQL function bodies instead of embedding raw platform SQL.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">LSP</div>
+                <h3>Editor Tooling</h3>
+                <p>The Rust language server powers diagnostics, formatting, schema-aware completions, hovers, and optional AI suggestions.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">F#</div>
+                <h3>Type Provider</h3>
+                <p>F# projects can validate LQL at compile time and expose generated SQL through the type provider.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">DX</div>
+                <h3>Transpiler Demo</h3>
+                <p>The Blazor page is kept as a focused playground for running client-side transpilation only.</p>
+            </div>
+        </div>
     </div>
-
-    <div class="features-grid">
-      <div class="card">
-        <div class="card-icon" style="font-size: var(--text-2xl);">&lambda;</div>
-        <h3>Functional First</h3>
-        <p>Built on pure functional programming principles. Immutable data transformations, lambda expressions, and composable operations make your queries predictable and testable.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">|></div>
-        <h3>Pipeline Operators</h3>
-        <p>Chain operations naturally with pipeline operators. Data flows from left to right, making complex transformations easy to read and understand.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon" style="background: linear-gradient(135deg, var(--forest) 0%, #3CB371 100%);">TS</div>
-        <h3>Type Safe</h3>
-        <p>Strong typing ensures your queries are correct at compile time. No more runtime surprises from typos or schema mismatches.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon" style="background: linear-gradient(135deg, var(--violet) 0%, #9B59B6 100%);">fn</div>
-        <h3>Composable</h3>
-        <p>Build complex queries from simple, reusable components. Define once, use everywhere with let bindings and function composition.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon" style="background: linear-gradient(135deg, #4DA3FF 0%, #2196F3 100%);">SQL</div>
-        <h3>SQL Compatible</h3>
-        <p>Compiles to optimized SQL for your target database. Get the performance of SQL with the elegance of functional programming.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon" style="background: linear-gradient(135deg, #FF9F43 0%, #F39C12 100%);">DX</div>
-        <h3>Developer Focused</h3>
-        <p>Designed by developers, for developers. Excellent tooling support with VS Code extension, LSP, and clear error messages.</p>
-      </div>
-    </div>
-  </div>
 </section>
 
 <section id="examples" class="examples">
-  <div class="container">
-    <div class="section-header">
-      <h2>See LQL in Action</h2>
-      <p>Real examples showing the power and elegance of functional data querying.</p>
-    </div>
-
-    <div class="examples-grid">
-      <div class="example">
-        <div class="example-content">
-          <h3>Simple Selection</h3>
-          <p>Clean, readable syntax for basic data selection. No verbose SELECT statements or complex syntax.</p>
-          <ul class="example-features">
-            <li>Pipeline operator for natural flow</li>
-            <li>Clear column specification</li>
-            <li>Type-safe field access</li>
-          </ul>
+    <div class="container">
+        <div class="section-header">
+            <h2>Examples</h2>
+            <p>The core language is small: compose table pipelines, lambda predicates, and expression columns.</p>
         </div>
-        <div class="example-code">
-          <div class="code-block"><span class="identifier">users</span> <span class="operator">|></span> <span class="function">select</span>(
+
+        <div class="examples-grid">
+            <div class="example">
+                <div class="example-content">
+                    <h3>Simple Selection</h3>
+                    <p>Select explicit columns from a source table. Fully qualify columns when that keeps intent clear.</p>
+                    <ul class="example-features">
+                        <li>Table-first query shape</li>
+                        <li>Column projection with `select`</li>
+                        <li>Portable output SQL</li>
+                    </ul>
+                </div>
+                <div class="example-code">
+                    <div class="code-block"><span class="identifier">users</span> <span class="operator">|></span> <span class="function">select</span>(
     <span class="identifier">users</span>.<span class="identifier">id</span>,
     <span class="identifier">users</span>.<span class="identifier">name</span>,
     <span class="identifier">users</span>.<span class="identifier">email</span>
 )</div>
-        </div>
-      </div>
+                </div>
+            </div>
 
-      <div class="example">
-        <div class="example-content">
-          <h3>Advanced Filtering</h3>
-          <p>Lambda expressions provide powerful, type-safe filtering with full access to row data.</p>
-          <ul class="example-features">
-            <li>Lambda function syntax</li>
-            <li>Logical operators (and, or)</li>
-            <li>Range filtering</li>
-          </ul>
-        </div>
-        <div class="example-code">
-          <div class="code-block"><span class="identifier">employees</span>
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">employees</span>.<span class="identifier">id</span>,
-    <span class="identifier">employees</span>.<span class="identifier">name</span>,
-    <span class="identifier">employees</span>.<span class="identifier">salary</span>
-)
+            <div class="example">
+                <div class="example-content">
+                    <h3>Lambda Filtering</h3>
+                    <p>Use `fn(row) => ...` predicates for filtering. The row parameter exposes fields through table-qualified paths.</p>
+                    <ul class="example-features">
+                        <li>Comparison operators: `=`, `!=`, `>`, `<`, `>=`, `<=`</li>
+                        <li>Logical operators: `and`, `or`, `not`</li>
+                        <li>Arithmetic and function calls inside predicates</li>
+                    </ul>
+                </div>
+                <div class="example-code">
+                    <div class="code-block"><span class="identifier">employees</span>
 <span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span>
-    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">salary</span> &gt; <span class="string">50000</span> <span class="keyword">and</span>
-    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">salary</span> &lt; <span class="string">100000</span>
-)</div>
-        </div>
-      </div>
-
-      <div class="example">
-        <div class="example-content">
-          <h3>Arithmetic & Functions</h3>
-          <p>Rich expression support with mathematical operations and built-in functions for complex calculations.</p>
-          <ul class="example-features">
-            <li>Mathematical expressions</li>
-            <li>Column aliases with 'as'</li>
-            <li>Function composition</li>
-          </ul>
-        </div>
-        <div class="example-code">
-          <div class="code-block"><span class="identifier">products</span>
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">products</span>.<span class="identifier">name</span>,
-    <span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">*</span> <span class="identifier">products</span>.<span class="identifier">quantity</span> <span class="keyword">as</span> <span class="identifier">total_value</span>,
-    <span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">+</span> <span class="string">10</span> <span class="keyword">as</span> <span class="identifier">price_plus_ten</span>,
-    <span class="function">round</span>(<span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">/</span> <span class="string">2</span>, <span class="string">2</span>) <span class="keyword">as</span> <span class="identifier">half_price</span>
+    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">salary</span> <span class="operator">&gt;</span> <span class="string">50000</span> <span class="keyword">and</span>
+    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">department</span> <span class="operator">=</span> <span class="string">'Engineering'</span>
 )
-<span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span>
-    <span class="identifier">row</span>.<span class="identifier">products</span>.<span class="identifier">price</span> &gt; <span class="string">0</span>
-)</div>
-        </div>
-      </div>
+<span class="operator">|></span> <span class="function">select</span>(<span class="identifier">employees</span>.<span class="identifier">id</span>, <span class="identifier">employees</span>.<span class="identifier">name</span>)</div>
+                </div>
+            </div>
 
-      <div class="example">
-        <div class="example-content">
-          <h3>Aggregation & Grouping</h3>
-          <p>Powerful aggregation functions with group by operations and having clauses for complex analytics.</p>
-          <ul class="example-features">
-            <li>Group by multiple columns</li>
-            <li>Aggregate functions (count, sum, avg)</li>
-            <li>Having clause with lambda filters</li>
-          </ul>
+            <div class="example">
+                <div class="example-content">
+                    <h3>Joins And Aggregation</h3>
+                    <p>Join tables, group rows, compute aggregate columns, filter groups, and order the result.</p>
+                    <ul class="example-features">
+                        <li>`join`, `left_join`, `right_join`, `full_join`, `cross_join`</li>
+                        <li>`count`, `sum`, `avg`, `min`, `max`</li>
+                        <li>`having` filters grouped rows</li>
+                    </ul>
+                </div>
+                <div class="example-code">
+                    <div class="code-block"><span class="identifier">users</span>
+<span class="operator">|></span> <span class="function">join</span>(<span class="identifier">orders</span>, <span class="identifier">on</span> <span class="operator">=</span> <span class="identifier">users</span>.<span class="identifier">id</span> <span class="operator">=</span> <span class="identifier">orders</span>.<span class="identifier">user_id</span>)
+<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">users</span>.<span class="identifier">id</span>, <span class="identifier">users</span>.<span class="identifier">name</span>)
+<span class="operator">|></span> <span class="function">having</span>(<span class="keyword">fn</span>(<span class="identifier">group</span>) <span class="operator">=></span> <span class="function">count</span>(*) <span class="operator">&gt;</span> <span class="string">2</span>)
+<span class="operator">|></span> <span class="function">select</span>(<span class="identifier">users</span>.<span class="identifier">name</span>, <span class="function">sum</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">revenue</span>)</div>
+                </div>
+            </div>
         </div>
-        <div class="example-code">
-          <div class="code-block"><span class="identifier">orders</span>
-<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">orders</span>.<span class="identifier">user_id</span>, <span class="identifier">orders</span>.<span class="identifier">status</span>)
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">orders</span>.<span class="identifier">user_id</span>,
-    <span class="identifier">orders</span>.<span class="identifier">status</span>,
-    <span class="function">count</span>(*) <span class="keyword">as</span> <span class="identifier">order_count</span>,
-    <span class="function">sum</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">total_amount</span>,
-    <span class="function">avg</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">avg_amount</span>
-)
-<span class="operator">|></span> <span class="function">having</span>(<span class="keyword">fn</span>(<span class="identifier">group</span>) <span class="operator">=></span> <span class="function">count</span>(*) &gt; <span class="string">2</span>)
-<span class="operator">|></span> <span class="function">order_by</span>(<span class="identifier">total_amount</span> <span class="keyword">desc</span>)</div>
-        </div>
-      </div>
     </div>
-  </div>
 </section>
 
-<section id="fsharp" class="fsharp">
-  <div class="container">
-    <div class="section-header">
-      <h2>F# Type Provider</h2>
-      <p>Use LQL with full type safety in F# through our native type provider.</p>
-    </div>
-
-    <div class="fsharp-content">
-      <div class="fsharp-info">
-        <h3>Type-Safe LQL in F#</h3>
-        <p>The LQL Type Provider brings compile-time type checking to your LQL queries in F#. Write queries with IntelliSense support, catch errors before runtime, and enjoy seamless integration with your F# codebase.</p>
-        <ul class="fsharp-features">
-          <li>Compile-time query validation</li>
-          <li>Full IntelliSense support for table and column names</li>
-          <li>Automatic SQL generation for PostgreSQL and SQL Server</li>
-          <li>Strongly-typed result sets</li>
-        </ul>
-      </div>
-      <div class="fsharp-code">
-        <div class="code-header">
-          <div class="code-dot"></div>
-          <div class="code-dot"></div>
-          <div class="code-dot"></div>
-          <span class="code-title">Program.fs</span>
+<section id="docs" class="docs-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>LQL Documentation</h2>
+            <p>Everything needed to install, write, transpile, use in migrations, and wire into editor tooling.</p>
         </div>
-        <div class="code-block"><span class="keyword">open</span> <span class="identifier">Lql</span>
 
-<span class="comment">// Define types with validated LQL</span>
-<span class="keyword">type</span> <span class="identifier">GetUsers</span> <span class="operator">=</span>
-    <span class="identifier">LqlCommand</span><span class="operator">&lt;</span><span class="string">"Users |> select(*)"</span><span class="operator">&gt;</span>
+        <div class="docs-grid">
+            <article id="install" class="doc-card">
+                <h3>Install</h3>
+                <p>Add the core parser plus the dialect package that will emit SQL for your target database.</p>
+                <pre><code class="language-bash">dotnet add package Nimblesite.Lql.Core
+dotnet add package Nimblesite.Lql.Postgres
+dotnet add package Nimblesite.Lql.SqlServer
+dotnet add package Nimblesite.Lql.SQLite</code></pre>
+                <table>
+                    <thead><tr><th>Package</th><th>Use</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>Nimblesite.Lql.Core</code></td><td>Parser, AST, statement conversion.</td></tr>
+                        <tr><td><code>Nimblesite.Lql.Postgres</code></td><td><code>ToPostgreSql()</code> extension.</td></tr>
+                        <tr><td><code>Nimblesite.Lql.SqlServer</code></td><td><code>ToSqlServer()</code> extension.</td></tr>
+                        <tr><td><code>Nimblesite.Lql.SQLite</code></td><td><code>ToSQLite()</code> extension.</td></tr>
+                    </tbody>
+                </table>
+            </article>
 
-<span class="comment">// Access generated SQL</span>
-<span class="keyword">let</span> <span class="identifier">sql</span> <span class="operator">=</span> <span class="identifier">GetUsers</span>.<span class="identifier">Sql</span>
-<span class="keyword">let</span> <span class="identifier">query</span> <span class="operator">=</span> <span class="identifier">GetUsers</span>.<span class="identifier">Query</span></div>
-      </div>
+            <article id="api" class="doc-card">
+                <h3>Programmatic API</h3>
+                <p>Parse once, then call the dialect extension. Errors are returned as `Result&lt;T,E&gt;` values.</p>
+                <pre><code class="language-csharp">using Nimblesite.Lql.Core;
+using Nimblesite.Lql.Postgres;
+using Nimblesite.Sql.Model;
+using Outcome;
+
+var lql = "Users |> filter(fn(row) => row.Users.Age > 21) |> select(Users.Name)";
+var statementResult = LqlStatementConverter.ToStatement(lql);
+
+if (statementResult is Result&lt;LqlStatement, SqlError&gt;.Ok&lt;LqlStatement, SqlError&gt; ok)
+{
+    Result&lt;string, SqlError&gt; sql = ok.Value.ToPostgreSql();
+}</code></pre>
+            </article>
+
+            <article id="syntax" class="doc-card">
+                <h3>Syntax</h3>
+                <p>A query starts with a table or binding and flows left-to-right through operations.</p>
+                <table>
+                    <thead><tr><th>Construct</th><th>Shape</th></tr></thead>
+                    <tbody>
+                        <tr><td>Table</td><td><code>users</code></td></tr>
+                        <tr><td>Pipeline</td><td><code>users |> select(users.id)</code></td></tr>
+                        <tr><td>Column</td><td><code>orders.total</code></td></tr>
+                        <tr><td>Lambda</td><td><code>fn(row) => row.users.active = true</code></td></tr>
+                        <tr><td>Alias</td><td><code>users.name as display_name</code></td></tr>
+                        <tr><td>Let binding</td><td><code>let active = users |> filter(...)</code></td></tr>
+                    </tbody>
+                </table>
+                <pre><code class="language-lql">let active_users =
+    users |> filter(fn(row) => row.users.status = 'active')
+
+active_users
+|> select(active_users.id, active_users.name)
+|> order_by(active_users.name asc)
+|> limit(50)</code></pre>
+            </article>
+
+            <article id="operations" class="doc-card">
+                <h3>Pipeline Operations</h3>
+                <table>
+                    <thead><tr><th>Operation</th><th>Purpose</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>select(cols...)</code></td><td>Project columns or computed expressions.</td></tr>
+                        <tr><td><code>filter(fn(row) => ...)</code></td><td>Filter rows before grouping.</td></tr>
+                        <tr><td><code>join(table, on = ...)</code></td><td>Inner join to another source.</td></tr>
+                        <tr><td><code>left_join(table, on = ...)</code></td><td>Preserve rows from the left source.</td></tr>
+                        <tr><td><code>group_by(cols...)</code></td><td>Group result rows.</td></tr>
+                        <tr><td><code>having(fn(group) => ...)</code></td><td>Filter grouped rows.</td></tr>
+                        <tr><td><code>order_by(col asc|desc)</code></td><td>Sort the result.</td></tr>
+                        <tr><td><code>limit(n)</code> / <code>offset(n)</code></td><td>Page the result.</td></tr>
+                        <tr><td><code>union(query)</code> / <code>union_all(query)</code></td><td>Combine compatible result sets.</td></tr>
+                        <tr><td><code>insert(target)</code></td><td>Insert query output into another table.</td></tr>
+                    </tbody>
+                </table>
+            </article>
+
+            <article id="functions" class="doc-card">
+                <h3>Expressions And Functions</h3>
+                <p>Expressions can compare values, combine predicates, compute columns, and call mapped SQL functions.</p>
+                <table>
+                    <thead><tr><th>Group</th><th>Examples</th></tr></thead>
+                    <tbody>
+                        <tr><td>Comparison</td><td><code>=</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code></td></tr>
+                        <tr><td>Logical</td><td><code>and</code>, <code>or</code>, <code>not</code></td></tr>
+                        <tr><td>Math</td><td><code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>round</code>, <code>abs</code></td></tr>
+                        <tr><td>Aggregate</td><td><code>count</code>, <code>sum</code>, <code>avg</code>, <code>min</code>, <code>max</code></td></tr>
+                        <tr><td>Window</td><td><code>row_number</code>, <code>rank</code>, <code>dense_rank</code>, <code>lag</code>, <code>lead</code></td></tr>
+                        <tr><td>Session</td><td><code>current_setting('app.tenant_id')::uuid</code> for PostgreSQL migration/RLS shapes.</td></tr>
+                    </tbody>
+                </table>
+            </article>
+
+            <article id="dialects" class="doc-card">
+                <h3>SQL Dialects</h3>
+                <p>LQL keeps query intent stable while the dialect package handles SQL differences such as `LIMIT`, `TOP`, booleans, and function names.</p>
+                <pre><code class="language-lql">users
+|> filter(fn(row) => row.users.age > 18)
+|> select(users.name, users.email)
+|> order_by(users.name asc)
+|> limit(10)</code></pre>
+                <table>
+                    <thead><tr><th>Dialect</th><th>Generated paging shape</th></tr></thead>
+                    <tbody>
+                        <tr><td>PostgreSQL</td><td><code>ORDER BY users.name ASC LIMIT 10</code></td></tr>
+                        <tr><td>SQLite</td><td><code>ORDER BY users.name ASC LIMIT 10</code></td></tr>
+                        <tr><td>SQL Server</td><td><code>SELECT TOP 10 ... ORDER BY users.name ASC</code></td></tr>
+                    </tbody>
+                </table>
+            </article>
+
+            <article id="migrations" class="doc-card">
+                <h3>Migrations, RLS, And `bodyLql`</h3>
+                <p>DataProvider migrations use LQL where schema logic must be portable or generated consistently. Use `usingLql` and `withCheckLql` for RLS policies, and `bodyLql` for PostgreSQL function bodies that should be transpiled instead of handwritten.</p>
+                <pre><code class="language-yaml">tables:
+  - name: documents
+    columns:
+      - name: id
+        type: uuid
+        primaryKey: true
+      - name: tenant_id
+        type: uuid
+      - name: owner_id
+        type: uuid
+    rls:
+      enabled: true
+      policies:
+        - name: tenant_documents
+          command: all
+          usingLql: tenant_id = current_setting('app.tenant_id')::uuid
+          withCheckLql: owner_id = current_setting('app.user_id')::uuid
+
+functions:
+  - name: current_tenant_id
+    schema: app
+    returns: uuid
+    language: sql
+    bodyLql: current_setting('app.tenant_id')::uuid</code></pre>
+                <p>For PostgreSQL, `current_setting('key')` is rewritten to the null-tolerant `current_setting('key', true)` form before SQL is emitted. `body` and `bodyLql` are mutually exclusive.</p>
+            </article>
+
+            <article id="tooling" class="doc-card">
+                <h3>VS Code, LSP, Database Schema, And AI</h3>
+                <p>The VS Code extension runs the Rust `lql-lsp` language server for `.lql` files.</p>
+                <table>
+                    <thead><tr><th>Feature</th><th>Behavior</th></tr></thead>
+                    <tbody>
+                        <tr><td>Diagnostics</td><td>ANTLR parse errors, unmatched parentheses, pipe spacing warnings, and unknown function hints.</td></tr>
+                        <tr><td>Completions</td><td>Pipeline operations, keywords, functions, `let` bindings, table names, and columns.</td></tr>
+                        <tr><td>Database config</td><td>Set `lql.database.connectionString`, `LQL_CONNECTION_STRING`, or `DATABASE_URL` for schema-aware completions and hovers.</td></tr>
+                        <tr><td>AI completions</td><td>Optional model completions are merged after schema and keyword results and bounded by timeout.</td></tr>
+                    </tbody>
+                </table>
+                <pre><code class="language-json">{
+  "lql.database.connectionString": "Host=localhost;Database=app;Username=postgres;Password=secret",
+  "lql.ai.provider": "ollama",
+  "lql.ai.endpoint": "http://localhost:11434/api/generate",
+  "lql.ai.model": "qwen2.5-coder:1.5b"
+}</code></pre>
+            </article>
+
+            <article id="fsharp" class="doc-card">
+                <h3>F# Type Provider</h3>
+                <p>The type provider validates LQL at compile time and exposes the original query plus generated SQLite SQL.</p>
+                <pre><code class="language-xml">&lt;PackageReference Include="Nimblesite.Lql.TypeProvider.FSharp" Version="*" /&gt;</code></pre>
+                <pre><code class="language-fsharp">open Nimblesite.Lql.Core.TypeProvider
+
+type ActiveUsers =
+    LqlCommand&lt;"Users |> filter(fn(row) => row.Users.Status = 'active') |> select(*)"&gt;
+
+let query = ActiveUsers.Query
+let sql = ActiveUsers.Sql</code></pre>
+            </article>
+        </div>
     </div>
-  </div>
 </section>
 
-<section class="features">
-  <div class="container">
-    <div class="section-header">
-      <h2>Get Started in Minutes</h2>
+<section id="playground" class="playground-strip">
+    <div class="container">
+        <div class="section-header">
+            <h2>Run The Transpiler</h2>
+            <p>The Blazor app is now scoped to the interactive transpilation demo. Use it to paste LQL and inspect PostgreSQL or SQL Server output.</p>
+        </div>
+        <div class="text-center">
+            <a href="/playground/" class="btn btn-primary">Open Playground</a>
+        </div>
     </div>
-
-    <div style="max-width: 700px; margin: 0 auto;">
-{% highlight "bash" %}
-# Install the LQL NuGet package
-dotnet add package Lql
-
-# Write your first LQL query
-users |> select(users.id, users.name, users.email)
-
-# Transpiles to SQL:
-# SELECT users.id, users.name, users.email FROM users
-{% endhighlight %}
-    </div>
-
-    <div class="text-center mt-8">
-      <a href="/playground/" class="btn btn-primary btn-large">Try the Playground</a>
-    </div>
-  </div>
 </section>

@@ -1,246 +1,19 @@
 @page "/"
-@using Microsoft.AspNetCore.Components.Web
 @using Nimblesite.Lql.Core
 @using Nimblesite.Lql.Postgres
 @using Nimblesite.Lql.SqlServer
-@using Outcome
 @using Nimblesite.Sql.Model
+@using Outcome
 
-<PageTitle>Lambda Query Language (LQL) - Functional Data Querying</PageTitle>
-
-<section class="hero">
-    <div class="container">
-        <div class="hero-content">
-            <h1>Lambda Query Language</h1>
-            <p class="subtitle">Functional programming meets data querying. Write elegant, composable queries with the power of lambda expressions and pipeline operators.</p>
-            
-            <div class="cta-buttons">
-                <a href="#examples" class="btn btn-primary">See Examples</a>
-                <a href="#playground" class="btn btn-secondary">Try Playground</a>
-            </div>
-
-            <div class="hero-code">
-                <div class="code-header">
-                    <div class="code-dot"></div>
-                    <div class="code-dot"></div>
-                    <div class="code-dot"></div>
-                    <span class="code-title">complex_analytics.lql</span>
-                </div>
-                <div class="code-block"><span class="comment">-- Join users + orders, filter only completed orders</span>
-<span class="keyword">let</span> <span class="identifier">joined</span> <span class="operator">=</span>
-    <span class="identifier">users</span>
-    <span class="operator">|></span> <span class="function">join</span>(<span class="identifier">orders</span>, <span class="identifier">on</span> <span class="operator">=</span> <span class="identifier">users</span>.<span class="identifier">id</span> <span class="operator">=</span> <span class="identifier">orders</span>.<span class="identifier">user_id</span>)
-    <span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span> <span class="identifier">row</span>.<span class="identifier">orders</span>.<span class="identifier">status</span> <span class="operator">=</span> <span class="string">'completed'</span>)
-
-<span class="comment">-- Aggregate and analyze</span>
-<span class="identifier">joined</span>
-<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">users</span>.<span class="identifier">id</span>)
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">users</span>.<span class="identifier">name</span>,
-    <span class="function">count</span>(*) <span class="keyword">as</span> <span class="identifier">total_orders</span>,
-    <span class="function">sum</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">revenue</span>
-)</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section id="features" class="features">
-    <div class="container">
-        <div class="section-header">
-            <h2>Why LQL?</h2>
-            <p>Functional programming principles applied to data querying for cleaner, more maintainable code.</p>
-        </div>
-        
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">λ</div>
-                <h3>Functional First</h3>
-                <p>Built on pure functional programming principles. Immutable data transformations, lambda expressions, and composable operations make your queries predictable and testable.</p>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">|></div>
-                <h3>Pipeline Operators</h3>
-                <p>Chain operations naturally with pipeline operators. Data flows from left to right, making complex transformations easy to read and understand.</p>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
-                <h3>Type Safe</h3>
-                <p>Strong typing ensures your queries are correct at compile time. No more runtime surprises from typos or schema mismatches.</p>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">🔧</div>
-                <h3>Composable</h3>
-                <p>Build complex queries from simple, reusable components. Define once, use everywhere with let bindings and function composition.</p>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <h3>SQL Compatible</h3>
-                <p>Compiles to optimized SQL for your target database. Get the performance of SQL with the elegance of functional programming.</p>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">🎯</div>
-                <h3>Developer Focused</h3>
-                <p>Designed by developers, for developers. Excellent tooling support, clear error messages, and intuitive syntax.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section id="examples" class="examples">
-    <div class="container">
-        <div class="section-header">
-            <h2>See LQL in Action</h2>
-            <p>Real examples showing the power and elegance of functional data querying.</p>
-        </div>
-        
-        <div class="examples-grid">
-            <div class="example">
-                <div class="example-content">
-                    <h3>Simple Selection</h3>
-                    <p>Clean, readable syntax for basic data selection. No verbose SELECT statements or complex syntax.</p>
-                    <ul class="example-features">
-                        <li>Pipeline operator for natural flow</li>
-                        <li>Clear column specification</li>
-                        <li>Type-safe field access</li>
-                    </ul>
-                </div>
-                <div class="example-code">
-                    <div class="code-block"><span class="identifier">users</span> <span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">users</span>.<span class="identifier">id</span>,
-    <span class="identifier">users</span>.<span class="identifier">name</span>,
-    <span class="identifier">users</span>.<span class="identifier">email</span>
-)</div>
-                </div>
-            </div>
-
-            <div class="example">
-                <div class="example-content">
-                    <h3>Advanced Filtering</h3>
-                    <p>Lambda expressions provide powerful, type-safe filtering with full access to row data.</p>
-                    <ul class="example-features">
-                        <li>Lambda function syntax</li>
-                        <li>Logical operators (and, or)</li>
-                        <li>Range filtering</li>
-                    </ul>
-                </div>
-                <div class="example-code">
-                    <div class="code-block"><span class="identifier">employees</span>
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">employees</span>.<span class="identifier">id</span>,
-    <span class="identifier">employees</span>.<span class="identifier">name</span>,
-    <span class="identifier">employees</span>.<span class="identifier">salary</span>
-)
-<span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span>
-    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">salary</span> <span class="operator">&gt;</span> <span class="string">50000</span> <span class="keyword">and</span>
-    <span class="identifier">row</span>.<span class="identifier">employees</span>.<span class="identifier">salary</span> <span class="operator">&lt;</span> <span class="string">100000</span>
-)</div>
-                </div>
-            </div>
-
-            <div class="example">
-                <div class="example-content">
-                    <h3>Arithmetic & Functions</h3>
-                    <p>Rich expression support with mathematical operations and built-in functions for complex calculations.</p>
-                    <ul class="example-features">
-                        <li>Mathematical expressions</li>
-                        <li>Column aliases with 'as'</li>
-                        <li>Function composition</li>
-                    </ul>
-                </div>
-                <div class="example-code">
-                    <div class="code-block"><span class="identifier">products</span>
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">products</span>.<span class="identifier">name</span>,
-    <span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">*</span> <span class="identifier">products</span>.<span class="identifier">quantity</span> <span class="keyword">as</span> <span class="identifier">total_value</span>,
-    <span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">+</span> <span class="string">10</span> <span class="keyword">as</span> <span class="identifier">price_plus_ten</span>,
-    <span class="function">round</span>(<span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">/</span> <span class="string">2</span>, <span class="string">2</span>) <span class="keyword">as</span> <span class="identifier">half_price</span>
-)
-<span class="operator">|></span> <span class="function">filter</span>(<span class="keyword">fn</span>(<span class="identifier">row</span>) <span class="operator">=></span>
-    <span class="identifier">row</span>.<span class="identifier">products</span>.<span class="identifier">price</span> <span class="operator">&gt;</span> <span class="string">0</span>
-)</div>
-                </div>
-            </div>
-
-            <div class="example">
-                <div class="example-content">
-                    <h3>Aggregation & Grouping</h3>
-                    <p>Powerful aggregation functions with group by operations and having clauses for complex analytics.</p>
-                    <ul class="example-features">
-                        <li>Group by multiple columns</li>
-                        <li>Aggregate functions (count, sum, avg)</li>
-                        <li>Having clause with lambda filters</li>
-                    </ul>
-                </div>
-                <div class="example-code">
-                    <div class="code-block"><span class="identifier">orders</span>
-<span class="operator">|></span> <span class="function">group_by</span>(<span class="identifier">orders</span>.<span class="identifier">user_id</span>, <span class="identifier">orders</span>.<span class="identifier">status</span>)
-<span class="operator">|></span> <span class="function">select</span>(
-    <span class="identifier">orders</span>.<span class="identifier">user_id</span>,
-    <span class="identifier">orders</span>.<span class="identifier">status</span>,
-    <span class="function">count</span>(*) <span class="keyword">as</span> <span class="identifier">order_count</span>,
-    <span class="function">sum</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">total_amount</span>,
-    <span class="function">avg</span>(<span class="identifier">orders</span>.<span class="identifier">total</span>) <span class="keyword">as</span> <span class="identifier">avg_amount</span>
-)
-<span class="operator">|></span> <span class="function">having</span>(<span class="keyword">fn</span>(<span class="identifier">group</span>) <span class="operator">=></span> <span class="function">count</span>(*) <span class="operator">&gt;</span> <span class="string">2</span>)
-<span class="operator">|></span> <span class="function">order_by</span>(<span class="identifier">total_amount</span> <span class="keyword">desc</span>)</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section id="fsharp" class="fsharp">
-    <div class="container">
-        <div class="section-header">
-            <h2>F# Type Provider</h2>
-            <p>Use LQL with full type safety in F# through our native type provider.</p>
-        </div>
-
-        <div class="fsharp-content">
-            <div class="fsharp-info">
-                <h3>Type-Safe LQL in F#</h3>
-                <p>The LQL Type Provider brings compile-time type checking to your LQL queries in F#. Write queries with IntelliSense support, catch errors before runtime, and enjoy seamless integration with your F# codebase.</p>
-                <ul class="fsharp-features">
-                    <li>Compile-time query validation</li>
-                    <li>Full IntelliSense support for table and column names</li>
-                    <li>Automatic SQL generation for PostgreSQL and SQL Server</li>
-                    <li>Strongly-typed result sets</li>
-                </ul>
-            </div>
-            <div class="fsharp-code">
-                <div class="code-header">
-                    <div class="code-dot"></div>
-                    <div class="code-dot"></div>
-                    <div class="code-dot"></div>
-                    <span class="code-title">Program.fs</span>
-                </div>
-                <div class="code-block"><span class="keyword">open</span> <span class="identifier">Lql</span>
-
-<span class="comment">// Define types with validated LQL</span>
-<span class="keyword">type</span> <span class="identifier">GetUsers</span> <span class="operator">=</span>
-    <span class="identifier">LqlCommand</span><span class="operator">&lt;</span><span class="string">"Users |> select(*)"</span><span class="operator">&gt;</span>
-
-<span class="comment">// Access generated SQL</span>
-<span class="keyword">let</span> <span class="identifier">sql</span> <span class="operator">=</span> <span class="identifier">GetUsers</span>.<span class="identifier">Sql</span>
-<span class="keyword">let</span> <span class="identifier">query</span> <span class="operator">=</span> <span class="identifier">GetUsers</span>.<span class="identifier">Query</span></div>
-            </div>
-        </div>
-    </div>
-</section>
+<PageTitle>LQL Transpiler Playground</PageTitle>
 
 <section id="playground" class="playground">
-    <div class="container">
-        <div class="section-header">
-            <h2>LQL Playground</h2>
-            <p>Try Lambda Query Language and see how it transpiles to PostgreSQL or SQL Server</p>
+    <div class="playground-container">
+        <div class="playground-header">
+            <h1>LQL Transpiler Playground</h1>
+            <p>Paste LQL and inspect the generated PostgreSQL or SQL Server output.</p>
         </div>
-        
+
         <div class="playground-content">
             <div class="input-section">
                 <h3 class="section-title">LQL Input</h3>
@@ -250,21 +23,11 @@
                         <option value="SqlServer">SQL Server</option>
                     </select>
                     <button @onclick="ConvertLql" class="convert-btn" disabled="@isConverting">
-                        @if (isConverting)
-                        {
-                            <text>Converting...</text>
-                        }
-                        else
-                        {
-                            <text>Convert to SQL</text>
-                        }
+                        @(isConverting ? "Converting..." : "Convert to SQL")
                     </button>
                 </div>
-                <textarea @bind="lqlInput" @bind:event="oninput" class="lql-input" 
-                         placeholder="Enter your LQL query here...
-
-Example:
-users |> select(users.id, users.name, users.email)"></textarea>
+                <textarea @bind="lqlInput" @bind:event="oninput" class="lql-input"
+                          placeholder="users |> select(users.id, users.name, users.email)"></textarea>
             </div>
 
             <div class="output-section">
@@ -281,80 +44,68 @@ users |> select(users.id, users.name, users.email)"></textarea>
 
         <div class="examples-section">
             <h3 class="section-title">Example Queries</h3>
-            <p style="color: var(--text-secondary); margin-bottom: 16px;">Click any example to load it into the editor:</p>
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">Click any example to load it into the editor.</p>
             <div class="example-buttons">
-                <button @onclick="() => LoadExample(simpleSelectExample)" class="example-btn">Simple Select</button>
-                <button @onclick="() => LoadExample(joinExample)" class="example-btn">Join Tables</button>
-                <button @onclick="() => LoadExample(filterExample)" class="example-btn">Filter Data</button>
-                <button @onclick="() => LoadExample(aggregateExample)" class="example-btn">Aggregation</button>
-                <button @onclick="() => LoadExample(complexExample)" class="example-btn">Complex Query</button>
+                <button @onclick="() => LoadExample(SimpleSelectExample)" class="example-btn">Simple Select</button>
+                <button @onclick="() => LoadExample(JoinExample)" class="example-btn">Join Tables</button>
+                <button @onclick="() => LoadExample(FilterExample)" class="example-btn">Filter Data</button>
+                <button @onclick="() => LoadExample(AggregateExample)" class="example-btn">Aggregation</button>
+                <button @onclick="() => LoadExample(ComplexExample)" class="example-btn">Complex Query</button>
             </div>
         </div>
     </div>
 </section>
 
-<footer>
-    <div class="container">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="#docs">Documentation</a>
-                <a href="#github">GitHub</a>
-                <a href="#examples">Examples</a>
-                <a href="#community">Community</a>
-            </div>
-            <p>&copy; 2024 Lambda Query Language. Built with functional programming principles.</p>
-        </div>
-    </div>
-</footer>
-
 @code {
-    private string lqlInput = "";
+    private const string SimpleSelectExample = "users |> select(users.id, users.name, users.email)";
+
+    private const string JoinExample =
+        "users\n" +
+        "|> join(orders, on = users.id = orders.user_id)\n" +
+        "|> select(users.name, orders.total, orders.status)";
+
+    private const string FilterExample =
+        "employees\n" +
+        "|> select(employees.id, employees.name, employees.salary)\n" +
+        "|> filter(fn(row) => row.employees.salary > 50000 and row.employees.department = 'Engineering')";
+
+    private const string AggregateExample =
+        "orders\n" +
+        "|> group_by(orders.user_id)\n" +
+        "|> select(\n" +
+        "    orders.user_id,\n" +
+        "    count(*) as order_count,\n" +
+        "    sum(orders.total) as total_amount,\n" +
+        "    avg(orders.total) as avg_amount\n" +
+        ")\n" +
+        "|> having(fn(group) => count(*) > 2)\n" +
+        "|> order_by(total_amount desc)";
+
+    private const string ComplexExample =
+        "let joined =\n" +
+        "    users\n" +
+        "    |> join(orders, on = users.id = orders.user_id)\n" +
+        "    |> filter(fn(row) => row.orders.status = 'completed')\n" +
+        "\n" +
+        "joined\n" +
+        "|> group_by(users.id)\n" +
+        "|> select(\n" +
+        "    users.name,\n" +
+        "    count(*) as total_orders,\n" +
+        "    sum(orders.total) as revenue,\n" +
+        "    avg(orders.total) as avg_order_value\n" +
+        ")\n" +
+        "|> filter(fn(row) => row.revenue > 1000)\n" +
+        "|> order_by(revenue desc)\n" +
+        "|> limit(10)";
+
+    private string lqlInput = SimpleSelectExample;
     private string sqlOutput = "Enter LQL code and click 'Convert to SQL' to see the result.";
     private string errorMessage = "";
     private string selectedDialect = "PostgreSQL";
-    private bool isConverting = false;
+    private bool isConverting;
 
-    // Example queries
-    private readonly string simpleSelectExample = "users |> select(users.id, users.name, users.email)";
-    
-    private readonly string joinExample = @"users 
-|> join(orders, on = users.id = orders.user_id) 
-|> select(users.name, orders.total, orders.status)";
-    
-    private readonly string filterExample = @"employees
-|> select(employees.id, employees.name, employees.salary)
-|> filter(fn(row) => row.employees.salary > 50000 and row.employees.department = 'Engineering')";
-    
-    private readonly string aggregateExample = @"orders
-|> group_by(orders.user_id)
-|> select(
-    orders.user_id,
-    count(*) as order_count,
-    sum(orders.total) as total_amount,
-    avg(orders.total) as avg_amount
-)
-|> having(fn(group) => count(*) > 2)
-|> order_by(total_amount desc)";
-    
-    private readonly string complexExample = @"-- Complex analytics query
-let joined =
-    users
-    |> join(orders, on = users.id = orders.user_id)
-    |> filter(fn(row) => row.orders.status = 'completed')
-
-joined
-|> group_by(users.id)
-|> select(
-    users.name,
-    count(*) as total_orders,
-    sum(orders.total) as revenue,
-    avg(orders.total) as avg_order_value
-)
-|> filter(fn(row) => row.revenue > 1000)
-|> order_by(revenue desc)
-|> limit(10)";
-
-    private async Task ConvertLql()
+    private void ConvertLql()
     {
         if (string.IsNullOrWhiteSpace(lqlInput))
         {
@@ -366,51 +117,46 @@ joined
         isConverting = true;
         errorMessage = "";
         sqlOutput = "Converting...";
-        
-        try
+
+        var statementResult = LqlStatementConverter.ToStatement(lqlInput);
+        if (statementResult is Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> parseFailure)
         {
-            await Task.Delay(100); // Small delay to show loading state
-            
-            // Parse the LQL code
-            var statementResult = LqlStatementConverter.ToStatement(lqlInput);
+            errorMessage = parseFailure.Value.DetailedMessage ?? parseFailure.Value.Message;
+            sqlOutput = "";
+            isConverting = false;
+            return;
+        }
 
-            if (statementResult is Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> parseFailure)
-            {
-                errorMessage = parseFailure.Value.DetailedMessage ?? parseFailure.Value.Message;
-                sqlOutput = "";
-                return;
-            }
+        if (statementResult is not Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> statementOk)
+        {
+            errorMessage = "LQL parser returned an unknown result.";
+            sqlOutput = "";
+            isConverting = false;
+            return;
+        }
 
-            var statement = ((Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)statementResult).Value;
+        var sqlResult = selectedDialect switch
+        {
+            "PostgreSQL" => statementOk.Value.ToPostgreSql(),
+            "SqlServer" => statementOk.Value.ToSqlServer(),
+            _ => new Result<string, SqlError>.Error<string, SqlError>(new SqlError($"Unsupported dialect: {selectedDialect}")),
+        };
 
-            // Convert to the selected SQL dialect
-            Result<string, SqlError> sqlResult = selectedDialect switch
-            {
-                "PostgreSQL" => statement.ToPostgreSql(),
-                "SqlServer" => statement.ToSqlServer(),
-                _ => new Result<string, SqlError>.Error<string, SqlError>(new SqlError($"Unsupported dialect: {selectedDialect}"))
-            };
+        if (sqlResult is Result<string, SqlError>.Error<string, SqlError> sqlFailure)
+        {
+            errorMessage = sqlFailure.Value.DetailedMessage ?? sqlFailure.Value.Message;
+            sqlOutput = "";
+            isConverting = false;
+            return;
+        }
 
-            if (sqlResult is Result<string, SqlError>.Error<string, SqlError> sqlFailure)
-            {
-                errorMessage = sqlFailure.Value.DetailedMessage ?? sqlFailure.Value.Message;
-                sqlOutput = "";
-                return;
-            }
-
-            var sql = ((Result<string, SqlError>.Ok<string, SqlError>)sqlResult).Value;
-            sqlOutput = sql;
+        if (sqlResult is Result<string, SqlError>.Ok<string, SqlError> sqlOk)
+        {
+            sqlOutput = sqlOk.Value;
             errorMessage = "";
         }
-        catch (Exception ex)
-        {
-            errorMessage = $"An unexpected error occurred: {ex}";
-            sqlOutput = "";
-        }
-        finally
-        {
-            isConverting = false;
-        }
+
+        isConverting = false;
     }
 
     private void LoadExample(string example)
@@ -418,12 +164,5 @@ joined
         lqlInput = example;
         errorMessage = "";
         sqlOutput = "Click 'Convert to SQL' to see the result.";
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        // Load a simple example by default
-        lqlInput = simpleSelectExample;
-        await ConvertLql();
     }
 }

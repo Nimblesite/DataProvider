@@ -1,104 +1,73 @@
 <!DOCTYPE html>
 <html lang="{{ site.language }}">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title | default(site.title) }}</title>
-  <meta name="description" content="{{ description | default(site.description) }}">
-  <meta name="author" content="{{ site.author }}">
-  <link rel="canonical" href="{{ site.url }}{{ page.url }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title | default(site.title) }}</title>
+    <meta name="description" content="{{ description | default(site.description) }}">
+    <meta name="author" content="{{ site.author }}">
+    <link rel="canonical" href="{{ site.url }}{{ page.url }}">
 
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="{{ site.url }}{{ page.url }}">
-  <meta property="og:title" content="{{ title | default(site.title) }}">
-  <meta property="og:description" content="{{ description | default(site.description) }}">
-  <meta property="og:image" content="{{ site.url }}/assets/images/lql-icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ site.url }}{{ page.url }}">
+    <meta property="og:title" content="{{ title | default(site.title) }}">
+    <meta property="og:description" content="{{ description | default(site.description) }}">
+    <meta property="og:image" content="{{ site.url }}/assets/images/lql-icon.png">
+    <meta name="theme-color" content="{{ site.themeColor }}">
 
-  <meta name="theme-color" content="{{ site.themeColor }}">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="/assets/css/styles.css">
-  <link rel="icon" type="image/png" href="/assets/images/lql-icon.png">
-  <link rel="apple-touch-icon" href="/assets/images/lql-icon.png">
-
-  {% block head %}{% endblock %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="icon" type="image/png" href="/assets/images/lql-icon.png">
+    {% block head %}{% endblock %}
 </head>
 <body>
-  <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
 
-  <header class="header">
-    <nav class="nav container">
-      <a href="/" class="logo">
-        <img src="/assets/images/lql-icon.png" alt="LQL">
-        <span class="logo-text">LQL</span>
-      </a>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <img src="/assets/images/lql-icon.png" alt="LQL Logo">
+                    <span class="logo-text">LQL</span>
+                </a>
+                <div class="site-toggle">
+                    <a href="/" class="site-toggle-btn active">LQL</a>
+                    <a href="https://dataprovider.dev" class="site-toggle-btn">DataProvider</a>
+                </div>
+                <nav>
+                    <ul>
+                        {% for item in navigation.main %}
+                        <li>
+                            <a href="{{ item.url }}" {% if item.external %}target="_blank" rel="noopener"{% endif %}>
+                                {{ item.text }}{% if item.external %} &#8599;{% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
 
-      <div class="site-toggle">
-        <a href="/" class="site-toggle-btn active">LQL</a>
-        <a href="https://dataprovider.dev" class="site-toggle-btn">DataProvider</a>
-      </div>
+    <main id="main-content">
+        {% block content %}{{ content | safe }}{% endblock %}
+    </main>
 
-      <ul class="nav-links">
-        {% for item in navigation.main %}
-        <li>
-          <a href="{{ item.url }}" {% if item.external %}target="_blank" rel="noopener"{% endif %}
-             class="nav-link {% if page.url.startsWith(item.url) %}active{% endif %}">
-            {{ item.text }}
-            {% if item.external %}<span aria-hidden="true">&#8599;</span>{% endif %}
-          </a>
-        </li>
-        {% endfor %}
-      </ul>
-
-      <div class="nav-actions">
-        <a href="/docs/quick-start/" class="btn btn-primary">Get Started</a>
-        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-      </div>
-    </nav>
-  </header>
-
-  <main id="main-content">
-    {% block content %}{{ content | safe }}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-grid">
-      {% for section in navigation.footer %}
-      <div class="footer-section">
-        <h3>{{ section.title }}</h3>
-        <ul>
-          {% for item in section.items %}
-          <li><a href="{{ item.url }}">{{ item.text }}</a></li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endfor %}
-    </div>
-
-    <div class="container footer-bottom">
-      <p>&copy; {% year %} Lambda Query Language. Built with functional programming principles.</p>
-    </div>
-  </footer>
-
-  <script src="/assets/js/main.js"></script>
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    // Convert ```mermaid code blocks into mermaid-renderable elements
-    document.querySelectorAll('pre > code.language-mermaid').forEach(el => {
-      const pre = el.parentElement;
-      const div = document.createElement('pre');
-      div.className = 'mermaid';
-      div.textContent = el.textContent;
-      pre.parentNode.replaceChild(div, pre);
-    });
-    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-  </script>
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    {% for item in navigation.footer %}
+                    <a href="{{ item.url }}" {% if item.external %}target="_blank" rel="noopener"{% endif %}>
+                        {{ item.text }}{% if item.external %} &#8599;{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+                <p>&copy; {% year %} Lambda Query Language. Built with functional programming principles.</p>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

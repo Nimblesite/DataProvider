@@ -1,198 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LQL Playground - Interactive Transpiler</title>
-  <meta name="description" content="Try Lambda Query Language and see how it transpiles to PostgreSQL or SQL Server in real time.">
-  <meta name="author" content="DataProvider team">
-  <link rel="canonical" href="https://lql.dev/playground/">
-
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://lql.dev/playground/">
-  <meta property="og:title" content="LQL Playground - Interactive Transpiler">
-  <meta property="og:description" content="Try Lambda Query Language and see how it transpiles to PostgreSQL or SQL Server in real time.">
-  <meta property="og:image" content="https://lql.dev/assets/images/lql-icon.png">
-
-  <meta name="theme-color" content="#FF4500">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="/assets/css/styles.css">
-  <link rel="icon" type="image/png" href="/assets/images/lql-icon.png">
-  <link rel="apple-touch-icon" href="/assets/images/lql-icon.png">
-
-  
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LQL Transpiler Playground</title>
+    <base href="/playground/" />
+    <link rel="icon" type="image/png" href="lql-icon.png" />
+    <link href="css/site.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
-  <a href="#main-content" class="skip-link">Skip to main content</a>
+    <div id="app">Loading LQL transpiler...</div>
 
-  <header class="header">
-    <nav class="nav container">
-      <a href="/" class="logo">
-        <img src="/assets/images/lql-icon.png" alt="LQL">
-        <span class="logo-text">LQL</span>
-      </a>
-
-      <div class="site-toggle">
-        <a href="/" class="site-toggle-btn active">LQL</a>
-        <a href="https://dataprovider.dev" class="site-toggle-btn">DataProvider</a>
-      </div>
-
-      <ul class="nav-links">
-        
-        <li>
-          <a href="/docs/" 
-             class="nav-link ">
-            Docs
-            
-          </a>
-        </li>
-        
-        <li>
-          <a href="/playground/" 
-             class="nav-link active">
-            Playground
-            
-          </a>
-        </li>
-        
-        <li>
-          <a href="https://github.com/MelbourneDeveloper/DataProvider" target="_blank" rel="noopener"
-             class="nav-link ">
-            GitHub
-            <span aria-hidden="true">&#8599;</span>
-          </a>
-        </li>
-        
-      </ul>
-
-      <div class="nav-actions">
-        <a href="/docs/quick-start/" class="btn btn-primary">Get Started</a>
-        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-      </div>
-    </nav>
-  </header>
-
-  <main id="main-content">
-    
-<section class="playground">
-  <div class="container">
-    <div class="section-header">
-      <h2>LQL Playground</h2>
-      <p>Try Lambda Query Language and see how it transpiles to PostgreSQL or SQL Server</p>
+    <div id="blazor-error-ui">
+        The LQL transpiler failed to load.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
     </div>
 
-    <div id="playground-app">
-      <div class="playground-content">
-        <div class="playground-panel">
-          <h3>LQL Input</h3>
-          <div class="playground-controls">
-            <select id="dialect-selector" class="dialect-selector">
-              <option value="PostgreSQL">PostgreSQL</option>
-              <option value="SqlServer">SQL Server</option>
-            </select>
-            <button id="convert-btn" class="convert-btn">Convert to SQL</button>
-          </div>
-          <textarea id="lql-input" class="lql-input" placeholder="Enter your LQL query here...
-
-Example:
-users |> select(users.id, users.name, users.email)"></textarea>
-        </div>
-
-        <div class="playground-panel">
-          <h3 id="output-title">PostgreSQL Output</h3>
-          <div id="sql-output" class="sql-output">Enter LQL code and click 'Convert to SQL' to see the result.</div>
-          <div id="error-message" class="error-message" style="display: none;"></div>
-        </div>
-      </div>
-
-      <div class="playground-panel">
-        <h3>Example Queries</h3>
-        <p style="color: var(--text-secondary); margin-bottom: var(--space-4);">Click any example to load it into the editor:</p>
-        <div class="example-buttons">
-          <button class="example-btn" data-example="simple">Simple Select</button>
-          <button class="example-btn" data-example="join">Join Tables</button>
-          <button class="example-btn" data-example="filter">Filter Data</button>
-          <button class="example-btn" data-example="aggregate">Aggregation</button>
-          <button class="example-btn" data-example="complex">Complex Query</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<script src="/assets/js/playground.js"></script>
-
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-grid">
-      
-      <div class="footer-section">
-        <h3>Documentation</h3>
-        <ul>
-          
-          <li><a href="/docs/quick-start/">Quick Start</a></li>
-          
-          <li><a href="/docs/syntax/">Syntax Overview</a></li>
-          
-          <li><a href="/playground/">Playground</a></li>
-          
-        </ul>
-      </div>
-      
-      <div class="footer-section">
-        <h3>Ecosystem</h3>
-        <ul>
-          
-          <li><a href="https://dataprovider.dev">DataProvider</a></li>
-          
-          <li><a href="https://github.com/MelbourneDeveloper/DataProvider">GitHub</a></li>
-          
-          <li><a href="https://www.nuget.org/packages/Lql">NuGet</a></li>
-          
-        </ul>
-      </div>
-      
-      <div class="footer-section">
-        <h3>More</h3>
-        <ul>
-          
-          <li><a href="/docs/vscode/">VS Code Extension</a></li>
-          
-          <li><a href="/docs/ai-integration/">AI Completions</a></li>
-          
-          <li><a href="/docs/fsharp-type-provider/">F# Type Provider</a></li>
-          
-        </ul>
-      </div>
-      
-    </div>
-
-    <div class="container footer-bottom">
-      <p>&copy; 2026 Lambda Query Language. Built with functional programming principles.</p>
-    </div>
-  </footer>
-
-  <script src="/assets/js/main.js"></script>
-  <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    // Convert ```mermaid code blocks into mermaid-renderable elements
-    document.querySelectorAll('pre > code.language-mermaid').forEach(el => {
-      const pre = el.parentElement;
-      const div = document.createElement('pre');
-      div.className = 'mermaid';
-      div.textContent = el.textContent;
-      pre.parentNode.replaceChild(div, pre);
-    });
-    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-  </script>
+    <script src="_framework/blazor.webassembly.js"></script>
 </body>
+
 </html>
