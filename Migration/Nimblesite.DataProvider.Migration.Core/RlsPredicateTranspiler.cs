@@ -66,9 +66,7 @@ public static class RlsPredicateTranspiler
         var trimmed = lql.Trim();
         return TryParseExistsWrapper(trimmed, out var inner)
             ? TranslateExistsSubquery(inner, platform, policyName)
-            : new Result<string, MigrationError>.Ok<string, MigrationError>(
-                TranslateSimplePredicate(trimmed, platform)
-            );
+            : TranslateSimplePredicate(trimmed, platform, policyName);
     }
 
     /// <summary>
@@ -141,8 +139,38 @@ public static class RlsPredicateTranspiler
         // survives LQL transpilation, then transpile the pipeline, then
         // replace the sentinel with the platform-specific expression.
         var withSentinel = SubstituteCurrentUserIdWithSentinel(innerLql);
+        var withSettings = RlsCurrentSettingRewriter.ReplaceCallsForPipeline(
+            withSentinel,
+            platform,
+            policyName
+        );
+        if (
+            withSettings
+            is Result<RlsCurrentSettingRewrite, MigrationError>.Error<
+                RlsCurrentSettingRewrite,
+                MigrationError
+            > settingsErr
+        )
+        {
+            return new Result<string, MigrationError>.Error<string, MigrationError>(
+                settingsErr.Value
+            );
+        }
 
-        var statementResult = LqlStatementConverter.ToStatement(withSentinel);
+        if (
+            withSettings
+            is not Result<RlsCurrentSettingRewrite, MigrationError>.Ok<
+                RlsCurrentSettingRewrite,
+                MigrationError
+            > settingsOk
+        )
+        {
+            return new Result<string, MigrationError>.Error<string, MigrationError>(
+                MigrationError.RlsLqlParse(policyName, "unknown current_setting rewrite failure")
+            );
+        }
+
+        var statementResult = LqlStatementConverter.ToStatement(settingsOk.Value.Text);
         if (statementResult is Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> sErr)
         {
             return new Result<string, MigrationError>.Error<string, MigrationError>(
@@ -180,21 +208,53 @@ public static class RlsPredicateTranspiler
         }
 
         var sql = ReplaceSentinelInSql(tOk.Value, platform);
+        sql = RlsCurrentSettingRewriter.RestoreSentinels(sql, settingsOk.Value.Replacements);
         return new Result<string, MigrationError>.Ok<string, MigrationError>($"EXISTS ({sql})");
     }
 
-    private static string TranslateSimplePredicate(string predicate, RlsPlatform platform)
+    private static Result<string, MigrationError> TranslateSimplePredicate(
+        string predicate,
+        RlsPlatform platform,
+        string policyName
+    )
     {
-        // Replace current_user_id() literal with platform expression.
-        // Quote bare identifiers per platform (best-effort, conservative).
-        var withSession = ReplaceCurrentUserIdLiteral(predicate, platform);
-        return platform switch
+        var withSettings = RlsCurrentSettingRewriter.ReplaceCallsForSimplePredicate(
+            predicate,
+            platform,
+            policyName
+        );
+
+        if (
+            withSettings is Result<string, MigrationError>.Error<string, MigrationError> settingsErr
+        )
+        {
+            return new Result<string, MigrationError>.Error<string, MigrationError>(
+                settingsErr.Value
+            );
+        }
+
+        if (
+            withSettings is not Result<string, MigrationError>.Ok<string, MigrationError> settingsOk
+        )
+        {
+            return new Result<string, MigrationError>.Error<string, MigrationError>(
+                MigrationError.RlsLqlParse(policyName, "unknown current_setting rewrite failure")
+            );
+        }
+
+        // Replace current_user_id() literal with platform expression after
+        // current_setting() LQL calls have been rewritten. The Postgres
+        // current_user_id() expansion itself uses current_setting(..., true).
+        var withSession = ReplaceCurrentUserIdLiteral(settingsOk.Value, platform);
+        var translated = platform switch
         {
             RlsPlatform.Postgres => QuoteSimpleIdentifiers(withSession, '"', '"'),
             RlsPlatform.Sqlite => QuoteSimpleIdentifiers(withSession, '[', ']'),
             RlsPlatform.SqlServer => QuoteSimpleIdentifiers(withSession, '[', ']'),
             _ => withSession,
         };
+
+        return new Result<string, MigrationError>.Ok<string, MigrationError>(translated);
     }
 
     private static string SubstituteCurrentUserIdWithSentinel(string lql) =>

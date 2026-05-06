@@ -122,10 +122,9 @@ internal static class LqlCodeParser
 
         // Check for circular references in let statements
         var letStatements = new Dictionary<string, string>();
-        var definedVariables = new HashSet<string>(); // Track all defined variables
         var lines = lqlCode.Split('\n');
 
-        // First pass: collect all let statements and defined variables
+        // First pass: collect all let statements.
         foreach (var line in lines)
         {
             var trimmedLine = line.Trim();
@@ -142,9 +141,6 @@ internal static class LqlCodeParser
                 {
                     var varName = parts[0][4..].Trim(); // Remove "let " prefix
                     var expression = parts[1].Trim();
-
-                    // Add to defined variables
-                    definedVariables.Add(varName);
 
                     // Extract the first identifier from the expression (before |>)
                     var pipeIndex = expression.IndexOf("|>", StringComparison.Ordinal);
@@ -210,31 +206,10 @@ internal static class LqlCodeParser
                 }
             }
 
-            // Check for undefined variables (identifiers with underscores that appear as pipeline bases)
-            // BUT exclude variables that are defined in let statements
-            if (trimmedLine.Contains("|>", StringComparison.Ordinal))
-            {
-                var pipeIndex = trimmedLine.IndexOf("|>", StringComparison.Ordinal);
-                var beforePipe = trimmedLine[..pipeIndex].Trim();
-
-                // Check if the identifier before the pipe contains underscores (indicating it might be an undefined variable)
-                // BUT only flag it as undefined if it's NOT in our definedVariables set
-                if (
-                    beforePipe.Contains('_', StringComparison.Ordinal)
-                    && !beforePipe.Contains('(', StringComparison.Ordinal)
-                    && !beforePipe.Contains('.', StringComparison.Ordinal)
-                    && beforePipe.All(c => char.IsLetterOrDigit(c) || c == '_')
-                    && !definedVariables.Contains(beforePipe)
-                ) // Only flag if NOT defined in let statement
-                {
-                    return SqlError.WithPosition(
-                        $"Syntax error: Undefined variable '{beforePipe}'",
-                        1,
-                        0,
-                        lqlCode
-                    );
-                }
-            }
+            // Pipeline bases can be table names such as tenant_members. The
+            // parser cannot distinguish those from variables without schema
+            // metadata, so undefined-variable validation belongs in a later
+            // semantic pass with table context.
         }
 
         return null;

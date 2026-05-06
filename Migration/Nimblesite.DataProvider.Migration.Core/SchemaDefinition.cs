@@ -76,6 +76,12 @@ public sealed record PostgresFunctionDefinition
     /// <summary>Function body placed between PostgreSQL dollar quotes.</summary>
     public string Body { get; init; } = string.Empty;
 
+    /// <summary>
+    /// LQL function body expression. Mutually exclusive with <see cref="Body" />.
+    /// Emits a SQL-language function body for PostgreSQL.
+    /// </summary>
+    public string? BodyLql { get; init; }
+
     /// <summary>Roles granted EXECUTE on this function.</summary>
     public IReadOnlyList<string> ExecuteRoles { get; init; } = [];
 
