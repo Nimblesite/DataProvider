@@ -51,6 +51,22 @@ public sealed class PostgresFunctionBodyLqlTests
     }
 
     [Fact]
+    public void TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate()
+    {
+        // Implements [LQL-PREDICATE-IN-LIST].
+        var sql = Body(
+            """
+            exists(
+              tenant_members
+              |> filter(fn(m) => m.user_id = u and m.tenant_id = t and m.role in ('owner', 'admin'))
+            )
+            """
+        );
+
+        Assert.Contains("role IN ('owner', 'admin')", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FromYaml_FunctionBodyLql_Deserializes()
     {
         var schema = SchemaYamlSerializer.FromYaml(

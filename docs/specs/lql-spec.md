@@ -23,6 +23,14 @@ table |> join(other, on = …) |> filter(…) |> select(…) |> insert(…)
 | Arguments         | Positional or named (`on=…`)    |        |          |
 | Literals          | `'string'`, `123`               |        |          |
 
+### IN List Predicates [LQL-PREDICATE-IN-LIST]
+
+Filter predicates may use `expr in (literal, literal, ...)` to express
+membership in a non-empty literal list. Pipeline filter bodies, including
+`exists(table |> filter(fn(row) => ...))`, must emit SQL `IN (...)` for the
+target platform. This supports compact role-membership predicates such as
+`m.role in ('owner', 'admin')` without expanding to `OR` chains.
+
 Futures:
 
 join(table2, on = …)      

@@ -537,7 +537,7 @@ The diff engine produces a list of schema operations as discriminated union reco
 - **Table**: `CreateTable`, `DropTable`
 - **Column**: `AddColumn`, `DropColumn`, `AlterColumn`
 - **Index**: `CreateIndex`, `DropIndex`
-- **Constraint**: `AddPrimaryKey`, `DropPrimaryKey`, `AddForeignKey`, `DropForeignKey`
+- **Constraint**: `AddPrimaryKey`, `DropPrimaryKey`, `AddForeignKey`, `DropForeignKey`, `AddUniqueConstraint`, `AddCheckConstraint`
 
 All operations carry the schema name, table name, and relevant definition or constraint name.
 
@@ -573,6 +573,15 @@ a `UNIQUE` or `PRIMARY KEY` constraint, the provider must drop the owning
 constraint with `ALTER TABLE ... DROP CONSTRAINT` instead of issuing `DROP INDEX`.
 Detection uses `pg_constraint.conindid` joined to the target table and index.
 Indexes that are not owned by a constraint still use `DROP INDEX IF EXISTS`.
+
+### PostgreSQL Unique Constraint Inspection [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION]
+
+PostgreSQL schema inspection must report `UNIQUE` constraints from
+`pg_constraint` as `UniqueConstraints`, preserving the constraint name and
+column order. Indexes owned by `UNIQUE` or `PRIMARY KEY` constraints are not
+ordinary `Indexes` in the portable schema model. A destructive diff against a
+converged schema must not emit `DropIndex` for a backing index when the desired
+schema still declares the owning unique constraint.
 
 ### PostgreSQL Named Column Check Constraints [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT]
 

@@ -35,6 +35,47 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
         }
     }
 
+    [Fact]
+    public async Task Calculate_WhenUniqueConstraintSchemaConverged_DoesNotDropBackingIndex()
+    {
+        // Implements [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION].
+        var connection = await fixture
+            .CreateDatabaseAsync("converged_unique_constraint")
+            .ConfigureAwait(true);
+
+        try
+        {
+            var desired = SchemaWithUniqueConstraint();
+
+            Apply(connection, Calculate(Inspect(connection), desired));
+
+            var inspected = Inspect(connection).Tables.Single(t => t.Name == TableName);
+            var converged = Calculate(Inspect(connection), desired, true);
+
+            Assert.Contains(
+                inspected.UniqueConstraints,
+                constraint =>
+                    constraint.Name == ConstraintName
+                    && constraint.Columns.SequenceEqual(["key_hash"])
+            );
+            Assert.DoesNotContain(converged, IsConstraintBackedIndexDrop);
+            Assert.DoesNotContain(
+                converged,
+                operation => operation is AddUniqueConstraintOperation
+            );
+
+            Apply(connection, converged, MigrationOptions.Destructive);
+
+            Assert.True(ConstraintExists(connection));
+            Assert.True(IndexExists(connection));
+        }
+        finally
+        {
+            await connection.DisposeAsync().ConfigureAwait(true);
+            NpgsqlConnection.ClearPool(connection);
+        }
+    }
+
     private static SchemaDefinition SchemaWithUniqueConstraint() =>
         Schema
             .Define("Issue49")

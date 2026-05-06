@@ -433,12 +433,60 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             return $"{left} IS {(isNot ? "NOT " : string.Empty)}NULL";
         }
 
+        if (comparison.inExpr() != null)
+        {
+            return ProcessInExpressionToSql(comparison.inExpr(), lambdaScope);
+        }
+
         // No fallback - fail hard if comparison type is not handled
         throw new SqlErrorException(
             CreateSqlErrorStatic(
                 $"Unsupported comparison type: {comparison.GetType().Name}",
                 comparison
             )
+        );
+    }
+
+    private static string ProcessInExpressionToSql(
+        LqlParser.InExprContext inExpr,
+        HashSet<string>? lambdaScope
+    )
+    {
+        // Implements [LQL-PREDICATE-IN-LIST].
+        if (inExpr.argList() == null)
+        {
+            throw new SqlErrorException(
+                CreateSqlErrorStatic("IN subqueries are not supported in this context", inExpr)
+            );
+        }
+
+        var left = ProcessInLeftExpressionToSql(inExpr, lambdaScope);
+        var values = inExpr.argList().arg().Select(arg => ProcessFnCallArgToSql(arg, lambdaScope));
+        return $"{left} IN ({string.Join(", ", values)})";
+    }
+
+    private static string ProcessInLeftExpressionToSql(
+        LqlParser.InExprContext inExpr,
+        HashSet<string>? lambdaScope
+    )
+    {
+        if (inExpr.qualifiedIdent() != null)
+        {
+            return ProcessQualifiedIdentifierToSql(inExpr.qualifiedIdent(), lambdaScope);
+        }
+
+        if (inExpr.IDENT() != null)
+        {
+            return inExpr.IDENT().GetText();
+        }
+
+        if (inExpr.PARAMETER() != null)
+        {
+            return inExpr.PARAMETER().GetText();
+        }
+
+        throw new SqlErrorException(
+            CreateSqlErrorStatic("Unsupported IN left-hand expression", inExpr)
         );
     }
 
