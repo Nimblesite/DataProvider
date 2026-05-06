@@ -199,7 +199,8 @@ make setup          # post-create dev environment setup
 ```
 DataProvider/
 ├── .github/workflows/     # CI/CD pipelines
-├── .claude/skills/        # Claude Code skills
+├── .agents/skills/        # Shared agent skills
+├── .claude/skills/        # Claude Code skill pointer files
 ├── DataProvider/           # Core source generator + CLI tools
 ├── Lql/                   # Lambda Query Language
 │   ├── Lql/               # Core transpiler library
@@ -225,7 +226,10 @@ DataProvider/
 - Central config in `Directory.Build.props`
 - Format: `dotnet csharpier .`
 
-## Claude Code Skills
+## Agent Skills
 
+- Canonical project skills live in `.agents/skills/` so Codex can load them from the repository scope.
+- `.claude/skills/*/SKILL.md` files are thin `@../../../.agents/skills/.../SKILL.md` pointers for Claude Code. Do not duplicate full skill bodies there.
 - [Claude Code Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+- [Codex Skills](https://developers.openai.com/codex/skills)
 - [The Complete Guide to Building Skills for Claude (PDF)](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf)
