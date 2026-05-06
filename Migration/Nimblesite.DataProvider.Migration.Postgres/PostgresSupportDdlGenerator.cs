@@ -84,7 +84,10 @@ public static partial class PostgresDdlGenerator
     }
 
     private static string GenerateGrantPrivileges(PostgresGrantDefinition grant) =>
-        $"GRANT {PrivilegeList(grant.Privileges)} ON {GrantTarget(grant)} TO {QuoteIdentList(grant.Roles)}";
+        WithGrantRunAs(
+            grant,
+            $"GRANT {PrivilegeList(grant.Privileges)} ON {GrantTarget(grant)} TO {QuoteIdentList(grant.Roles)}"
+        );
 
     private static string GenerateRevokePrivileges(PostgresGrantDefinition grant) =>
         $"REVOKE {PrivilegeList(grant.Privileges)} ON {GrantTarget(grant)} FROM {QuoteIdentList(grant.Roles)}";
@@ -129,6 +132,31 @@ public static partial class PostgresDdlGenerator
 
     private static string FunctionSignature(PostgresFunctionDefinition function) =>
         $"{QuoteIdent(function.Schema)}.{QuoteIdent(function.Name)}({string.Join(", ", function.Arguments.Select(a => a.Type))})";
+
+    private static string WithGrantRunAs(PostgresGrantDefinition grant, string ddl)
+    {
+        var runAs = grant.RunAs?.Trim();
+        return string.IsNullOrWhiteSpace(runAs)
+            ? ddl
+            : $"""
+                {GrantRunAsMembershipGuard(runAs)}
+                SET LOCAL ROLE {QuoteIdent(runAs)};
+                {ddl};
+                RESET ROLE
+                """;
+    }
+
+    private static string GrantRunAsMembershipGuard(string runAs) =>
+        $"""
+            DO $$
+            BEGIN
+              IF NOT pg_has_role(current_user, {QuoteLiteral(runAs)}, 'MEMBER') THEN
+                RAISE EXCEPTION 'MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP: connecting role "%" cannot SET LOCAL ROLE {QuoteIdent(
+                runAs
+            )}; run GRANT {QuoteIdent(runAs)} TO "%"', current_user, current_user;
+              END IF;
+            END $$;
+            """;
 
     private static string GrantTarget(PostgresGrantDefinition grant) =>
         grant.Target switch

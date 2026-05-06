@@ -470,6 +470,48 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
     }
 
     [Fact]
+    public void CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase()
+    {
+        var schema = Schema
+            .Define("Test")
+            .Table(
+                "public",
+                "fhir_patient",
+                t =>
+                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
+                        .Column(
+                            "Gender",
+                            PortableTypes.Text,
+                            c => c.NotNull().Check("\"Gender\" IN ('male', 'female', 'other')")
+                        )
+            )
+            .Build();
+
+        var current = (
+            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
+        ).Value;
+        var operations = (
+            (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
+        ).Value;
+
+        var result = MigrationRunner.Apply(
+            _connection,
+            operations,
+            PostgresDdlGenerator.Generate,
+            MigrationOptions.Default,
+            _logger
+        );
+
+        Assert.True(
+            result is MigrationApplyResultOk,
+            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
+        );
+        InsertPatientGender("male");
+        var ex = Assert.Throws<PostgresException>(() => InsertPatientGender("invalid"));
+        Assert.Equal("23514", ex.SqlState);
+    }
+
+    [Fact]
     public void ExpressionIndex_CreateWithLowerFunction_Success()
     {
         // Arrange - Create table with expression index for case-insensitive uniqueness
@@ -1609,5 +1651,15 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             + "JOIN pg_class c ON c.oid = a.attrelid "
             + "WHERE c.relname = 'large_embeddings' AND a.attname = 'embedding'";
         Assert.Equal("vector(3072)", (string?)typeCmd.ExecuteScalar());
+    }
+
+    private void InsertPatientGender(string gender)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            "INSERT INTO \"fhir_patient\" (\"id\", \"Gender\") VALUES (@id, @gender)";
+        command.Parameters.AddWithValue("@id", Guid.NewGuid());
+        command.Parameters.AddWithValue("@gender", gender);
+        command.ExecuteNonQuery();
     }
 }

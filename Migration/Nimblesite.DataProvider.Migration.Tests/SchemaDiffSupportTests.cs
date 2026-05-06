@@ -72,6 +72,60 @@ public sealed class SchemaDiffSupportTests
         Assert.Contains(((OperationsResultOk)result).Value, op => op is RevokePrivilegesOperation);
     }
 
+    [Fact]
+    public void Calculate_GrantRunAsAlreadyApplied_HasNoOperations()
+    {
+        var current = SupportSchema();
+        var desired = current with
+        {
+            Grants =
+            [
+                new PostgresGrantDefinition
+                {
+                    Schema = "public",
+                    Target = PostgresGrantTarget.AllTablesInSchema,
+                    Privileges = ["SELECT", "INSERT"],
+                    Roles = ["app_user"],
+                    RunAs = "schema_owner",
+                },
+            ],
+        };
+
+        var result = SchemaDiff.Calculate(current, desired);
+
+        Assert.True(result is OperationsResultOk);
+        Assert.Empty(((OperationsResultOk)result).Value);
+    }
+
+    [Fact]
+    public void Calculate_MissingGrantRunAs_PreservesRunAsOnOperation()
+    {
+        var current = SupportSchema() with { Grants = [] };
+        var desired = SupportSchema() with
+        {
+            Grants =
+            [
+                new PostgresGrantDefinition
+                {
+                    Schema = "auth",
+                    Target = PostgresGrantTarget.Table,
+                    ObjectName = "users",
+                    Privileges = ["SELECT"],
+                    Roles = ["app_user"],
+                    RunAs = "supabase_admin",
+                },
+            ],
+        };
+
+        var result = SchemaDiff.Calculate(current, desired);
+
+        Assert.True(result is OperationsResultOk);
+        var grant = Assert.IsType<GrantPrivilegesOperation>(
+            Assert.Single(((OperationsResultOk)result).Value)
+        );
+        Assert.Equal("supabase_admin", grant.Grant.RunAs);
+    }
+
     private static SchemaDefinition SupportSchema() =>
         new()
         {

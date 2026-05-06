@@ -121,6 +121,12 @@ public sealed record PostgresGrantDefinition
 
     /// <summary>Roles receiving the privileges.</summary>
     public IReadOnlyList<string> Roles { get; init; } = [];
+
+    /// <summary>
+    /// PostgreSQL role used only while applying this grant. Useful when a migration role
+    /// is a member of the schema owner role but is not itself the schema owner.
+    /// </summary>
+    public string? RunAs { get; init; }
 }
 
 /// <summary>

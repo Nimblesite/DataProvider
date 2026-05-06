@@ -27,6 +27,12 @@ public sealed class SchemaSupportYamlSerializerTests
                 target: AllTablesInSchema
                 privileges: [SELECT, INSERT, UPDATE, DELETE]
                 roles: [app_user, app_admin]
+              - schema: auth
+                target: Table
+                objectName: users
+                privileges: [SELECT]
+                roles: [app_user]
+                runAs: supabase_admin
             tables: []
             """;
 
@@ -37,8 +43,9 @@ public sealed class SchemaSupportYamlSerializerTests
         Assert.Single(schema.Functions);
         Assert.Equal("is_member", schema.Functions[0].Name);
         Assert.Equal(2, schema.Functions[0].Arguments.Count);
-        Assert.Single(schema.Grants);
+        Assert.Equal(2, schema.Grants.Count);
         Assert.Equal(PostgresGrantTarget.AllTablesInSchema, schema.Grants[0].Target);
+        Assert.Equal("supabase_admin", schema.Grants[1].RunAs);
     }
 
     [Fact]
@@ -65,5 +72,29 @@ public sealed class SchemaSupportYamlSerializerTests
         Assert.DoesNotContain("language: sql", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("volatility: stable", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("revokePublicExecute: true", yaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToYaml_PostgresGrantRunAs_EmitsRunAs()
+    {
+        var schema = new SchemaDefinition
+        {
+            Name = "nap",
+            Grants =
+            [
+                new PostgresGrantDefinition
+                {
+                    Schema = "auth",
+                    Target = PostgresGrantTarget.Schema,
+                    Privileges = ["USAGE"],
+                    Roles = ["app_user", "app_admin"],
+                    RunAs = "supabase_admin",
+                },
+            ],
+        };
+
+        var yaml = SchemaYamlSerializer.ToYaml(schema);
+
+        Assert.Contains("runAs: supabase_admin", yaml, StringComparison.Ordinal);
     }
 }
