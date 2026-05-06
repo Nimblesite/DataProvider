@@ -565,6 +565,14 @@ Destructive operations require explicit opt-in via `MigrationOptions`:
 - `AllowDropIndex` (default: false)
 - `AllowAlterColumn` (default: false)
 
+### PostgreSQL Constraint-Backed Index Drops [MIG-PG-CONSTRAINT-BACKED-INDEX-DROP]
+
+When a destructive diff emits `DropIndex` for a PostgreSQL index that implements
+a `UNIQUE` or `PRIMARY KEY` constraint, the provider must drop the owning
+constraint with `ALTER TABLE ... DROP CONSTRAINT` instead of issuing `DROP INDEX`.
+Detection uses `pg_constraint.conindid` joined to the target table and index.
+Indexes that are not owned by a constraint still use `DROP INDEX IF EXISTS`.
+
 ---
 
 ## 7. Migration Execution
