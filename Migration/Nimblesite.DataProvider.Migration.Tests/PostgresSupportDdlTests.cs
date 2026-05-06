@@ -85,6 +85,35 @@ public sealed class PostgresSupportDdlTests
     }
 
     [Fact]
+    public void Generate_GrantPrivileges_WithRunAs_WrapsGrantInLocalRole()
+    {
+        var ddl = PostgresDdlGenerator.Generate(
+            new GrantPrivilegesOperation(
+                new PostgresGrantDefinition
+                {
+                    Schema = "auth",
+                    Target = PostgresGrantTarget.Table,
+                    ObjectName = "users",
+                    Privileges = ["select", "insert"],
+                    Roles = ["app_admin"],
+                    RunAs = "supabase_admin",
+                }
+            )
+        );
+
+        Assert.Contains("pg_has_role(current_user, 'supabase_admin', 'MEMBER')", ddl);
+        Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", ddl);
+        Assert.Contains("GRANT \"supabase_admin\" TO", ddl, StringComparison.Ordinal);
+        Assert.Contains("SET LOCAL ROLE \"supabase_admin\";", ddl, StringComparison.Ordinal);
+        Assert.Contains(
+            "GRANT SELECT, INSERT ON TABLE \"auth\".\"users\" TO \"app_admin\";",
+            ddl,
+            StringComparison.Ordinal
+        );
+        Assert.EndsWith("RESET ROLE", ddl, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generate_RevokePrivileges_EmitsTableRevoke()
     {
         var ddl = PostgresDdlGenerator.Generate(
