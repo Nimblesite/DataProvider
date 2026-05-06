@@ -45,10 +45,34 @@
     </Content>
   </ItemGroup>
 
+  <PropertyGroup>
+    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/net9.0/DataProviderMigrate.dll</DataProviderMigrateToolDll>
+    <LqlToolDll>$(MSBuildThisFileDirectory)../../Lql/Lql/bin/$(Configuration)/net9.0/Lql.dll</LqlToolDll>
+    <DataProviderToolDll>$(MSBuildThisFileDirectory)../DataProvider/bin/$(Configuration)/net10.0/DataProvider.dll</DataProviderToolDll>
+  </PropertyGroup>
+
+  <Target Name="BuildCodegenTools" BeforeTargets="CreateDatabaseSchema">
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../Lql/Lql/Lql.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../DataProvider/DataProvider.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+  </Target>
+
   <!-- Create database from YAML using DataProviderMigrate (YAML stored in git) -->
   <Target Name="CreateDatabaseSchema" BeforeTargets="TranspileLqlAndGenerateDataProvider">
     <Exec
-      Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj&quot; -- --schema &quot;$(MSBuildProjectDirectory)/example-schema.yaml&quot; --output &quot;$(MSBuildProjectDirectory)/invoices.db&quot; --provider sqlite"
+      Command="dotnet &quot;$(DataProviderMigrateToolDll)&quot; --schema &quot;$(MSBuildProjectDirectory)/example-schema.yaml&quot; --output &quot;$(MSBuildProjectDirectory)/invoices.db&quot; --provider sqlite"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       StandardOutputImportance="High"
       StandardErrorImportance="High"
@@ -71,7 +95,7 @@
     </ItemGroup>
     <Message Importance="High" Text="Transpiling LQL files (@(LqlFiles))" />
     <Exec
-      Command="dotnet run --project $(MSBuildProjectDirectory)/../../Lql/Lql/Lql.csproj -- sqlite --input &quot;%(LqlFiles.Identity)&quot; --output &quot;%(LqlFiles.RootDir)%(LqlFiles.Directory)%(LqlFiles.Filename).generated.sql&quot;"
+      Command="dotnet &quot;$(LqlToolDll)&quot; sqlite --input &quot;%(LqlFiles.Identity)&quot; --output &quot;%(LqlFiles.RootDir)%(LqlFiles.Directory)%(LqlFiles.Filename).generated.sql&quot;"
       Condition="'$(EnableLqlTranspile)' == 'true' and @(LqlFiles) != ''"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       StandardOutputImportance="High"
@@ -80,7 +104,7 @@
     />
     <!-- Run SQLite generator CLI to emit .g.cs into Generated folder -->
     <Exec
-      Command="dotnet run --project $(MSBuildThisFileDirectory)../DataProvider/DataProvider.csproj -- sqlite --project-dir &quot;$(MSBuildProjectDirectory)&quot; --config &quot;$(MSBuildProjectDirectory)/DataProvider.json&quot; --out &quot;$(MSBuildProjectDirectory)/Generated&quot;"
+      Command="dotnet &quot;$(DataProviderToolDll)&quot; sqlite --project-dir &quot;$(MSBuildProjectDirectory)&quot; --config &quot;$(MSBuildProjectDirectory)/DataProvider.json&quot; --out &quot;$(MSBuildProjectDirectory)/Generated&quot;"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       StandardOutputImportance="High"
       StandardErrorImportance="High"

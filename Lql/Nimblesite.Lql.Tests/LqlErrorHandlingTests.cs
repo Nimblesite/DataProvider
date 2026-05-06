@@ -66,6 +66,26 @@ public class LqlErrorHandlingTests
     }
 
     [Fact]
+    public void InvalidCharacter_ShouldReturnLexerError()
+    {
+        // Arrange
+        const string lqlCode = """
+            users |> select(users.id) #
+            """;
+
+        // Act
+        var result = LqlStatementConverter.ToStatement(lqlCode);
+
+        // Assert
+        Assert.IsType<Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>>(result);
+        var failure = (Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>)result;
+        Assert.Contains("Syntax error", failure.Value.Message, StringComparison.Ordinal);
+        Assert.NotNull(failure.Value.Position);
+        Assert.True(failure.Value.Position!.Line > 0);
+        Assert.True(failure.Value.Position.Column >= 0);
+    }
+
+    [Fact]
     public void MissingPipeOperator_ShouldReturnError()
     {
         // Arrange

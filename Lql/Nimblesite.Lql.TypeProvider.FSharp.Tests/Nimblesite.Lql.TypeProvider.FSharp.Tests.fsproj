@@ -38,6 +38,18 @@
     <ProjectReference Include="../Nimblesite.Lql.TypeProvider.FSharp.Tests.Data/Nimblesite.Lql.TypeProvider.FSharp.Tests.Data.csproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/net9.0/DataProviderMigrate.dll</DataProviderMigrateToolDll>
+  </PropertyGroup>
+
+  <Target Name="BuildMigrationTool" BeforeTargets="CreateTestDatabase">
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+  </Target>
+
   <!-- YAML schema is source of truth -->
   <ItemGroup>
     <Content Include="typeprovider-test-schema.yaml">
@@ -47,7 +59,7 @@
 
   <!-- Create database from YAML using DataProviderMigrate before build -->
   <Target Name="CreateTestDatabase" BeforeTargets="BeforeCompile">
-    <Exec Command='dotnet run --project "$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" -- --schema "$(MSBuildProjectDirectory)/typeprovider-test-schema.yaml" --output "$(MSBuildProjectDirectory)/typeprovider-test.db" --provider sqlite' WorkingDirectory='$(MSBuildProjectDirectory)' StandardOutputImportance='High' StandardErrorImportance='High' />
+    <Exec Command='dotnet "$(DataProviderMigrateToolDll)" --schema "$(MSBuildProjectDirectory)/typeprovider-test-schema.yaml" --output "$(MSBuildProjectDirectory)/typeprovider-test.db" --provider sqlite' WorkingDirectory='$(MSBuildProjectDirectory)' StandardOutputImportance='High' StandardErrorImportance='High' />
   </Target>
 
 </Project>
