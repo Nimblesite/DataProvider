@@ -215,6 +215,7 @@ Type definitions use the `kind` property to discriminate:
 | `computed.expression` | string | `null` | Computed column SQL |
 | `computed.persisted` | boolean | `false` | Store computed value |
 | `checkConstraint` | string | `null` | Column-level CHECK |
+| `checkConstraintName` | string | `null` | Stable name for column-level CHECK |
 | `collation` | string | `null` | String collation |
 | `comment` | string | `null` | Documentation |
 
@@ -572,6 +573,15 @@ a `UNIQUE` or `PRIMARY KEY` constraint, the provider must drop the owning
 constraint with `ALTER TABLE ... DROP CONSTRAINT` instead of issuing `DROP INDEX`.
 Detection uses `pg_constraint.conindid` joined to the target table and index.
 Indexes that are not owned by a constraint still use `DROP INDEX IF EXISTS`.
+
+### PostgreSQL Named Column Check Constraints [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT]
+
+Column-level `checkConstraint` entries may specify `checkConstraintName`.
+PostgreSQL DDL must emit `CONSTRAINT "<name>" CHECK (...)` for that column
+constraint so migrations create stable, queryable `pg_constraint` rows. When no
+name is supplied, the provider uses `<table>_<column>_chk`. PostgreSQL schema
+inspection must preserve the discovered constraint name for one-column checks so
+idempotency proofs can verify the constraint was materialized.
 
 ---
 

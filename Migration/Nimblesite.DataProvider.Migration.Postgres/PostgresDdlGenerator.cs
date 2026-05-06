@@ -267,7 +267,7 @@ public static partial class PostgresDdlGenerator
 
         foreach (var column in table.Columns)
         {
-            columnDefs.Add(GenerateColumnDef(column));
+            columnDefs.Add(GenerateColumnDef(tableName, column));
         }
 
         // Add primary key constraint
@@ -337,7 +337,7 @@ public static partial class PostgresDdlGenerator
         return sb.ToString();
     }
 
-    private static string GenerateColumnDef(ColumnDefinition column)
+    private static string GenerateColumnDef(string tableName, ColumnDefinition column)
     {
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"\"{column.Name}\" ");
@@ -378,11 +378,16 @@ public static partial class PostgresDdlGenerator
 
         if (column.CheckConstraint is not null)
         {
+            // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
             // Auto-quote the column's own name in its CHECK expression so
             // mixed-case columns survive without manual quoting in YAML.
             var ownNames = new HashSet<string>(StringComparer.Ordinal) { column.Name };
             var quotedExpr = QuoteIdentifiersInExpression(column.CheckConstraint, ownNames);
-            sb.Append(CultureInfo.InvariantCulture, $" CHECK ({quotedExpr})");
+            var checkName = SchemaConstraintNames.ColumnCheck(tableName, column);
+            sb.Append(
+                CultureInfo.InvariantCulture,
+                $" CONSTRAINT \"{checkName}\" CHECK ({quotedExpr})"
+            );
         }
 
         return sb.ToString();
@@ -390,7 +395,7 @@ public static partial class PostgresDdlGenerator
 
     private static string GenerateAddColumn(AddColumnOperation op)
     {
-        var colDef = GenerateColumnDef(op.Column);
+        var colDef = GenerateColumnDef(op.TableName, op.Column);
         return $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD COLUMN {colDef}";
     }
 

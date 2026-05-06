@@ -358,6 +358,7 @@ public sealed class ColumnBuilder
     private bool _isComputedPersisted;
     private string? _collation;
     private string? _checkConstraint;
+    private string? _checkConstraintName;
     private string? _comment;
 
     internal bool IsPrimaryKey { get; private set; }
@@ -457,6 +458,17 @@ public sealed class ColumnBuilder
     }
 
     /// <summary>
+    /// Add named check constraint to column.
+    /// Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
+    /// </summary>
+    public ColumnBuilder Check(string name, string expression)
+    {
+        _checkConstraintName = name;
+        _checkConstraint = expression;
+        return this;
+    }
+
+    /// <summary>
     /// Add comment to column.
     /// </summary>
     public ColumnBuilder Comment(string comment)
@@ -480,6 +492,7 @@ public sealed class ColumnBuilder
             IsComputedPersisted = _isComputedPersisted,
             Collation = _collation,
             CheckConstraint = _checkConstraint,
+            CheckConstraintName = _checkConstraintName,
             Comment = _comment,
         };
 }
