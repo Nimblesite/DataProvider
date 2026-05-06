@@ -68,16 +68,25 @@ public static class SchemaYamlSerializer
     /// </summary>
     /// <param name="schema">Schema to serialize.</param>
     /// <returns>YAML representation of the schema.</returns>
-    public static string ToYaml(SchemaDefinition schema) => Serializer.Serialize(schema);
+    public static string ToYaml(SchemaDefinition schema)
+    {
+        ValidateSupportFunctionBodies(schema);
+        return Serializer.Serialize(schema);
+    }
 
     /// <summary>
     /// Deserialize a schema definition from YAML string.
     /// </summary>
     /// <param name="yaml">YAML string.</param>
     /// <returns>Deserialized schema definition.</returns>
-    public static SchemaDefinition FromYaml(string yaml) =>
-        Deserializer.Deserialize<SchemaDefinition>(yaml)
-        ?? new SchemaDefinition { Name = string.Empty, Tables = [] };
+    public static SchemaDefinition FromYaml(string yaml)
+    {
+        var schema =
+            Deserializer.Deserialize<SchemaDefinition>(yaml)
+            ?? new SchemaDefinition { Name = string.Empty, Tables = [] };
+        ValidateSupportFunctionBodies(schema);
+        return schema;
+    }
 
     /// <summary>
     /// Load a schema definition from a YAML file.
@@ -99,6 +108,23 @@ public static class SchemaYamlSerializer
     {
         var yaml = ToYaml(schema);
         File.WriteAllText(filePath, yaml);
+    }
+
+    private static void ValidateSupportFunctionBodies(SchemaDefinition schema)
+    {
+        foreach (var function in schema.Functions)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(function.Body)
+                && !string.IsNullOrWhiteSpace(function.BodyLql)
+            )
+            {
+                throw new InvalidOperationException(
+                    "PostgreSQL function body and bodyLql are mutually exclusive: "
+                        + $"{function.Schema}.{function.Name}"
+                );
+            }
+        }
     }
 }
 

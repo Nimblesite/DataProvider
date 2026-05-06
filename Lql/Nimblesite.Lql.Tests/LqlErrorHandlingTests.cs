@@ -174,21 +174,20 @@ public class LqlErrorHandlingTests
     }
 
     [Fact]
-    public void UndefinedVariable_ShouldReturnError()
+    public void UnderscorePipelineBase_ShouldParseAsTableName()
     {
         // Arrange
         const string lqlCode = """
-            undefined_variable |> select(id, name)
+            tenant_members |> select(id, name)
             """;
 
         // Act
         var result = LqlStatementConverter.ToStatement(lqlCode);
 
         // Assert
-        Assert.IsType<Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>>(result);
-        var failure = (Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>)result;
-        Assert.Contains("Syntax error", failure.Value.Message, StringComparison.Ordinal);
-        Assert.NotNull(failure.Value.Position);
+        Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(result);
+        var success = (Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)result;
+        Assert.NotNull(success.Value);
     }
 
     [Fact]
