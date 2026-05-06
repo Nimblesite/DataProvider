@@ -106,8 +106,27 @@ public static partial class SchemaDiff
             || !SameSqlToken(current.Volatility, desired.Volatility)
             || current.SecurityDefiner != desired.SecurityDefiner
             || current.RevokePublicExecute != desired.RevokePublicExecute
-            || current.Body.Trim() != desired.Body.Trim()
+            || FunctionBodyForDiff(current) != FunctionBodyForDiff(desired)
             || !currentExecuteRoles.SetEquals(desired.ExecuteRoles);
+    }
+
+    private static string FunctionBodyForDiff(PostgresFunctionDefinition function)
+    {
+        if (string.IsNullOrWhiteSpace(function.BodyLql))
+        {
+            return function.Body.Trim();
+        }
+
+        var result = LqlFunctionBodyTranspiler.TranslatePostgresBody(
+            function.BodyLql,
+            $"{function.Schema}.{function.Name}"
+        );
+        return result switch
+        {
+            Outcome.Result<string, MigrationError>.Ok<string, MigrationError> ok => ok.Value.Trim(),
+            Outcome.Result<string, MigrationError>.Error<string, MigrationError> =>
+                function.BodyLql.Trim(),
+        };
     }
 
     private static string FunctionKey(PostgresFunctionDefinition function) =>

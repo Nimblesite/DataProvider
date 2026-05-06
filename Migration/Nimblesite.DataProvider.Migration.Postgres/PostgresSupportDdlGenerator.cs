@@ -44,6 +44,7 @@ public static partial class PostgresDdlGenerator
             function.Arguments.Select(ArgumentDeclaration)
         );
         var signature = FunctionSignature(function);
+        var body = FunctionBody(function);
         var sb = new StringBuilder();
 
         sb.AppendLine(
@@ -58,7 +59,7 @@ public static partial class PostgresDdlGenerator
             sb.AppendLine("SECURITY DEFINER");
         }
         sb.AppendLine("AS $function$");
-        sb.AppendLine(function.Body.Trim());
+        sb.AppendLine(body);
         sb.Append("$function$");
 
         if (function.RevokePublicExecute)
@@ -95,6 +96,36 @@ public static partial class PostgresDdlGenerator
         string.IsNullOrWhiteSpace(argument.Name)
             ? argument.Type
             : $"{QuoteIdent(argument.Name)} {argument.Type}";
+
+    private static string FunctionBody(PostgresFunctionDefinition function)
+    {
+        if (
+            !string.IsNullOrWhiteSpace(function.Body)
+            && !string.IsNullOrWhiteSpace(function.BodyLql)
+        )
+        {
+            throw new InvalidOperationException(
+                "PostgreSQL function body and bodyLql are mutually exclusive: "
+                    + $"{function.Schema}.{function.Name}"
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(function.BodyLql))
+        {
+            return function.Body.Trim();
+        }
+
+        var result = LqlFunctionBodyTranspiler.TranslatePostgresBody(
+            function.BodyLql,
+            $"{function.Schema}.{function.Name}"
+        );
+        return result switch
+        {
+            Outcome.Result<string, MigrationError>.Ok<string, MigrationError> ok => ok.Value,
+            Outcome.Result<string, MigrationError>.Error<string, MigrationError> err =>
+                throw new InvalidOperationException(err.Value.Message),
+        };
+    }
 
     private static string FunctionSignature(PostgresFunctionDefinition function) =>
         $"{QuoteIdent(function.Schema)}.{QuoteIdent(function.Name)}({string.Join(", ", function.Arguments.Select(a => a.Type))})";
