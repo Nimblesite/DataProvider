@@ -1,71 +1,18 @@
 {
   "main": [
-    { "text": "Docs", "url": "/docs/" },
+    { "text": "Docs", "url": "/#docs" },
+    { "text": "Syntax", "url": "/#syntax" },
+    { "text": "Migrations", "url": "/#migrations" },
+    { "text": "Tooling", "url": "/#tooling" },
     { "text": "Playground", "url": "/playground/" },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider", "external": true }
   ],
-  "docs": [
-    {
-      "title": "Getting Started",
-      "items": [
-        { "text": "Introduction", "url": "/docs/" },
-        { "text": "Quick Start", "url": "/docs/quick-start/" },
-        { "text": "Installation", "url": "/docs/installation/" }
-      ]
-    },
-    {
-      "title": "Language",
-      "items": [
-        { "text": "Syntax Overview", "url": "/docs/syntax/" },
-        { "text": "Pipeline Operators", "url": "/docs/pipelines/" },
-        { "text": "Lambda Expressions", "url": "/docs/lambdas/" },
-        { "text": "Joins", "url": "/docs/joins/" },
-        { "text": "Aggregation", "url": "/docs/aggregation/" },
-        { "text": "Let Bindings", "url": "/docs/let-bindings/" }
-      ]
-    },
-    {
-      "title": "Tooling",
-      "items": [
-        { "text": "VS Code Extension", "url": "/docs/vscode/" },
-        { "text": "AI-Powered Completions", "url": "/docs/ai-integration/" },
-        { "text": "Database Configuration", "url": "/docs/database-config/" },
-        { "text": "F# Type Provider", "url": "/docs/fsharp-type-provider/" },
-        { "text": "Language Server", "url": "/docs/language-server/" }
-      ]
-    },
-    {
-      "title": "Reference",
-      "items": [
-        { "text": "SQL Dialects", "url": "/docs/sql-dialects/" },
-        { "text": "Nimblesite.DataProvider.Core", "url": "https://dataprovider.dev", "external": true }
-      ]
-    }
-  ],
   "footer": [
-    {
-      "title": "Documentation",
-      "items": [
-        { "text": "Quick Start", "url": "/docs/quick-start/" },
-        { "text": "Syntax Overview", "url": "/docs/syntax/" },
-        { "text": "Playground", "url": "/playground/" }
-      ]
-    },
-    {
-      "title": "Ecosystem",
-      "items": [
-        { "text": "Nimblesite.DataProvider.Core", "url": "https://dataprovider.dev" },
-        { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider" },
-        { "text": "NuGet", "url": "https://www.nuget.org/packages/Nimblesite.Lql.Core" }
-      ]
-    },
-    {
-      "title": "More",
-      "items": [
-        { "text": "VS Code Extension", "url": "/docs/vscode/" },
-        { "text": "AI Completions", "url": "/docs/ai-integration/" },
-        { "text": "F# Type Provider", "url": "/docs/fsharp-type-provider/" }
-      ]
-    }
+    { "text": "Docs", "url": "/#docs" },
+    { "text": "Examples", "url": "/#examples" },
+    { "text": "Migrations", "url": "/#migrations" },
+    { "text": "Playground", "url": "/playground/" },
+    { "text": "DataProvider", "url": "https://dataprovider.dev", "external": true },
+    { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider", "external": true }
   ]
 }

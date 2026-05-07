@@ -23,11 +23,24 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Lql/LqlWebsite-Eleventy/package-lock.json
+
+      - name: Build Eleventy documentation site
+        working-directory: Lql/LqlWebsite-Eleventy
+        run: |
+          npm ci
+          npm run build
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -39,23 +52,21 @@ jobs:
       - name: Install .NET WebAssembly workload
         run: dotnet workload install wasm-tools
 
-      - name: Restore dependencies
+      - name: Restore Blazor playground dependencies
         run: dotnet restore ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj
 
-      - name: Build
+      - name: Build Blazor transpiler playground
         env:
           VERSION: ${{ inputs.version }}
         run: |
           if [ -n "${VERSION:-}" ]; then
-            # AssemblyVersion only accepts numeric major[.minor[.build[.revision]]] —
-            # strip any -prerelease suffix (e.g. 0.9.7-beta -> 0.9.7).
             ASM_VERSION="${VERSION%%-*}"
             dotnet build ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release --no-restore -p:Version="$VERSION" -p:AssemblyVersion="$ASM_VERSION" -p:FileVersion="$ASM_VERSION"
           else
             dotnet build ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release --no-restore
           fi
 
-      - name: Publish Blazor WebAssembly project
+      - name: Publish Blazor transpiler playground
         env:
           VERSION: ${{ inputs.version }}
         run: |
@@ -66,13 +77,13 @@ jobs:
             dotnet publish ./Lql/Nimblesite.Lql.Website/Nimblesite.Lql.Website.csproj -c Release -o release --nologo
           fi
 
-      - name: Update base href for custom domain
+      - name: Mount Blazor playground under Eleventy site
         run: |
-          sed -i 's/<base href="\/" \/>/<base href="\/" \/>/g' release/wwwroot/index.html
-
-      - name: Add .nojekyll file
-        run: touch release/wwwroot/.nojekyll
-
+          sed -i 's|<base href="/" />|<base href="/playground/" />|g' release/wwwroot/index.html
+          rm -rf Lql/LqlWebsite-Eleventy/_site/playground
+          mkdir -p Lql/LqlWebsite-Eleventy/_site/playground
+          cp -R release/wwwroot/. Lql/LqlWebsite-Eleventy/_site/playground/
+          touch Lql/LqlWebsite-Eleventy/_site/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -80,7 +91,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: release/wwwroot
+          path: Lql/LqlWebsite-Eleventy/_site
 
       - name: Deploy to GitHub Pages
         id: deployment

@@ -215,6 +215,7 @@ Type definitions use the `kind` property to discriminate:
 | `computed.expression` | string | `null` | Computed column SQL |
 | `computed.persisted` | boolean | `false` | Store computed value |
 | `checkConstraint` | string | `null` | Column-level CHECK |
+| `checkConstraintName` | string | `null` | Stable name for column-level CHECK |
 | `collation` | string | `null` | String collation |
 | `comment` | string | `null` | Documentation |
 
@@ -536,7 +537,7 @@ The diff engine produces a list of schema operations as discriminated union reco
 - **Table**: `CreateTable`, `DropTable`
 - **Column**: `AddColumn`, `DropColumn`, `AlterColumn`
 - **Index**: `CreateIndex`, `DropIndex`
-- **Constraint**: `AddPrimaryKey`, `DropPrimaryKey`, `AddForeignKey`, `DropForeignKey`
+- **Constraint**: `AddPrimaryKey`, `DropPrimaryKey`, `AddForeignKey`, `DropForeignKey`, `AddUniqueConstraint`, `AddCheckConstraint`
 
 All operations carry the schema name, table name, and relevant definition or constraint name.
 
@@ -564,6 +565,32 @@ Destructive operations require explicit opt-in via `MigrationOptions`:
 - `AllowDropColumn` (default: false)
 - `AllowDropIndex` (default: false)
 - `AllowAlterColumn` (default: false)
+
+### PostgreSQL Constraint-Backed Index Drops [MIG-PG-CONSTRAINT-BACKED-INDEX-DROP]
+
+When a destructive diff emits `DropIndex` for a PostgreSQL index that implements
+a `UNIQUE` or `PRIMARY KEY` constraint, the provider must drop the owning
+constraint with `ALTER TABLE ... DROP CONSTRAINT` instead of issuing `DROP INDEX`.
+Detection uses `pg_constraint.conindid` joined to the target table and index.
+Indexes that are not owned by a constraint still use `DROP INDEX IF EXISTS`.
+
+### PostgreSQL Unique Constraint Inspection [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION]
+
+PostgreSQL schema inspection must report `UNIQUE` constraints from
+`pg_constraint` as `UniqueConstraints`, preserving the constraint name and
+column order. Indexes owned by `UNIQUE` or `PRIMARY KEY` constraints are not
+ordinary `Indexes` in the portable schema model. A destructive diff against a
+converged schema must not emit `DropIndex` for a backing index when the desired
+schema still declares the owning unique constraint.
+
+### PostgreSQL Named Column Check Constraints [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT]
+
+Column-level `checkConstraint` entries may specify `checkConstraintName`.
+PostgreSQL DDL must emit `CONSTRAINT "<name>" CHECK (...)` for that column
+constraint so migrations create stable, queryable `pg_constraint` rows. When no
+name is supplied, the provider uses `<table>_<column>_chk`. PostgreSQL schema
+inspection must preserve the discovered constraint name for one-column checks so
+idempotency proofs can verify the constraint was materialized.
 
 ---
 

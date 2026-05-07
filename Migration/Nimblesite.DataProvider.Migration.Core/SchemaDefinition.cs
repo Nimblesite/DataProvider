@@ -228,6 +228,12 @@ public sealed record ColumnDefinition
     /// <summary>Check constraint expression for this column only.</summary>
     public string? CheckConstraint { get; init; }
 
+    /// <summary>
+    /// Stable database constraint name for <see cref="CheckConstraint" />.
+    /// Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
+    /// </summary>
+    public string? CheckConstraintName { get; init; }
+
     /// <summary>Column comment/description for documentation.</summary>
     public string? Comment { get; init; }
 }

@@ -312,7 +312,7 @@ public sealed class SchemaYamlSerializerTests
                         .Column(
                             "Price",
                             PortableTypes.Decimal(10, 2),
-                            c => c.NotNull().Check("Price >= 0")
+                            c => c.NotNull().Check("CK_Products_Price", "Price >= 0")
                         )
                         .Column("Quantity", PortableTypes.Int, c => c.NotNull())
                         .Check("CK_Products_Quantity", "Quantity >= 0")
@@ -328,6 +328,7 @@ public sealed class SchemaYamlSerializerTests
 
         var priceCol = table.Columns.First(c => c.Name == "Price");
         Assert.Equal("Price >= 0", priceCol.CheckConstraint);
+        Assert.Equal("CK_Products_Price", priceCol.CheckConstraintName);
 
         Assert.Single(table.CheckConstraints);
         Assert.Equal("CK_Products_Quantity", table.CheckConstraints[0].Name);

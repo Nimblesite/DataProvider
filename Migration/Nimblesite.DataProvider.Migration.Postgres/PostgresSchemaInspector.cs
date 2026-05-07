@@ -99,6 +99,8 @@ public static partial class PostgresSchemaInspector
             var columns = new List<ColumnDefinition>();
             var indexes = new List<IndexDefinition>();
             var foreignKeys = new List<ForeignKeyDefinition>();
+            var uniqueConstraints = new List<UniqueConstraintDefinition>();
+            var checkConstraints = new List<CheckConstraintDefinition>();
             PrimaryKeyDefinition? primaryKey = null;
 
             // Get column info. Implements [MIG-TYPES-VECTOR] §5.4.4: LEFT JOIN
@@ -204,6 +206,8 @@ public static partial class PostgresSchemaInspector
                 };
             }
 
+            InspectUniqueConstraints(connection, schemaName, tableName, uniqueConstraints);
+
             // Get indexes (both column-based and expression indexes)
             using var idxCmd = connection.CreateCommand();
             idxCmd.CommandText = """
@@ -221,9 +225,13 @@ public static partial class PostgresSchemaInspector
                 JOIN pg_index ix ON t.oid = ix.indrelid
                 JOIN pg_class i ON i.oid = ix.indexrelid
                 JOIN pg_namespace n ON n.oid = t.relnamespace
+                LEFT JOIN pg_constraint owned_constraint
+                    ON owned_constraint.conindid = ix.indexrelid
+                    AND owned_constraint.contype IN ('p', 'u')
                 WHERE n.nspname = @schema
                 AND t.relname = @table
                 AND NOT ix.indisprimary
+                AND owned_constraint.oid IS NULL
                 ORDER BY i.relname
                 """;
             idxCmd.Parameters.AddWithValue("@schema", schemaName);
@@ -319,6 +327,8 @@ public static partial class PostgresSchemaInspector
                 }
             }
 
+            InspectCheckConstraints(connection, schemaName, tableName, columns, checkConstraints);
+
             // [RLS-DIFF] read pg_policies + relrowsecurity into RowLevelSecurity.
             var rls = InspectRls(connection, schemaName, tableName);
 
@@ -331,6 +341,8 @@ public static partial class PostgresSchemaInspector
                     Indexes = indexes.AsReadOnly(),
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
+                    UniqueConstraints = uniqueConstraints.AsReadOnly(),
+                    CheckConstraints = checkConstraints.AsReadOnly(),
                     RowLevelSecurity = rls,
                 }
             );
@@ -415,6 +427,121 @@ public static partial class PostgresSchemaInspector
             "RESTRICT" => ForeignKeyAction.Restrict,
             _ => ForeignKeyAction.NoAction,
         };
+
+    private static void InspectUniqueConstraints(
+        NpgsqlConnection connection,
+        string schemaName,
+        string tableName,
+        List<UniqueConstraintDefinition> uniqueConstraints
+    )
+    {
+        // Implements [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION].
+        using var uniqueCmd = connection.CreateCommand();
+        uniqueCmd.CommandText = """
+            SELECT
+                c.conname,
+                array_agg(a.attname ORDER BY keys.n) AS columns
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            JOIN unnest(c.conkey) WITH ORDINALITY AS keys(attnum, n) ON true
+            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
+            WHERE n.nspname = @schema
+            AND t.relname = @table
+            AND c.contype = 'u'
+            GROUP BY c.conname
+            ORDER BY c.conname
+            """;
+        uniqueCmd.Parameters.AddWithValue("@schema", schemaName);
+        uniqueCmd.Parameters.AddWithValue("@table", tableName);
+
+        using var reader = uniqueCmd.ExecuteReader();
+        while (reader.Read())
+        {
+            uniqueConstraints.Add(
+                new UniqueConstraintDefinition
+                {
+                    Name = reader.GetString(0),
+                    Columns = ((string[])reader.GetValue(1)).ToList().AsReadOnly(),
+                }
+            );
+        }
+    }
+
+    private static void InspectCheckConstraints(
+        NpgsqlConnection connection,
+        string schemaName,
+        string tableName,
+        List<ColumnDefinition> columns,
+        List<CheckConstraintDefinition> tableChecks
+    )
+    {
+        // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
+        using var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = """
+            SELECT
+                c.conname,
+                pg_get_expr(c.conbin, c.conrelid, true),
+                COALESCE(array_length(c.conkey, 1), 0),
+                column_ref.attname
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            LEFT JOIN LATERAL (
+                SELECT a.attname
+                FROM unnest(c.conkey) AS keys(attnum)
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
+            ) AS column_ref ON COALESCE(array_length(c.conkey, 1), 0) = 1
+            WHERE n.nspname = @schema
+            AND t.relname = @table
+            AND c.contype = 'c'
+            ORDER BY c.conname
+            """;
+        checkCmd.Parameters.AddWithValue("@schema", schemaName);
+        checkCmd.Parameters.AddWithValue("@table", tableName);
+
+        using var reader = checkCmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var name = reader.GetString(0);
+            var expression = reader.GetString(1);
+            var columnCount = reader.GetInt32(2);
+
+            if (columnCount == 1 && !reader.IsDBNull(3))
+            {
+                ApplyColumnCheckConstraint(columns, reader.GetString(3), name, expression);
+            }
+            else
+            {
+                tableChecks.Add(
+                    new CheckConstraintDefinition { Name = name, Expression = expression }
+                );
+            }
+        }
+    }
+
+    private static void ApplyColumnCheckConstraint(
+        List<ColumnDefinition> columns,
+        string columnName,
+        string constraintName,
+        string expression
+    )
+    {
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (!string.Equals(columns[i].Name, columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            columns[i] = columns[i] with
+            {
+                CheckConstraint = expression,
+                CheckConstraintName = constraintName,
+            };
+            return;
+        }
+    }
 
     /// <summary>
     /// Parse expressions from a PostgreSQL index definition string.

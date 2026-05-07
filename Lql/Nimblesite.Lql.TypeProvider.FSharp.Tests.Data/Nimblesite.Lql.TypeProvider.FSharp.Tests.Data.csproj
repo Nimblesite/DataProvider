@@ -26,6 +26,24 @@
     <AdditionalFiles Include="DataProvider.json" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/net9.0/DataProviderMigrate.dll</DataProviderMigrateToolDll>
+    <DataProviderToolDll>$(MSBuildThisFileDirectory)../../DataProvider/DataProvider/bin/$(Configuration)/net10.0/DataProvider.dll</DataProviderToolDll>
+  </PropertyGroup>
+
+  <Target Name="BuildCodegenTools" BeforeTargets="CreateDatabaseSchema">
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../DataProvider/DataProvider/DataProvider.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)"
+    />
+  </Target>
+
   <!-- YAML schema is source of truth -->
   <ItemGroup>
     <Content Include="../Nimblesite.Lql.TypeProvider.FSharp.Tests/typeprovider-test-schema.yaml">
@@ -37,7 +55,7 @@
   <!-- Create database from YAML using DataProviderMigrate -->
   <Target Name="CreateDatabaseSchema" BeforeTargets="GenerateDataProvider">
     <Exec
-      Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj&quot; -- --schema &quot;$(MSBuildThisFileDirectory)../Nimblesite.Lql.TypeProvider.FSharp.Tests/typeprovider-test-schema.yaml&quot; --output &quot;$(MSBuildThisFileDirectory)../Nimblesite.Lql.TypeProvider.FSharp.Tests/typeprovider-test.db&quot; --provider sqlite"
+      Command="dotnet &quot;$(DataProviderMigrateToolDll)&quot; --schema &quot;$(MSBuildThisFileDirectory)../Nimblesite.Lql.TypeProvider.FSharp.Tests/typeprovider-test-schema.yaml&quot; --output &quot;$(MSBuildThisFileDirectory)../Nimblesite.Lql.TypeProvider.FSharp.Tests/typeprovider-test.db&quot; --provider sqlite"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       StandardOutputImportance="High"
       StandardErrorImportance="High"
@@ -56,7 +74,7 @@
     <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
     <!-- Run DataProvider sqlite subcommand to emit .g.cs into Generated folder -->
     <Exec
-      Command="dotnet run --project $(MSBuildThisFileDirectory)../../DataProvider/DataProvider/DataProvider.csproj -- sqlite --project-dir &quot;$(MSBuildProjectDirectory)&quot; --config &quot;$(MSBuildProjectDirectory)/DataProvider.json&quot; --out &quot;$(MSBuildProjectDirectory)/Generated&quot;"
+      Command="dotnet &quot;$(DataProviderToolDll)&quot; sqlite --project-dir &quot;$(MSBuildProjectDirectory)&quot; --config &quot;$(MSBuildProjectDirectory)/DataProvider.json&quot; --out &quot;$(MSBuildProjectDirectory)/Generated&quot;"
       WorkingDirectory="$(MSBuildProjectDirectory)"
       StandardOutputImportance="High"
       StandardErrorImportance="High"

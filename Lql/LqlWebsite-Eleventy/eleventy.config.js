@@ -28,10 +28,6 @@ export default function(eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/robots.txt");
   eleventyConfig.addWatchTarget("src/assets/");
 
-  eleventyConfig.addCollection("docs", function(collectionApi) {
-    return collectionApi.getFilteredByGlob("src/docs/**/*.md");
-  });
-
   eleventyConfig.addFilter("dateFormat", (dateObj) => {
     return new Date(dateObj).toLocaleDateString('en-US', {
       year: 'numeric', month: 'long', day: 'numeric'

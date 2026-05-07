@@ -112,7 +112,7 @@ public static partial class PostgresDdlGenerator
                 $"DROP TABLE IF EXISTS \"{op.Schema}\".\"{op.TableName}\" CASCADE",
             DropColumnOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP COLUMN \"{op.ColumnName}\"",
-            DropIndexOperation op => $"DROP INDEX IF EXISTS \"{op.Schema}\".\"{op.IndexName}\"",
+            DropIndexOperation op => GenerateDropIndex(op),
             DropForeignKeyOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP CONSTRAINT \"{op.ConstraintName}\"",
             DropFunctionOperation op => GenerateDropFunction(op),
@@ -267,7 +267,7 @@ public static partial class PostgresDdlGenerator
 
         foreach (var column in table.Columns)
         {
-            columnDefs.Add(GenerateColumnDef(column));
+            columnDefs.Add(GenerateColumnDef(tableName, column));
         }
 
         // Add primary key constraint
@@ -337,7 +337,7 @@ public static partial class PostgresDdlGenerator
         return sb.ToString();
     }
 
-    private static string GenerateColumnDef(ColumnDefinition column)
+    private static string GenerateColumnDef(string tableName, ColumnDefinition column)
     {
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"\"{column.Name}\" ");
@@ -378,11 +378,16 @@ public static partial class PostgresDdlGenerator
 
         if (column.CheckConstraint is not null)
         {
+            // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
             // Auto-quote the column's own name in its CHECK expression so
             // mixed-case columns survive without manual quoting in YAML.
             var ownNames = new HashSet<string>(StringComparer.Ordinal) { column.Name };
             var quotedExpr = QuoteIdentifiersInExpression(column.CheckConstraint, ownNames);
-            sb.Append(CultureInfo.InvariantCulture, $" CHECK ({quotedExpr})");
+            var checkName = SchemaConstraintNames.ColumnCheck(tableName, column);
+            sb.Append(
+                CultureInfo.InvariantCulture,
+                $" CONSTRAINT \"{checkName}\" CHECK ({quotedExpr})"
+            );
         }
 
         return sb.ToString();
@@ -390,7 +395,7 @@ public static partial class PostgresDdlGenerator
 
     private static string GenerateAddColumn(AddColumnOperation op)
     {
-        var colDef = GenerateColumnDef(op.Column);
+        var colDef = GenerateColumnDef(op.TableName, op.Column);
         return $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD COLUMN {colDef}";
     }
 
@@ -406,6 +411,45 @@ public static partial class PostgresDdlGenerator
 
         return $"CREATE {unique}INDEX IF NOT EXISTS \"{op.Index.Name}\" ON \"{op.Schema}\".\"{op.TableName}\" ({indexItems}){filter}";
     }
+
+    private static string GenerateDropIndex(DropIndexOperation op)
+    {
+        var schema = SqlLiteral(op.Schema);
+        var table = SqlLiteral(op.TableName);
+        var index = SqlLiteral(op.IndexName);
+
+        // Implements [MIG-PG-CONSTRAINT-BACKED-INDEX-DROP].
+        return $$"""
+            DO $migration_drop_index$
+            DECLARE
+                constraint_name text;
+            BEGIN
+                SELECT c.conname
+                INTO constraint_name
+                FROM pg_constraint c
+                JOIN pg_class i ON i.oid = c.conindid
+                JOIN pg_namespace ni ON ni.oid = i.relnamespace
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace nt ON nt.oid = t.relnamespace
+                WHERE ni.nspname = {{schema}}
+                AND i.relname = {{index}}
+                AND nt.nspname = {{schema}}
+                AND t.relname = {{table}}
+                AND c.contype IN ('p', 'u')
+                LIMIT 1;
+
+                IF constraint_name IS NULL THEN
+                    EXECUTE format('DROP INDEX IF EXISTS %I.%I', {{schema}}, {{index}});
+                ELSE
+                    EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', {{schema}}, {{table}}, constraint_name);
+                END IF;
+            END;
+            $migration_drop_index$;
+            """;
+    }
+
+    private static string SqlLiteral(string value) =>
+        $"'{value.Replace("'", "''", StringComparison.Ordinal)}'";
 
     private static string GenerateAddForeignKey(AddForeignKeyOperation op)
     {

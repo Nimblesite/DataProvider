@@ -122,6 +122,17 @@ public static partial class SchemaDiff
                     );
                     operations.AddRange(fkOps);
 
+                    var uniqueOps = CalculateUniqueConstraintDiff(
+                        currentTable,
+                        desiredTable,
+                        allowDestructive,
+                        logger
+                    );
+                    operations.AddRange(uniqueOps);
+
+                    var checkOps = CalculateCheckConstraintDiff(currentTable, desiredTable, logger);
+                    operations.AddRange(checkOps);
+
                     rlsOperations.AddRange(
                         CalculateRlsDiff(currentTable, desiredTable, allowDestructive, logger)
                     );
@@ -428,5 +439,151 @@ public static partial class SchemaDiff
                 }
             }
         }
+    }
+
+    private static IEnumerable<SchemaOperation> CalculateCheckConstraintDiff(
+        TableDefinition current,
+        TableDefinition desired,
+        ILogger? logger
+    )
+    {
+        var currentNames = CheckConstraintNames(current)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var desiredCheck in desired.CheckConstraints)
+        {
+            if (currentNames.Contains(desiredCheck.Name))
+            {
+                continue;
+            }
+
+            logger?.LogDebug(
+                "Check constraint {CheckName} on {Schema}.{Table} not found, will add",
+                desiredCheck.Name,
+                desired.Schema,
+                desired.Name
+            );
+            yield return new AddCheckConstraintOperation(
+                desired.Schema,
+                desired.Name,
+                desiredCheck
+            );
+        }
+
+        foreach (var desiredColumn in desired.Columns)
+        {
+            if (desiredColumn.CheckConstraint is null)
+            {
+                continue;
+            }
+
+            // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
+            var name = SchemaConstraintNames.ColumnCheck(desired.Name, desiredColumn);
+            if (currentNames.Contains(name))
+            {
+                continue;
+            }
+
+            logger?.LogDebug(
+                "Column check constraint {CheckName} on {Schema}.{Table} not found, will add",
+                name,
+                desired.Schema,
+                desired.Name
+            );
+            yield return new AddCheckConstraintOperation(
+                desired.Schema,
+                desired.Name,
+                new CheckConstraintDefinition
+                {
+                    Name = name,
+                    Expression = desiredColumn.CheckConstraint,
+                }
+            );
+        }
+    }
+
+    private static IEnumerable<string> CheckConstraintNames(TableDefinition table)
+    {
+        foreach (var tableCheck in table.CheckConstraints)
+        {
+            yield return tableCheck.Name;
+        }
+
+        foreach (var column in table.Columns)
+        {
+            if (column.CheckConstraint is not null)
+            {
+                yield return SchemaConstraintNames.ColumnCheck(table.Name, column);
+            }
+        }
+    }
+
+    private static IEnumerable<SchemaOperation> CalculateUniqueConstraintDiff(
+        TableDefinition current,
+        TableDefinition desired,
+        bool allowDestructive,
+        ILogger? logger
+    )
+    {
+        var currentNames = current
+            .UniqueConstraints.Select(uc => UniqueConstraintName(current.Name, uc))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var desiredUnique in desired.UniqueConstraints)
+        {
+            var name = UniqueConstraintName(desired.Name, desiredUnique);
+            if (currentNames.Contains(name))
+            {
+                continue;
+            }
+
+            // Implements [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION].
+            logger?.LogDebug(
+                "Unique constraint {UniqueName} on {Schema}.{Table} not found, will add",
+                name,
+                desired.Schema,
+                desired.Name
+            );
+            yield return new AddUniqueConstraintOperation(
+                desired.Schema,
+                desired.Name,
+                desiredUnique
+            );
+        }
+
+        if (!allowDestructive)
+        {
+            yield break;
+        }
+
+        var desiredNames = desired
+            .UniqueConstraints.Select(uc => UniqueConstraintName(desired.Name, uc))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var currentUnique in current.UniqueConstraints)
+        {
+            var name = UniqueConstraintName(current.Name, currentUnique);
+            if (desiredNames.Contains(name))
+            {
+                continue;
+            }
+
+            logger?.LogDebug("Unique constraint {UniqueName} will be dropped", name);
+            // Implements [MIG-PG-CONSTRAINT-BACKED-INDEX-DROP].
+            yield return new DropIndexOperation(current.Schema, current.Name, name);
+        }
+    }
+
+    private static string UniqueConstraintName(
+        string tableName,
+        UniqueConstraintDefinition uniqueConstraint
+    )
+    {
+        if (!string.IsNullOrWhiteSpace(uniqueConstraint.Name))
+        {
+            return uniqueConstraint.Name;
+        }
+
+        return $"UQ_{tableName}_{string.Join("_", uniqueConstraint.Columns)}";
     }
 }
