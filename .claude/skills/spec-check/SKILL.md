@@ -1,6 +1,7 @@
 ---
 name: spec-check
-description: Audits spec/plan documents against the codebase to ensure every spec section has implementing code and tests. Use when the user says "check specs", "audit specs", "spec coverage", or "validate specs".
+description: Audit spec/plan documents against the codebase. Ensures every spec section has implementing code, tests, and matching logic. Use when the user says "check specs", "spec audit", or "verify specs".
+argument-hint: "[optional spec ID or filename filter]"
 ---
 
 @../../../.agents/skills/spec-check/SKILL.md

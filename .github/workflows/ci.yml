@@ -65,7 +65,7 @@ jobs:
         run: cd Lql/LqlExtension && npm install --no-audit --no-fund
 
       - name: Format check
-        run: make fmt-check
+        run: make fmt CHECK=1
 
       - name: Lint
         run: make lint

@@ -7,7 +7,7 @@
 
 ⚠️ NEVER KILL ANY VSCODE PROCESS ⚠️
 
-<!-- agent-pmo:d75d5c8 -->
+<!-- agent-pmo:74cf183 -->
 
 ## Project Overview
 
@@ -165,18 +165,24 @@ Always include these in `Directory.Build.props`:
 
 ## Build Commands (exact — cross-platform via GNU Make)
 
+The 7 standard portfolio targets:
+
 ```bash
 make build          # compile everything
-make test           # run tests with coverage
-make lint           # run all linters
-make fmt            # format all code
-make fmt-check      # check formatting (CI uses this)
+make test           # fail-fast tests + coverage + threshold (the only test entry point)
+make lint           # run all linters/analyzers (no formatting)
+make fmt            # format all code in-place (CHECK=1 for read-only verify, used in CI)
 make clean          # remove build artifacts
-make check          # lint + test (pre-commit)
 make ci             # lint + test + build (full CI simulation)
-make coverage       # generate and open coverage report
-make coverage-check # assert coverage thresholds
 make setup          # post-create dev environment setup
+```
+
+Repo-specific targets (this repo only):
+
+```bash
+make check          # lint + test (pre-commit shortcut)
+make coverage       # generate and open HTML coverage report
+make vsix           # build LSP + package VS Code extension
 ```
 
 ## Architecture
