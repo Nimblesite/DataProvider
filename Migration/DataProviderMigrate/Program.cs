@@ -94,6 +94,14 @@ public static class Program
             return 1;
         }
 
+        if (IsSqlServerProvider(args.Provider) && SchemaContainsRls(schema))
+        {
+            // Implements [RLS-MSSQL]. The SQL Server migration package does
+            // not exist yet, so RLS targeting SQL Server must fail closed.
+            Console.WriteLine(MigrationError.RlsMssqlUnsupported().Message);
+            return 1;
+        }
+
         return args.Provider.ToLowerInvariant() switch
         {
             "sqlite" => MigrateSqliteDatabase(
@@ -111,6 +119,13 @@ public static class Program
             _ => ShowProviderError(args.Provider),
         };
     }
+
+    private static bool IsSqlServerProvider(string provider) =>
+        provider.Equals("sqlserver", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("mssql", StringComparison.OrdinalIgnoreCase);
+
+    private static bool SchemaContainsRls(SchemaDefinition schema) =>
+        schema.Tables.Any(table => table.RowLevelSecurity is not null);
 
     private static int MigrateSqliteDatabase(
         SchemaDefinition schema,
