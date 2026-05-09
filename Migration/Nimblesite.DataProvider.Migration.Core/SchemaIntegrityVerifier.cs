@@ -461,8 +461,63 @@ public static class SchemaIntegrityVerifier
                 mismatches.Add(
                     $"{expectedFunction.Schema}.{expectedFunction.Name}: missing function"
                 );
+                continue;
             }
+            VerifyFunction(
+                actual: actualFunction,
+                expected: expectedFunction,
+                mismatches: mismatches
+            );
         }
+    }
+
+    private static void VerifyFunction(
+        PostgresFunctionDefinition actual,
+        PostgresFunctionDefinition expected,
+        ImmutableArray<string>.Builder mismatches
+    )
+    {
+        var path = FunctionPath(function: expected);
+        AddIf(
+            condition: !SameIdentifier(actual: actual.Returns, expected: expected.Returns),
+            message: $"{path}: returns expected {expected.Returns} but found {actual.Returns}",
+            mismatches: mismatches
+        );
+        AddIf(
+            condition: !SameIdentifier(actual: actual.Language, expected: expected.Language),
+            message: $"{path}: language expected {expected.Language} but found {actual.Language}",
+            mismatches: mismatches
+        );
+        VerifyFunctionBehavior(
+            actual: actual,
+            expected: expected,
+            path: path,
+            mismatches: mismatches
+        );
+    }
+
+    private static void VerifyFunctionBehavior(
+        PostgresFunctionDefinition actual,
+        PostgresFunctionDefinition expected,
+        string path,
+        ImmutableArray<string>.Builder mismatches
+    )
+    {
+        AddIf(
+            condition: !SameIdentifier(actual: actual.Volatility, expected: expected.Volatility),
+            message: $"{path}: volatility expected {expected.Volatility} but found {actual.Volatility}",
+            mismatches: mismatches
+        );
+        AddIf(
+            condition: actual.SecurityDefiner != expected.SecurityDefiner,
+            message: $"{path}: security definer expected {expected.SecurityDefiner} but found {actual.SecurityDefiner}",
+            mismatches: mismatches
+        );
+        AddIf(
+            condition: !SameFunctionBody(actual: actual, expected: expected),
+            message: $"{path}: function body drifted",
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyGrants(
@@ -531,6 +586,13 @@ public static class SchemaIntegrityVerifier
         && SameIdentifier(actual.ObjectName ?? string.Empty, expected.ObjectName ?? string.Empty)
         && SameIdentifiers(actual.Privileges, expected.Privileges)
         && SameIdentifiers(actual.Roles, expected.Roles);
+
+    private static bool SameFunctionBody(
+        PostgresFunctionDefinition actual,
+        PostgresFunctionDefinition expected
+    ) =>
+        string.IsNullOrWhiteSpace(expected.Body)
+        || SameSql(actual: actual.Body, expected: expected.Body);
 
     private static bool SameIdentifiers(
         IReadOnlyList<string> actual,
@@ -624,6 +686,9 @@ public static class SchemaIntegrityVerifier
     }
 
     private static string TablePath(TableDefinition table) => $"{table.Schema}.{table.Name}";
+
+    private static string FunctionPath(PostgresFunctionDefinition function) =>
+        $"{function.Schema}.{function.Name}({Format(function.Arguments.Select(a => a.Type).ToArray())})";
 
     private static string Nullability(ColumnDefinition column) =>
         column.IsNullable ? "NULL" : "NOT NULL";
