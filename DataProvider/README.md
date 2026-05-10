@@ -152,4 +152,4 @@ SqliteCodeGenerator.GenerateCodeWithMetadata(config: config, /* … */);
 
 - [LQL](../Lql/README.md) — cross-database query language that transpiles to SQL
 - [Migrations](../Migration/README.md) — YAML schema definitions consumed by `DataProviderMigrate`
-- Migration CLI spec: [docs/specs/migration-cli-spec.md](../docs/specs/migration-cli-spec.md)
+- Migration spec: [docs/specs/migration-spec.md](../docs/specs/migration-spec.md#74-dataprovidermigrate-cli-mig-cli)

@@ -259,12 +259,12 @@ The renderer is a standalone JS bundle. Embed in any page:
 
 ## Database Schema
 
-**All database schemas MUST be created using the Migration library with YAML definitions.** Raw SQL for creating database schemas is strictly prohibited. Use `Migration.Cli` with YAML schema files as the single source of truth.
+**All database schemas MUST be created using the Migration library with YAML definitions.** Raw SQL for creating database schemas is strictly prohibited. Use `DataProviderMigrate` with YAML schema files as the single source of truth.
 
 If the reporting platform requires its own persistence (e.g., for saved reports, scheduled executions), the schema MUST be defined in a `reporting-schema.yaml` file and created via:
 
 ```bash
-dotnet run --project Migration/Migration.Cli -- --schema reporting-schema.yaml --output reporting.db --provider sqlite
+dotnet run --project Migration/DataProviderMigrate/DataProviderMigrate.csproj -- migrate --schema reporting-schema.yaml --output reporting.db --provider sqlite
 ```
 
 For the MVP, report definitions are loaded from JSON files on disk (no database persistence needed). Future phases will add YAML-migrated schema for saved reports.

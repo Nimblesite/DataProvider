@@ -85,14 +85,14 @@ Predicates that query other tables (e.g. group membership) MUST use LQL, transpi
 - [x] Write failing `RlsPredicateTranspiler` unit tests in new `RlsPredicateTranspilerTests.cs`
 - [x] Make `RlsPredicateTranspiler` tests pass
 - [x] Implement RLS operation handling in `PostgresDdlGenerator.cs` (Enable, Create, Drop, Disable)
-- [ ] Write failing Postgres RLS E2E tests in `PostgresMigrationTests.cs`
+- [x] Write failing Postgres RLS E2E tests in `PostgresRlsE2ETests.cs`
 - [x] Extend `PostgresSchemaInspector.cs` to read `pg_policies` into `RlsPolicySetDefinition`
-- [ ] Make Postgres E2E tests pass
+- [x] Make Postgres E2E tests pass
 - [x] Extend `SchemaDiff.Calculate` in `SchemaDiff.cs` with RLS diff logic
 - [x] Write failing SQLite RLS E2E tests in `SqliteRlsMigrationTests.cs`
 - [x] Implement `__rls_context` table, trigger generation, and `_secure` view generation in `SqliteDdlGenerator.cs`
 - [x] Extend `SqliteSchemaInspector.cs` to reverse-map `rls_*` triggers
 - [x] Make SQLite E2E tests pass
-- [ ] Add `MIG-E-RLS-MSSQL-UNSUPPORTED` error guard for SQL Server
-- [ ] Run `make ci` -- all tests pass, coverage thresholds maintained
-- [ ] Update `Migration/README.md` with RLS usage examples
+- [x] Add `MIG-E-RLS-MSSQL-UNSUPPORTED` error guard for SQL Server
+- [x] Run `make ci` -- all tests pass, coverage thresholds maintained
+- [x] Update `Migration/README.md` with RLS usage examples
