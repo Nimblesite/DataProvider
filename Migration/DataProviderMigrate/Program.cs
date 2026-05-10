@@ -1,9 +1,24 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
 using Nimblesite.DataProvider.Migration.SQLite;
 using Npgsql;
+using SchemaIntegrityResultError = Outcome.Result<
+    System.Collections.Immutable.ImmutableArray<string>,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>.Error<
+    System.Collections.Immutable.ImmutableArray<string>,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>;
+using SchemaIntegrityResultOk = Outcome.Result<
+    System.Collections.Immutable.ImmutableArray<string>,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>.Ok<
+    System.Collections.Immutable.ImmutableArray<string>,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>;
 
 namespace DataProviderMigrate;
 
@@ -94,6 +109,14 @@ public static class Program
             return 1;
         }
 
+        if (IsSqlServerProvider(args.Provider) && SchemaContainsRls(schema))
+        {
+            // Implements [RLS-MSSQL]. The SQL Server migration package does
+            // not exist yet, so RLS targeting SQL Server must fail closed.
+            Console.WriteLine(MigrationError.RlsMssqlUnsupported().Message);
+            return 1;
+        }
+
         return args.Provider.ToLowerInvariant() switch
         {
             "sqlite" => MigrateSqliteDatabase(
@@ -111,6 +134,13 @@ public static class Program
             _ => ShowProviderError(args.Provider),
         };
     }
+
+    private static bool IsSqlServerProvider(string provider) =>
+        provider.Equals("sqlserver", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("mssql", StringComparison.OrdinalIgnoreCase);
+
+    private static bool SchemaContainsRls(SchemaDefinition schema) =>
+        schema.Tables.Any(table => table.RowLevelSecurity is not null);
 
     private static int MigrateSqliteDatabase(
         SchemaDefinition schema,
@@ -250,7 +280,7 @@ public static class Program
                     ? "Schema is up to date — no operations needed"
                     : $"Schema is up to date for phase '{phase.ToString().ToLowerInvariant()}' — no operations needed"
             );
-            return 0;
+            return VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
         }
 
         Console.WriteLine(
@@ -271,7 +301,76 @@ public static class Program
         }
 
         Console.WriteLine("Migration completed successfully");
-        return 0;
+        return VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+    }
+
+    private static int VerifySchemaIntegrity(
+        SchemaDefinition schema,
+        MigratePhase phase,
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect
+    )
+    {
+        var inspectResult = inspect();
+        if (
+            inspectResult
+            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
+                SchemaDefinition,
+                MigrationError
+            > inspectErr
+        )
+        {
+            Console.WriteLine($"Error: schema integrity inspection failed: {inspectErr.Value}");
+            return 1;
+        }
+
+        var live = (
+            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                SchemaDefinition,
+                MigrationError
+            >)inspectResult
+        ).Value;
+        var verification = SchemaIntegrityVerifier.Verify(
+            live: live,
+            desired: schema,
+            includeSupportObjects: true,
+            includeRls: phase != MigratePhase.Structural
+        );
+
+        return verification switch
+        {
+            SchemaIntegrityResultOk ok => WriteIntegrityResult(mismatches: ok.Value),
+            SchemaIntegrityResultError error => WriteIntegrityError(error: error.Value),
+        };
+    }
+
+    private static int WriteIntegrityResult(ImmutableArray<string> mismatches)
+    {
+        if (mismatches.Length == 0)
+        {
+            Console.WriteLine("Schema integrity check passed");
+            return 0;
+        }
+
+        WriteIntegrityFailure(mismatches: mismatches);
+        return 1;
+    }
+
+    private static int WriteIntegrityError(MigrationError error)
+    {
+        Console.WriteLine($"Error: schema integrity verification failed: {error}");
+        return 1;
+    }
+
+    private static void WriteIntegrityFailure(ImmutableArray<string> mismatches)
+    {
+        var original = Console.ForegroundColor;
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("SCHEMA INTEGRITY CHECK FAILED");
+        foreach (var mismatch in mismatches)
+        {
+            Console.WriteLine(mismatch);
+        }
+        Console.ForegroundColor = original;
     }
 
     private static IReadOnlyList<SchemaOperation> FilterByPhase(

@@ -1,11 +1,11 @@
-# agent-pmo:d75d5c8
+# agent-pmo:74cf183
 # =============================================================================
 # Standard Makefile — Nimblesite.DataProvider.Core
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # All targets are language-agnostic. Add language-specific helpers below.
 # =============================================================================
 
-.PHONY: build test lint fmt fmt-check clean check ci coverage setup
+.PHONY: build test lint fmt clean ci setup check coverage vsix help
 
 # -----------------------------------------------------------------------------
 # OS Detection — portable commands for Linux, macOS, and Windows
@@ -42,7 +42,12 @@ DOTNET_TEST_PROJECTS = \
   Reporting/Nimblesite.Reporting.Integration.Tests
 
 # =============================================================================
-# PRIMARY TARGETS (uniform interface — do not rename)
+# Standard Targets
+#
+# Portfolio-wide uniform interface — these 7 targets exist in every repo and
+# their names never change. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
+# Do NOT add extra public targets here — put them in the Repo-Specific
+# Targets section below.
 # =============================================================================
 
 ## build: Compile/assemble all artifacts
@@ -50,36 +55,47 @@ build:
 	@echo "==> Building..."
 	$(MAKE) _build
 
-## test: Run full test suite with coverage enforcement
+## test: Fail-fast tests + coverage + threshold enforcement.
+##       See REPO-STANDARDS-SPEC [TEST-RULES].
 test:
 	@echo "==> Testing..."
 	$(MAKE) _test
 
-## lint: Run all linters (fails on any warning)
+## lint: Run all linters/analyzers (read-only). Does NOT format.
 lint:
 	@echo "==> Linting..."
 	$(MAKE) _lint
 
-## fmt: Format all code in-place
+## fmt: Format all code in-place. Pass CHECK=1 for read-only verification (CI).
 fmt:
-	@echo "==> Formatting..."
-	$(MAKE) _fmt
-
-## fmt-check: Check formatting without modifying
-fmt-check:
-	@echo "==> Checking format..."
-	$(MAKE) _fmt_check
+	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
+	$(MAKE) _fmt$(if $(CHECK),_check,)
 
 ## clean: Remove all build artifacts
 clean:
 	@echo "==> Cleaning..."
 	$(MAKE) _clean
 
-## check: lint + test (pre-commit)
-check: lint test
-
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
+
+## setup: Post-create dev environment setup (used by devcontainer)
+setup:
+	@echo "==> Setting up development environment..."
+	$(MAKE) _setup
+	@echo "==> Setup complete. Run 'make ci' to validate."
+
+# =============================================================================
+# -----------------------------------------------------------------------------
+# Repo-Specific Targets (NOT part of the portfolio standard 7)
+#
+# Add helpers unique to this repo below. They MUST NOT shadow any of the 7
+# standard targets above. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
+# -----------------------------------------------------------------------------
+# =============================================================================
+
+## check: lint + test (pre-commit shortcut)
+check: lint test
 
 ## coverage: Generate HTML coverage report (runs tests first)
 coverage:
@@ -90,12 +106,6 @@ coverage:
 vsix:
 	@echo "==> Building and packaging VSIX..."
 	bash Lql/lql-lsp-rust/build-vsix.sh
-
-## setup: Post-create dev environment setup (used by devcontainer)
-setup:
-	@echo "==> Setting up development environment..."
-	$(MAKE) _setup
-	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
 # LANGUAGE-SPECIFIC IMPLEMENTATIONS
@@ -109,6 +119,7 @@ _lint: _lint_dotnet _lint_rust _lint_ts
 
 _fmt: _fmt_dotnet _fmt_rust
 
+# Internal — invoked by `make fmt CHECK=1`.
 _fmt_check: _fmt_check_dotnet _fmt_check_rust
 
 _clean: _clean_dotnet _clean_rust _clean_ts
@@ -369,15 +380,16 @@ _setup_ts:
 # HELP
 # =============================================================================
 help:
-	@echo "Available targets:"
+	@echo "Standard targets (portfolio-wide):"
 	@echo "  build          - Compile/assemble all artifacts"
-	@echo "  test           - Run full test suite with coverage enforcement"
-	@echo "  lint           - Run all linters (errors mode)"
-	@echo "  fmt            - Format all code in-place"
-	@echo "  fmt-check      - Check formatting (no modification)"
+	@echo "  test           - Fail-fast tests + coverage + threshold enforcement"
+	@echo "  lint           - Run all linters/analyzers (read-only)"
+	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only verify)"
 	@echo "  clean          - Remove build artifacts"
-	@echo "  check          - lint + test (pre-commit)"
-	@echo "  ci             - lint + test + build (full CI)"
-	@echo "  coverage       - Generate and open HTML coverage report"
+	@echo "  ci             - lint + test + build (full CI simulation)"
 	@echo "  setup          - Post-create dev environment setup"
+	@echo ""
+	@echo "Repo-specific targets:"
+	@echo "  check          - lint + test (pre-commit shortcut)"
+	@echo "  coverage       - Generate and open HTML coverage report"
 	@echo "  vsix           - Build LSP + compile & package VS Code extension (.vsix)"

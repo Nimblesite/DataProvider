@@ -202,4 +202,4 @@ Regenerate the database on every build so developers never run migrations manual
 
 - [DataProvider](../DataProvider/README.md) — generated extension methods for the tables defined here
 - [LQL](../Lql/README.md) — write portable queries against the migrated schema
-- Migration CLI spec: [docs/specs/migration-cli-spec.md](../docs/specs/migration-cli-spec.md)
+- Migration spec: [docs/specs/migration-spec.md](../docs/specs/migration-spec.md#74-dataprovidermigrate-cli-mig-cli)

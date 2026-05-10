@@ -14,7 +14,8 @@
 10. [Error Handling](#10-error-handling)
 11. [Conformance Requirements](#11-conformance-requirements)
 12. [E2E Testing Requirements](#12-e2e-testing-requirements)
-13. [Appendices](#13-appendices)
+13. [Schema Capture and Metadata](#13-schema-capture-and-metadata)
+14. [Appendices](#14-appendices)
 
 ---
 
@@ -134,7 +135,7 @@ var schema = Schema.Define("MyApp")
 
 ### 4.3 YAML Schema Format
 
-Schema files use YAML format. See [migration-cli-spec.md](migration-cli-spec.md) for CLI usage. The YAML format mirrors the C# records:
+Schema files use YAML format. The `DataProviderMigrate` CLI contract is defined in [7.4 DataProviderMigrate CLI](#74-dataprovidermigrate-cli-mig-cli). The YAML format mirrors the C# records:
 
 ```yaml
 name: MyApp
@@ -624,6 +625,159 @@ idempotency proofs can verify the constraint was materialized.
 4. Commit transaction (or rollback on error)
 5. Return result with applied operations
 ```
+
+### 7.4 DataProviderMigrate CLI [MIG-CLI]
+
+`Migration/DataProviderMigrate/DataProviderMigrate.csproj` is the single, canonical CLI tool for creating databases from schema definitions. All projects that need to spin up a database for code generation MUST use this executable or the packaged `DataProviderMigrate` .NET tool.
+
+The CLI contains the SQLite and PostgreSQL migration providers. It is database-agnostic at the command surface: callers pass a YAML schema file path, an output database path or connection string, and a provider name.
+
+#### 7.4.1 Commands [MIG-CLI-COMMANDS]
+
+Installed tool usage:
+
+```bash
+dotnet DataProviderMigrate migrate \
+  --schema path/to/schema.yaml \
+  --output path/to/database.db \
+  --provider sqlite
+
+dotnet DataProviderMigrate export \
+  --assembly path/to/MyProject.Migrations.dll \
+  --type MyProject.Migrations.MyProjectSchema \
+  --output path/to/schema.yaml
+```
+
+Repository-local usage:
+
+```bash
+dotnet run --project Migration/DataProviderMigrate/DataProviderMigrate.csproj -- \
+  migrate \
+  --schema path/to/schema.yaml \
+  --output path/to/database.db \
+  --provider sqlite
+```
+
+`migrate` options:
+
+| Option | Required | Meaning |
+|--------|----------|---------|
+| `--schema`, `-s` | Yes | Path to a YAML schema definition file |
+| `--output`, `-o` | Yes | SQLite database file path or PostgreSQL connection string |
+| `--provider`, `-p` | No | `sqlite` or `postgres`; defaults to `sqlite` |
+| `--allow-destructive` | No | Permits destructive drift cleanup operations; off by default |
+| `--phase` | No | `all`, `structural`, or `rls`; defaults to `all` |
+
+`export` options:
+
+| Option | Required | Meaning |
+|--------|----------|---------|
+| `--assembly`, `-a` | Yes | Compiled assembly containing the schema type |
+| `--type`, `-t` | Yes | Fully qualified schema type name |
+| `--output`, `-o` | Yes | YAML file path to write |
+
+Schema export types MUST expose either a static `Definition` property returning `SchemaDefinition` or a static `Build()` method returning `SchemaDefinition`.
+
+#### 7.4.2 YAML-Only Migration Input [MIG-CLI-YAML-ONLY]
+
+The `migrate` command accepts only YAML schema files. It does not accept:
+
+- C# code references
+- Inline schema definitions
+- Project references to schema classes
+- JSON schema files
+
+JSON serialization/deserialization code may remain dormant in the core library for future support, but the CLI MUST NOT expose JSON schema input until YAML support is complete and the format is explicitly specified.
+
+If a project defines its schema in C# code, that schema MUST be exported to YAML first. The YAML file is then passed to `DataProviderMigrate migrate`.
+
+#### 7.4.3 Schema-to-YAML Workflow [MIG-CLI-SCHEMA-YAML-WORKFLOW]
+
+Consumer build pipelines that start from C# schema definitions MUST use this order:
+
+1. Define schema in a separate `*.Migrations` assembly with no generated-code dependencies.
+2. Build the migrations assembly first.
+3. Run `DataProviderMigrate export` to serialize the C# schema to YAML.
+4. Run `DataProviderMigrate migrate` to create or update the target database from YAML.
+5. Run DataProvider code generation against the created database.
+6. Build the main project with generated code included.
+
+#### 7.4.4 Separate Migrations Assemblies [MIG-CLI-MIGRATIONS-ASSEMBLY]
+
+Schemas MUST live in separate migrations assemblies to avoid circular build dependencies.
+
+Naming convention: use the `*.Migrations` suffix. Do not use `*.Schema` or `*BuildDb`.
+
+Correct pattern:
+
+```text
+MyProject.Migrations/
+  MyProjectSchema.cs      # Defines SchemaDefinition
+
+MyProject.Api/
+  Generated/              # DataProvider generated code
+```
+
+The migrations assembly:
+
+- Contains only schema definition code.
+- References only migration schema types and their direct dependencies.
+- Has no dependencies on generated code.
+- Builds before code generation runs.
+
+The API or main assembly:
+
+- References the migrations assembly only when it needs the schema at runtime.
+- Contains DataProvider generated code.
+- Builds after code generation.
+
+#### 7.4.5 Build Integration [MIG-CLI-BUILD-INTEGRATION]
+
+Consumer projects may wire export and migrate into MSBuild pre-build targets:
+
+```xml
+<Target Name="ExportSchemaToYaml" BeforeTargets="CreateBuildDatabase">
+  <Exec Command='dotnet DataProviderMigrate export --assembly "$(SolutionDir)MyProject.Migrations/bin/Debug/net10.0/MyProject.Migrations.dll" --type "MyProject.Migrations.MyProjectSchema" --output "$(MSBuildProjectDirectory)/schema.yaml"' />
+</Target>
+
+<Target Name="CreateBuildDatabase" BeforeTargets="GenerateDataProvider">
+  <Exec Command='dotnet DataProviderMigrate migrate --schema "$(MSBuildProjectDirectory)/schema.yaml" --output "$(MSBuildProjectDirectory)/build.db" --provider sqlite' />
+</Target>
+```
+
+There are no project references from the CLI to consumer schemas, no schema source includes, and no hardcoded schema names or switches in the CLI.
+
+#### 7.4.6 Required Build Order [MIG-CLI-BUILD-ORDER]
+
+To avoid circular dependencies, builds that need generated data access code MUST follow this order:
+
+```text
+1. Migration/Nimblesite.DataProvider.Migration.Core
+2. MyProject.Migrations
+3. DataProviderMigrate export
+4. DataProviderMigrate migrate
+5. DataProvider code generation
+6. MyProject.Api
+```
+
+The migrations assembly MUST NOT reference:
+
+- The API or main project.
+- Any generated code.
+- Any project that depends on generated code.
+
+#### 7.4.7 Forbidden CLI Patterns [MIG-CLI-FORBIDDEN]
+
+The following patterns are not conformant:
+
+- Individual `*BuildDb` projects per consumer.
+- `<Compile Include="../OtherProject/Schema.cs">` in the CLI project.
+- Multiple CLI tools for database creation.
+- Hardcoded schema names or project-specific switches in the CLI.
+- CLI references to consumer schema projects.
+- Schema classes in the same project as generated code.
+- Migrations assemblies with dependencies on generated code.
+- `*.Schema` or `*BuildDb` naming for migrations projects.
 
 ---
 

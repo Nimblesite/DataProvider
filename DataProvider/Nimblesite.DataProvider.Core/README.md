@@ -5,4 +5,4 @@ The core source generator library. Parses SQL files and generates strongly-typed
 ## Documentation
 
 - Parent README: [DataProvider/README.md](../README.md)
-- Migration CLI spec: [docs/specs/migration-cli-spec.md](../../docs/specs/migration-cli-spec.md)
+- Migration spec: [docs/specs/migration-spec.md](../../docs/specs/migration-spec.md#74-dataprovidermigrate-cli-mig-cli)

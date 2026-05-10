@@ -18,7 +18,7 @@
       "include": "[Nimblesite.Lql.TypeProvider.FSharp]*,[Nimblesite.Lql.Core]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Migration/Nimblesite.DataProvider.Migration.Core": {
-      "threshold": 84,
+      "threshold": 86,
       "include": "[Nimblesite.DataProvider.Migration.Core]*,[Nimblesite.DataProvider.Migration.SQLite]*,[Nimblesite.DataProvider.Migration.Postgres]*"
     },
     "Sync/Nimblesite.Sync.Core": {
@@ -50,10 +50,10 @@
       "include": "[Nimblesite.Reporting.Engine]*,[Nimblesite.Reporting.Api]*"
     },
     "Lql/lql-lsp-rust": {
-      "threshold": 83
+      "threshold": 89
     },
     "Lql/LqlExtension": {
-      "threshold": 38
+      "threshold": 44
     }
   }
 }

@@ -44,6 +44,7 @@ public static class MigrationRunner
         }
 
         IDbTransaction? transaction = null;
+        var failures = new List<(string OperationType, Exception Exception)>();
 
         try
         {
@@ -75,12 +76,37 @@ public static class MigrationRunner
                 }
                 catch (Exception ex) when (options.ContinueOnError)
                 {
+                    // Implements [MIG-RUNNER-HARD-FAIL]: ContinueOnError keeps the loop
+                    // running for diagnostic visibility, but the runner must NEVER report
+                    // success while operations were missed. Track the failure so we can
+                    // return an aggregate Error after the loop.
                     logger?.LogWarning(
                         ex,
                         "Failed to apply {OperationType}, continuing",
                         operation.GetType().Name
                     );
+                    failures.Add((operation.GetType().Name, ex));
                 }
+            }
+
+            if (failures.Count > 0)
+            {
+                transaction?.Rollback();
+                var summary = string.Join(
+                    "; ",
+                    failures.Select(f => $"{f.OperationType}: {f.Exception.Message}")
+                );
+                logger?.LogError(
+                    "Migration failed: {Count} of {Total} operation(s) errored: {Summary}",
+                    failures.Count,
+                    operations.Count,
+                    summary
+                );
+                return new MigrationApplyResult.Error<bool, MigrationError>(
+                    MigrationError.FromMessage(
+                        $"Migration failed: {failures.Count} of {operations.Count} operation(s) errored: {summary}"
+                    )
+                );
             }
 
             transaction?.Commit();

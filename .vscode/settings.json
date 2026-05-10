@@ -9,5 +9,11 @@
     "lql.ai.provider": "ollama",
     "lql.ai.model": "qwen2.5-coder:1.5b",
     "lql.ai.endpoint": "http://localhost:11434/api/generate",
-    "lql.languageServer.path": "/Users/christianfindlay/Documents/Code/DataProvider/Lql/lql-lsp-rust/target/release/lql-lsp"
+    "lql.languageServer.path": "/Users/christianfindlay/Documents/Code/DataProvider/Lql/lql-lsp-rust/target/release/lql-lsp",
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#0B132B",
+        "titleBar.activeForeground": "#F4F7FB",
+        "titleBar.inactiveBackground": "#070D1F",
+        "titleBar.inactiveForeground": "#F4F7FBcc"
+    }
 }
