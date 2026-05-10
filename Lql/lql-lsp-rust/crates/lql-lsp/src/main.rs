@@ -253,57 +253,11 @@ impl LanguageServer for LqlBackend {
         let ai_config = self.ai_config.lock().unwrap().clone();
         if let Some(ref config) = ai_config {
             if config.enabled {
-                // Activate built-in test providers or log external config
-                match config.provider.as_str() {
-                    "test" => {
-                        self.set_ai_provider(Arc::new(ai::TestAiProvider)).await;
-                        self.client
-                            .log_message(
-                                MessageType::INFO,
-                                "AI test provider activated — returns deterministic completions",
-                            )
-                            .await;
-                    }
-                    "test_slow" => {
-                        let delay = config.timeout_ms.saturating_add(5000);
-                        self.set_ai_provider(Arc::new(ai::SlowAiProvider { delay_ms: delay }))
-                            .await;
-                        self.client
-                            .log_message(
-                                MessageType::INFO,
-                                format!(
-                                    "AI slow test provider activated — {}ms delay (timeout: {}ms)",
-                                    delay, config.timeout_ms
-                                ),
-                            )
-                            .await;
-                    }
-                    "ollama" => {
-                        let lql_ref = include_str!("../../lql-reference.md").to_string();
-                        self.set_ai_provider(Arc::new(ai::OllamaProvider::new(config, lql_ref)))
-                            .await;
-                        self.client
-                            .log_message(
-                                MessageType::INFO,
-                                format!(
-                                    "Ollama AI provider activated (model: {}, endpoint: {})",
-                                    config.model, config.endpoint
-                                ),
-                            )
-                            .await;
-                    }
-                    _ => {
-                        self.client
-                            .log_message(
-                                MessageType::INFO,
-                                format!(
-                                    "AI completion provider configured: {} (model: {}, endpoint: {})",
-                                    config.provider, config.model, config.endpoint
-                                ),
-                            )
-                            .await;
-                    }
+                let (provider, log_msg) = build_ai_provider(config);
+                if let Some(p) = provider {
+                    self.set_ai_provider(p).await;
                 }
+                self.client.log_message(MessageType::INFO, log_msg).await;
             }
         }
 
@@ -599,6 +553,52 @@ impl LanguageServer for LqlBackend {
             },
             new_text: formatted,
         }]))
+    }
+}
+
+/// Build the AI completion provider for a given config and produce the
+/// log message to surface to the client.
+///
+/// Pure function (no I/O, no state) so it can be unit-tested without the
+/// full LSP runtime — closes the coverage gap on the AI dispatch arms in
+/// `initialized()`.
+pub fn build_ai_provider(
+    config: &ai::AiConfig,
+) -> (Option<Arc<dyn ai::AiCompletionProvider>>, String) {
+    match config.provider.as_str() {
+        "test" => (
+            Some(Arc::new(ai::TestAiProvider) as Arc<dyn ai::AiCompletionProvider>),
+            "AI test provider activated — returns deterministic completions".to_string(),
+        ),
+        "test_slow" => {
+            let delay = config.timeout_ms.saturating_add(5000);
+            (
+                Some(Arc::new(ai::SlowAiProvider { delay_ms: delay })
+                    as Arc<dyn ai::AiCompletionProvider>),
+                format!(
+                    "AI slow test provider activated — {}ms delay (timeout: {}ms)",
+                    delay, config.timeout_ms
+                ),
+            )
+        }
+        "ollama" => {
+            let lql_ref = include_str!("../../lql-reference.md").to_string();
+            (
+                Some(Arc::new(ai::OllamaProvider::new(config, lql_ref))
+                    as Arc<dyn ai::AiCompletionProvider>),
+                format!(
+                    "Ollama AI provider activated (model: {}, endpoint: {})",
+                    config.model, config.endpoint
+                ),
+            )
+        }
+        _ => (
+            None,
+            format!(
+                "AI completion provider configured: {} (model: {}, endpoint: {})",
+                config.provider, config.model, config.endpoint
+            ),
+        ),
     }
 }
 
@@ -1878,5 +1878,81 @@ mod tests {
         let items = get_completions(&ctx, &scope, Some(&schema));
         let table_item = items.iter().find(|i| i.label == "big_table").unwrap();
         assert!(table_item.documentation.contains("10 total"));
+    }
+
+    // ── build_ai_provider — covers the AI dispatch arms ──────────────
+
+    fn ai_cfg(provider: &str) -> ai::AiConfig {
+        ai::AiConfig {
+            provider: provider.to_string(),
+            endpoint: "http://localhost:11434/api/generate".to_string(),
+            model: "test-model".to_string(),
+            api_key: None,
+            timeout_ms: 1000,
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn build_ai_provider_test_arm() {
+        let (provider, msg) = build_ai_provider(&ai_cfg("test"));
+        assert!(provider.is_some(), "test arm must yield a provider");
+        assert!(
+            msg.contains("AI test provider"),
+            "log message must mention test provider, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn build_ai_provider_test_slow_arm() {
+        let cfg = ai_cfg("test_slow");
+        let (provider, msg) = build_ai_provider(&cfg);
+        assert!(provider.is_some());
+        assert!(msg.contains("slow test provider"), "got: {msg}");
+        // delay = timeout_ms + 5000
+        assert!(
+            msg.contains("6000ms delay"),
+            "delay should be 1000 + 5000 = 6000ms, got: {msg}"
+        );
+        assert!(msg.contains("timeout: 1000ms"));
+    }
+
+    #[test]
+    fn build_ai_provider_ollama_arm() {
+        let (provider, msg) = build_ai_provider(&ai_cfg("ollama"));
+        assert!(provider.is_some(), "ollama arm must yield a provider");
+        assert!(msg.contains("Ollama AI provider"), "got: {msg}");
+        assert!(msg.contains("test-model"));
+        assert!(msg.contains("http://localhost:11434/api/generate"));
+    }
+
+    #[test]
+    fn build_ai_provider_unknown_arm_returns_none() {
+        let (provider, msg) = build_ai_provider(&ai_cfg("some-other-provider"));
+        assert!(
+            provider.is_none(),
+            "unknown provider must NOT install a built-in"
+        );
+        assert!(
+            msg.contains("AI completion provider configured"),
+            "got: {msg}"
+        );
+        assert!(msg.contains("some-other-provider"));
+    }
+
+    #[test]
+    fn build_ai_provider_test_slow_saturating_add() {
+        let cfg = ai::AiConfig {
+            provider: "test_slow".to_string(),
+            endpoint: String::new(),
+            model: String::new(),
+            api_key: None,
+            timeout_ms: u64::MAX,
+            enabled: true,
+        };
+        let (provider, msg) = build_ai_provider(&cfg);
+        assert!(provider.is_some());
+        // saturating_add(u64::MAX, 5000) saturates at u64::MAX
+        assert!(msg.contains(&format!("{}ms delay", u64::MAX)));
     }
 }
