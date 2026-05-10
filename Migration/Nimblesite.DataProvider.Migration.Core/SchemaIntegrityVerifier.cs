@@ -528,15 +528,59 @@ public static class SchemaIntegrityVerifier
     {
         foreach (var expectedGrant in desired.Grants)
         {
-            var actualGrant = live.Grants.FirstOrDefault(g =>
-                SameGrant(actual: g, expected: expectedGrant)
-            );
-            if (actualGrant is null)
+            // Implements [MIG-VERIFY-DEFAULTS-AND-GRANTS] (#59 Bugs 2 & 3):
+            // an inspector may report grants in normalised atomic form — one row per
+            // (object, role) — while a desired schema can declare grants over many
+            // roles or every table in a schema. Expand each desired grant into the
+            // same atomic units before searching the live set.
+            foreach (var atomic in ExpandDesiredGrant(grant: expectedGrant, desired: desired))
             {
-                mismatches.Add(
-                    $"grant {expectedGrant.Target} {expectedGrant.ObjectName ?? expectedGrant.Schema}: missing grant"
+                var actualGrant = live.Grants.FirstOrDefault(g =>
+                    SameGrant(actual: g, expected: atomic)
                 );
+                if (actualGrant is null)
+                {
+                    mismatches.Add(
+                        $"grant {expectedGrant.Target} {expectedGrant.ObjectName ?? expectedGrant.Schema}: missing grant"
+                    );
+                    break;
+                }
             }
+        }
+    }
+
+    private static IEnumerable<PostgresGrantDefinition> ExpandDesiredGrant(
+        PostgresGrantDefinition grant,
+        SchemaDefinition desired
+    )
+    {
+        var roles = grant.Roles.Count == 0 ? [string.Empty] : grant.Roles;
+        if (grant.Target == PostgresGrantTarget.AllTablesInSchema)
+        {
+            var tablesInSchema = desired
+                .Tables.Where(t => SameSchema(t.Schema, grant.Schema))
+                .Select(t => t.Name)
+                .ToList();
+            foreach (var role in roles)
+            {
+                foreach (var table in tablesInSchema)
+                {
+                    yield return grant with
+                    {
+                        Target = PostgresGrantTarget.Table,
+                        ObjectName = table,
+                        Roles = [role],
+                    };
+                }
+            }
+            yield break;
+        }
+        foreach (var role in roles)
+        {
+            yield return grant with
+            {
+                Roles = [role],
+            };
         }
     }
 
@@ -584,8 +628,33 @@ public static class SchemaIntegrityVerifier
         actual.Target == expected.Target
         && SameIdentifier(actual.Schema, expected.Schema)
         && SameIdentifier(actual.ObjectName ?? string.Empty, expected.ObjectName ?? string.Empty)
-        && SameIdentifiers(actual.Privileges, expected.Privileges)
-        && SameIdentifiers(actual.Roles, expected.Roles);
+        && CoversPrivileges(actual: actual.Privileges, expected: expected.Privileges)
+        && SameIdentifierSet(actual.Roles, expected.Roles);
+
+    // Implements [MIG-VERIFY-DEFAULTS-AND-GRANTS] (#59 Bugs 2 & 3):
+    // privilege comparison must be order-insensitive — different inspectors
+    // emit privileges in different orders, and YAML order is arbitrary — and
+    // the live grant must cover at least every privilege expected.
+    private static bool CoversPrivileges(
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected
+    )
+    {
+        var actualSet = actual.Select(p => p.ToUpperInvariant()).ToHashSet();
+        return expected.All(p => actualSet.Contains(p.ToUpperInvariant()));
+    }
+
+    private static bool SameIdentifierSet(
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected
+    ) =>
+        actual.Count == expected.Count
+        && actual
+            .Select(a => a.ToLowerInvariant())
+            .OrderBy(a => a, StringComparer.Ordinal)
+            .SequenceEqual(
+                expected.Select(e => e.ToLowerInvariant()).OrderBy(e => e, StringComparer.Ordinal)
+            );
 
     private static bool SameFunctionBody(
         PostgresFunctionDefinition actual,
@@ -646,8 +715,37 @@ public static class SchemaIntegrityVerifier
         }
         var builder = new StringBuilder();
         AppendNormalizedSql(value: value, builder: builder);
-        return builder.ToString().Trim().TrimEnd(';').Trim();
+        var normalized = builder.ToString().Trim().TrimEnd(';').Trim();
+        return StripTrailingTypeCast(normalized);
     }
+
+    // Implements [MIG-VERIFY-DEFAULTS-AND-GRANTS] (#59 Bug 1):
+    // some platforms store a string default like 'pending' with an explicit type
+    // suffix such as 'pending'::text when read back from the catalog. Strip a
+    // trailing ::<typename> cast on a quoted string literal so the verifier
+    // treats 'pending' and 'pending'::text as equal across providers.
+    private static string StripTrailingTypeCast(string normalized)
+    {
+        var castIndex = normalized.LastIndexOf("::", StringComparison.Ordinal);
+        if (castIndex <= 0)
+        {
+            return normalized;
+        }
+        var before = normalized[..castIndex];
+        if (!before.EndsWith('\''))
+        {
+            return normalized;
+        }
+        var after = normalized[(castIndex + 2)..];
+        if (after.Length == 0 || !after.All(IsTypeNameChar))
+        {
+            return normalized;
+        }
+        return before;
+    }
+
+    private static bool IsTypeNameChar(char ch) =>
+        char.IsLetterOrDigit(ch) || ch == '_' || ch == ' ';
 
     private static void AppendNormalizedSql(string value, StringBuilder builder)
     {
