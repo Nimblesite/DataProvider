@@ -1,5 +1,5 @@
-pub mod ai;
-mod db;
+use lql_lsp::ai;
+use lql_lsp::db;
 
 use ai::{AiCompletionContext, AiCompletionProvider, AiConfig};
 use lql_analyzer::{

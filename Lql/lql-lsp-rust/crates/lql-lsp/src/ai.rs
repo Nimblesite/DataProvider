@@ -684,4 +684,194 @@ mod tests {
             assert_eq!(item.sort_priority, 6);
         }
     }
+
+    // ── OllamaProvider::complete via unreachable endpoint ──────────────
+
+    #[tokio::test]
+    async fn ollama_complete_returns_empty_on_connection_failure() {
+        // Port 1 (tcpmux) is reserved and refuses connections — this exercises
+        // the request-error branch at line 250-251 of ai.rs without depending
+        // on any external service.
+        let config = AiConfig {
+            provider: "ollama".to_string(),
+            endpoint: "http://127.0.0.1:1/api/generate".to_string(),
+            model: "test-model".to_string(),
+            api_key: None,
+            timeout_ms: 1000,
+            enabled: true,
+        };
+        let provider = OllamaProvider::new(&config, "ref".to_string());
+        let ctx = AiCompletionContext {
+            document_text: "users |> ".to_string(),
+            line: 0,
+            column: 9,
+            line_prefix: "users |> ".to_string(),
+            word_prefix: "".to_string(),
+            file_uri: "file:///x.lql".to_string(),
+            available_tables: vec!["users".to_string()],
+            schema_description: "users(id uuid PK)".to_string(),
+        };
+
+        let items = provider.complete(&ctx).await;
+        assert!(
+            items.is_empty(),
+            "unreachable endpoint must yield empty completions"
+        );
+    }
+
+    #[tokio::test]
+    async fn ollama_complete_returns_empty_on_non_json_body() {
+        // Hit a plain HTTP service that returns non-JSON — this exercises
+        // the response.json() error branch (line 254-256). Use httpbin's
+        // /html endpoint via a local stub: spin up a one-shot tokio server
+        // that returns text/plain. Avoids external network dependence by
+        // binding to 127.0.0.1:0 and serving a minimal HTTP response.
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let endpoint = format!("http://{addr}/api/generate");
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                // Drain request headers (don't bother parsing the body)
+                let mut buf = [0u8; 1024];
+                use tokio::io::AsyncReadExt;
+                let _ = stream.read(&mut buf).await;
+                let body = "not valid json at all";
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let config = AiConfig {
+            provider: "ollama".to_string(),
+            endpoint,
+            model: "m".to_string(),
+            api_key: None,
+            timeout_ms: 5000,
+            enabled: true,
+        };
+        let provider = OllamaProvider::new(&config, "ref".to_string());
+        let ctx = AiCompletionContext {
+            document_text: String::new(),
+            line: 0,
+            column: 0,
+            line_prefix: String::new(),
+            word_prefix: String::new(),
+            file_uri: String::new(),
+            available_tables: vec![],
+            schema_description: String::new(),
+        };
+        let items = provider.complete(&ctx).await;
+        assert!(items.is_empty(), "non-JSON body must yield empty");
+    }
+
+    #[tokio::test]
+    async fn ollama_complete_returns_empty_when_response_field_missing() {
+        // Server returns valid JSON but no "response" field — exercises
+        // the response-field-missing branch (line 259-261).
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let endpoint = format!("http://{addr}/api/generate");
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                use tokio::io::AsyncReadExt;
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let body = r#"{"other_field": "no response key here"}"#;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let config = AiConfig {
+            provider: "ollama".to_string(),
+            endpoint,
+            model: "m".to_string(),
+            api_key: None,
+            timeout_ms: 5000,
+            enabled: true,
+        };
+        let provider = OllamaProvider::new(&config, "ref".to_string());
+        let ctx = AiCompletionContext {
+            document_text: String::new(),
+            line: 0,
+            column: 0,
+            line_prefix: String::new(),
+            word_prefix: String::new(),
+            file_uri: String::new(),
+            available_tables: vec![],
+            schema_description: String::new(),
+        };
+        let items = provider.complete(&ctx).await;
+        assert!(items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn ollama_complete_parses_completions_when_response_field_present() {
+        // Server returns Ollama-shaped JSON with a "response" field that is
+        // a JSON-array string of completions — covers the success path
+        // (line 264 -> parse_response).
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let endpoint = format!("http://{addr}/api/generate");
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                use tokio::io::AsyncReadExt;
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let inner = r#"[{"label":"foo","insertText":"foo()","detail":"AI"}]"#;
+                let body = serde_json::json!({ "response": inner }).to_string();
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let config = AiConfig {
+            provider: "ollama".to_string(),
+            endpoint,
+            model: "m".to_string(),
+            api_key: None,
+            timeout_ms: 5000,
+            enabled: true,
+        };
+        let provider = OllamaProvider::new(&config, "ref".to_string());
+        let ctx = AiCompletionContext {
+            document_text: String::new(),
+            line: 0,
+            column: 0,
+            line_prefix: String::new(),
+            word_prefix: String::new(),
+            file_uri: String::new(),
+            available_tables: vec![],
+            schema_description: String::new(),
+        };
+        let items = provider.complete(&ctx).await;
+        assert!(items.iter().any(|i| i.label == "foo"), "should parse foo");
+    }
 }

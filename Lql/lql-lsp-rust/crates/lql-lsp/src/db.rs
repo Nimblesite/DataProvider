@@ -401,4 +401,70 @@ mod tests {
         assert_eq!(result.unwrap().table_count(), 0);
         std::fs::remove_file("/tmp/lql_nonexistent_db_12345.db").ok();
     }
+
+    // ── fetch_schema dispatch ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn fetch_schema_dispatches_to_sqlite_for_db_extension() {
+        let path = std::env::temp_dir().join("lql_dispatch_test.db");
+        let path_str = path.to_str().unwrap();
+
+        let conn = rusqlite::Connection::open(path_str).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS dispatch_users (id TEXT PRIMARY KEY NOT NULL);",
+        )
+        .unwrap();
+        drop(conn);
+
+        let schema = fetch_schema(path_str).await.unwrap();
+        assert!(schema.get_table("dispatch_users").is_some());
+
+        std::fs::remove_file(path_str).ok();
+    }
+
+    #[tokio::test]
+    async fn fetch_schema_dispatches_to_sqlite_for_sqlite_prefix() {
+        let path = std::env::temp_dir().join("lql_dispatch_prefix.db");
+        let path_str = path.to_str().unwrap();
+
+        let conn = rusqlite::Connection::open(path_str).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS dispatch_orders (id TEXT PRIMARY KEY NOT NULL);",
+        )
+        .unwrap();
+        drop(conn);
+
+        let with_prefix = format!("sqlite:{path_str}");
+        let schema = fetch_schema(&with_prefix).await.unwrap();
+        assert!(schema.get_table("dispatch_orders").is_some());
+
+        std::fs::remove_file(path_str).ok();
+    }
+
+    // ── fetch_postgres_schema connect failure ─────────────────────────
+
+    #[tokio::test]
+    async fn fetch_postgres_schema_connect_failure_returns_error() {
+        // Port 1 is reserved (tcpmux) — the connect will be refused, exercising
+        // the connect error branch (line 147) without waiting for the timeout.
+        let result = fetch_postgres_schema(
+            "host=127.0.0.1 port=1 dbname=test user=test password=test connect_timeout=1",
+        )
+        .await;
+        assert!(result.is_err(), "connect to localhost:1 must fail");
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("DB connect"),
+            "error must mention DB connect: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_postgres_schema_via_npgsql_format_routes_normalize() {
+        // Drives normalize_connection_string from inside fetch_postgres_schema
+        // and exercises the connect-error branch with a different format.
+        let result =
+            fetch_postgres_schema("Host=127.0.0.1;Port=1;Database=x;Username=u;Password=p").await;
+        assert!(result.is_err());
+    }
 }

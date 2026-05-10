@@ -854,6 +854,215 @@ fn test_completion_after_dot_without_qualifier() {
 }
 
 #[test]
+fn test_version_flag_prints_and_exits() {
+    // Drives main.rs lines 640-641: `lql-lsp --version` must print
+    // "lql-lsp <semver>" to stdout and exit 0 without starting the LSP loop.
+    let binary = env!("CARGO_BIN_EXE_lql-lsp");
+    let output = Command::new(binary)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .expect("failed to invoke --version");
+
+    assert!(output.status.success(), "--version must exit 0");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.starts_with("lql-lsp "),
+        "version line must start with 'lql-lsp ', got: {text}"
+    );
+    assert!(
+        text.split_whitespace().count() == 2,
+        "version line must be 'lql-lsp <version>', got: {text}"
+    );
+}
+
+#[test]
+fn test_short_version_flag_prints_and_exits() {
+    let binary = env!("CARGO_BIN_EXE_lql-lsp");
+    let output = Command::new(binary)
+        .arg("-V")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .expect("failed to invoke -V");
+
+    assert!(output.status.success(), "-V must exit 0");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.starts_with("lql-lsp "), "got: {text}");
+}
+
+#[test]
+fn test_completion_with_ai_provider_and_schema_loaded() {
+    // Drives main.rs lines 413-441 (the Some(s) schema arm of the AI
+    // completion-merge path) by initializing with both an aiProvider and
+    // a SQLite connection string so a schema is loaded into the cache.
+    let dir = std::env::temp_dir().join(format!("lql_ai_schema_test_{}.db", std::process::id()));
+    let path = dir.to_str().unwrap();
+
+    // Seed the database before spawning the LSP.
+    {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS users_ai_schema_test (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT
+            );",
+        )
+        .unwrap();
+    }
+
+    let mut client = LspClient::spawn();
+    let id = client.send_request(
+        "initialize",
+        Some(json!({
+            "processId": std::process::id(),
+            "capabilities": {},
+            "rootUri": null,
+            "initializationOptions": {
+                "connectionString": path,
+                "aiProvider": {
+                    "provider": "test",
+                    "enabled": true,
+                }
+            }
+        })),
+    );
+    let resp = client.read_response(id);
+    assert!(resp.get("error").is_none(), "init must succeed");
+    client.send_notification("initialized", json!({}));
+
+    // Give the schema fetch a moment to populate.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    client.open_document(DOC_URI, "users_ai_schema_test |> ");
+    let _ = client.read_notification("textDocument/publishDiagnostics");
+
+    let resp = client.request_completion(DOC_URI, 0, 24);
+    assert!(resp.get("error").is_none());
+    let items = resp["result"].as_array().unwrap();
+    assert!(!items.is_empty(), "completion must return items");
+
+    client.shutdown();
+    std::fs::remove_file(path).ok();
+}
+
+#[test]
+fn test_completion_with_test_slow_provider_times_out() {
+    // Drives the AI timeout branch (main.rs around line 460-464) and the
+    // "test_slow" arm of the initialized() AI dispatch (lines 267-280).
+    let mut client = LspClient::spawn();
+    let id = client.send_request(
+        "initialize",
+        Some(json!({
+            "processId": std::process::id(),
+            "capabilities": {},
+            "rootUri": null,
+            "initializationOptions": {
+                "aiProvider": {
+                    "provider": "test_slow",
+                    "enabled": true,
+                    "timeoutMs": 100,
+                }
+            }
+        })),
+    );
+    let _ = client.read_response(id);
+    client.send_notification("initialized", json!({}));
+
+    client.open_document(DOC_URI, "users |> ");
+    let _ = client.read_notification("textDocument/publishDiagnostics");
+
+    let resp = client.request_completion(DOC_URI, 0, 9);
+    // Even when AI times out, schema/keyword completions should still be returned.
+    assert!(resp.get("error").is_none());
+    let items = resp["result"].as_array().unwrap();
+    assert!(
+        !items.is_empty(),
+        "must still return non-AI completions when AI times out"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn test_completion_with_unknown_ai_provider_uses_default_branch() {
+    // Drives the `_` arm in initialized()'s AI dispatch (main.rs line 295).
+    let mut client = LspClient::spawn();
+    let id = client.send_request(
+        "initialize",
+        Some(json!({
+            "processId": std::process::id(),
+            "capabilities": {},
+            "rootUri": null,
+            "initializationOptions": {
+                "aiProvider": {
+                    "provider": "some-unrecognised-provider",
+                    "enabled": true,
+                }
+            }
+        })),
+    );
+    let _ = client.read_response(id);
+    client.send_notification("initialized", json!({}));
+
+    client.open_document(DOC_URI, "users |> ");
+    let _ = client.read_notification("textDocument/publishDiagnostics");
+
+    let resp = client.request_completion(DOC_URI, 0, 9);
+    assert!(resp.get("error").is_none());
+
+    client.shutdown();
+}
+
+#[test]
+fn test_initialize_with_connection_string_only_loads_schema() {
+    // Drives the connectionString-without-aiProvider path in initialized()
+    // — exercises lines 311-349 (DB connect + schema fetch success arm).
+    let dir = std::env::temp_dir().join(format!("lql_conn_only_test_{}.db", std::process::id()));
+    let path = dir.to_str().unwrap();
+
+    {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS conn_only_users (id TEXT PRIMARY KEY NOT NULL);",
+        )
+        .unwrap();
+    }
+
+    let mut client = LspClient::spawn();
+    let id = client.send_request(
+        "initialize",
+        Some(json!({
+            "processId": std::process::id(),
+            "capabilities": {},
+            "rootUri": null,
+            "initializationOptions": {
+                "connectionString": path,
+            }
+        })),
+    );
+    let resp = client.read_response(id);
+    assert!(resp.get("error").is_none());
+    client.send_notification("initialized", json!({}));
+
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
+    client.open_document(DOC_URI, "conn_only_users.");
+    let _ = client.read_notification("textDocument/publishDiagnostics");
+
+    // Trigger column completion after the dot
+    let resp = client.request_completion(DOC_URI, 0, 16);
+    assert!(resp.get("error").is_none());
+
+    client.shutdown();
+    std::fs::remove_file(path).ok();
+}
+
+#[test]
 fn test_document_symbols_positions() {
     let mut client = LspClient::spawn();
     client.initialize();
