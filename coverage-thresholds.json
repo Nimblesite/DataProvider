@@ -50,10 +50,10 @@
       "include": "[Nimblesite.Reporting.Engine]*,[Nimblesite.Reporting.Api]*"
     },
     "Lql/lql-lsp-rust": {
-      "threshold": 83
+      "threshold": 88
     },
     "Lql/LqlExtension": {
-      "threshold": 38
+      "threshold": 39
     }
   }
 }
