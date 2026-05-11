@@ -275,12 +275,23 @@ public static class Program
 
         if (operations.Count == 0)
         {
-            Console.WriteLine(
-                phase == MigratePhase.All
-                    ? "Schema is up to date — no operations needed"
-                    : $"Schema is up to date for phase '{phase.ToString().ToLowerInvariant()}' — no operations needed"
-            );
-            return VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+            // Implements [MIG-VERIFY-BEFORE-UP-TO-DATE]: a clean diff doesn't
+            // prove the live schema matches the desired one — it only proves
+            // the inspector and diff couldn't see drift. The integrity verifier
+            // is what proves "up to date." Run it FIRST, then print the
+            // up-to-date message only on success so the CLI never claims success
+            // ahead of a failing post-check.
+            Console.WriteLine("No operations to apply — running schema integrity check");
+            var verifyExit = VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+            if (verifyExit == 0)
+            {
+                Console.WriteLine(
+                    phase == MigratePhase.All
+                        ? "Schema is up to date — no operations needed"
+                        : $"Schema is up to date for phase '{phase.ToString().ToLowerInvariant()}' — no operations needed"
+                );
+            }
+            return verifyExit;
         }
 
         Console.WriteLine(

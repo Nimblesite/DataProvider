@@ -447,27 +447,25 @@ public static partial class SchemaDiff
         ILogger? logger
     )
     {
-        var currentNames = CheckConstraintNames(current)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var currentByName = CurrentCheckConstraints(current)
+            .ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var desiredCheck in desired.CheckConstraints)
         {
-            if (currentNames.Contains(desiredCheck.Name))
+            foreach (
+                var op in CompareNamedCheckConstraint(
+                    name: desiredCheck.Name,
+                    desiredExpression: desiredCheck.Expression,
+                    desiredSchema: desired.Schema,
+                    desiredTable: desired.Name,
+                    currentByName: currentByName,
+                    desiredCheck: desiredCheck,
+                    logger: logger
+                )
+            )
             {
-                continue;
+                yield return op;
             }
-
-            logger?.LogDebug(
-                "Check constraint {CheckName} on {Schema}.{Table} not found, will add",
-                desiredCheck.Name,
-                desired.Schema,
-                desired.Name
-            );
-            yield return new AddCheckConstraintOperation(
-                desired.Schema,
-                desired.Name,
-                desiredCheck
-            );
         }
 
         foreach (var desiredColumn in desired.Columns)
@@ -479,44 +477,100 @@ public static partial class SchemaDiff
 
             // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
             var name = SchemaConstraintNames.ColumnCheck(desired.Name, desiredColumn);
-            if (currentNames.Contains(name))
+            var desiredCheck = new CheckConstraintDefinition
             {
-                continue;
+                Name = name,
+                Expression = desiredColumn.CheckConstraint,
+            };
+            foreach (
+                var op in CompareNamedCheckConstraint(
+                    name: name,
+                    desiredExpression: desiredColumn.CheckConstraint,
+                    desiredSchema: desired.Schema,
+                    desiredTable: desired.Name,
+                    currentByName: currentByName,
+                    desiredCheck: desiredCheck,
+                    logger: logger
+                )
+            )
+            {
+                yield return op;
             }
-
-            logger?.LogDebug(
-                "Column check constraint {CheckName} on {Schema}.{Table} not found, will add",
-                name,
-                desired.Schema,
-                desired.Name
-            );
-            yield return new AddCheckConstraintOperation(
-                desired.Schema,
-                desired.Name,
-                new CheckConstraintDefinition
-                {
-                    Name = name,
-                    Expression = desiredColumn.CheckConstraint,
-                }
-            );
         }
     }
 
-    private static IEnumerable<string> CheckConstraintNames(TableDefinition table)
+    // Implements [MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT] (#57): if the desired
+    // and live constraints share a name but differ in expression, emit a
+    // drop+add pair so the live constraint is replaced. If absent, just add.
+    private static IEnumerable<SchemaOperation> CompareNamedCheckConstraint(
+        string name,
+        string desiredExpression,
+        string desiredSchema,
+        string desiredTable,
+        Dictionary<string, CheckConstraintDefinition> currentByName,
+        CheckConstraintDefinition desiredCheck,
+        ILogger? logger
+    )
+    {
+        if (currentByName.TryGetValue(name, out var existing))
+        {
+            if (SameCheckExpression(existing.Expression, desiredExpression))
+            {
+                yield break;
+            }
+            logger?.LogDebug(
+                "Check constraint {CheckName} on {Schema}.{Table} expression drifted, will replace",
+                name,
+                desiredSchema,
+                desiredTable
+            );
+            yield return new DropCheckConstraintOperation(desiredSchema, desiredTable, name);
+            yield return new AddCheckConstraintOperation(desiredSchema, desiredTable, desiredCheck);
+            yield break;
+        }
+
+        logger?.LogDebug(
+            "Check constraint {CheckName} on {Schema}.{Table} not found, will add",
+            name,
+            desiredSchema,
+            desiredTable
+        );
+        yield return new AddCheckConstraintOperation(desiredSchema, desiredTable, desiredCheck);
+    }
+
+    private static IEnumerable<CheckConstraintDefinition> CurrentCheckConstraints(
+        TableDefinition table
+    )
     {
         foreach (var tableCheck in table.CheckConstraints)
         {
-            yield return tableCheck.Name;
+            yield return tableCheck;
         }
-
         foreach (var column in table.Columns)
         {
-            if (column.CheckConstraint is not null)
+            if (column.CheckConstraint is null)
             {
-                yield return SchemaConstraintNames.ColumnCheck(table.Name, column);
+                continue;
             }
+            yield return new CheckConstraintDefinition
+            {
+                Name = SchemaConstraintNames.ColumnCheck(table.Name, column),
+                Expression = column.CheckConstraint,
+            };
         }
     }
+
+    // Whitespace-insensitive comparison so trivial reformatting in the YAML
+    // doesn't produce spurious replace operations on every run.
+    private static bool SameCheckExpression(string actual, string expected) =>
+        string.Equals(
+            NormalizeWhitespace(actual),
+            NormalizeWhitespace(expected),
+            StringComparison.Ordinal
+        );
+
+    private static string NormalizeWhitespace(string value) =>
+        new(value.Where(c => !char.IsWhiteSpace(c)).ToArray());
 
     private static IEnumerable<SchemaOperation> CalculateUniqueConstraintDiff(
         TableDefinition current,

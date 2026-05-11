@@ -504,7 +504,7 @@ public static partial class PostgresSchemaInspector
         while (reader.Read())
         {
             var name = reader.GetString(0);
-            var expression = reader.GetString(1);
+            var expression = PostgresCheckExpressionNormalizer.Normalize(reader.GetString(1));
             var columnCount = reader.GetInt32(2);
 
             if (columnCount == 1 && !reader.IsDBNull(3))

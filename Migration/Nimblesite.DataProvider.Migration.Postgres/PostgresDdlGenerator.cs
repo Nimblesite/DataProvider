@@ -115,6 +115,8 @@ public static partial class PostgresDdlGenerator
             DropIndexOperation op => GenerateDropIndex(op),
             DropForeignKeyOperation op =>
                 $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP CONSTRAINT \"{op.ConstraintName}\"",
+            DropCheckConstraintOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" DROP CONSTRAINT IF EXISTS \"{op.ConstraintName}\"",
             DropFunctionOperation op => GenerateDropFunction(op),
             RevokePrivilegesOperation op => GenerateRevokePrivileges(op.Grant),
             EnableRlsOperation op =>

@@ -70,6 +70,82 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
         }
     }
 
+    /// <summary>
+    /// Implements [MIG-VERIFY-BEFORE-UP-TO-DATE]: a clean diff doesn't prove the
+    /// live schema matches the desired one. The CLI must NOT print "Schema is up
+    /// to date" until the integrity verifier confirms it; doing so when the
+    /// verifier subsequently fails is a lie. Concrete drift used here: the diff
+    /// is non-destructive and cannot alter an existing column default, so when
+    /// the YAML declares a different default than the live column, Calculate
+    /// returns zero operations but the verifier reports drift.
+    /// </summary>
+    [Fact]
+    public void Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate()
+    {
+        var baseline = Schema
+            .Define(name: "nap")
+            .Table(
+                schema: "public",
+                name: "settings",
+                configure: t =>
+                    t.Column(name: "id", type: PortableTypes.Uuid, configure: c => c.PrimaryKey())
+                        .Column(
+                            name: "tier",
+                            type: PortableTypes.Text,
+                            configure: c => c.NotNull().Default(defaultValue: "'free'")
+                        )
+            )
+            .Build();
+        ApplySchema(schema: baseline);
+
+        var schemaPath = WriteTempSchemaFile(
+            contents: """
+            name: nap
+            tables:
+              - name: settings
+                schema: public
+                columns:
+                  - name: id
+                    type: Uuid
+                    isNullable: false
+                  - name: tier
+                    type: Text
+                    isNullable: false
+                    defaultValue: "'pro'"
+                primaryKey:
+                  columns:
+                    - id
+            """
+        );
+
+        try
+        {
+            var result = RunMigrate(schemaPath: schemaPath);
+
+            Assert.Equal(expected: 1, actual: result.ExitCode);
+            Assert.True(
+                condition: result.Output.Contains(
+                    value: "SCHEMA INTEGRITY CHECK FAILED",
+                    comparisonType: StringComparison.Ordinal
+                ),
+                userMessage: result.Output
+            );
+            Assert.False(
+                condition: result.Output.Contains(
+                    value: "Schema is up to date",
+                    comparisonType: StringComparison.Ordinal
+                ),
+                userMessage: "CLI must not claim 'Schema is up to date' before the "
+                    + "integrity check confirms it.\n"
+                    + result.Output
+            );
+        }
+        finally
+        {
+            File.Delete(path: schemaPath);
+        }
+    }
+
     [Fact]
     public void Migrate_AddsDeclaredCompositeUniqueConstraintToExistingPostgresTable()
     {

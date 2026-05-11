@@ -128,6 +128,21 @@ public sealed record DropForeignKeyOperation(string Schema, string TableName, st
     : SchemaOperation;
 
 /// <summary>
+/// Drop a check constraint. Implements [MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT]
+/// (#57): when a declared CHECK changes its predicate but keeps the same name,
+/// the diff emits a drop+add pair so the live constraint is replaced. Treated
+/// as a non-destructive replacement (not a deletion) — the immediately-following
+/// add restores a constraint with the same name and a stricter or different
+/// predicate; if existing rows violate the new predicate the apply will error
+/// loudly rather than silently corrupt data.
+/// </summary>
+public sealed record DropCheckConstraintOperation(
+    string Schema,
+    string TableName,
+    string ConstraintName
+) : SchemaOperation;
+
+/// <summary>
 /// Drop a PostgreSQL function. DESTRUCTIVE - requires explicit opt-in.
 /// </summary>
 public sealed record DropFunctionOperation(

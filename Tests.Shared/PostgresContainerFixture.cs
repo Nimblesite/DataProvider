@@ -118,10 +118,18 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
         return BuildConnectionString(dbName);
     }
 
+    // Pooling=false: with the default pool, every test in the assembly retains
+    // its server-side connection slot after disposing the NpgsqlConnection, and
+    // a single test run easily exhausts Postgres's default max_connections=100,
+    // causing later tests to fail with SQLSTATE 53300 ("too many clients
+    // already"). The shared container only services this test process, so
+    // pool reuse delivers no real benefit; turning it off makes each test
+    // hand its slot back immediately.
     private string BuildConnectionString(string dbName) =>
         new NpgsqlConnectionStringBuilder(_adminConnectionString)
         {
             Database = dbName,
+            Pooling = false,
         }.ConnectionString;
 
     private string NextDatabaseName(string namePrefix)
