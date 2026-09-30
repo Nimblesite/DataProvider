@@ -213,7 +213,9 @@ public static partial class Program
                         ops,
                         PostgresDdlGenerator.Generate,
                         new MigrationOptions { AllowDestructive = allowDestructive }
-                    )
+                    ),
+                (live, target) =>
+                    PostgresPolicyCatalogNormalizer.Normalize(connection, live, target)
             );
         }
         catch (Exception ex)
@@ -236,7 +238,12 @@ public static partial class Program
         bool allowDestructive,
         MigratePhase phase,
         Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
-        Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply
+        Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize = null
     )
     {
         var inspectResult = inspect();
@@ -258,7 +265,12 @@ public static partial class Program
             >)inspectResult
         ).Value;
 
-        var diff = SchemaDiff.Calculate(current, schema, allowDestructive);
+        var comparisonSchema = NormalizeDesired(current, schema, normalize);
+        if (comparisonSchema is null)
+        {
+            return 1;
+        }
+        var diff = SchemaDiff.Calculate(current, comparisonSchema, allowDestructive);
         if (
             diff
             is Outcome.Result<IReadOnlyList<SchemaOperation>, MigrationError>.Error<
@@ -288,7 +300,12 @@ public static partial class Program
             // up-to-date message only on success so the CLI never claims success
             // ahead of a failing post-check.
             Console.WriteLine("No operations to apply — running schema integrity check");
-            var verifyExit = VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+            var verifyExit = VerifySchemaIntegrity(
+                schema: schema,
+                phase: phase,
+                inspect: inspect,
+                normalize: normalize
+            );
             if (verifyExit == 0)
             {
                 Console.WriteLine(
@@ -318,13 +335,23 @@ public static partial class Program
         }
 
         Console.WriteLine("Migration completed successfully");
-        return VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+        return VerifySchemaIntegrity(
+            schema: schema,
+            phase: phase,
+            inspect: inspect,
+            normalize: normalize
+        );
     }
 
     private static int VerifySchemaIntegrity(
         SchemaDefinition schema,
         MigratePhase phase,
-        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize = null
     )
     {
         var inspectResult = inspect();
@@ -346,9 +373,14 @@ public static partial class Program
                 MigrationError
             >)inspectResult
         ).Value;
+        var comparisonSchema = NormalizeDesired(live, schema, normalize);
+        if (comparisonSchema is null)
+        {
+            return 1;
+        }
         var verification = SchemaIntegrityVerifier.Verify(
             live: live,
-            desired: schema,
+            desired: comparisonSchema,
             includeSupportObjects: true,
             includeRls: phase != MigratePhase.Structural
         );
@@ -358,6 +390,40 @@ public static partial class Program
             SchemaIntegrityResultOk ok => WriteIntegrityResult(mismatches: ok.Value),
             SchemaIntegrityResultError error => WriteIntegrityError(error: error.Value),
         };
+    }
+
+    private static SchemaDefinition? NormalizeDesired(
+        SchemaDefinition live,
+        SchemaDefinition desired,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize
+    )
+    {
+        if (normalize is null)
+        {
+            return desired;
+        }
+        var result = normalize(live, desired);
+        if (
+            result
+            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
+                SchemaDefinition,
+                MigrationError
+            > error
+        )
+        {
+            Console.WriteLine($"Error: policy catalog normalization failed: {error.Value}");
+            return null;
+        }
+        return (
+            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                SchemaDefinition,
+                MigrationError
+            >)result
+        ).Value;
     }
 
     private static int WriteIntegrityResult(ImmutableArray<string> mismatches)
@@ -407,6 +473,8 @@ public static partial class Program
             is EnableRlsOperation
                 or EnableForceRlsOperation
                 or CreateRlsPolicyOperation
+                or AlterRlsPolicyOperation
+                or ReplaceRlsPolicyOperation
                 or DropRlsPolicyOperation
                 or DisableRlsOperation
                 or DisableForceRlsOperation;

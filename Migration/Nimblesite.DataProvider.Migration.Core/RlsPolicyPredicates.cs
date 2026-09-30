@@ -51,8 +51,7 @@ internal static class RlsPolicyPredicates
             ? new HashSet<string>(["public"], StringComparer.Ordinal)
             : roles.ToHashSet(StringComparer.Ordinal);
 
-    internal static bool IsPublicRole(string role) =>
-        role is "public" or "PUBLIC";
+    internal static bool IsPublicRole(string role) => role is "public" or "PUBLIC";
 
     private static bool HasPredicate(string? sql, string? lql) =>
         !string.IsNullOrWhiteSpace(sql) || !string.IsNullOrWhiteSpace(lql);
@@ -192,23 +191,21 @@ internal static class RlsPolicyPredicates
         // PostgreSQL deparses a text IN-list as = ANY(ARRAY[...::text]).
         // Only ignore casts on these text literals; casts elsewhere can
         // change policy meaning and must remain visible as drift.
-        return list.List.Zip(array.Arr.Element).All(pair =>
-            pair.Second is Expression.Cast
-            {
-                DataType: DataType.Text,
-                Expression: Expression.LiteralValue
-                {
-                    Value: Value.SingleQuotedString
-                },
-            } cast && Equivalent(pair.First, cast.Expression)
-            || Equivalent(pair.First, pair.Second)
-        );
+        return list
+            .List.Zip(array.Arr.Element)
+            .All(pair =>
+                pair.Second
+                    is Expression.Cast
+                    {
+                        DataType: DataType.Text,
+                        Expression: Expression.LiteralValue { Value: Value.SingleQuotedString },
+                    } cast
+                    && Equivalent(pair.First, cast.Expression)
+                || Equivalent(pair.First, pair.Second)
+            );
     }
 
-    private static bool EquivalentFunction(
-        Expression.Function current,
-        Expression.Function desired
-    )
+    private static bool EquivalentFunction(Expression.Function current, Expression.Function desired)
     {
         var currentName = current.Name.ToString();
         var desiredName = desired.Name.ToString();
@@ -218,7 +215,7 @@ internal static class RlsPolicyPredicates
         }
         return string.Equals(currentName, $"public.{desiredName}", StringComparison.Ordinal)
             && string.Equals(
-                current.ToString().Replace(currentName, desiredName, StringComparison.Ordinal),
+                (current with { Name = desired.Name }).ToString(),
                 desired.ToString(),
                 StringComparison.Ordinal
             );
@@ -231,14 +228,21 @@ internal static class RlsPolicyPredicates
         return currentValue is not null && currentValue == desiredValue;
     }
 
-    private static bool? BooleanLiteral(Expression expression) =>
-        expression switch
+    private static bool? BooleanLiteral(Expression expression)
+    {
+        if (expression is Expression.LiteralValue { Value: Value.Boolean value })
         {
-            Expression.LiteralValue { Value: Value.Boolean value } => value.Value,
-            Expression.LiteralValue { Value: Value.SingleQuotedString value }
-                when bool.TryParse(value.Value, out var parsed) => parsed,
-            _ => null,
-        };
+            return value.Value;
+        }
+        if (
+            expression is Expression.LiteralValue { Value: Value.SingleQuotedString quoted }
+            && bool.TryParse(quoted.Value, out var parsed)
+        )
+        {
+            return parsed;
+        }
+        return null;
+    }
 
     private static string IdentifierKey(Ident identifier) =>
         identifier.QuoteStyle is null ? identifier.Value.ToLowerInvariant() : identifier.Value;

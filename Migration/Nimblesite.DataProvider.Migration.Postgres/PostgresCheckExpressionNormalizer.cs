@@ -120,7 +120,11 @@ internal static class PostgresCheckExpressionNormalizer
 
     private static string? TryRewriteAnyArrayToIn(Expression expression)
     {
-        if (expression is not Expression.AnyOp any || any.Right is not Expression.Array arr)
+        if (
+            expression is not Expression.AnyOp any
+            || any.CompareOp != BinaryOperator.Eq
+            || any.Right is not Expression.Array arr
+        )
         {
             return null;
         }
@@ -146,6 +150,10 @@ internal static class PostgresCheckExpressionNormalizer
         if (value is Value.Number n)
         {
             return n.Value;
+        }
+        if (value is Value.Boolean b)
+        {
+            return b.Value ? "true" : "false";
         }
         return null;
     }
@@ -186,6 +194,10 @@ internal static class PostgresCheckExpressionNormalizer
         {
             return $"{Render(bin.Left)} {RenderOp(bin.Op)} {Render(bin.Right)}";
         }
+        if (expression is Expression.AnyOp && TryRewriteAnyArrayToIn(expression) is { } inList)
+        {
+            return inList;
+        }
         if (expression is Expression.Nested nested)
         {
             return $"({Render(nested.Expression)})";
@@ -194,8 +206,10 @@ internal static class PostgresCheckExpressionNormalizer
         {
             return Render(cast.Expression);
         }
-        // Fallback: stringify via type name only; lossy but deterministic.
-        return expression.GetType().Name;
+        // Preserve every unhandled expression rather than discarding its
+        // operands. A lossy fallback makes CHECK constraints look different
+        // on every rerun and can conceal meaningful predicate changes.
+        return expression.ToSql();
     }
 
     private static string RenderOp(BinaryOperator op)
