@@ -23,6 +23,6 @@
     "markdown-it-anchor": "^9.2.0"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.3.0"
   }
 }
