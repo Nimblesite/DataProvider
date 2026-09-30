@@ -18,6 +18,19 @@ public abstract record SchemaOperation
 public sealed record CreateTableOperation(TableDefinition Table) : SchemaOperation;
 
 /// <summary>
+/// Recreate a table in place: create <paramref name="Table"/>, copy
+/// <paramref name="CopyColumns"/>, drop the old table, rename, then re-run
+/// <paramref name="DependentObjectSql"/> (indexes and triggers). Planned by
+/// providers that cannot ALTER constraints (SQLite). Implements [MIG-SQLITE-REBUILD].
+/// </summary>
+public sealed record RebuildTableOperation(
+    TableDefinition Table,
+    IReadOnlyList<string> CopyColumns,
+    IReadOnlyList<string> DependentObjectSql,
+    bool Destructive
+) : SchemaOperation;
+
+/// <summary>
 /// Add a column to an existing table.
 /// </summary>
 public sealed record AddColumnOperation(string Schema, string TableName, ColumnDefinition Column)

@@ -905,6 +905,17 @@ SQLite-specific considerations:
 - No DROP COLUMN before SQLite 3.35 (requires table rebuild)
 - Transactional DDL supported
 
+#### SQLite Table Rebuild [MIG-SQLITE-REBUILD]
+
+SQLite cannot ALTER nullability, foreign keys, check or unique constraints, or
+drop columns. `SqliteMigrationApplier` replaces those operations with one
+`RebuildTableOperation` per table, placed before any other operation on that
+table, following https://www.sqlite.org/lang_altertable.html#otheralter: create
+the declared shape, copy rows, drop, rename, recreate indexes and replay
+triggers. Live columns the schema no longer declares are kept unless dropped.
+`foreign_keys` is off during the run so DROP TABLE fires no ON DELETE actions;
+rebuilt tables are then checked with `PRAGMA foreign_key_check`.
+
 ### 9.3 PostgreSQL Provider
 
 PostgreSQL-specific considerations:

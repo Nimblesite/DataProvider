@@ -153,5 +153,6 @@ public static class MigrationRunner
                 or DropRlsPolicyOperation
                 or DropTriggerOperation
                 or DisableRlsOperation
-                or DisableForceRlsOperation;
+                or DisableForceRlsOperation
+                or RebuildTableOperation { Destructive: true };
 }

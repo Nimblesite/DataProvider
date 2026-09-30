@@ -14,6 +14,7 @@ public static class SqliteDdlGenerator
         operation switch
         {
             CreateTableOperation op => GenerateCreateTable(op.Table),
+            RebuildTableOperation op => SqliteTableRebuild.Generate(op),
             AddColumnOperation op => GenerateAddColumn(op),
             MakeColumnNullableOperation => throw new NotSupportedException(
                 "SQLite cannot relax NOT NULL on an existing column without rebuilding its table."
@@ -53,7 +54,7 @@ public static class SqliteDdlGenerator
             ),
         };
 
-    private static string GenerateCreateTable(TableDefinition table)
+    internal static string GenerateCreateTable(TableDefinition table)
     {
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"CREATE TABLE IF NOT EXISTS [{table.Name}] (");
@@ -162,7 +163,7 @@ public static class SqliteDdlGenerator
         return $"ALTER TABLE [{op.TableName}] ADD COLUMN {colDef}";
     }
 
-    private static string GenerateCreateIndex(CreateIndexOperation op)
+    internal static string GenerateCreateIndex(CreateIndexOperation op)
     {
         var unique = op.Index.IsUnique ? "UNIQUE " : "";
         // Expression indexes use Expressions verbatim, column indexes quote column names

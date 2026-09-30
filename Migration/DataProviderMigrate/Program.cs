@@ -182,10 +182,10 @@ public static partial class Program
                 phase,
                 () => SqliteSchemaInspector.Inspect(connection),
                 ops =>
-                    MigrationRunner.Apply(
+                    SqliteMigrationApplier.Apply(
                         connection,
+                        schema,
                         ops,
-                        SqliteDdlGenerator.Generate,
                         new MigrationOptions { AllowDestructive = allowDestructive }
                     ),
                 (_, desired) => SqliteSchemaNormalizer.Normalize(desired)

@@ -2,7 +2,7 @@
   "default_threshold": 90,
   "projects": {
     "DataProvider/Nimblesite.DataProvider.Core": {
-      "threshold": 89,
+      "threshold": 90,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.Sql.Model]*,[Nimblesite.Lql.SQLite]*"
     },
     "DataProvider/Nimblesite.DataProvider.Example": {
