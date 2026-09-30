@@ -1,3 +1,0 @@
-icd10am_chapter
-|> select(icd10am_chapter.Id, icd10am_chapter.ChapterNumber, icd10am_chapter.Title, icd10am_chapter.CodeRangeStart, icd10am_chapter.CodeRangeEnd, icd10am_chapter.LastUpdated, icd10am_chapter.VersionId)
-|> order_by(icd10am_chapter.ChapterNumber)

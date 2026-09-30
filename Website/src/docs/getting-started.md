@@ -184,5 +184,5 @@ This is the **default** generator output — errors are explicit in the return t
 
 - [Quick Start](/docs/quick-start/) — shorter example focused on the generated API
 - [Installation](/docs/installation/) — full package reference
-- [Clinical Coding Platform](/docs/samples/) — see every tool used in a real multi-service reference implementation
+- [Clinical Coding Platform](https://github.com/Nimblesite/ClinicalCoding) — see every tool used in a real multi-service reference implementation
 - [LQL](/docs/lql/) — the Lambda Query Language in depth

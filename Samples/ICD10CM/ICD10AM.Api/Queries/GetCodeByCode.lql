@@ -1,6 +1,0 @@
-icd10am_code
-|> join(icd10am_category, on = icd10am_code.CategoryId = icd10am_category.Id)
-|> join(icd10am_block, on = icd10am_category.BlockId = icd10am_block.Id)
-|> join(icd10am_chapter, on = icd10am_block.ChapterId = icd10am_chapter.Id)
-|> filter(fn(row) => row.icd10am_code.Code = @code)
-|> select(icd10am_code.Id, icd10am_code.CategoryId, icd10am_code.Code, icd10am_code.ShortDescription, icd10am_code.LongDescription, icd10am_code.InclusionTerms, icd10am_code.ExclusionTerms, icd10am_code.CodeAlso, icd10am_code.CodeFirst, icd10am_code.Billable, icd10am_code.EffectiveFrom, icd10am_code.EffectiveTo, icd10am_code.Edition, icd10am_code.LastUpdated, icd10am_code.VersionId, icd10am_category.CategoryCode, icd10am_category.Title AS CategoryTitle, icd10am_block.BlockCode, icd10am_block.Title AS BlockTitle, icd10am_chapter.ChapterNumber, icd10am_chapter.Title AS ChapterTitle)

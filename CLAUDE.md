@@ -45,7 +45,7 @@ If the TMC server is available:
 - **Work on exactly ONE branch at a time, always** — even with multiple agents working concurrently (coordinate via TMC). Reuse the open feature branch.
 - **NEVER start a new branch when a feature branch already exists.** Check first; work on the open one. If multiple feature branches exist, merge them into one IMMEDIATELY before doing any other work.
 - **Worktrees are forbidden.** All agents work in this checkout on the same open feature branch.
-- **Delegate parallel code work to Pi, not Codex subagents.** Start every Pi agent in this checkout, verify its branch before it edits, and assign nonoverlapping files. Never create a branch or worktree for a Pi agent.
+- **Codex subagents are forbidden.** Delegate parallel code work only to Pi. Start every Pi agent in this checkout, verify its branch before it edits, and assign nonoverlapping files. Never create a branch or worktree for a Pi agent.
 
 ## Duplication — Deslop (MANDATORY)
 
@@ -224,7 +224,6 @@ make vsix           # build LSP + package VS Code extension
 | Migration | `Migration/` | Schema migration framework (YAML -> SQL DDL) |
 | Sync | `Sync/` | Offline-first bidirectional sync |
 | Gatekeeper | `Gatekeeper/` | WebAuthn + RBAC auth |
-| Samples | `Samples/` | Clinical, Scheduling, ICD10, Dashboard |
 | Reporting | `Reporting/` | Embeddable reporting platform (SQL/LQL data sources, JSON config, React renderer) |
 | Website | `Website/` | Documentation site (Eleventy + DocFX) |
 
@@ -243,7 +242,6 @@ DataProvider/
 ├── Migration/             # Schema migration framework
 ├── Sync/                  # Bidirectional sync engine
 ├── Gatekeeper/            # WebAuthn auth + RBAC
-├── Samples/               # Healthcare samples
 ├── Reporting/             # Embeddable reporting platform
 ├── Website/               # Documentation site
 ├── docs/

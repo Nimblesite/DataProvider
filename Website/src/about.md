@@ -27,7 +27,7 @@ description: "DataProvider is an open-source .NET toolkit for type-safe database
       <li><strong><a href="/docs/lql/">LQL</a></strong> - Lambda Query Language: write once, transpile to any SQL dialect. Ships with a native Rust LSP and a VS Code extension</li>
       <li><strong><a href="/docs/migrations/">Migrations</a></strong> - YAML schemas applied via the <code>DataProviderMigrate</code> CLI tool</li>
       <li><strong><a href="/docs/sync/">Sync</a></strong> - Offline-first bidirectional synchronisation with conflict resolution</li>
-      <li><strong><a href="/docs/samples/">Clinical Coding Platform</a></strong> - Reference implementation: FHIR R5 microservices, ICD-10 semantic search with pgvector, and a React dashboard (<a href="https://github.com/Nimblesite/ClinicalCoding">GitHub</a>)</li>
+      <li><strong><a href="https://github.com/Nimblesite/ClinicalCoding">Clinical Coding Platform</a></strong> - Reference implementation: FHIR R5 services, bidirectional sync, and a React dashboard (<a href="https://github.com/Nimblesite/ClinicalCoding">GitHub</a>)</li>
     </ul>
 
     <h2>Get Involved</h2>

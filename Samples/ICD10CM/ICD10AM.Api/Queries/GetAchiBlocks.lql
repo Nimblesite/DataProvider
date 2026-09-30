@@ -1,3 +1,0 @@
-achi_block
-|> select(achi_block.Id, achi_block.BlockNumber, achi_block.Title, achi_block.CodeRangeStart, achi_block.CodeRangeEnd, achi_block.LastUpdated, achi_block.VersionId)
-|> order_by(achi_block.BlockNumber)

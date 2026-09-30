@@ -1,4 +1,0 @@
-achi_code
-|> filter(fn(row) => row.achi_code.BlockId = @blockId)
-|> select(achi_code.Id, achi_code.BlockId, achi_code.Code, achi_code.ShortDescription, achi_code.LongDescription, achi_code.Billable, achi_code.EffectiveFrom, achi_code.EffectiveTo, achi_code.Edition, achi_code.LastUpdated, achi_code.VersionId)
-|> order_by(achi_code.Code)

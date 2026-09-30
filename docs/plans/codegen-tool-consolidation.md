@@ -87,7 +87,7 @@ Per [PKG-LAYOUT] the tool exe lives under `build/tool/net10.0/`, NOT in a `tools
 
 | Path | When |
 |---|---|
-| `Lql/Nimblesite.Lql.Cli.Postgres/` | After consumers (HealthcareSamples, ai_cms) cut over to the unified `DataProvider` tool — the tool's internal LQL pipeline supersedes it. |
+| `Lql/Nimblesite.Lql.Cli.Postgres/` | After consumers ([ClinicalCoding](https://github.com/Nimblesite/ClinicalCoding), ai_cms) cut over to the unified `DataProvider` tool — the tool's internal LQL pipeline supersedes it. |
 | `Lql/Nimblesite.Lql.Cli.SQLite/` | Same. |
 
 The LQL CLI test suites (`Nimblesite.Lql.Cli.SQLite.Tests`, etc.) stay alive as behaviour-equivalence harnesses pointed at `Nimblesite.Lql.Core` per [DEPS-EXTRACT], not at the obsolete CLIs.
@@ -161,7 +161,7 @@ That is the entire consumer-side delta. No tool manifest. No `<Target>`. No `Gen
    - MSBuild end-to-end test consuming the packed `DataProvider.{version}.nupkg` from a local feed.
    - RID matrix on `win-x64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`.
 9. **Update [`RELEASE-PLAN.md`](./RELEASE-PLAN.md)** + the release workflow to pack `DataProvider` from `DataProvider/DataProvider/DataProvider.csproj`.
-10. **Cut over consumers** (HealthcareSamples, ai_cms) in their own PRs after the new tool ships to nuget.org. Not in scope for this plan.
+10. **Cut over consumers** (ClinicalCoding, ai_cms) in their own PRs after the new tool ships to nuget.org. Not in scope for this plan.
 
 ## Risks
 
@@ -276,5 +276,5 @@ That is the entire consumer-side delta. No tool manifest. No `<Target>`. No `Gen
 - [ ] **OBSOLETE** — Mark `Lql/Nimblesite.Lql.Cli.Postgres` + `Lql/Nimblesite.Lql.Cli.SQLite` `Program` types `[Obsolete]` once the unified tool's LQL pipeline lands.
 - [ ] **RELEASE** — Update [`RELEASE-PLAN.md`](./RELEASE-PLAN.md): add `DataProvider` (bare name) to the CLI tools table.
 - [ ] **RELEASE** — Update `.github/workflows/release.yml`: add `dotnet pack DataProvider/DataProvider/DataProvider.csproj` and upload the resulting nupkg.
-- [ ] **CONSUMER** — (Not in this repo) Cut HealthcareSamples + ai_cms over to `PackageReference Include="DataProvider"` in separate PRs after first release.
+- [ ] **CONSUMER** — (Not in this repo) Cut ClinicalCoding + ai_cms over to `PackageReference Include="DataProvider"` in separate PRs after first release.
 - [ ] **CLEANUP** — After one release cycle of overlap, delete the legacy `Lql/Nimblesite.Lql.Cli.Postgres` + `Lql/Nimblesite.Lql.Cli.SQLite` projects entirely.

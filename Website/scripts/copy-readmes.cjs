@@ -136,23 +136,6 @@ function copyImages() {
     }
   }
 
-  // Copy images from subdirectories (relative to each README)
-  const subdirImages = [
-    { src: 'Samples/image.png', dest: 'Samples/image.png' },
-    { src: 'Samples/image-1.png', dest: 'Samples/image-1.png' }
-  ];
-  for (const img of subdirImages) {
-    const src = path.join(REPO_ROOT, img.src);
-    const destDir = path.join(ASSETS_DIR, path.dirname(img.dest));
-    const dest = path.join(ASSETS_DIR, img.dest);
-    if (fs.existsSync(src)) {
-      if (!fs.existsSync(destDir)) {
-        fs.mkdirSync(destDir, { recursive: true });
-      }
-      fs.copyFileSync(src, dest);
-      console.log(`Copied image: ${img.src}`);
-    }
-  }
 }
 
 function main() {

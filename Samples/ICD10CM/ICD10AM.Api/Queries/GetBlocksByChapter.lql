@@ -1,4 +1,0 @@
-icd10am_block
-|> filter(fn(row) => row.icd10am_block.ChapterId = @chapterId)
-|> select(icd10am_block.Id, icd10am_block.ChapterId, icd10am_block.BlockCode, icd10am_block.Title, icd10am_block.CodeRangeStart, icd10am_block.CodeRangeEnd, icd10am_block.LastUpdated, icd10am_block.VersionId)
-|> order_by(icd10am_block.BlockCode)

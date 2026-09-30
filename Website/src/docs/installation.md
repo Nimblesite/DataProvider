@@ -99,4 +99,4 @@ Add the following to your `.csproj`:
 
 - [Getting Started](/docs/getting-started/) — end-to-end walkthrough using all three CLI tools
 - [Quick Start](/docs/quick-start/) — 5-minute generated-query example
-- [Clinical Coding Platform](/docs/samples/) — the full reference implementation using every package above
+- [Clinical Coding Platform](https://github.com/Nimblesite/ClinicalCoding) — the full reference implementation using every package above

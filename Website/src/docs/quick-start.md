@@ -110,4 +110,4 @@ var sql = sqlResult switch
 - [Getting Started](/docs/getting-started/) — full end-to-end walkthrough
 - [DataProvider](/docs/dataprovider/) — source generation reference
 - [LQL](/docs/lql/) — the Lambda Query Language
-- [Clinical Coding Platform](/docs/samples/) — reference implementation
+- [Clinical Coding Platform](https://github.com/Nimblesite/ClinicalCoding) — reference implementation

@@ -23,7 +23,7 @@
         { "text": "LQL", "url": "/docs/lql/" },
         { "text": "Sync", "url": "/docs/sync/" },
         { "text": "Migrations", "url": "/docs/migrations/" },
-        { "text": "Clinical Coding Platform", "url": "/docs/samples/" }
+        { "text": "Clinical Coding Platform", "url": "https://github.com/Nimblesite/ClinicalCoding", "external": true }
       ]
     }
   ],
@@ -44,7 +44,7 @@
         { "text": "Getting Started", "url": "/docs/getting-started/" },
         { "text": "Installation", "url": "/docs/installation/" },
         { "text": "LQL", "url": "/docs/lql/" },
-        { "text": "Clinical Coding Platform", "url": "/docs/samples/" }
+        { "text": "Clinical Coding Platform", "url": "https://github.com/Nimblesite/ClinicalCoding", "external": true }
       ]
     },
     {

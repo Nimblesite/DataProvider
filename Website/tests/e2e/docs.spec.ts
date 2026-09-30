@@ -17,7 +17,6 @@ const FORBIDDEN_STRINGS = [
   "dotnet add package Lql.Postgres",
   "dotnet add package Lql.SqlServer",
   "dotnet add package Lql.TypeProvider.FSharp",
-  "HealthcareSamples",
   "Healthcare Samples",
   "--version 0.4.0",
   "version\": \"0.4.0",
@@ -30,7 +29,6 @@ const DOC_PAGES = [
   "/docs/installation/",
   "/docs/getting-started/",
   "/docs/quick-start/",
-  "/docs/samples/",
   "/docs/dataprovider/",
   "/docs/lql/",
   "/docs/sync/",
@@ -71,8 +69,8 @@ test.describe("Homepage", () => {
 
     await expect(page.locator("h1")).toContainText("Effortless .NET Data Access");
 
-    const samplesLink = page.locator('a[href="/docs/samples/"]').first();
-    await expect(samplesLink).toBeVisible();
+    const referenceLink = page.locator('a[href="https://github.com/Nimblesite/ClinicalCoding"]').first();
+    await expect(referenceLink).toBeVisible();
 
     const body = await getBodyText(page);
     for (const forbidden of FORBIDDEN_STRINGS) {
@@ -135,39 +133,26 @@ test.describe("Quick Start page", () => {
   });
 });
 
-test.describe("Clinical Coding Platform page", () => {
-  test("covers FHIR, ICD-10, pgvector, and links to GitHub", async ({ page }) => {
-    const response = await page.goto("/docs/samples/");
-    expect(response?.status()).toBe(200);
+test.describe("Clinical Coding external repository", () => {
+  const repository = "https://github.com/Nimblesite/ClinicalCoding";
 
-    const title = await page.title();
-    expect(title).toContain("Clinical Coding");
+  for (const route of ["/", "/about/", "/docs/getting-started/", "/docs/quick-start/", "/docs/installation/"]) {
+    test(`${route} links directly to the separate repository`, async ({ page }) => {
+      const response = await page.goto(route);
+      expect(response?.status()).toBe(200);
+      const links = page.locator(`a[href="${repository}"]`);
+      expect(await links.count()).toBeGreaterThan(0);
+      await expect(links.first()).toBeVisible();
+      expect(await links.first().getAttribute("href")).toBe(repository);
+    });
+  }
 
-    const body = await getBodyText(page);
-    expect(body).toContain("FHIR");
-    expect(body).toContain("ICD-10");
-    expect(body).toContain("pgvector");
-    expect(body).toContain("DataProviderMigrate");
-
-    const repoLink = page.locator('a[href*="github.com/Nimblesite/ClinicalCoding"]').first();
-    await expect(repoLink).toBeVisible();
-
-    const screenshot = page.locator('img[src*="clinical-coding/login"]').first();
-    await expect(screenshot).toBeVisible();
-    const src = await screenshot.getAttribute("src");
-    expect(src).toBeTruthy();
-    const imgResponse = await page.request.get(src!);
-    expect(imgResponse.status()).toBe(200);
-  });
-
-  test("architecture diagram renders as Mermaid SVG, not ASCII", async ({ page }) => {
-    await page.goto("/docs/samples/");
-
-    const mermaidDiv = page.locator("div.mermaid").first();
-    await expect(mermaidDiv).toBeVisible();
-
-    const svg = mermaidDiv.locator("svg").first();
-    await expect(svg).toBeVisible({ timeout: 10_000 });
+  test("the local sample files are absent", async () => {
+    const repoRoot = path.resolve(__dirname, "../../..");
+    expect(fs.existsSync(path.join(repoRoot, "Samples"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "Website/src/docs/samples.md"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "Website/src/assets/images/clinical-coding/login.png"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "Website/src/assets/images/cc.mp4"))).toBe(false);
   });
 });
 
@@ -181,7 +166,6 @@ test.describe("No ASCII box-drawing diagrams remain", () => {
     "/docs/installation/",
     "/docs/getting-started/",
     "/docs/quick-start/",
-    "/docs/samples/",
     "/docs/dataprovider/",
     "/docs/lql/",
     "/docs/sync/",
@@ -217,7 +201,6 @@ test.describe("Version is centralised, not hardcoded", () => {
       "Website/src/docs/installation.md",
       "Website/src/docs/getting-started.md",
       "Website/src/docs/quick-start.md",
-      "Website/src/docs/samples.md",
       "Website/src/index.njk",
       "Website/src/blog/getting-started-dataprovider.md",
       "Website/src/blog/connecting-sql-server.md",
@@ -273,7 +256,6 @@ test.describe("No Result<T,E> marketing lead-ins", () => {
     "/docs/installation/",
     "/docs/getting-started/",
     "/docs/quick-start/",
-    "/docs/samples/",
     "/blog/getting-started-dataprovider/",
     "/blog/connecting-sql-server/",
     "/blog/lql-simplifies-development/",

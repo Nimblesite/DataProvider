@@ -69,4 +69,4 @@ The transpiler supports the full set of pipeline operators — `filter`, `select
 
 - [LQL documentation](/docs/lql/)
 - [Installation guide](/docs/installation/)
-- [Clinical Coding Platform](/docs/samples/) — LQL in production-style use
+- [Clinical Coding Platform](https://github.com/Nimblesite/ClinicalCoding) — LQL in production-style use

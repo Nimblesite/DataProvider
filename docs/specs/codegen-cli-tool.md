@@ -221,7 +221,7 @@ Auto-imported by NuGet from `build/DataProvider.targets`. Consumer never sees th
 | TEST-NATIVE | Live-db only. Matrix runs on `win-x64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`. Each combo loads its driver's native asset from `runtimes/` and runs an introspection against a testcontainer. Schema-doc mode bypasses native drivers entirely. |
 | TEST-PARSER | Per platform, `Nimblesite.DataProvider.{Platform}.Tests` parses real fixture SQL and asserts on the resulting syntax tree shape (rule contexts, terminal nodes, parameter list, projection list). Mandatory for every platform under [CON-PARSER-ONLY]. |
 | TEST-WATCH | Boot the LSP against a temp solution with two projects, edit one column in one project's `*.schema.yaml`, assert only that project's `.g.cs` rewrites; sibling project keeps mtime. Snapshot test on the typeDiagram-generated TS types confirms the wire surface. |
-| TEST-TEMPLATES | Sample TypeScript template under `Samples/` emits `*.d.ts` for the `example` schema; `tsc --noEmit` passes. Sandbox test asserts a malicious template that touches `System.IO` is rejected with `DPSG014`. |
+| TEST-TEMPLATES | TypeScript test fixture emits `*.d.ts` for the `example` schema; `tsc --noEmit` passes. Sandbox test asserts a malicious template that touches `System.IO` is rejected with `DPSG014`. |
 
 ## DX
 
