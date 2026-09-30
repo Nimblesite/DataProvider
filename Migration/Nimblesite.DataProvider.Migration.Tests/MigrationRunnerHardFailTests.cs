@@ -1,93 +1,115 @@
+using System.Collections.Immutable;
+using MigrationRunnerResult = Outcome.Result<
+    bool,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-/// <summary>
-/// Implements [MIG-RUNNER-HARD-FAIL]: when any operation fails, MigrationRunner.Apply
-/// must return an Error result, even when ContinueOnError=true. The purpose of
-/// ContinueOnError is to keep applying remaining operations after a failure for
-/// diagnostic visibility; it must NEVER cause the runner to claim success when
-/// operations were missed. Closes the spirit of issues #53 and #55: the migrator
-/// must hard-fail when schema migrations are missed.
-/// </summary>
-public sealed class MigrationRunnerHardFailTests
+public sealed partial record MigrationPlatformRegressionTests
 {
-    [Fact]
-    public void Apply_WithContinueOnError_FailedOperationCausesErrorResult()
+    // Implements [MIG-RUNNER-HARD-FAIL] and [MIG-TEST-CROSS-PLATFORM].
+    [Theory]
+    [InlineData("sqlite", false)]
+    [InlineData("postgres", false)]
+    [InlineData("sqlserver", false)]
+    [InlineData("sqlite", true)]
+    [InlineData("postgres", true)]
+    [InlineData("sqlserver", true)]
+    public async Task Runner_FailedOperationReturnsErrorAndHonorsContinueOnError(
+        string provider,
+        bool continueOnError
+    )
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"hardfail_{Guid.NewGuid()}.db");
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
+        await WithTargetAsync(provider, target => AssertRunnerHardFail(target, continueOnError))
+            .ConfigureAwait(true);
+    }
 
-        try
+    private static void AssertRunnerHardFail(MigrationTarget target, bool continueOnError)
+    {
+        var baseline = new SchemaDefinition
         {
-            var goodOp = new CreateTableOperation(
-                new TableDefinition
-                {
-                    Schema = "main",
-                    Name = "good_table",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.BigInt,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                }
-            );
+            Name = "runner_hard_fail",
+            Tables = [ParentTable("runner_baseline")],
+        };
+        Migrate(target, baseline);
+        AssertBaseline(target);
+        var before = new CreateTableOperation(ParentTable("runner_before"));
+        var broken = new CreateTableOperation(ParentTable("runner_broken"));
+        var after = new CreateTableOperation(ParentTable("runner_after"));
+        var generated = ImmutableArray.CreateBuilder<SchemaOperation>();
+        var result = ApplyFailureScenario(
+            target,
+            continueOnError,
+            before,
+            broken,
+            after,
+            generated
+        );
+        AssertRunnerFailure(result, continueOnError, before, broken, after, generated);
+        AssertBaseline(target);
+        AssertTableExists(target, "runner_before", expected: false);
+        AssertTableExists(target, "runner_broken", expected: false);
+        AssertTableExists(target, "runner_after", expected: false);
+        Migrate(target, baseline);
+        AssertBaseline(target);
+    }
 
-            var brokenOp = new CreateTableOperation(
-                new TableDefinition
-                {
-                    Schema = "main",
-                    Name = "broken_table",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.BigInt,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                }
-            );
-
-            string GenerateDdl(SchemaOperation op) =>
-                op == brokenOp
-                    ? "INSERT INTO no_such_table (col) VALUES ('forced failure')"
-                    : SqliteDdlGenerator.Generate(op);
-
-            var result = MigrationRunner.Apply(
-                connection: connection,
-                operations: [goodOp, brokenOp],
-                generateDdl: GenerateDdl,
-                options: new MigrationOptions { ContinueOnError = true, UseTransaction = false }
-            );
-
-            Assert.True(
-                condition: result is MigrationApplyResultError,
-                userMessage: "Apply must return Error when any operation fails, even with "
-                    + "ContinueOnError=true. The runner reported success while a migration "
-                    + "was missed."
-            );
+    private static MigrationRunnerResult ApplyFailureScenario(
+        MigrationTarget target,
+        bool continueOnError,
+        CreateTableOperation before,
+        CreateTableOperation broken,
+        CreateTableOperation after,
+        ImmutableArray<SchemaOperation>.Builder generated
+    )
+    {
+        string GenerateDdl(SchemaOperation operation)
+        {
+            generated.Add(operation);
+            return operation == broken ? "SELECT * FROM missing_runner_table" : "SELECT 1";
         }
-        finally
-        {
-            connection.Close();
-            if (File.Exists(dbPath))
+        return MigrationRunner.Apply(
+            connection: target.Connection,
+            operations: [before, broken, after],
+            generateDdl: GenerateDdl,
+            options: new MigrationOptions
             {
-                try
-                {
-                    File.Delete(dbPath);
-                }
-                catch
-                {
-                    /* file may be locked */
-                }
+                ContinueOnError = continueOnError,
+                UseTransaction = false,
             }
+        );
+    }
+
+    private static void AssertRunnerFailure(
+        MigrationRunnerResult result,
+        bool continueOnError,
+        SchemaOperation before,
+        SchemaOperation broken,
+        SchemaOperation after,
+        ImmutableArray<SchemaOperation>.Builder generated
+    )
+    {
+        var failure = Assert.IsType<MigrationApplyResultError>(result);
+        Assert.False(string.IsNullOrWhiteSpace(failure.Value.Message));
+        Assert.Contains(
+            "missing_runner_table",
+            failure.Value.Message,
+            StringComparison.OrdinalIgnoreCase
+        );
+        Assert.Equal(continueOnError ? 3 : 2, generated.Count);
+        Assert.Same(before, generated[0]);
+        Assert.Same(broken, generated[1]);
+        if (continueOnError)
+        {
+            Assert.Same(after, generated[2]);
         }
+    }
+
+    private static void AssertBaseline(MigrationTarget target)
+    {
+        AssertTableExists(target, "runner_baseline", expected: true);
+        AssertColumnExists(target, "runner_baseline", "id", expected: true);
+        Assert.False(ColumnIsNullable(target, "runner_baseline", "id"));
     }
 }

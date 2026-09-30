@@ -20,6 +20,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
     <PackageReference Include="Microsoft.Playwright" Version="1.50.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -31,6 +35,7 @@
     <ProjectReference Include="..\Nimblesite.Reporting.Engine\Nimblesite.Reporting.Engine.csproj" />
     <ProjectReference Include="..\..\Migration\Nimblesite.DataProvider.Migration.Core\Nimblesite.DataProvider.Migration.Core.csproj" />
     <ProjectReference Include="..\..\Migration\Nimblesite.DataProvider.Migration.SQLite\Nimblesite.DataProvider.Migration.SQLite.csproj" />
+    <ProjectReference Include="..\..\Migration\DataProviderMigrate\DataProviderMigrate.csproj" />
     <ProjectReference Include="..\..\Lql\Nimblesite.Lql.Core\Nimblesite.Lql.Core.csproj" />
     <ProjectReference Include="..\..\Lql\Nimblesite.Lql.SQLite\Nimblesite.Lql.SQLite.csproj" />
     <ProjectReference Include="..\..\Other\Nimblesite.Sql.Model\Nimblesite.Sql.Model.csproj" />
@@ -48,8 +53,15 @@
   <!-- Copy test report definitions and schema -->
   <ItemGroup>
     <Content Include="Reports\*.report.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="PlatformReports\*.report.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="*.yaml" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Tests.Shared\PostgresContainerFixture.cs" Link="Shared\PostgresContainerFixture.cs" />
+    <Compile Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPostgresContainerFixture.cs" Link="Shared\MigrationPostgresContainerFixture.cs" />
+    <Compile Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPlatformFixture.cs" Link="Shared\MigrationPlatformFixture.cs" />
   </ItemGroup>
 
   <!--

@@ -69,8 +69,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         var result = ReportConfigLoader.LoadFromJson(json: json, logger: _logger);
 
         // Assert
-        Assert.True(result is LoadOk, $"Expected success but got {result.GetType()}");
-        var report = ((LoadOk)result).Value;
+        var report = Assert.IsType<LoadOk>(result).Value;
         Assert.Equal("test-report", report.Id);
         Assert.Equal("Test Report", report.Title);
         Assert.Single(report.Parameters);
@@ -106,8 +105,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         var result = ReportConfigLoader.LoadFromJson(json: invalidJson, logger: _logger);
 
         // Assert
-        Assert.True(result is LoadError, $"Expected error but got {result.GetType()}");
-        var err = (LoadError)result;
+        var err = Assert.IsType<LoadError>(result);
         Assert.NotNull(err.Value.Message);
         Assert.True(
             err.Value.Message.Length > 0,
@@ -136,8 +134,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         var result = ReportConfigLoader.LoadFromJson(json: json, logger: _logger);
 
         // Assert
-        Assert.True(result is LoadOk);
-        var report = ((LoadOk)result).Value;
+        var report = Assert.IsType<LoadOk>(result).Value;
         Assert.Equal("multi-ds", report.Id);
         Assert.Equal("Multi DS", report.Title);
         Assert.Empty(report.Parameters);
@@ -200,8 +197,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         var result = ReportConfigLoader.LoadFromJson(json: json, logger: _logger);
 
         // Assert
-        Assert.True(result is LoadOk);
-        var report = ((LoadOk)result).Value;
+        var report = Assert.IsType<LoadOk>(result).Value;
         Assert.Single(report.Layout.Rows);
         Assert.Equal(2, report.Layout.Rows[0].Cells.Length);
 
@@ -281,8 +277,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         var result = ReportConfigLoader.LoadFromJson(json: json, logger: _logger);
 
         // Assert
-        Assert.True(result is LoadOk);
-        var report = ((LoadOk)result).Value;
+        var report = Assert.IsType<LoadOk>(result).Value;
 
         // Report-level customCss
         Assert.Equal(
@@ -317,8 +312,7 @@ public sealed class ReportConfigLoaderTests : IDisposable
         );
 
         // Assert
-        Assert.True(result is LoadError, $"Expected error but got {result.GetType()}");
-        var err = (LoadError)result;
+        var err = Assert.IsType<LoadError>(result);
         Assert.NotNull(err.Value.Message);
         Assert.True(err.Value.Message.Length > 0, "Error message should describe file not found");
     }

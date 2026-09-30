@@ -4,13 +4,18 @@
 
 Lambda Query Language (Lql) is a functional–pipeline–style DSL that transpiles to procedural SQL or pure SQL for popular RDBMSs.
 
-### Pipeline syntax
+### Pipeline syntax [LQL-PIPELINE-COMPOSITION]
 
 Chained operations using `|>`:
 
 ```
 table |> join(other, on = …) |> filter(…) |> select(…) |> insert(…)
 ```
+
+Each appended operation must retain the earlier operations' meaning when
+transpiled for PostgreSQL, SQLite, or SQL Server. Adding a join and filter must
+keep the selected source; adding ordering and a limit must keep that join and
+filter while applying the requested ordering and row limit.
 
 ### Constructs
 
@@ -54,10 +59,11 @@ limit(n)
 | `union(other)`       | SQL `UNION`                    |
 | `range(a,b)`         | generates a range              |
 
-### Output
+### Output [LQL-OUTPUT-DIALECTS]
 
 * Target SQL dialect chosen at transpilation (`postgres`, `mysql`, `sqlserver`, etc.)
 * Defaults to PostgreSQL if not specified.
+* Equivalent select, filter, join, grouping, ordering, and paging requests retain their meaning on PostgreSQL, SQLite, and SQL Server. A target dialect that cannot render a requested statement must return an error rather than silently dropping an operation.
 
 ### Identifier Casing
 
@@ -76,12 +82,10 @@ This guarantees portability:
 
 ### Validation Rules
 
-#### Identifier Validation
+#### Identifier Validation [LQL-IDENTIFIER-VALIDATION]
 
 - **Numeric Start**: Identifiers cannot start with numbers (e.g., `123table` is invalid)
-- **Undefined Variables**: Identifiers containing underscores that appear as pipeline bases are treated as undefined variables and result in syntax errors
-  - Invalid: `undefined_variable |> select(name)` → "Syntax error: Undefined variable"
-  - Valid: `users |> select(name)` → Simple table names without underscores are allowed
+- **Underscored Table Names**: An identifier such as `tenant_members` is a valid pipeline base. The parser cannot distinguish an unknown variable from a table name without schema metadata; any undefined-variable check requires a later semantic pass with table context.
 
 #### Error Handling
 

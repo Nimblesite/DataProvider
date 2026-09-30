@@ -359,15 +359,28 @@ public static partial class SchemaDiff
                     );
                     yield return new CreateRlsPolicyOperation(desired.Schema, desired.Name, policy);
                 }
-                else if (
-                    current?.Schema != "main"
-                    && (
+                else if (current?.Schema != "main")
+                {
+                    var recreate = RlsPolicyPredicates.RequiresRecreate(currentPolicy, policy);
+                    if (recreate)
+                    {
+                        yield return new ReplaceRlsPolicyOperation(
+                            desired.Schema,
+                            desired.Name,
+                            policy
+                        );
+                    }
+                    else if (
                         !RlsPolicyPredicates.SameUsing(currentPolicy, policy)
                         || !RlsPolicyPredicates.SameWithCheck(currentPolicy, policy)
                     )
-                )
-                {
-                    yield return new AlterRlsPolicyOperation(desired.Schema, desired.Name, policy);
+                    {
+                        yield return new AlterRlsPolicyOperation(
+                            desired.Schema,
+                            desired.Name,
+                            policy
+                        );
+                    }
                 }
             }
         }

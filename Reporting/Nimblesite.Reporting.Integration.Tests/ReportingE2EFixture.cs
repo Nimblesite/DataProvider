@@ -10,7 +10,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Playwright;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.SQLite;
-using Xunit;
 
 namespace Nimblesite.Reporting.Integration.Tests;
 

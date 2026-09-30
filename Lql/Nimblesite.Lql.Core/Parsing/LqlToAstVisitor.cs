@@ -499,41 +499,14 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     private static string ProcessArithmeticExpressionToSql(
         LqlParser.ArithmeticExprContext arithmeticExpr,
         HashSet<string>? lambdaScope
-    )
-    {
-        // Process arithmetic terms
-        var terms = arithmeticExpr.arithmeticTerm();
-        var results = new List<string>();
-
-        for (int i = 0; i < terms.Length; i++)
-        {
-            if (i > 0)
-            {
-                // Extract actual operator from context
-                // The operator is between the terms, so we look at child nodes
-                var operatorIndex = (i * 2) - 1; // Operators are at odd indices: term op term op term
-                if (operatorIndex < arithmeticExpr.ChildCount)
-                {
-                    var operatorNode = arithmeticExpr.GetChild(operatorIndex);
-                    if (operatorNode is ITerminalNode terminalNode)
-                    {
-                        results.Add($" {terminalNode.GetText()} ");
-                    }
-                    else
-                    {
-                        results.Add(" + "); // Fallback to plus if we can't extract operator
-                    }
-                }
-                else
-                {
-                    results.Add(" + "); // Fallback to plus if index is out of bounds
-                }
-            }
-            results.Add(ProcessArithmeticTermToSql(terms[i], lambdaScope));
-        }
-
-        return string.Join("", results);
-    }
+    ) =>
+        ProcessArithmeticSequence(
+            expression: arithmeticExpr,
+            operands: arithmeticExpr.arithmeticTerm(),
+            processOperand: term =>
+                ProcessArithmeticTermToSql(arithmeticTerm: term, lambdaScope: lambdaScope),
+            fallbackOperator: "+"
+        );
 
     /// <summary>
     /// Processes an arithmetic term to SQL text, respecting lambda variable scope.
@@ -544,40 +517,40 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     private static string ProcessArithmeticTermToSql(
         LqlParser.ArithmeticTermContext arithmeticTerm,
         HashSet<string>? lambdaScope
+    ) =>
+        ProcessArithmeticSequence(
+            expression: arithmeticTerm,
+            operands: arithmeticTerm.arithmeticFactor(),
+            processOperand: factor =>
+                ProcessArithmeticFactorToSql(arithmeticFactor: factor, lambdaScope: lambdaScope),
+            fallbackOperator: "*"
+        );
+
+    private static string ProcessArithmeticSequence<T>(
+        ParserRuleContext expression,
+        IReadOnlyList<T> operands,
+        Func<T, string> processOperand,
+        string fallbackOperator
     )
     {
-        // Process arithmetic factors
-        var factors = arithmeticTerm.arithmeticFactor();
-        var results = new List<string>();
-
-        for (int i = 0; i < factors.Length; i++)
+        var result = new StringBuilder();
+        for (var index = 0; index < operands.Count; index++)
         {
-            if (i > 0)
+            if (index > 0)
             {
-                // Extract actual operator from context
-                // The operator is between the factors, so we look at child nodes
-                var operatorIndex = (i * 2) - 1; // Operators are at odd indices: factor op factor op factor
-                if (operatorIndex < arithmeticTerm.ChildCount)
-                {
-                    var operatorNode = arithmeticTerm.GetChild(operatorIndex);
-                    if (operatorNode is ITerminalNode terminalNode)
-                    {
-                        results.Add($" {terminalNode.GetText()} ");
-                    }
-                    else
-                    {
-                        results.Add(" * "); // Fallback to multiply if we can't extract operator
-                    }
-                }
-                else
-                {
-                    results.Add(" * "); // Fallback to multiply if index is out of bounds
-                }
+                var operatorIndex = (index * 2) - 1;
+                var operatorText =
+                    operatorIndex < expression.ChildCount
+                    && expression.GetChild(operatorIndex) is ITerminalNode terminal
+                        ? terminal.GetText()
+                        : fallbackOperator;
+                result.Append(' ').Append(operatorText).Append(' ');
             }
-            results.Add(ProcessArithmeticFactorToSql(factors[i], lambdaScope));
+
+            result.Append(processOperand(operands[index]));
         }
 
-        return string.Join("", results);
+        return result.ToString();
     }
 
     /// <summary>
@@ -1310,21 +1283,25 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
                 // Check for IDENT first
                 if (namedArg.IDENT()?.GetText() == name)
                 {
-                    return ResolveNamedArgValue(namedArg);
+                    return ResolveNamedArgText(namedArg: namedArg);
                 }
 
                 // Check for ON keyword
                 if (name == "on" && namedArg.ON() != null)
                 {
-                    return ResolveNamedArgValue(namedArg);
+                    return ResolveNamedArgText(namedArg: namedArg);
                 }
             }
         }
         return null;
     }
 
-    // Resolves a named-arg value to SQL, preferring a comparison over a logicalExpr.
-    private static string? ResolveNamedArgValue(LqlParser.NamedArgContext namedArg)
+    /// <summary>
+    /// Resolves the SQL text of a named argument from its comparison or logical expression.
+    /// </summary>
+    /// <param name="namedArg">The named argument context.</param>
+    /// <returns>The rendered SQL text, or null when neither form is present.</returns>
+    private static string? ResolveNamedArgText(LqlParser.NamedArgContext namedArg)
     {
         var comparisonText =
             namedArg.comparison() != null

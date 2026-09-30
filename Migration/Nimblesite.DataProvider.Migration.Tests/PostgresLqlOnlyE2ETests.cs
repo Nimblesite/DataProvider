@@ -81,25 +81,51 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
             """
         );
 
-    private void ApplyAndGrant(SchemaDefinition desired, params string[] tableNames)
+    /// <summary>
+    /// Inspects the live public schema, diffs it against the desired schema,
+    /// applies the resulting operations, and asserts the migration succeeded.
+    /// </summary>
+    internal static void ApplySchema(
+        NpgsqlConnection connection,
+        SchemaDefinition desired,
+        ILogger logger
+    )
     {
         var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
+            (SchemaResultOk)PostgresSchemaInspector.Inspect(connection, "public", logger)
         ).Value;
         var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)
+            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: logger)
         ).Value;
+        ApplyOperations(connection, ops, logger);
+    }
+
+    /// <summary>
+    /// Applies pre-computed schema operations to Postgres and asserts the
+    /// migration succeeded.
+    /// </summary>
+    internal static void ApplyOperations(
+        NpgsqlConnection connection,
+        IReadOnlyList<SchemaOperation> operations,
+        ILogger logger
+    )
+    {
         var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
+            connection,
+            operations,
             PostgresDdlGenerator.Generate,
             MigrationOptions.Default,
-            _logger
+            logger
         );
         Assert.True(
             apply is MigrationApplyResultOk,
             $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
         );
+    }
+
+    private void ApplyAndGrant(SchemaDefinition desired, params string[] tableNames)
+    {
+        ApplySchema(connection: _connection, desired: desired, logger: _logger);
 
         foreach (var t in tableNames)
         {

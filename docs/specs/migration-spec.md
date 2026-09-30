@@ -542,7 +542,7 @@ The diff engine produces a list of schema operations as discriminated union reco
 
 All operations carry the schema name, table name, and relevant definition or constraint name.
 
-### 6.2 Additive-Only Mode (Default)
+### 6.2 Additive-Only Mode (Default) [MIG-DIFF-ADDITIVE]
 
 By default, the migration engine only applies **additive** operations:
 
@@ -556,9 +556,18 @@ By default, the migration engine only applies **additive** operations:
 | `DropTable` | **No** - requires explicit opt-in |
 | `DropColumn` | **No** - requires explicit opt-in |
 | `DropIndex` | **No** - requires explicit opt-in |
-| `AlterColumn` | **No** - requires explicit opt-in |
+| `AlterColumn` | Only `NOT NULL` to nullable is allowed by default; other alterations require explicit opt-in |
 
-### 6.3 Destructive Operations
+Relaxing an existing column from `NOT NULL` to nullable is additive. A normal
+migration must apply the change on every provider and preserve the column's
+other constraints. Reapplying the same schema must leave the column nullable.
+
+Adding a foreign key to an existing table is additive, including when the
+referencing column or referenced table is added in the same migration. If an
+earlier attempt created the column but not its foreign key, the next normal
+migration must add the missing key without duplicating existing objects.
+
+### 6.3 Destructive Operations [MIG-DIFF-DESTRUCTIVE]
 
 Destructive operations require explicit opt-in via `MigrationOptions`:
 
@@ -566,6 +575,11 @@ Destructive operations require explicit opt-in via `MigrationOptions`:
 - `AllowDropColumn` (default: false)
 - `AllowDropIndex` (default: false)
 - `AllowAlterColumn` (default: false)
+
+Destructive cleanup removes only objects absent from the desired schema.
+Every foreign key still declared in that schema must remain present and
+enforced, including when another foreign key or table is removed. Reapplying
+the desired schema must not remove or duplicate any surviving key.
 
 ### PostgreSQL Constraint-Backed Index Drops [MIG-PG-CONSTRAINT-BACKED-INDEX-DROP]
 
@@ -795,16 +809,24 @@ The following patterns are not conformant:
 | Columns | Match by name within table (case-insensitive) |
 | Indexes | Match by name (case-insensitive) |
 | Primary Keys | Match by table (only one per table) |
-| Foreign Keys | Match named constraints by name and relationship; match unnamed declarations by relationship |
+| Foreign Keys | Match named constraints by name and relationship; match unnamed declarations by relationship. Compare referencing column, referenced table and column, and delete action. |
 
 ### 8.2.1 Existing-database upgrades [MIG-EXISTING-DATABASE-UPGRADE]
 
-An additive PostgreSQL migration relaxes an existing `NOT NULL` column when the
+An additive migration relaxes an existing `NOT NULL` column when the
 desired schema marks it nullable. A foreign key declared without a name is
 created on an existing table after its columns and referenced tables exist.
 Re-running a partially applied migration repairs a missing foreign key.
 Destructive cleanup drops only foreign keys absent from the desired schema;
 repeated additive and destructive runs produce no further operations.
+
+#### Foreign-Key Repair [MIG-DIFF-FOREIGN-KEY]
+
+A missing declared foreign key must produce an `AddForeignKey` operation on an
+existing table, whether the referencing column already exists or is added by
+the same migration. A later run must repair a partially migrated database in
+which the column exists but the key does not. A matching existing key must not
+be duplicated.
 
 ### 8.3 Diff Algorithm
 
@@ -940,7 +962,7 @@ An implementation is **conformant** if:
 9. All public members have XML documentation
 10. Logging via ILogger at appropriate levels
 11. E2E tests cover greenfield creation and upgrade scenarios
-12. E2E tests run against real databases (SQLite in-memory, PostgreSQL via Testcontainers)
+12. The same E2E behavior tests run against real SQLite files, PostgreSQL via Testcontainers, and SQL Server via Testcontainers
 
 ---
 
@@ -960,23 +982,29 @@ End-to-end tests are **critical** for validating that migrations work correctly 
 
 ### 12.2 Greenfield Tests
 
-Create fresh database, define schema with fluent API, apply via `SchemaDiff.Calculate()` + `MigrationRunner.Apply()`, verify tables exist via introspection.
+Create a fresh database from a YAML schema through `DataProviderMigrate`, then verify the created objects through database catalog queries.
 
 ### 12.3 Upgrade Tests
 
 Apply v1 schema, then v2 with new columns. Verify diff produces `AddColumn` operations and final schema has all columns.
 
-### 12.4 PostgreSQL Tests with Testcontainers
+### 12.4 PostgreSQL and SQL Server Tests with Testcontainers
 
-Use `Testcontainers.PostgreSql` to spin up real PostgreSQL. Verify native types (UUID, JSONB, TIMESTAMPTZ) are created correctly by querying `information_schema.columns`.
+Use `Testcontainers.PostgreSql` and `Testcontainers.MsSql` to run real server
+instances. Both providers must execute the same behavioral migration theories
+as SQLite. Verify provider-specific types and constraints through catalog queries
+where necessary; a missing implementation must cause an ordinary test failure.
 
 ### 12.5 Idempotency Tests
 
 Run migration twice. Second run should produce zero operations (schema already matches desired state).
 
-### 12.6 Cross-Platform Test Matrix
+### 12.6 Cross-Platform Test Matrix [MIG-TEST-CROSS-PLATFORM]
 
-Use `[Theory]` with `[MemberData]` to run the same schema definition against SQLite, PostgreSQL, and SQL Server. Verify identical results across all platforms.
+Use a single `[Theory]` with rows for SQLite, PostgreSQL, and SQL Server to run
+each behavioral migration scenario. Assert the same resulting schema and
+idempotency on all three, with provider-specific catalog queries only for
+readback. Do not skip or accept expected failures for any provider.
 
 ### 12.7 Required Test Coverage
 

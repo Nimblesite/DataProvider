@@ -15,6 +15,8 @@ public sealed class QueryBuilderE2ETests : IDisposable
     private readonly SqliteTestDatabase _db = new("qb_e2e");
     private SqliteConnection _connection => _db.Connection;
 
+    internal SqliteConnection Connection => _connection;
+
     public QueryBuilderE2ETests()
     {
         CreateSchemaAndSeed();

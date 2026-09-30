@@ -276,27 +276,48 @@ public static partial class PostgresSchemaInspector
                 }
             }
 
-            // Get foreign keys
+            // [MIG-EXISTING-DATABASE-UPGRADE] Keep each relationship intact,
+            // including composite keys and references to another schema.
             using var fkCmd = connection.CreateCommand();
             fkCmd.CommandText = """
                 SELECT
-                    tc.constraint_name,
-                    kcu.column_name,
-                    ccu.table_name AS referenced_table,
-                    ccu.column_name AS referenced_column,
-                    rc.delete_rule,
-                    rc.update_rule
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu 
-                    ON tc.constraint_name = kcu.constraint_name 
-                    AND tc.table_schema = kcu.table_schema
-                JOIN information_schema.constraint_column_usage ccu 
-                    ON ccu.constraint_name = tc.constraint_name
-                JOIN information_schema.referential_constraints rc 
-                    ON tc.constraint_name = rc.constraint_name
-                WHERE tc.table_schema = @schema 
-                AND tc.table_name = @table 
-                AND tc.constraint_type = 'FOREIGN KEY'
+                    constraint_record.conname,
+                    array_agg(source_column.attname::text ORDER BY keys.n),
+                    referenced_table.relname,
+                    referenced_schema.nspname,
+                    array_agg(referenced_column.attname::text ORDER BY keys.n),
+                    CASE constraint_record.confdeltype
+                        WHEN 'c' THEN 'CASCADE'
+                        WHEN 'n' THEN 'SET NULL'
+                        WHEN 'd' THEN 'SET DEFAULT'
+                        WHEN 'r' THEN 'RESTRICT'
+                        ELSE 'NO ACTION'
+                    END,
+                    CASE constraint_record.confupdtype
+                        WHEN 'c' THEN 'CASCADE'
+                        WHEN 'n' THEN 'SET NULL'
+                        WHEN 'd' THEN 'SET DEFAULT'
+                        WHEN 'r' THEN 'RESTRICT'
+                        ELSE 'NO ACTION'
+                    END
+                FROM pg_constraint constraint_record
+                JOIN pg_class source_table ON source_table.oid = constraint_record.conrelid
+                JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
+                JOIN pg_class referenced_table ON referenced_table.oid = constraint_record.confrelid
+                JOIN pg_namespace referenced_schema ON referenced_schema.oid = referenced_table.relnamespace
+                JOIN unnest(constraint_record.conkey, constraint_record.confkey)
+                    WITH ORDINALITY AS keys(source_attnum, referenced_attnum, n) ON true
+                JOIN pg_attribute source_column
+                    ON source_column.attrelid = source_table.oid
+                    AND source_column.attnum = keys.source_attnum
+                JOIN pg_attribute referenced_column
+                    ON referenced_column.attrelid = referenced_table.oid
+                    AND referenced_column.attnum = keys.referenced_attnum
+                WHERE source_schema.nspname = @schema
+                AND source_table.relname = @table
+                AND constraint_record.contype = 'f'
+                GROUP BY constraint_record.oid, referenced_table.relname, referenced_schema.nspname
+                ORDER BY constraint_record.conname
                 """;
             fkCmd.Parameters.AddWithValue("@schema", schemaName);
             fkCmd.Parameters.AddWithValue("@table", tableName);
@@ -306,20 +327,21 @@ public static partial class PostgresSchemaInspector
                 while (reader.Read())
                 {
                     var constraintName = reader.GetString(0);
-                    var columnName = reader.GetString(1);
+                    var columnNames = reader.GetFieldValue<string[]>(1);
                     var refTable = reader.GetString(2);
-                    var refColumn = reader.GetString(3);
-                    var deleteRule = reader.GetString(4);
-                    var updateRule = reader.GetString(5);
+                    var refSchema = reader.GetString(3);
+                    var refColumns = reader.GetFieldValue<string[]>(4);
+                    var deleteRule = reader.GetString(5);
+                    var updateRule = reader.GetString(6);
 
                     foreignKeys.Add(
                         new ForeignKeyDefinition
                         {
                             Name = constraintName,
-                            Columns = [columnName],
+                            Columns = columnNames,
                             ReferencedTable = refTable,
-                            ReferencedSchema = schemaName,
-                            ReferencedColumns = [refColumn],
+                            ReferencedSchema = refSchema,
+                            ReferencedColumns = refColumns,
                             OnDelete = ParseForeignKeyAction(deleteRule),
                             OnUpdate = ParseForeignKeyAction(updateRule),
                         }

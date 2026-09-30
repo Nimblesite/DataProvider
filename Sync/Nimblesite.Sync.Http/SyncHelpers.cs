@@ -120,19 +120,13 @@ public static class SyncHelpers
 
         try
         {
-            var applied = 0;
-            foreach (var change in changes)
-            {
-                if (change.Origin == originId)
-                    continue;
-
-                var entry = ToSyncLogEntry(change);
-
-                var result = SQLite.ChangeApplierSQLite.ApplyChange(conn, entry);
-                if (result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>)
-                    applied++;
-            }
-            return applied;
+            return ApplyChangesCore(
+                changes: changes,
+                originId: originId,
+                applyChange: entry =>
+                    SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
+                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+            );
         }
         finally
         {
@@ -154,25 +148,49 @@ public static class SyncHelpers
 
         try
         {
-            var applied = 0;
-            foreach (var change in changes)
-            {
-                if (change.Origin == originId)
-                    continue;
-
-                var entry = ToSyncLogEntry(change);
-
-                var result = Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger);
-                if (result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>)
-                    applied++;
-            }
-            return applied;
+            return ApplyChangesCore(
+                changes: changes,
+                originId: originId,
+                applyChange: entry =>
+                    Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
+                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+            );
         }
         finally
         {
             Postgres.PostgresSyncSession.DisableSuppression(conn);
         }
     }
+
+    private static int ApplyChangesCore(
+        IReadOnlyList<SyncLogEntryDto> changes,
+        string originId,
+        Func<SyncLogEntry, bool> applyChange
+    )
+    {
+        var applied = 0;
+        foreach (var change in changes)
+        {
+            if (change.Origin == originId)
+                continue;
+
+            if (applyChange(ToSyncLogEntry(change: change)))
+                applied++;
+        }
+
+        return applied;
+    }
+
+    private static SyncLogEntry ToSyncLogEntry(SyncLogEntryDto change) =>
+        new(
+            Version: change.Version,
+            TableName: change.TableName,
+            PkValue: change.PkValue,
+            Operation: Enum.Parse<SyncOperation>(value: change.Operation, ignoreCase: true),
+            Payload: change.Payload,
+            Origin: change.Origin,
+            Timestamp: change.Timestamp
+        );
 
     private static bool UpsertClientSqlite(
         string connectionString,

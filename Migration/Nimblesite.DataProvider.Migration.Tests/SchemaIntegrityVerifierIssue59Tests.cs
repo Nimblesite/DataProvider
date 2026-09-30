@@ -74,6 +74,35 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
+
+        var changedDefault = new SchemaDefinition
+        {
+            Name = "changed-default",
+            Tables =
+            [
+                new TableDefinition
+                {
+                    Schema = "public",
+                    Name = "t",
+                    Columns =
+                    [
+                        new ColumnDefinition
+                        {
+                            Name = "status",
+                            Type = PortableTypes.Text,
+                            IsNullable = false,
+                            DefaultValue = "'failed'",
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var changedDefaultMismatches = Verify(live: live, desired: changedDefault);
+
+        Assert.Single(changedDefaultMismatches);
+        Assert.Contains("public.t.status: default expected 'failed'", changedDefaultMismatches[0]);
+        Assert.DoesNotContain("default expected 'pending'", changedDefaultMismatches[0]);
     }
 
     [Fact]
@@ -118,6 +147,18 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
+
+        var missingAdminGrant = new SchemaDefinition
+        {
+            Name = "missing-admin-grant",
+            Grants = [live.Grants[0]],
+        };
+
+        var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
+
+        Assert.Single(missingAdminMismatches);
+        Assert.Contains("grant Schema", missingAdminMismatches[0]);
+        Assert.Contains("missing grant", missingAdminMismatches[0]);
     }
 
     [Fact]
@@ -174,6 +215,19 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
+
+        var missingTableGrant = new SchemaDefinition
+        {
+            Name = "missing-table-grant",
+            Tables = live.Tables,
+            Grants = [live.Grants[0]],
+        };
+
+        var missingTableMismatches = Verify(live: missingTableGrant, desired: desired);
+
+        Assert.Single(missingTableMismatches);
+        Assert.Contains("grant AllTablesInSchema", missingTableMismatches[0]);
+        Assert.Contains("missing grant", missingTableMismatches[0]);
     }
 
     private static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)

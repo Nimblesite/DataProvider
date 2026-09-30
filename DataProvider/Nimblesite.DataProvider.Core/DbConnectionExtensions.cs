@@ -70,7 +70,11 @@ public static class DbConnectionExtensions
 
         try
         {
-            using var command = connection.CreateCommandWith(sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                sql: sql,
+                parameters: parameters
+            );
 
             var results = new List<T>();
             using var reader = command.ExecuteReader();
@@ -134,7 +138,11 @@ public static class DbConnectionExtensions
 
         try
         {
-            using var command = connection.CreateCommandWith(sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                sql: sql,
+                parameters: parameters
+            );
 
             var rowsAffected = command.ExecuteNonQuery();
             return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);
@@ -171,7 +179,11 @@ public static class DbConnectionExtensions
 
         try
         {
-            using var command = connection.CreateCommandWith(sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                sql: sql,
+                parameters: parameters
+            );
 
             var result = command.ExecuteScalar();
             return new Result<T?, SqlError>.Ok<T?, SqlError>(result is T value ? value : default);
@@ -229,14 +241,18 @@ public static class DbConnectionExtensions
         return connection.Query(sql, parameters, mapper);
     }
 
-    private static IDbCommand CreateCommandWith(
-        this IDbConnection connection,
+    /// <summary>
+    /// Create a command with SQL text and optional parameters
+    /// </summary>
+    private static IDbCommand CreateCommand(
+        IDbConnection connection,
         string sql,
         IEnumerable<IDataParameter>? parameters
     )
     {
         var command = connection.CreateCommand();
         command.CommandText = sql;
+
         if (parameters != null)
         {
             foreach (var parameter in parameters)
@@ -244,6 +260,7 @@ public static class DbConnectionExtensions
                 command.Parameters.Add(parameter);
             }
         }
+
         return command;
     }
 }

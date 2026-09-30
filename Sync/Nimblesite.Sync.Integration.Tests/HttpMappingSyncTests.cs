@@ -112,6 +112,26 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
     }
 
     /// <summary>
+    /// Fetches all source changes, maps the first one in the push direction,
+    /// asserts the mapping succeeded, and returns the first mapped entry.
+    /// </summary>
+    private MappedEntry MapFirstChange(SqliteConnection source, SyncMappingConfig mappingConfig)
+    {
+        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
+        var entry = ((SyncLogListOk)changes).Value[0];
+
+        var mappingResult = MappingEngine.ApplyMapping(
+            entry,
+            mappingConfig,
+            MappingDirection.Push,
+            _logger
+        );
+
+        var success = Assert.IsType<MappingSuccess>(mappingResult);
+        return success.Entries[0];
+    }
+
+    /// <summary>
     /// PROVES: MappingEngine transforms User -> Customer with column renaming.
     /// Source: User(Id, FullName, EmailAddress)
     /// Target: Customer(CustomerId, Name, Email)
@@ -786,18 +806,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             cmd.ExecuteNonQuery();
         }
 
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
-
-        var mappingResult = MappingEngine.ApplyMapping(
-            entry,
-            mappingConfig,
-            MappingDirection.Push,
-            _logger
-        );
-
-        var success = Assert.IsType<MappingSuccess>(mappingResult);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("email", mappedEntry.MappedPayload);
         // Empty string should be ""
@@ -847,18 +856,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             cmd.ExecuteNonQuery();
         }
 
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
-
-        var mappingResult = MappingEngine.ApplyMapping(
-            entry,
-            mappingConfig,
-            MappingDirection.Push,
-            _logger
-        );
-
-        var success = Assert.IsType<MappingSuccess>(mappingResult);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.NotNull(mappedEntry.MappedPayload);
         Assert.Contains(longName, mappedEntry.MappedPayload);
@@ -891,18 +889,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             cmd.ExecuteNonQuery();
         }
 
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
-
-        var mappingResult = MappingEngine.ApplyMapping(
-            entry,
-            mappingConfig,
-            MappingDirection.Push,
-            _logger
-        );
-
-        var success = Assert.IsType<MappingSuccess>(mappingResult);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("status", mappedEntry.MappedPayload);
         Assert.Contains("active", mappedEntry.MappedPayload);
@@ -933,18 +920,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             cmd.ExecuteNonQuery();
         }
 
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
-
-        var mappingResult = MappingEngine.ApplyMapping(
-            entry,
-            mappingConfig,
-            MappingDirection.Push,
-            _logger
-        );
-
-        var success = Assert.IsType<MappingSuccess>(mappingResult);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         // PK should still be there
         Assert.Contains("customer_id", mappedEntry.TargetPkValue);
@@ -1000,18 +976,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             cmd.ExecuteNonQuery();
         }
 
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
-
-        var mappingResult = MappingEngine.ApplyMapping(
-            entry,
-            mappingConfig,
-            MappingDirection.Push,
-            _logger
-        );
-
-        var success = Assert.IsType<MappingSuccess>(mappingResult);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("name", mappedEntry.MappedPayload);
         // The nested JSON should be preserved as a string value

@@ -28,6 +28,17 @@ public static class MigrationRunner
             return new MigrationApplyResult.Ok<bool, MigrationError>(true);
         }
 
+        if (
+            !options.UseTransaction
+            && !options.DryRun
+            && operations.Any(op => op is ReplaceRlsPolicyOperation)
+        )
+        {
+            return new MigrationApplyResult.Error<bool, MigrationError>(
+                MigrationError.FromMessage("Replacing an RLS policy requires a transaction")
+            );
+        }
+
         // Check for destructive operations
         if (!options.AllowDestructive)
         {

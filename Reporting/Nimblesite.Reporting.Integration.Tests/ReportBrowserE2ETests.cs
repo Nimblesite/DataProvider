@@ -1,5 +1,4 @@
 using Microsoft.Playwright;
-using Xunit;
 
 namespace Nimblesite.Reporting.Integration.Tests;
 

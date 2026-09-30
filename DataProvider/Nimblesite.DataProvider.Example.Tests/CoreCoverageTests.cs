@@ -892,14 +892,20 @@ public sealed class CoreCoverageTests : IDisposable
         await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
-    public void Dispose()
+    public void Dispose() => DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
+
+    /// <summary>
+    /// Shared best-effort cleanup for SQLite file fixtures: disposes the connection and
+    /// deletes the database file, tolerating a file locked by another process.
+    /// </summary>
+    internal static void DisposeSqliteFixture(SqliteConnection? connection, string dbPath)
     {
-        _connection?.Dispose();
-        if (File.Exists(_dbPath))
+        connection?.Dispose();
+        if (File.Exists(dbPath))
         {
             try
             {
-                File.Delete(_dbPath);
+                File.Delete(dbPath);
             }
 #pragma warning disable CA1031 // Do not catch general exception types - file cleanup is best-effort
             catch (IOException)

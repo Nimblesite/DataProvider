@@ -19,7 +19,9 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
     <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -28,11 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../DataProvider/Nimblesite.DataProvider.Core/Nimblesite.DataProvider.Core.csproj" />
     <ProjectReference Include="../DataProviderMigrate/DataProviderMigrate.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.Core/Nimblesite.DataProvider.Migration.Core.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.SQLite/Nimblesite.DataProvider.Migration.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.Postgres/Nimblesite.DataProvider.Migration.Postgres.csproj" />
-    <ProjectReference Include="../DataProviderMigrate/DataProviderMigrate.csproj" />
   </ItemGroup>
 
   <ItemGroup>

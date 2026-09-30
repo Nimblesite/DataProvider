@@ -133,6 +133,7 @@ public static partial class PostgresDdlGenerator
                 $"DROP POLICY IF EXISTS \"{op.PolicyName}\" ON \"{op.Schema}\".\"{op.TableName}\"",
             CreateRlsPolicyOperation op => GenerateCreateRlsPolicy(op),
             AlterRlsPolicyOperation op => GenerateAlterRlsPolicy(op),
+            ReplaceRlsPolicyOperation op => GenerateReplaceRlsPolicy(op),
             CreateTriggerOperation op => PostgresTriggerDdlBuilder.GenerateCreate(op),
             DropTriggerOperation op => PostgresTriggerDdlBuilder.GenerateDrop(op),
             _ => throw new NotSupportedException(
@@ -171,6 +172,10 @@ public static partial class PostgresDdlGenerator
         AppendPolicyPredicates(sb, op.Policy);
         return sb.ToString();
     }
+
+    private static string GenerateReplaceRlsPolicy(ReplaceRlsPolicyOperation op) =>
+        $"DROP POLICY \"{op.Policy.Name}\" ON \"{op.Schema}\".\"{op.TableName}\"; "
+        + GenerateCreateRlsPolicy(new CreateRlsPolicyOperation(op.Schema, op.TableName, op.Policy));
 
     private static void AppendPolicyPredicates(StringBuilder sb, RlsPolicyDefinition policy)
     {
@@ -259,7 +264,9 @@ public static partial class PostgresDdlGenerator
     }
 
     private static string RlsRolesToPgClause(IReadOnlyList<string> roles) =>
-        roles.Count == 0 ? "PUBLIC" : string.Join(", ", roles.Select(r => $"\"{r}\""));
+        roles.Count == 0 || roles.Any(r => r is "public" or "PUBLIC")
+            ? "PUBLIC"
+            : string.Join(", ", roles.Select(r => $"\"{r}\""));
 
     private static string GenerateCreateTable(TableDefinition table)
     {

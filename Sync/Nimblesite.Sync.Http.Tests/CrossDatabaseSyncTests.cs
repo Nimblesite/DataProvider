@@ -7,7 +7,8 @@ namespace Nimblesite.Sync.Http.Tests;
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private string _postgresConnectionString = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -415,62 +416,6 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
         var changes2 = SyncLogRepository.FetchChanges(sqlite, 0, 100);
         var list2 = ((SyncLogListOk)changes2).Value;
         Assert.Single(list2);
-    }
-
-    [Fact]
-    public void BatchSync_LargeDataset()
-    {
-        // Arrange
-        var sqliteOriginId = Guid.NewGuid().ToString();
-        var postgresOriginId = Guid.NewGuid().ToString();
-
-        using var sqlite = CreateSqliteDb(sqliteOriginId);
-        using var postgres = CreatePostgresDb(postgresOriginId);
-
-        // Insert 100 records in SQLite
-        var recordCount = 100;
-        for (var i = 0; i < recordCount; i++)
-        {
-            using var cmd = sqlite.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Email) VALUES ('batch{i}', 'Person {i}', 'p{i}@example.com')";
-            cmd.ExecuteNonQuery();
-        }
-
-        // Sync in batches
-        var batchSize = 25;
-        var fromVersion = 0L;
-        var totalSynced = 0;
-
-        while (true)
-        {
-            var batch = SyncLogRepository.FetchChanges(sqlite, fromVersion, batchSize);
-            var batchList = ((SyncLogListOk)batch).Value;
-
-            if (batchList.Count == 0)
-                break;
-
-            PostgresSyncSession.EnableSuppression(postgres);
-            foreach (var entry in batchList)
-            {
-                PostgresChangeApplier.ApplyChange(postgres, entry, _logger);
-                totalSynced++;
-            }
-            PostgresSyncSession.DisableSuppression(postgres);
-
-            fromVersion = batchList.Max(e => e.Version);
-        }
-
-        // Assert
-        Assert.Equal(recordCount, totalSynced);
-
-        using var countCmd = postgres.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM person";
-        var pgCount = Convert.ToInt32(
-            countCmd.ExecuteScalar(),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        Assert.Equal(recordCount, pgCount);
     }
 
     [Fact]

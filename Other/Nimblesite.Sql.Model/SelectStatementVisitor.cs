@@ -10,10 +10,7 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
 {
     private readonly SelectStatementBuilder _builder;
 
-    internal SelectStatementVisitor(SelectStatementBuilder builder)
-    {
-        _builder = builder;
-    }
+    internal SelectStatementVisitor(SelectStatementBuilder builder) => _builder = builder;
 
     protected override Expression VisitMethodCall(MethodCallExpression node)
     {
@@ -22,76 +19,23 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
         switch (method.Name)
         {
             case "Where":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    var lambda = GetLambda(node.Arguments[1]);
-                    if (lambda != null)
-                    {
-                        ProcessWhereExpression(lambda.Body);
-                    }
-                }
-                return node;
+                return VisitSourceAndProcessLambda(node, ProcessWhereExpression);
 
             case "Select":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    var lambda = GetLambda(node.Arguments[1]);
-                    if (lambda != null)
-                    {
-                        ProcessSelectExpression(lambda.Body);
-                    }
-                }
-                return node;
+                return VisitSourceAndProcessLambda(node, ProcessSelectExpression);
 
             case "OrderBy":
             case "ThenBy":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    var lambda = GetLambda(node.Arguments[1]);
-                    if (lambda != null && lambda.Body is MemberExpression member)
-                    {
-                        _builder.AddOrderBy(member.Member.Name, "ASC");
-                    }
-                }
-                return node;
+                return AddOrderByFromLambda(node, "ASC");
 
             case "OrderByDescending":
             case "ThenByDescending":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    var lambda = GetLambda(node.Arguments[1]);
-                    if (lambda != null && lambda.Body is MemberExpression member)
-                    {
-                        _builder.AddOrderBy(member.Member.Name, "DESC");
-                    }
-                }
-                return node;
+                return AddOrderByFromLambda(node, "DESC");
 
             case "Take":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    if (node.Arguments[1] is ConstantExpression constant)
-                    {
-                        _builder.WithLimit(constant.Value?.ToString() ?? "0");
-                    }
-                }
-                return node;
-
+                return ApplyRowCountConstraint(node, limit => _builder.WithLimit(limit));
             case "Skip":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    if (node.Arguments[1] is ConstantExpression constant)
-                    {
-                        _builder.WithOffset(constant.Value?.ToString() ?? "0");
-                    }
-                }
-                return node;
+                return ApplyRowCountConstraint(node, offset => _builder.WithOffset(offset));
 
             case "Distinct":
                 Visit(node.Arguments[0]);
@@ -99,17 +43,10 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
                 return node;
 
             case "GroupBy":
-                if (node.Arguments.Count >= 2)
-                {
-                    Visit(node.Arguments[0]);
-                    var lambda = GetLambda(node.Arguments[1]);
-                    if (lambda != null)
-                    {
-                        var columns = ExtractColumns(lambda.Body);
-                        _builder.AddGroupBy(columns);
-                    }
-                }
-                return node;
+                return VisitSourceAndProcessLambda(
+                    node,
+                    body => _builder.AddGroupBy(ExtractColumns(body))
+                );
 
             default:
                 return base.VisitMethodCall(node);
@@ -123,6 +60,64 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
             LambdaExpression lambda => lambda,
             _ => null,
         };
+
+    private MethodCallExpression VisitSourceAndProcessLambda(
+        MethodCallExpression node,
+        Action<Expression> processBody
+    )
+    {
+        if (node.Arguments.Count >= 2)
+        {
+            Visit(node.Arguments[0]);
+            var lambda = GetLambda(node.Arguments[1]);
+            if (lambda != null)
+            {
+                processBody(lambda.Body);
+            }
+        }
+        return node;
+    }
+
+    private MethodCallExpression AddOrderByFromLambda(MethodCallExpression node, string direction)
+    {
+        if (node.Arguments.Count >= 2)
+        {
+            Visit(node.Arguments[0]);
+            var lambda = GetLambda(node.Arguments[1]);
+            if (lambda != null && lambda.Body is MemberExpression member)
+            {
+                _builder.AddOrderBy(member.Member.Name, direction);
+            }
+        }
+        return node;
+    }
+
+    private MethodCallExpression ApplyRowCountConstraint(
+        MethodCallExpression node,
+        Action<string> apply
+    )
+    {
+        if (node.Arguments.Count >= 2)
+        {
+            Visit(node.Arguments[0]);
+            if (node.Arguments[1] is ConstantExpression constant)
+            {
+                apply(constant.Value?.ToString() ?? "0");
+            }
+        }
+        return node;
+    }
+
+    private static string? TryFoldBooleanConstants(
+        BinaryExpression binary,
+        Func<bool, bool, bool> combine
+    ) =>
+        binary.Left is ConstantExpression { Value: bool left } leftConst
+        && leftConst.Type == typeof(bool)
+        && binary.Right is ConstantExpression { Value: bool right } rightConst
+        && rightConst.Type == typeof(bool)
+            ? BooleanSql(combine(left, right))
+            : null;
 
     private void ProcessSelectExpression(Expression expression)
     {
@@ -150,9 +145,9 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
     private static string? TryConvertToSingleSqlExpression(Expression expression) =>
         expression switch
         {
-            ConstantExpression constant when constant.Type == typeof(bool) => (bool)constant.Value!
-                ? "1 = 1"
-                : "1 = 0",
+            ConstantExpression constant
+                when constant.Type == typeof(bool) && constant.Value is bool boolValue =>
+                BooleanSql(boolValue),
 
             UnaryExpression { NodeType: ExpressionType.Not } unary => ConvertExpressionToSql(unary),
 
@@ -165,31 +160,19 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
     private static bool IsComplexPredicateBuilderExpression(BinaryExpression binary) =>
         // Detect if this is a complex PredicateBuilder expression
         // PredicateBuilder expressions typically have constant boolean values at the leaf nodes
-        (binary.NodeType is ExpressionType.AndAlso or ExpressionType.OrElse)
-        && (HasDirectConstantBooleanNodes(binary) || IsPredicateBuilderPattern(binary));
+        binary.NodeType
+            is ExpressionType.AndAlso
+                or ExpressionType.OrElse
+        && (
+            HasDirectConstantBooleanNodes(binary)
+            || IsConstantBooleanOrPredicateBuilder(binary.Left)
+            || IsConstantBooleanOrPredicateBuilder(binary.Right)
+        );
 
     private static bool HasDirectConstantBooleanNodes(BinaryExpression binary) =>
         // Check for direct constant boolean nodes (immediate children)
         (binary.Left is ConstantExpression leftConst && leftConst.Type == typeof(bool))
         || (binary.Right is ConstantExpression rightConst && rightConst.Type == typeof(bool));
-
-    private static bool IsPredicateBuilderPattern(BinaryExpression binary) =>
-        // More sophisticated detection for PredicateBuilder patterns
-        // Look for patterns like: (constant || expression) or (expression && constant)
-        (
-            binary.NodeType is ExpressionType.OrElse
-            && (
-                IsConstantBooleanOrPredicateBuilder(binary.Left)
-                || IsConstantBooleanOrPredicateBuilder(binary.Right)
-            )
-        )
-        || (
-            binary.NodeType is ExpressionType.AndAlso
-            && (
-                IsConstantBooleanOrPredicateBuilder(binary.Left)
-                || IsConstantBooleanOrPredicateBuilder(binary.Right)
-            )
-        );
 
     private static bool IsConstantBooleanOrPredicateBuilder(Expression expression) =>
         expression switch
@@ -199,22 +182,12 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
             _ => false,
         };
 
-    private static bool HasConstantBooleanNodes(Expression expression) =>
-        expression switch
-        {
-            ConstantExpression constant => constant.Type == typeof(bool),
-            BinaryExpression binary => HasConstantBooleanNodes(binary.Left)
-                || HasConstantBooleanNodes(binary.Right),
-            UnaryExpression unary => HasConstantBooleanNodes(unary.Operand),
-            _ => false,
-        };
-
     private static string ConvertExpressionToSql(Expression expression) =>
         expression switch
         {
-            ConstantExpression constant when constant.Type == typeof(bool) => (bool)constant.Value!
-                ? "1 = 1"
-                : "1 = 0",
+            ConstantExpression constant
+                when constant.Type == typeof(bool) && constant.Value is bool boolValue =>
+                BooleanSql(boolValue),
 
             UnaryExpression { NodeType: ExpressionType.Not } unary =>
                 $"NOT ({ConvertExpressionToSql(unary.Operand)})",
@@ -234,32 +207,17 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
 
     private static string ConvertComparisonToSql(BinaryExpression binary)
     {
-        var columnName = ExtractColumnName(binary.Left) ?? ExtractColumnName(binary.Right);
-        var value = ExtractValue(binary.Right) ?? ExtractValue(binary.Left);
+        var (columnName, value) = ExtractComparisonOperands(binary);
 
         // Handle NULL comparisons specially
         if (value == null)
         {
-            return binary.NodeType switch
-            {
-                ExpressionType.Equal => $"{columnName} IS NULL",
-                ExpressionType.NotEqual => $"{columnName} IS NOT NULL",
-                _ => $"{columnName} IS NULL",
-            };
+            return NullComparisonSql(columnName, binary.NodeType);
         }
 
-        var op = binary.NodeType switch
-        {
-            ExpressionType.Equal => "=",
-            ExpressionType.NotEqual => "!=",
-            ExpressionType.LessThan => "<",
-            ExpressionType.LessThanOrEqual => "<=",
-            ExpressionType.GreaterThan => ">",
-            ExpressionType.GreaterThanOrEqual => ">=",
-            _ => "=",
-        };
+        var op = ComparisonOperatorFor(binary.NodeType).ToSql();
 
-        return $"{columnName} {op} {FormatValue(value)}";
+        return $"{columnName} {op} {FormatValue(value, CultureInfo.InvariantCulture)}";
     }
 
     private void ProcessWhereExpressionRecursive(Expression expression)
@@ -291,12 +249,10 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
                 );
                 break;
 
-            case ConstantExpression constant when constant.Type == typeof(bool):
+            case ConstantExpression { Value: bool value } constant
+                when constant.Type == typeof(bool):
                 // Handle PredicateBuilder.True() and PredicateBuilder.False() constant expressions
-                var value = (bool)constant.Value!;
-                _builder.AddWhereCondition(
-                    WhereCondition.FromExpression(value ? "1 = 1" : "1 = 0")
-                );
+                _builder.AddWhereCondition(WhereCondition.FromExpression(BooleanSql(value)));
                 break;
         }
     }
@@ -307,20 +263,10 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
         {
             case ExpressionType.AndAlso:
                 // Special handling for constant boolean expressions
-                if (
-                    binary.Left is ConstantExpression leftConst
-                    && leftConst.Type == typeof(bool)
-                    && binary.Right is ConstantExpression rightConst
-                    && rightConst.Type == typeof(bool)
-                )
+                var andFolded = TryFoldBooleanConstants(binary, static (l, r) => l && r);
+                if (andFolded != null)
                 {
-                    // Optimize boolean constants: true AND true = true, false AND anything = false, etc.
-                    var leftValue = (bool)leftConst.Value!;
-                    var rightValue = (bool)rightConst.Value!;
-                    var result = leftValue && rightValue;
-                    _builder.AddWhereCondition(
-                        WhereCondition.FromExpression(result ? "1 = 1" : "1 = 0")
-                    );
+                    _builder.AddWhereCondition(WhereCondition.FromExpression(andFolded));
                 }
                 else
                 {
@@ -332,20 +278,10 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
 
             case ExpressionType.OrElse:
                 // Special handling for constant boolean expressions to avoid unnecessary parentheses
-                if (
-                    binary.Left is ConstantExpression orLeftConst
-                    && orLeftConst.Type == typeof(bool)
-                    && binary.Right is ConstantExpression orRightConst
-                    && orRightConst.Type == typeof(bool)
-                )
+                var orFolded = TryFoldBooleanConstants(binary, static (l, r) => l || r);
+                if (orFolded != null)
                 {
-                    // Optimize boolean constants: false OR false = false, true OR anything = true, etc.
-                    var leftValue = (bool)orLeftConst.Value!;
-                    var rightValue = (bool)orRightConst.Value!;
-                    var result = leftValue || rightValue;
-                    _builder.AddWhereCondition(
-                        WhereCondition.FromExpression(result ? "1 = 1" : "1 = 0")
-                    );
+                    _builder.AddWhereCondition(WhereCondition.FromExpression(orFolded));
                 }
                 else
                 {
@@ -372,8 +308,7 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
 
     private void AddComparisonCondition(BinaryExpression binary)
     {
-        var columnName = ExtractColumnName(binary.Left) ?? ExtractColumnName(binary.Right);
-        var value = ExtractValue(binary.Right) ?? ExtractValue(binary.Left);
+        var (columnName, value) = ExtractComparisonOperands(binary);
 
         if (columnName == null)
             return;
@@ -381,29 +316,18 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
         // Handle NULL comparisons specially
         if (value == null)
         {
-            var nullCondition = binary.NodeType switch
-            {
-                ExpressionType.Equal => $"{columnName} IS NULL",
-                ExpressionType.NotEqual => $"{columnName} IS NOT NULL",
-                _ => $"{columnName} IS NULL",
-            };
-            _builder.AddWhereCondition(WhereCondition.FromExpression(nullCondition));
+            _builder.AddWhereCondition(
+                WhereCondition.FromExpression(NullComparisonSql(columnName, binary.NodeType))
+            );
             return;
         }
 
-        var op = binary.NodeType switch
-        {
-            ExpressionType.Equal => ComparisonOperator.Eq,
-            ExpressionType.NotEqual => ComparisonOperator.NotEq,
-            ExpressionType.LessThan => ComparisonOperator.LessThan,
-            ExpressionType.LessThanOrEqual => ComparisonOperator.LessOrEq,
-            ExpressionType.GreaterThan => ComparisonOperator.GreaterThan,
-            ExpressionType.GreaterThanOrEqual => ComparisonOperator.GreaterOrEq,
-            _ => ComparisonOperator.Eq,
-        };
-
         _builder.AddWhereCondition(
-            WhereCondition.Comparison(ColumnInfo.Named(columnName), op, FormatValue(value))
+            WhereCondition.Comparison(
+                ColumnInfo.Named(columnName),
+                ComparisonOperatorFor(binary.NodeType),
+                FormatValue(value, CultureInfo.InvariantCulture)
+            )
         );
     }
 
@@ -412,34 +336,28 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
         switch (method.Method.Name)
         {
             case "Contains" when method.Object != null:
-                var columnName = ExtractColumnName(method.Object);
                 var value = ExtractValue(method.Arguments[0]);
-                if (columnName != null && value != null)
-                {
-                    _builder.AddWhereCondition(
-                        WhereCondition.Comparison(
-                            ColumnInfo.Named(columnName),
-                            ComparisonOperator.Like,
-                            $"%{value}%"
-                        )
-                    );
-                }
+                AddLikeCondition(ExtractColumnName(method.Object), value, $"%{value}%");
                 break;
 
             case "StartsWith" when method.Object != null:
-                columnName = ExtractColumnName(method.Object);
                 value = ExtractValue(method.Arguments[0]);
-                if (columnName != null && value != null)
-                {
-                    _builder.AddWhereCondition(
-                        WhereCondition.Comparison(
-                            ColumnInfo.Named(columnName),
-                            ComparisonOperator.Like,
-                            $"{value}%"
-                        )
-                    );
-                }
+                AddLikeCondition(ExtractColumnName(method.Object), value, $"{value}%");
                 break;
+        }
+    }
+
+    private void AddLikeCondition(string? columnName, object? value, string pattern)
+    {
+        if (columnName != null && value != null)
+        {
+            _builder.AddWhereCondition(
+                WhereCondition.Comparison(
+                    ColumnInfo.Named(columnName),
+                    ComparisonOperator.Like,
+                    pattern
+                )
+            );
         }
     }
 
@@ -452,7 +370,7 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
             _ => [],
         };
 
-    private static string? ExtractColumnName(Expression expression) =>
+    internal static string? ExtractColumnName(Expression expression) =>
         expression switch
         {
             MemberExpression member => member.Member.Name,
@@ -462,21 +380,50 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
 
     // Implements [MIG-AOT-DYNCODE]: walk the subtree to a constant instead of
     // Expression.Compile().DynamicInvoke() (IL3050, breaks Native AOT).
-    private static object? ExtractValue(Expression expression) =>
+    internal static object? ExtractValue(Expression expression) =>
         ConstantExpressionEvaluator.TryEvaluate(expression);
 
-    private static string FormatValue(object? value) =>
+    internal static ComparisonOperator ComparisonOperatorFor(ExpressionType nodeType) =>
+        nodeType switch
+        {
+            ExpressionType.NotEqual => ComparisonOperator.NotEq,
+            ExpressionType.LessThan => ComparisonOperator.LessThan,
+            ExpressionType.LessThanOrEqual => ComparisonOperator.LessOrEq,
+            ExpressionType.GreaterThan => ComparisonOperator.GreaterThan,
+            ExpressionType.GreaterThanOrEqual => ComparisonOperator.GreaterOrEq,
+            _ => ComparisonOperator.Eq,
+        };
+
+    private static string NullComparisonSql(string? columnName, ExpressionType nodeType) =>
+        nodeType switch
+        {
+            ExpressionType.NotEqual => $"{columnName} IS NOT NULL",
+            _ => $"{columnName} IS NULL",
+        };
+
+    private static (string? ColumnName, object? Value) ExtractComparisonOperands(
+        BinaryExpression binary
+    ) =>
+        (
+            ExtractColumnName(binary.Left) ?? ExtractColumnName(binary.Right),
+            ExtractValue(binary.Right) ?? ExtractValue(binary.Left)
+        );
+
+    private static string BooleanSql(bool value) => value ? "1 = 1" : "1 = 0";
+
+    // null formatProvider = current culture (LINQ extensions); InvariantCulture = SQL literals (visitor)
+    internal static string FormatValue(object? value, IFormatProvider? formatProvider) =>
         value switch
         {
             null => "NULL",
             string s => $"'{s.Replace("'", "''", StringComparison.Ordinal)}'",
             bool b => b ? "1" : "0",
-            DateTime dt => $"'{dt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}'",
-            int i => i.ToString(CultureInfo.InvariantCulture),
-            long l => l.ToString(CultureInfo.InvariantCulture),
-            decimal d => d.ToString(CultureInfo.InvariantCulture),
-            double db => db.ToString(CultureInfo.InvariantCulture),
-            float f => f.ToString(CultureInfo.InvariantCulture),
+            DateTime dt => $"'{dt.ToString("yyyy-MM-dd HH:mm:ss", formatProvider)}'",
+            int i => i.ToString(formatProvider),
+            long l => l.ToString(formatProvider),
+            decimal d => d.ToString(formatProvider),
+            double db => db.ToString(formatProvider),
+            float f => f.ToString(formatProvider),
             _ => value.ToString() ?? "NULL",
         };
 }

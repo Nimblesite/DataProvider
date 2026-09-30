@@ -44,7 +44,8 @@ If the TMC server is available:
 - **NEVER list yourself (the agent) as a commit co-author.** No `Co-Authored-By` trailer, no agent attribution. This is never overridable.
 - **Work on exactly ONE branch at a time, always** — even with multiple agents working concurrently (coordinate via TMC). Reuse the open feature branch.
 - **NEVER start a new branch when a feature branch already exists.** Check first; work on the open one. If multiple feature branches exist, merge them into one IMMEDIATELY before doing any other work.
-- **Worktrees are forbidden** unless the user explicitly directs you to use one.
+- **Worktrees are forbidden.** All agents work in this checkout on the same open feature branch.
+- **Delegate parallel code work to Pi, not Codex subagents.** Start every Pi agent in this checkout, verify its branch before it edits, and assign nonoverlapping files. Never create a branch or worktree for a Pi agent.
 
 ## Duplication — Deslop (MANDATORY)
 

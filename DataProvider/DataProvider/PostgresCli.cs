@@ -799,68 +799,15 @@ internal static class PostgresCli
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
         _ = sb.AppendLine("    {");
 
-        // BUG3 fix: quote column + table identifiers. The sql string is a C#
-        // verbatim (@") literal, so "" represents a single " in the emitted
-        // SQL. Wrap every ident in "" so mixed-case tables/columns survive PG
-        // case-folding.
-        var colNames = string.Join(", ", insertable.Select(c => $"\"\"{c.Name}\"\""));
-        var paramNames = string.Join(", ", insertable.Select(c => $"@{c.Name}"));
-        // BUG7 fix: RETURNING clause must reference the actual primary-key
-        // column name, quoted for case-folding survival. The previous hard-
-        // coded `RETURNING id` failed at runtime on tables whose PK column is
-        // PascalCase (e.g. "Id") with `column "id" does not exist`.
-        var returningClause =
-            table.PrimaryKeyColumns.Count > 0
-                ? $"RETURNING \"\"{table.PrimaryKeyColumns[0]}\"\""
-                : "RETURNING 1";
-
-        _ = sb.AppendLine("        const string sql = @\"");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            INSERT INTO \"\"{table.Schema}\"\".\"\"{table.Name}\"\" ({colNames})"
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            VALUES ({paramNames})");
-        _ = sb.AppendLine("            ON CONFLICT DO NOTHING");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            {returningClause}\";");
+        EmitInsertSql(sb, table, insertable);
         _ = sb.AppendLine();
         _ = sb.AppendLine("        try");
         _ = sb.AppendLine("        {");
         _ = sb.AppendLine("            await using var cmd = new NpgsqlCommand(sql, conn);");
 
-        foreach (var col in insertable)
-        {
-            var paramName = col.Name;
-            if (col.IsNullable)
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", (object?){paramName} ?? DBNull.Value);"
-                );
-            }
-            else
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", {paramName});"
-                );
-            }
-        }
+        EmitParameterBindings(sb, insertable);
 
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(
-            "            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);"
-        );
-        _ = sb.AppendLine(
-            "            return new Result<Guid?, SqlError>.Ok<Guid?, SqlError>(result is Guid g ? g : null);"
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("        catch (Exception ex)");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine(
-            "            return new Result<Guid?, SqlError>.Error<Guid?, SqlError>(SqlError.FromException(ex));"
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
+        EmitInsertResult(sb);
 
         // Bug #16: also emit an IDbTransaction overload that delegates to
         // the same SQL via a NpgsqlCommand bound to the transaction's
@@ -881,16 +828,6 @@ internal static class PostgresCli
     )
     {
         var parameters = string.Join(", ", insertable.Select(c => $"{c.CSharpType} {c.Name}"));
-        // BUG3 fix: quote idents in transaction overload INSERT, same reason
-        // as primary Insert method above.
-        var colNames = string.Join(", ", insertable.Select(c => $"\"\"{c.Name}\"\""));
-        var paramNames = string.Join(", ", insertable.Select(c => $"@{c.Name}"));
-        // BUG7 fix: same RETURNING fix as the NpgsqlConnection overload.
-        var returningClause =
-            table.PrimaryKeyColumns.Count > 0
-                ? $"RETURNING \"\"{table.PrimaryKeyColumns[0]}\"\""
-                : "RETURNING 1";
-
         _ = sb.AppendLine();
         _ = sb.AppendLine("    /// <summary>");
         _ = sb.AppendLine(
@@ -905,14 +842,7 @@ internal static class PostgresCli
         _ = sb.AppendLine("        this System.Data.IDbTransaction transaction,");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
         _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        const string sql = @\"");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            INSERT INTO \"\"{table.Schema}\"\".\"\"{table.Name}\"\" ({colNames})"
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            VALUES ({paramNames})");
-        _ = sb.AppendLine("            ON CONFLICT DO NOTHING");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            {returningClause}\";");
+        EmitInsertSql(sb, table, insertable);
         _ = sb.AppendLine();
         _ = sb.AppendLine("        if (transaction.Connection is not NpgsqlConnection conn)");
         _ = sb.AppendLine("        {");
@@ -926,24 +856,37 @@ internal static class PostgresCli
         _ = sb.AppendLine(
             "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);"
         );
-        foreach (var col in insertable)
-        {
-            var paramName = col.Name;
-            if (col.IsNullable)
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", (object?){paramName} ?? DBNull.Value);"
-                );
-            }
-            else
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", {paramName});"
-                );
-            }
-        }
+        EmitParameterBindings(sb, insertable);
+        EmitInsertResult(sb);
+    }
+
+    private static void EmitInsertSql(
+        StringBuilder sb,
+        TableConfigItem table,
+        List<DatabaseColumn> insertable
+    )
+    {
+        // The generated SQL is a C# verbatim string; doubled quotes preserve
+        // mixed-case identifiers. RETURNING must use the actual primary key.
+        var colNames = string.Join(", ", insertable.Select(c => $"\"\"{c.Name}\"\""));
+        var paramNames = string.Join(", ", insertable.Select(c => $"@{c.Name}"));
+        var returningClause =
+            table.PrimaryKeyColumns.Count > 0
+                ? $"RETURNING \"\"{table.PrimaryKeyColumns[0]}\"\""
+                : "RETURNING 1";
+
+        _ = sb.AppendLine("        const string sql = @\"");
+        _ = sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"            INSERT INTO \"\"{table.Schema}\"\".\"\"{table.Name}\"\" ({colNames})"
+        );
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            VALUES ({paramNames})");
+        _ = sb.AppendLine("            ON CONFLICT DO NOTHING");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            {returningClause}\";");
+    }
+
+    private static void EmitInsertResult(StringBuilder sb)
+    {
         _ = sb.AppendLine();
         _ = sb.AppendLine(
             "            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);"
@@ -1350,25 +1293,7 @@ internal static class PostgresCli
         // lowercase by PG and the statement failed with "column ... does not
         // exist". Matches SELECT path which already quotes.
         var colNames = string.Join(", ", insertable.Select(c => $"\\\"{c.Name}\\\""));
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        var sql = new System.Text.StringBuilder(\"INSERT INTO \\\"{table.Schema}\\\".\\\"{table.Name}\\\" ({colNames}) VALUES \");"
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        for (int i = 0; i < batch.Count; i++)");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine("            if (i > 0) sql.Append(\", \");");
-
-        // Build VALUES placeholders
-        var placeholders = string.Join(
-            ", ",
-            insertable.Select((c, idx) => $"@p\" + (i * {insertable.Count} + {idx}) + \"")
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            sql.Append(\"({placeholders})\");"
-        );
-        _ = sb.AppendLine("        }");
+        EmitBulkValuesBuilder(sb, table, insertable, colNames);
         _ = sb.AppendLine("        sql.Append(\" ON CONFLICT DO NOTHING\");");
         _ = sb.AppendLine();
         _ = sb.AppendLine("        await using var cmd = new NpgsqlCommand(sql.ToString(), conn);");
@@ -1377,6 +1302,19 @@ internal static class PostgresCli
         _ = sb.AppendLine("        {");
         _ = sb.AppendLine("            var rec = batch[i];");
 
+        EmitBulkParameterBindings(sb, insertable);
+
+        _ = sb.AppendLine("        }");
+        _ = sb.AppendLine();
+        _ = sb.AppendLine(
+            "        var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);"
+        );
+        _ = sb.AppendLine("        return new Result<int, SqlError>.Ok<int, SqlError>(rows);");
+        _ = sb.AppendLine("    }");
+    }
+
+    private static void EmitBulkParameterBindings(StringBuilder sb, List<DatabaseColumn> insertable)
+    {
         for (int i = 0; i < insertable.Count; i++)
         {
             var col = insertable[i];
@@ -1399,14 +1337,34 @@ internal static class PostgresCli
                 );
             }
         }
+    }
 
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine();
+    private static void EmitBulkValuesBuilder(
+        StringBuilder sb,
+        TableConfigItem table,
+        List<DatabaseColumn> insertable,
+        string colNames
+    )
+    {
         _ = sb.AppendLine(
-            "        var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);"
+            CultureInfo.InvariantCulture,
+            $"        var sql = new System.Text.StringBuilder(\"INSERT INTO \\\"{table.Schema}\\\".\\\"{table.Name}\\\" ({colNames}) VALUES \");"
         );
-        _ = sb.AppendLine("        return new Result<int, SqlError>.Ok<int, SqlError>(rows);");
-        _ = sb.AppendLine("    }");
+        _ = sb.AppendLine();
+        _ = sb.AppendLine("        for (int i = 0; i < batch.Count; i++)");
+        _ = sb.AppendLine("        {");
+        _ = sb.AppendLine("            if (i > 0) sql.Append(\", \");");
+
+        // Build VALUES placeholders
+        var placeholders = string.Join(
+            ", ",
+            insertable.Select((c, idx) => $"@p\" + (i * {insertable.Count} + {idx}) + \"")
+        );
+        _ = sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"            sql.Append(\"({placeholders})\");"
+        );
+        _ = sb.AppendLine("        }");
     }
 
     private static void GenerateBulkUpsertMethod(
@@ -1546,25 +1504,7 @@ internal static class PostgresCli
             updateCols.Select(c => $"\\\"{c.Name}\\\" = EXCLUDED.\\\"{c.Name}\\\"")
         );
 
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        var sql = new System.Text.StringBuilder(\"INSERT INTO \\\"{table.Schema}\\\".\\\"{table.Name}\\\" ({colNames}) VALUES \");"
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        for (int i = 0; i < batch.Count; i++)");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine("            if (i > 0) sql.Append(\", \");");
-
-        // Build VALUES placeholders
-        var placeholders = string.Join(
-            ", ",
-            insertable.Select((c, idx) => $"@p\" + (i * {insertable.Count} + {idx}) + \"")
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            sql.Append(\"({placeholders})\");"
-        );
-        _ = sb.AppendLine("        }");
+        EmitBulkValuesBuilder(sb, table, insertable, colNames);
 
         // Add ON CONFLICT DO UPDATE clause
         if (updateCols.Count > 0)
@@ -1590,28 +1530,7 @@ internal static class PostgresCli
         _ = sb.AppendLine("        {");
         _ = sb.AppendLine("            var rec = batch[i];");
 
-        for (int i = 0; i < insertable.Count; i++)
-        {
-            var col = insertable[i];
-            // Preserve the column name verbatim so generated record fields
-            // match the SQLite CLI output (which kept snake_case literally),
-            // and so consumers that reference `rec.user_id` etc. keep working.
-            var propName = col.Name;
-            if (col.IsNullable)
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"p\" + (i * {insertable.Count} + {i}), rec.{propName} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"p\" + (i * {insertable.Count} + {i}), rec.{propName});"
-                );
-            }
-        }
+        EmitBulkParameterBindings(sb, insertable);
 
         _ = sb.AppendLine("        }");
         _ = sb.AppendLine();

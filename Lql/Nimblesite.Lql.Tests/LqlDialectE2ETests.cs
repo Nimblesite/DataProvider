@@ -11,8 +11,9 @@ namespace Nimblesite.Lql.Tests;
 /// E2E tests: LQL parse -> convert to all 3 SQL dialects -> verify output.
 /// Targets function mappings, DISTINCT, complex filters, and edge cases.
 /// </summary>
-public sealed class LqlDialectE2ETests
+public sealed partial class LqlDialectE2ETests
 {
+    // Implements [LQL-OUTPUT-DIALECTS].
     private static (string PostgreSql, string SqlServer, string SQLite) ConvertToAllDialects(
         string lqlCode
     )
@@ -112,6 +113,9 @@ public sealed class LqlDialectE2ETests
         {
             Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("COUNT(DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("unique_products", sql, StringComparison.Ordinal);
         }
     }
@@ -163,10 +167,20 @@ public sealed class LqlDialectE2ETests
 
         Assert.Contains("OFFSET", pg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LIMIT", pg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("20", pg, StringComparison.Ordinal);
+        Assert.Contains("10", pg, StringComparison.Ordinal);
         Assert.Contains("OFFSET", sl, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LIMIT", sl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("20", sl, StringComparison.Ordinal);
+        Assert.Contains("10", sl, StringComparison.Ordinal);
         // SQL Server uses OFFSET...FETCH or TOP
         Assert.Contains("OFFSET", ss, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("20", ss, StringComparison.Ordinal);
+        Assert.Contains("10", ss, StringComparison.Ordinal);
+        Assert.True(
+            ss.Contains("FETCH", StringComparison.OrdinalIgnoreCase)
+                || ss.Contains("TOP", StringComparison.OrdinalIgnoreCase)
+        );
     }
 
     [Fact]
@@ -201,6 +215,9 @@ public sealed class LqlDialectE2ETests
         {
             Assert.Contains("LEFT", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("total", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -220,243 +237,10 @@ public sealed class LqlDialectE2ETests
             Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("products", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL()
-    {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.age > 18 and row.users.country = 'US' or row.users.status = 'premium')
-            |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void OrderByDescending_AllDialects_GeneratesDescSQL()
-    {
-        var lql = """
-            users
-            |> order_by(users.age desc, users.name asc)
-            |> select(users.id, users.name, users.age)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("DESC", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ASC", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void FilterWithStringLiteral_AllDialects_PreservesQuotes()
-    {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.status = 'active')
-            |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("'active'", sql, StringComparison.Ordinal);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL()
-    {
-        var lql = """
-            products
-            |> filter(fn(row) => row.products.price >= 100 and row.products.price <= 500)
-            |> select(products.id, products.name, products.price)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains(">=", sql, StringComparison.Ordinal);
-            Assert.Contains("<=", sql, StringComparison.Ordinal);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks()
-    {
-        var lql = """
-            users
-            |> join(orders, on = users.id = orders.user_id)
-            |> filter(fn(row) => row.orders.total > 100)
-            |> order_by(orders.total desc)
-            |> limit(50)
-            |> select(users.name, orders.total, orders.status)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
+            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("DESC", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(2, sql.Split("JOIN", StringSplitOptions.None).Length - 1);
         }
-    }
-
-    [Fact]
-    public void GroupByWithMultipleAggregates_AllDialects_GeneratesCorrectSQL()
-    {
-        var lql = """
-            orders
-            |> group_by(orders.status)
-            |> select(
-                orders.status,
-                count(*) as cnt,
-                sum(orders.total) as total,
-                avg(orders.total) as avg_val,
-                count(distinct orders.user_id) as unique_users
-            )
-            |> order_by(total desc)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("SUM", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("AVG", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void SimpleTableReference_AllDialects_GeneratesSelectStar()
-    {
-        var lql = "users |> select(users.id, users.name)";
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("FROM", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void ArithmeticExpressions_AllDialects_GeneratesCorrectSQL()
-    {
-        var lql = """
-            products
-            |> select(
-                products.id,
-                products.price * products.quantity as total_value,
-                products.price + 10 as price_plus_ten
-            )
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("*", sql, StringComparison.Ordinal);
-            Assert.Contains("+", sql, StringComparison.Ordinal);
-            Assert.Contains("total_value", sql, StringComparison.Ordinal);
-            Assert.Contains("price_plus_ten", sql, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void CaseExpression_AllDialects_GeneratesCaseWhenSQL()
-    {
-        var lql = """
-            orders
-            |> select(
-                orders.id,
-                case
-                    when orders.total > 1000 then orders.total * 0.95
-                    when orders.total > 500 then orders.total * 0.97
-                    else orders.total
-                end as discounted
-            )
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("CASE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("WHEN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("THEN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ELSE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("END", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void FilterWithNotEquals_AllDialects_GeneratesCorrectOperator()
-    {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.status != 'deleted')
-            |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.True(
-                sql.Contains("!=", StringComparison.Ordinal)
-                    || sql.Contains("<>", StringComparison.Ordinal),
-                "Should contain != or <> operator"
-            );
-        }
-    }
-
-    [Fact]
-    public void SelectWithColumnAlias_AllDialects_GeneratesAliasedColumns()
-    {
-        var lql = """
-            users
-            |> select(users.id, users.name as full_name, users.email as contact_email)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("full_name", sql, StringComparison.Ordinal);
-            Assert.Contains("contact_email", sql, StringComparison.Ordinal);
-            Assert.Contains("AS", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void LimitOnly_AllDialects_GeneratesLimitSQL()
-    {
-        var lql = """
-            users |> limit(25) |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        Assert.Contains("LIMIT", pg, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sl, StringComparison.OrdinalIgnoreCase);
-        // SQL Server uses TOP
-        Assert.True(
-            ss.Contains("TOP", StringComparison.OrdinalIgnoreCase)
-                || ss.Contains("FETCH", StringComparison.OrdinalIgnoreCase),
-            "SQL Server should use TOP or FETCH for limit"
-        );
     }
 }

@@ -387,6 +387,7 @@ reapplying a converged policy produces no operation.
 
 - Table exists in desired with RLS enabled but not in current -> emit `EnableRlsOperation` then `CreateRlsPolicyOperation` for each policy
 - Policy in desired not in current -> emit `CreateRlsPolicyOperation`
+- Policy name exists in both but its `USING` or `WITH CHECK` predicate differs -> replace or alter that policy so both predicates match the desired definition. Compare each clause independently; an unchanged clause must retain its meaning.
 - Policy in current but not in desired (with `allowDestructive: true`) -> emit `DropRlsPolicyOperation`
 - RLS disabled in desired but enabled in current (with `allowDestructive: true`) -> emit `DisableRlsOperation`
 

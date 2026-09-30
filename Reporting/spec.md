@@ -269,13 +269,16 @@ dotnet run --project Migration/DataProviderMigrate/DataProviderMigrate.csproj --
 
 For the MVP, report definitions are loaded from JSON files on disk (no database persistence needed). Future phases will add YAML-migrated schema for saved reports.
 
-## Security
+## Security [REPORT-SECURITY]
 
 - Connection strings / secrets are NEVER exposed to the client
 - Report definitions sent to client contain layout + parameter metadata only
-- API endpoints require authentication (Bearer token via Gatekeeper)
 - SQL parameters are always parameterized (no string concatenation)
 - LQL is transpiled server-side, client never sees raw SQL
+
+### Bearer Authentication [REPORT-AUTH-BEARER]
+
+All API endpoints require authentication with a Gatekeeper Bearer token.
 
 ## MVP Scope
 

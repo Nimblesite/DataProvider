@@ -84,11 +84,14 @@ public static partial class Program
 
     private static int ExecuteMigration(MigrateParseResult.Success args)
     {
+        var outputDescription = args.Provider.Equals("postgres", StringComparison.OrdinalIgnoreCase)
+            ? "<PostgreSQL connection>"
+            : args.OutputPath;
         Console.WriteLine(
             $"""
             DataProviderMigrate - Database Schema Tool
               Schema:   {args.SchemaPath}
-              Output:   {args.OutputPath}
+              Output:   {outputDescription}
               Provider: {args.Provider}
             """
         );

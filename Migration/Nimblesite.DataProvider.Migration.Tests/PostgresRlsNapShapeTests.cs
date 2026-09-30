@@ -132,22 +132,10 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
 
     private void ApplyAndGrant(SchemaDefinition desired)
     {
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)
-        ).Value;
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
+        PostgresLqlOnlyE2ETests.ApplySchema(
+            connection: _connection,
+            desired: desired,
+            logger: _logger
         );
 
         // Grant CRUD on each table to the app roles (NAP would do this in its

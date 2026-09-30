@@ -67,9 +67,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .Where<TestProduct>(p => p.Category == "Tools")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Category", sql);
 
@@ -115,9 +113,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains(">", sql);
 
         var queryResult = _connection.Query<(string Name, double Price)>(
@@ -155,9 +151,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
 
         var queryResult = _connection.Query<(string Name, double Price)>(
@@ -195,9 +189,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
 
         var queryResult = _connection.Query<(string Name, double Price)>(
@@ -239,9 +231,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy(columnName: "Name")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Widget", sql);
         Assert.Contains("Name", sql);
@@ -257,9 +247,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy(columnName: "Name")
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Tool", sql);
         Assert.Contains("Name", sql);
@@ -270,9 +258,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
     {
         var statement = "Products".From().Select<TestProduct>(p => p.Name).ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("Name", sql);
         Assert.DoesNotContain("*", sql);
         Assert.Contains("FROM Products", sql);
@@ -302,9 +288,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .OrderBy<TestProduct>(p => p.Price)
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Price", sql);
 
@@ -350,9 +334,7 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
             .Take(count: 3)
             .ToSqlStatement();
 
-        var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
-        var sql = sqlOk.Value;
+        var sql = ToSqliteSql(statement);
         Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
@@ -388,5 +370,15 @@ public sealed class SelectStatementLinqE2ETests : IDisposable
         Assert.Equal(35.00, rows[1].Price);
         Assert.Equal("Tool Beta", rows[2].Name);
         Assert.Equal(45.00, rows[2].Price);
+    }
+
+    /// <summary>
+    /// Convert a statement to SQLite SQL, asserting the result is Ok, and return the SQL text.
+    /// </summary>
+    private static string ToSqliteSql(SelectStatement statement)
+    {
+        var sqlResult = statement.ToSQLite();
+        var sqlOk = Assert.IsType<StringOk>(sqlResult);
+        return sqlOk.Value;
     }
 }

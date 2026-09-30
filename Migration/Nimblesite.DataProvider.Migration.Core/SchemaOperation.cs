@@ -116,6 +116,16 @@ public sealed record AlterRlsPolicyOperation(
 ) : SchemaOperation;
 
 /// <summary>
+/// Atomically replace a policy when a predicate is removed or its scope changes.
+/// Implements [RLS-DIFF].
+/// </summary>
+public sealed record ReplaceRlsPolicyOperation(
+    string Schema,
+    string TableName,
+    RlsPolicyDefinition Policy
+) : SchemaOperation;
+
+/// <summary>
 /// Create a declarative trigger guard. Additive. Implements
 /// [MIG-TRIGGER-DIFF] (GitHub issue 82).
 /// </summary>

@@ -1,0 +1,36 @@
+{
+  "id": "platform-contract",
+  "title": "Platform Contract Report",
+  "parameters": [],
+  "dataSources": [
+    {
+      "id": "platformProbe",
+      "type": "Sql",
+      "connectionRef": "reporting-db",
+      "query": "SELECT 7 AS metric_value, 'ready' AS state",
+      "parameters": []
+    }
+  ],
+  "layout": {
+    "columns": 12,
+    "rows": [
+      {
+        "cells": [
+          {
+            "colSpan": 12,
+            "component": {
+              "type": "Table",
+              "dataSource": "platformProbe",
+              "title": "Platform Probe",
+              "columns": [
+                { "field": "metric_value", "header": "Metric" },
+                { "field": "state", "header": "State" }
+              ],
+              "pageSize": 10
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

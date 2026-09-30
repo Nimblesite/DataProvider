@@ -42,7 +42,12 @@ public static class DbTransactionExtensions
                     SqlError.Create("Transaction or connection is null")
                 );
 
-            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                transaction: transaction,
+                sql: sql,
+                parameters: parameters
+            );
 
             var results = new List<T>();
             using var reader = command.ExecuteReader();
@@ -97,7 +102,12 @@ public static class DbTransactionExtensions
                     SqlError.Create("Transaction or connection is null")
                 );
 
-            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                transaction: transaction,
+                sql: sql,
+                parameters: parameters
+            );
 
             var rowsAffected = command.ExecuteNonQuery();
             return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);
@@ -139,7 +149,12 @@ public static class DbTransactionExtensions
                     SqlError.Create("Transaction or connection is null")
                 );
 
-            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
+            using var command = CreateCommand(
+                connection: connection,
+                transaction: transaction,
+                sql: sql,
+                parameters: parameters
+            );
 
             var result = command.ExecuteScalar();
             return new Result<T?, SqlError>.Ok<T?, SqlError>(result is T value ? value : default);
@@ -150,7 +165,10 @@ public static class DbTransactionExtensions
         }
     }
 
-    private static IDbCommand CreateConfiguredCommand(
+    /// <summary>
+    /// Create a command bound to the transaction, with SQL text and optional parameters
+    /// </summary>
+    private static IDbCommand CreateCommand(
         IDbConnection connection,
         IDbTransaction transaction,
         string sql,
@@ -160,6 +178,7 @@ public static class DbTransactionExtensions
         var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
+
         if (parameters != null)
         {
             foreach (var parameter in parameters)
@@ -167,6 +186,7 @@ public static class DbTransactionExtensions
                 command.Parameters.Add(parameter);
             }
         }
+
         return command;
     }
 }

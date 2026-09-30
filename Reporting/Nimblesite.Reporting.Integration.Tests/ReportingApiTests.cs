@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Xunit;
 
 namespace Nimblesite.Reporting.Integration.Tests;
 

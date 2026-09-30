@@ -381,26 +381,8 @@ public static partial class DataAccessGenerator
             CultureInfo.InvariantCulture,
             $"        const string sql = \"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\";"
         );
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            using (var command = new {commandType}(sql, ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("            {");
+        AppendTransactionConnectionGuard(sb);
+        AppendTransactionCommandOpen(sb, connectionType: connectionType);
 
         // Add parameters
         AppendParameterBindings(sb, insertableColumns);
@@ -601,26 +583,8 @@ public static partial class DataAccessGenerator
             CultureInfo.InvariantCulture,
             $"        const string sql = \"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\";"
         );
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            using (var command = new {commandType}(sql, ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("            {");
+        AppendTransactionConnectionGuard(sb);
+        AppendTransactionCommandOpen(sb, connectionType: connectionType);
 
         // Add parameters (nullable types use null-coalescing to DBNull.Value)
         AppendParameterBindings(sb, allColumns);
@@ -759,12 +723,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        if (batch.Count == 0)");
         sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
+        AppendTransactionConnectionGuard(sb);
 
         // Build the SQL with placeholders - all identifiers lowercase, no quoting
         var columnNames = string.Join(", ", insertableColumns.Select(c => c.Name));
@@ -801,33 +760,7 @@ public static partial class DataAccessGenerator
             );
         }
         sb.AppendLine("        }");
-        sb.AppendLine();
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        using (var command = new {commandType}(sql.ToString(), ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("        {");
-        sb.AppendLine("            for (int i = 0; i < parameters.Count; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine(
-            "                command.Parameters.AddWithValue(\"@p\" + i, parameters[i] ?? (object)DBNull.Value);"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine(
-            "            var rowsAffected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
-        );
-        sb.AppendLine("        }");
+        AppendBatchCommandExecute(sb, connectionType: connectionType);
         sb.AppendLine("    }");
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
@@ -954,12 +887,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        if (batch.Count == 0)");
         sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
+        AppendTransactionConnectionGuard(sb);
 
         // Build the SQL with placeholders - database-specific upsert syntax
         // All identifiers lowercase, no quoting needed for cross-platform compatibility
@@ -1028,15 +956,67 @@ public static partial class DataAccessGenerator
                 $"        sql.Append(\" ON CONFLICT ({pkColumnNames}) DO UPDATE SET {updateSet}\");"
             );
         }
+        AppendBatchCommandExecute(sb, connectionType: connectionType);
+        sb.AppendLine("    }");
 
+        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
+    }
+
+    /// <summary>
+    /// Emits the generated guard that rejects transactions without a live connection.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    private static void AppendTransactionConnectionGuard(StringBuilder sb)
+    {
         sb.AppendLine();
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
+        sb.AppendLine("        if (transaction.Connection is null)");
+        sb.AppendLine(
+            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
         );
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Derives the platform command and transaction type names from a connection type.
+    /// </summary>
+    /// <param name="connectionType">Database connection type (e.g., SqliteConnection).</param>
+    /// <returns>The matching command and transaction type names.</returns>
+    private static (string CommandType, string TransactionType) DeriveTransactionTypes(
+        string connectionType
+    ) =>
+        (
+            connectionType.Replace("Connection", "Command", StringComparison.Ordinal),
+            connectionType.Replace("Connection", "Transaction", StringComparison.Ordinal)
+        );
+
+    /// <summary>
+    /// Emits the generated try-block opening and transaction-scoped command creation.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    /// <param name="connectionType">Database connection type (e.g., SqliteConnection).</param>
+    private static void AppendTransactionCommandOpen(StringBuilder sb, string connectionType)
+    {
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+
+        var (commandType, transactionType) = DeriveTransactionTypes(connectionType);
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"            using (var command = new {commandType}(sql, ({connectionType})transaction.Connection!, ({transactionType})transaction))"
+        );
+        sb.AppendLine("            {");
+    }
+
+    /// <summary>
+    /// Emits the generated batch execution tail: transaction-scoped command creation,
+    /// positional parameter binding, and non-query execution.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    /// <param name="connectionType">Database connection type (e.g., SqliteConnection).</param>
+    private static void AppendBatchCommandExecute(StringBuilder sb, string connectionType)
+    {
+        sb.AppendLine();
+        var (commandType, transactionType) = DeriveTransactionTypes(connectionType);
         sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"        using (var command = new {commandType}(sql.ToString(), ({connectionType})transaction.Connection!, ({transactionType})transaction))"
@@ -1056,9 +1036,6 @@ public static partial class DataAccessGenerator
             "            return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
         );
         sb.AppendLine("        }");
-        sb.AppendLine("    }");
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
 
     /// <summary>

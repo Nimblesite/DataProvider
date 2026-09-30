@@ -1,3 +1,6 @@
+using Nimblesite.Lql.Postgres;
+using Nimblesite.Lql.SQLite;
+using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
@@ -193,21 +196,37 @@ public class LqlErrorHandlingTests
         Assert.NotNull(failure.Value.Position);
     }
 
-    [Fact]
-    public void UnderscorePipelineBase_ShouldParseAsTableName()
+    // Implements [LQL-IDENTIFIER-VALIDATION].
+    [Theory]
+    [InlineData("tenant_members")]
+    [InlineData("fhir_patient")]
+    public void UnderscorePipelineBase_ShouldParseAsTableName(string tableName)
     {
-        // Arrange
-        const string lqlCode = """
-            tenant_members |> select(id, name)
-            """;
+        var rejected = LqlStatementConverter.ToStatement("123_invalid_table |> select(id)");
+        var error = Assert.IsType<Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>>(
+            rejected
+        );
+        Assert.Contains("identifier", error.Value.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(error.Value.Position);
 
-        // Act
-        var result = LqlStatementConverter.ToStatement(lqlCode);
-
-        // Assert
-        Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(result);
-        var success = (Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)result;
-        Assert.NotNull(success.Value);
+        var accepted = LqlStatementConverter.ToStatement($"{tableName} |> select(id, name)");
+        var statement = Assert
+            .IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(accepted)
+            .Value;
+        foreach (
+            var result in new[]
+            {
+                statement.ToPostgreSql(),
+                statement.ToSqlServer(),
+                statement.ToSQLite(),
+            }
+        )
+        {
+            var sql = Assert.IsType<Result<string, SqlError>.Ok<string, SqlError>>(result).Value;
+            Assert.Contains(tableName, sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("FROM", sql, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]

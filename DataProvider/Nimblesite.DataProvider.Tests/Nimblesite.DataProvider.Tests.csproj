@@ -22,6 +22,10 @@
     <!-- NEVER USE FLUENT ASSERTIONS - REMOVE!! -->
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
@@ -30,6 +34,9 @@
     <ProjectReference Include="../Nimblesite.DataProvider.Parsing.Tests/Nimblesite.DataProvider.Parsing.Tests.csproj" />
     <ProjectReference Include="../../Other/Nimblesite.Sql.Model/Nimblesite.Sql.Model.csproj" />
     <ProjectReference Include="../../Lql/Nimblesite.Lql.SQLite/Nimblesite.Lql.SQLite.csproj" />
+    <ProjectReference Include="../../Lql/Nimblesite.Lql.Postgres/Nimblesite.Lql.Postgres.csproj" />
+    <ProjectReference Include="../../Lql/Nimblesite.Lql.SqlServer/Nimblesite.Lql.SqlServer.csproj" />
+    <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="TestSqlFiles\**\*.sql">

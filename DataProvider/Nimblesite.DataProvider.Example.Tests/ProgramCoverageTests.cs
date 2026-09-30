@@ -604,21 +604,6 @@ public sealed class ProgramCoverageTests : IDisposable
         await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
-    public void Dispose()
-    {
-        _connection?.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-#pragma warning disable CA1031 // Do not catch general exception types - file cleanup is best-effort
-            catch (IOException)
-            {
-                /* File may be locked */
-            }
-#pragma warning restore CA1031
-        }
-    }
+    public void Dispose() =>
+        CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
 }

@@ -222,6 +222,11 @@ public static class SchemaIntegrityVerifier
             mismatches
         );
         AddIf(
+            !SameIdentifier(actual.ReferencedSchema, expected.ReferencedSchema),
+            $"{tablePath}: foreign key {name} referenced schema drifted",
+            mismatches
+        );
+        AddIf(
             !SameIdentifiers(actual.ReferencedColumns, expected.ReferencedColumns),
             $"{tablePath}: foreign key {name} referenced columns drifted",
             mismatches
@@ -417,6 +422,11 @@ public static class SchemaIntegrityVerifier
             AddIf(
                 !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
                 $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
+                mismatches
+            );
+            AddIf(
+                !RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} scope drifted",
                 mismatches
             );
         }
