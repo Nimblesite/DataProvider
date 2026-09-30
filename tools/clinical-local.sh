@@ -44,7 +44,7 @@ printf -- '-p:DataProviderVersion=%s\n-p:RestoreAdditionalProjectSources=%s\n' \
 
 cd "$clinical_dir"
 for tool in dataprovidermigrate dataprovider lql; do
-  dotnet tool update --local "$tool" --version "$version" --add-source "$feed"
+  dotnet tool update --local "$tool" --version "$version" --add-source "$feed" --allow-downgrade
 done
 
 echo "==> Running ClinicalCoding targets against local DataProvider: $targets"
