@@ -240,6 +240,32 @@ type RuntimeComplexPipelineTests() =
         assertContainsCi "AVG" sql
 
 [<Collection("TypeProvider")>]
+type RuntimeDistinctAndPredicateTests() =
+
+    [<Fact>]
+    member _.``Runtime: select_distinct renders SELECT DISTINCT``() =
+        Assert.Equal(
+            "SELECT DISTINCT users.country FROM users",
+            transpile "users |> select_distinct(users.country)"
+        )
+
+    [<Fact>]
+    member _.``Runtime: null check and comparison are joined with AND``() =
+        Assert.Equal(
+            "SELECT users.id FROM users WHERE users.email IS NOT NULL AND users.age >= 18",
+            transpile
+                "users |> filter(fn(row) => row.users.email is not null and row.users.age >= 18) |> select(users.id)"
+        )
+
+    [<Fact>]
+    member _.``Runtime: parenthesized OR keeps its grouping inside AND``() =
+        Assert.Equal(
+            "SELECT users.id FROM users WHERE (users.age < 18 OR users.age > 65) AND users.active = 1",
+            transpile
+                "users |> filter(fn(row) => (row.users.age < 18 or row.users.age > 65) and row.users.active = 1) |> select(users.id)"
+        )
+
+[<Collection("TypeProvider")>]
 type RuntimeParseErrorTests() =
 
     [<Fact>]
