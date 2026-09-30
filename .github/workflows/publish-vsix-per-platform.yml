@@ -1,0 +1,207 @@
+# Adapted from Shipwright templates/gh-actions/publish-vsix-per-platform.yml
+# One VSIX per vsceTarget (never a fat native VSIX): build lql-lsp, stage it under
+# bin/<target>/, package, verify contents, attest provenance, then publish each VSIX
+# to the Marketplace via Entra OIDC (no stored PAT).
+# [SWR-VSIX-PACKAGE] [SWR-VSIX-LAYOUT] [SWR-VSIX-VERIFY] [SWR-VSIX-PUBLISH-OIDC] [SWR-VSIX-PROVENANCE]
+name: publish-vsix-per-platform
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      pre_release:
+        required: false
+        type: boolean
+        default: false
+      marketplace_environment:
+        required: false
+        type: string
+        default: release
+    secrets:
+      azure_client_id:
+        required: false
+      azure_tenant_id:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  EXT_DIR: Lql/LqlExtension
+  RUST_DIR: Lql/lql-lsp-rust
+  BINARY_NAME: lql-lsp
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-15
+            npm_arch: arm64
+          - target: darwin-x64
+            os: macos-13
+            npm_arch: x64
+          - target: linux-x64
+            os: ubuntu-latest
+            npm_arch: x64
+          - target: win32-x64
+            os: windows-latest
+            npm_arch: x64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 22
+      - name: Stamp version from tag
+        shell: bash
+        run: python3 tools/shipwright-version-stamp.py --tag "v${{ inputs.version }}" --root .
+      - name: Build lql-lsp (release, locked)
+        shell: bash
+        working-directory: ${{ env.RUST_DIR }}
+        run: cargo build --release --locked -p lql-lsp
+      - name: Sign + notarize darwin binary (before staging)
+        if: runner.os == 'macOS' && env.APPLE_TEAM_ID != ''
+        shell: bash
+        working-directory: ${{ env.RUST_DIR }}
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          codesign --force --options runtime --timestamp \
+            --sign "Developer ID Application: ${APPLE_TEAM_ID}" \
+            "target/release/${BINARY_NAME}"
+          # [SWR-SIGN-APPLE-INTEGRATION] notarization runs in the release env when
+          # the App Store Connect API-key secrets are configured (manual follow-up).
+      - name: Stage binary under bin/<target>/ and pin .vscodeignore
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          dest="${EXT_DIR}/bin/${{ matrix.target }}"
+          mkdir -p "$dest"
+          cp "${RUST_DIR}/target/release/${BINARY_NAME}${exe}" "${dest}/${BINARY_NAME}${exe}"
+          # Verify the staged binary's version matches the tag before packaging.
+          "${dest}/${BINARY_NAME}${exe}" --version | grep -Fx "${BINARY_NAME} ${{ inputs.version }}"
+          # Pattern B manual .vscodeignore: ship ONLY this target's bin dir, exclude
+          # all other platform dirs and dev artifacts. [SWR-VSIX-LAYOUT]
+          cat > "${EXT_DIR}/.vscodeignore" <<IGNORE
+          .vscode/**
+          .vscode-test/**
+          src/**
+          **/tsconfig.json
+          **/.eslintrc.json
+          **/*.map
+          **/*.ts
+          !out/**/*.js
+          **/.DS_Store
+          **/*.log
+          **/test/**
+          **/*.test.js
+          **/*.github/**
+          *.vsix
+          shipwright.json
+          bin/**
+          !bin/${{ matrix.target }}/**
+          IGNORE
+      - name: Install extension deps (frozen)
+        shell: bash
+        working-directory: ${{ env.EXT_DIR }}
+        run: npm ci
+      - name: Compile + package VSIX for target
+        shell: bash
+        working-directory: ${{ env.EXT_DIR }}
+        env:
+          npm_config_arch: ${{ matrix.npm_arch }}
+        run: |
+          set -euo pipefail
+          npm run compile
+          flag=""
+          if [ "${{ inputs.pre_release }}" = "true" ]; then flag="--pre-release"; fi
+          npx vsce package --target ${{ matrix.target }} $flag \
+            --no-git-tag-version --no-update-package-json \
+            -o "${GITHUB_WORKSPACE}/dist/lql-language-support-${{ matrix.target }}-${{ inputs.version }}.vsix"
+      - name: Verify VSIX contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          vsix="dist/lql-language-support-${{ matrix.target }}-${{ inputs.version }}.vsix"
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          listing="$(unzip -l "$vsix")"
+          echo "$listing"
+          # Required: this target's binary present. [SWR-VSIX-VERIFY]
+          echo "$listing" | grep -F "extension/bin/${{ matrix.target }}/${BINARY_NAME}${exe}"
+          # Forbidden: foreign platform bins, TS source, unstamped placeholder.
+          for other in darwin-arm64 darwin-x64 linux-x64 win32-x64; do
+            if [ "$other" != "${{ matrix.target }}" ]; then
+              if echo "$listing" | grep -qF "extension/bin/${other}/"; then
+                echo "::error::foreign platform binary ${other} present in $vsix"; exit 1
+              fi
+            fi
+          done
+          if echo "$listing" | grep -qE "extension/src/.*\.ts$"; then
+            echo "::error::TypeScript source leaked into $vsix"; exit 1
+          fi
+      - name: Attest VSIX provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc20 # v3.0.0
+        with:
+          subject-path: dist/lql-language-support-${{ matrix.target }}-${{ inputs.version }}.vsix
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: vsix-${{ matrix.target }}
+          path: dist/*.vsix
+          if-no-files-found: error
+
+  publish:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.marketplace_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 22
+      # Entra workload-identity federation — no stored VSCE_PAT. [SWR-VSIX-PUBLISH-OIDC]
+      - name: Azure login (OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.azure_client_id }}
+          tenant-id: ${{ secrets.azure_tenant_id }}
+          allow-no-subscriptions: true
+      - name: Publish each VSIX to the Marketplace
+        shell: bash
+        env:
+          PRE_RELEASE: ${{ inputs.pre_release }}
+        run: |
+          set -euo pipefail
+          VSCE_PAT="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          export VSCE_PAT
+          flag=""
+          if [ "$PRE_RELEASE" = "true" ]; then flag="--pre-release"; fi
+          shopt -s nullglob
+          for vsix in dist/*.vsix; do
+            echo "::group::publish $vsix"
+            npx vsce publish --packagePath "$vsix" $flag
+            echo "::endgroup::"
+          done

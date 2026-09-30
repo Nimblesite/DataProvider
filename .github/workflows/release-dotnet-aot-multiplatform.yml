@@ -1,0 +1,163 @@
+# Sibling of release-binary-multiplatform.yml for the .NET Native AOT migration
+# CLI. Builds the DataProviderMigrate binary per platform with PublishAot, runs a
+# native smoke test, archives with SBOM + provenance, and uploads to the
+# v{version} release alongside the Rust binary. Implements [MIG-AOT-CI].
+# [SWR-REL-GITHUB] [SWR-SEC-CHECKSUM] [SWR-SEC-PROVENANCE] [SWR-SEC-SBOM]
+name: release-dotnet-aot-multiplatform
+
+on:
+  workflow_call:
+    inputs:
+      binary_name:
+        required: false
+        type: string
+        default: DataProviderMigrate
+      project:
+        required: false
+        type: string
+        default: Migration/DataProviderMigrate/DataProviderMigrate.csproj
+      version:
+        required: true
+        type: string
+      upload_release:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-15
+            rid: osx-arm64
+          - platform: darwin-x64
+            os: macos-13
+            rid: osx-x64
+          - platform: linux-x64
+            os: ubuntu-latest
+            rid: linux-x64
+          - platform: win32-x64
+            os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+      # Native AOT needs the platform C toolchain; ubuntu/macos runners ship it,
+      # Windows runners ship MSVC. Linux additionally needs clang + zlib headers.
+      - name: Install Linux AOT toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Publish Native AOT (${{ matrix.rid }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish "${{ inputs.project }}" \
+            -c Release -r "${{ matrix.rid }}" \
+            -p:PublishAot=true -p:InvariantGlobalization=true \
+            --self-contained \
+            -o "${GITHUB_WORKSPACE}/aot-out"
+      - name: Locate binary
+        id: bin
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          path="${GITHUB_WORKSPACE}/aot-out/${{ inputs.binary_name }}${exe}"
+          test -f "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "exe=$exe" >> "$GITHUB_OUTPUT"
+      - name: Native smoke test (migrate example schema → SQLite)
+        shell: bash
+        env:
+          DATAPROVIDERMIGRATE_AOT_BIN: ${{ steps.bin.outputs.path }}
+        run: |
+          set -euo pipefail
+          db="${RUNNER_TEMP}/aot_smoke.db"
+          "${DATAPROVIDERMIGRATE_AOT_BIN}" migrate \
+            --schema Migration/DataProviderMigrate/example-schema.yaml \
+            --output "$db" --provider sqlite
+          test -f "$db"
+      - name: Package archive
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="${{ inputs.binary_name }}-${{ inputs.version }}-${{ matrix.platform }}"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "${GITHUB_WORKSPACE}/dist/${stage}.zip" "${{ steps.bin.outputs.path }}" >/dev/null
+            echo "archive=dist/${stage}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "${GITHUB_WORKSPACE}/dist/${stage}.tar.gz" \
+              -C "$(dirname "${{ steps.bin.outputs.path }}")" \
+              "$(basename "${{ steps.bin.outputs.path }}")"
+            echo "archive=dist/${stage}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@f08f31f53bbe4451c46f9c5d8a8ff4cbb2c5ed27 # v0.21.0
+        with:
+          file: ${{ steps.pkg.outputs.archive }}
+          format: cyclonedx-json
+          output-file: ${{ steps.pkg.outputs.archive }}.cdx.json
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc20 # v3.0.0
+        with:
+          subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
+      - name: Attest SBOM
+        uses: actions/attest-sbom@bd218ad7dbf483c81a22dde9694703a90f723a0d # v3.0.0
+        with:
+          subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
+          sbom-path: ${{ steps.pkg.outputs.archive }}.cdx.json
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ${{ inputs.binary_name }}-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: ${{ inputs.upload_release }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: dist
+          merge-multiple: true
+      # Own signed checksum file (separate from the Rust binary's SHA256SUMS) so
+      # this workflow is self-contained. [SWR-SEC-CHECKSUM]
+      - name: Generate SHA256SUMS
+        shell: bash
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mapfile -t files < <(find . -maxdepth 1 -type f ! -name '*SHA256SUMS*' -printf '%P\n')
+          test "${#files[@]}" -gt 0
+          shasum -a 256 "${files[@]}" > "${{ inputs.binary_name }}-SHA256SUMS"
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Sign SHA256SUMS (cosign keyless)
+        shell: bash
+        run: cosign sign-blob --yes --bundle "dist/${{ inputs.binary_name }}-SHA256SUMS.sigstore.json" "dist/${{ inputs.binary_name }}-SHA256SUMS"
+      - uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: v${{ inputs.version }}
+          files: dist/*

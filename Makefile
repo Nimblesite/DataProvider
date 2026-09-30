@@ -1,11 +1,14 @@
-# agent-pmo:74cf183
+# agent-pmo:795a9c2
 # =============================================================================
 # Standard Makefile — Nimblesite.DataProvider.Core
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # All targets are language-agnostic. Add language-specific helpers below.
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup check coverage vsix help
+.PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix help
+
+# Installed VS Code extension id (publisher.name from Lql/LqlExtension/package.json)
+VSIX_EXT_ID = lql-team.lql-language-support
 
 # -----------------------------------------------------------------------------
 # OS Detection — portable commands for Linux, macOS, and Windows
@@ -102,10 +105,29 @@ coverage:
 	@echo "==> Coverage report..."
 	$(MAKE) _coverage
 
+## aot: Native AOT publish of the DataProviderMigrate CLI + native smoke test ([MIG-AOT-CI])
+aot:
+	@echo "==> Native AOT publish + smoke test (DataProviderMigrate)..."
+	$(MAKE) _aot_dotnet
+
 ## vsix: Build Rust LSP (release), compile & package the VS Code extension (.vsix), and install it
 vsix:
 	@echo "==> Building and packaging VSIX..."
 	bash Lql/lql-lsp-rust/build-vsix.sh
+
+## rebuild-install-vsix: Full clean cycle — uninstall, clean, rebuild, package, install ([MAKE-IDE-EXT])
+rebuild-install-vsix: _vsix_uninstall _vsix_clean vsix
+
+# Uninstall the currently-installed LQL extension (ignore if absent).
+_vsix_uninstall:
+	@echo "==> Uninstalling $(VSIX_EXT_ID) (if present)..."
+	-code --uninstall-extension $(VSIX_EXT_ID)
+
+# Remove the previously packaged .vsix and the compiled extension output.
+_vsix_clean:
+	@echo "==> Cleaning packaged VSIX + extension build output..."
+	$(RM) Lql/LqlExtension/out
+	-$(RM) Lql/LqlExtension/*.vsix
 
 # =============================================================================
 # LANGUAGE-SPECIFIC IMPLEMENTATIONS
@@ -252,6 +274,40 @@ endif
 _setup_dotnet:
 	dotnet restore
 	dotnet tool restore
+
+# Native AOT publish of the migration CLI, then run the published native binary
+# as a black-box smoke test against a throwaway SQLite database. Implements
+# [MIG-AOT-CI]. RID auto-detects per platform; override with `make aot RID=...`.
+AOT_PROJ := Migration/DataProviderMigrate/DataProviderMigrate.csproj
+ifeq ($(OS),Windows_NT)
+RID ?= win-x64
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate.exe
+else ifeq ($(shell uname -s),Darwin)
+ifeq ($(shell uname -m),arm64)
+RID ?= osx-arm64
+else
+RID ?= osx-x64
+endif
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+else
+RID ?= linux-x64
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+endif
+
+_aot_dotnet:
+	@echo "==> Publishing Native AOT ($(RID))..."
+	dotnet publish $(AOT_PROJ) -c Release -r $(RID) -p:PublishAot=true --self-contained
+	@echo "==> Native smoke test: migrate example schema to SQLite..."
+	$(AOT_EXE) migrate --schema Migration/DataProviderMigrate/example-schema.yaml \
+	  --output $(AOT_SMOKE_DB) --provider sqlite
+	@echo "==> Native AOT smoke test passed."
+
+# Throwaway SQLite path for the smoke test (TMPDIR-aware, cleaned each run).
+ifeq ($(OS),Windows_NT)
+AOT_SMOKE_DB := $(TEMP)\dataprovider_aot_smoke.db
+else
+AOT_SMOKE_DB := $(shell printf '%s' "$${TMPDIR:-/tmp}")dataprovider_aot_smoke.db
+endif
 
 # --- RUST (LQL LSP) ---
 _build_rust:

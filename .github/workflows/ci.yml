@@ -1,3 +1,4 @@
+# agent-pmo:795a9c2
 name: CI
 
 on:
@@ -10,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  # Projects target a mix of net9.0, net10.0 and netstandard2.1, so both SDKs
+  # are installed everywhere .NET builds (see the setup-dotnet steps below).
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
@@ -23,10 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (9 + 10)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -115,10 +119,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (9 + 10)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -280,3 +286,77 @@ jobs:
 
       - name: Package VSIX (dry run)
         run: cd Lql/LqlExtension && npm run compile && npx vsce package --no-git-tag-version --no-update-package-json
+
+  # Duplication gate — Deslop ([CI-DESLOP]). Reads the threshold from .deslop.toml
+  # and exits 3 (failing the build) when measured duplication exceeds it. Owns the
+  # "duplicated code" concern; never hardcode the threshold here.
+  deslop:
+    name: Duplication (Deslop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DESLOP_VERSION: '0.14.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deslop
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /usr/local/bin/deslop \
+            "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-x86_64-unknown-linux-gnu"
+          chmod +x /usr/local/bin/deslop
+          deslop --version
+      - name: Check duplication (reads .deslop.toml)
+        run: deslop .
+      - name: Upload Deslop report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deslop-report
+          path: deslop-report.*
+
+  # Vulnerable-dependency gate ([GITHUB-DEP-REVIEW]). Fails a PR that introduces a
+  # dependency with a known High+ advisory. Owns the "vulnerable deps" concern
+  # (CodeQL owns vulnerable code; make lint owns style). No overlap.
+  security:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # Aggregating gate. This is the SINGLE required status check for branch
+  # protection ([GITHUB-PROTECTION]): it passes only when every real job above
+  # passed, giving a stable check name regardless of how the matrix evolves.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - lint-and-dataprovider
+      - build-and-test
+      - extension-tests
+      - deslop
+      - security
+    steps:
+      - name: Verify all required jobs succeeded
+        run: |
+          set -euo pipefail
+          # `security` is skipped on non-PR events; treat skipped as acceptable,
+          # any failure/cancellation as fatal.
+          results='${{ toJSON(needs) }}'
+          echo "$results"
+          fail=0
+          for job in lint-and-dataprovider build-and-test extension-tests deslop security; do
+            result=$(echo "$results" | jq -r --arg j "$job" '.[$j].result')
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::Required job '$job' did not succeed (result: $result)"
+              fail=1
+            fi
+          done
+          exit $fail

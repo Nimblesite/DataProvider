@@ -419,25 +419,10 @@ public static class SelectStatementLinqExtensions
             _ => null,
         };
 
-    private static object? ExtractValue(Expression expr)
-    {
-        try
-        {
-            var lambda = Expression.Lambda(expr);
-            var compiled = lambda.Compile();
-            return compiled.DynamicInvoke();
-        }
-        catch (InvalidOperationException)
-        {
-            // Expected - expression cannot be evaluated at compile time
-            return default;
-        }
-        catch (ArgumentException)
-        {
-            // Expected - invalid expression structure
-            return default;
-        }
-    }
+    // Implements [MIG-AOT-DYNCODE]: walk the subtree to a constant instead of
+    // Expression.Compile().DynamicInvoke() (IL3050, breaks Native AOT).
+    private static object? ExtractValue(Expression expr) =>
+        ConstantExpressionEvaluator.TryEvaluate(expr);
 
     private static string FormatValue(object? value) =>
         value switch

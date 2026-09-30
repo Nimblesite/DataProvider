@@ -1,6 +1,12 @@
+# agent-pmo:795a9c2
 # ═══════════════════════════════════════════════════════════════════════════════
 # Universal (portfolio-wide)
 # ═══════════════════════════════════════════════════════════════════════════════
+# AI agent + IDE config dirs are COMMITTED, never ignored ([GITIGNORE-RULES]):
+# .vscode/ .idea/ .claude/ .codex/ .agents/ .cline/ .clinerules/ .opencode/
+# .cursorrules .windsurfrules .github/copilot-instructions.md AGENTS.md CLAUDE.md
+# Force-commit Claude's local settings (auto-ignored by Claude Code otherwise):
+!.claude/settings.local.json
 .DS_Store?
 ._*
 .Spotlight-V100
@@ -150,7 +156,8 @@ _Pvt_Extensions
 # ═══════════════════════════════════════════════════════════════════════════════
 # JetBrains Rider
 # ═══════════════════════════════════════════════════════════════════════════════
-.idea/
+# NOTE: .idea/ is intentionally NOT ignored — shared run configs + code-style
+# settings are committed per [GITIGNORE-RULES].
 *.sln.iml
 
 # ═══════════════════════════════════════════════════════════════════════════════

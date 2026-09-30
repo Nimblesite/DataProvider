@@ -1,0 +1,144 @@
+# Vendored + adapted from Shipwright templates/gh-actions/release-binary-multiplatform.yml
+# Builds the lql-lsp Rust binary per platform, verifies --version, archives with a
+# signed SHA256SUMS, attaches SBOM + provenance, and uploads to the v{version} release.
+# [SWR-REL-GITHUB] [SWR-SEC-CHECKSUM] [SWR-SEC-PROVENANCE] [SWR-SEC-SBOM]
+name: release-binary-multiplatform
+
+on:
+  workflow_call:
+    inputs:
+      manifest_path:
+        required: false
+        type: string
+        default: shipwright.json
+      binary_name:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      artifact_prefix:
+        required: false
+        type: string
+        default: ""
+      upload_release:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-15
+          - platform: darwin-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-latest
+          - platform: win32-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: Lql/lql-lsp-rust
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Stamp version from tag
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: python3 tools/shipwright-version-stamp.py --tag "v${{ inputs.version }}" --root .
+      - name: Validate deployment manifest
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: python3 tools/validate-manifest.py "${{ inputs.manifest_path }}"
+      - name: Install cargo-auditable
+        shell: bash
+        run: cargo install cargo-auditable --locked
+      - name: Build binary (auditable, embeds SBOM)
+        shell: bash
+        run: cargo auditable build --release --locked -p lql-lsp
+      - name: Verify binary version
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          "./target/release/${{ inputs.binary_name }}${exe}" --version | grep -Fx "${{ inputs.binary_name }} ${{ inputs.version }}"
+      - name: Package archive
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="${{ inputs.artifact_prefix }}"
+          if [ -z "$prefix" ]; then prefix="${{ inputs.binary_name }}"; fi
+          stage="${prefix}-${{ inputs.version }}-${{ matrix.platform }}"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "${GITHUB_WORKSPACE}/dist/${stage}.zip" "./target/release/${{ inputs.binary_name }}.exe" >/dev/null
+            echo "archive=dist/${stage}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "${GITHUB_WORKSPACE}/dist/${stage}.tar.gz" -C target/release "${{ inputs.binary_name }}"
+            echo "archive=dist/${stage}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@f08f31f53bbe4451c46f9c5d8a8ff4cbb2c5ed27 # v0.21.0
+        with:
+          file: ${{ steps.pkg.outputs.archive }}
+          format: cyclonedx-json
+          output-file: ${{ steps.pkg.outputs.archive }}.cdx.json
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc20 # v3.0.0
+        with:
+          subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
+      - name: Attest SBOM
+        uses: actions/attest-sbom@bd218ad7dbf483c81a22dde9694703a90f723a0d # v3.0.0
+        with:
+          subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
+          sbom-path: ${{ steps.pkg.outputs.archive }}.cdx.json
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ${{ inputs.binary_name }}-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: ${{ inputs.upload_release }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate SHA256SUMS
+        shell: bash
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mapfile -t files < <(find . -maxdepth 1 -type f ! -name 'SHA256SUMS' -printf '%P\n')
+          test "${#files[@]}" -gt 0
+          shasum -a 256 "${files[@]}" > SHA256SUMS
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Sign SHA256SUMS (cosign keyless)
+        shell: bash
+        run: cosign sign-blob --yes --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS
+      - uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: v${{ inputs.version }}
+          files: dist/*

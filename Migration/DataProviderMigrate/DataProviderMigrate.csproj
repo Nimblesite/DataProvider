@@ -16,6 +16,27 @@
     <PackageTags>dataprovider;migration;schema;yaml;sqlite;postgres;dotnet-tool</PackageTags>
   </PropertyGroup>
 
+  <!-- Implements [MIG-AOT-EXPORT] + [MIG-AOT-CSPROJ]. A Native AOT publish
+       (PublishAot=true) defines the AOT constant (which compiles out the
+       reflection-based `export` command), turns on InvariantGlobalization, and
+       enables the AOT/trim analyzers. The analyzers are scoped to the AOT build
+       on purpose: the `migrate` path is the only code in the native binary and
+       must stay reflection-free (CI's AOT publish enforces that), while the
+       managed `dotnet tool` build legitimately keeps the reflection-based
+       `export` command and so must not be held to AOT rules. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <DefineConstants>$(DefineConstants);AOT</DefineConstants>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <!-- The packaging metadata above is meaningless for a self-contained native
+         binary; turn it off so `dotnet publish -p:PublishAot=true` does not try
+         to build a tool package. -->
+    <IsPackable>false</IsPackable>
+    <PackAsTool>false</PackAsTool>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
     <PackageReference Include="Npgsql" Version="9.0.2" />

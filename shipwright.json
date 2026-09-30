@@ -1,0 +1,48 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "dataprovider-lql",
+    "displayName": "DataProvider LQL Language Support",
+    "version": "0.0.0-dev"
+  },
+  "supplyChain": {
+    "provenance": true,
+    "sbom": true,
+    "signedChecksums": true,
+    "signerWorkflow": "Nimblesite/DataProvider/.github/workflows/release.yml@refs/tags/v*"
+  },
+  "components": [
+    {
+      "id": "lql-lsp",
+      "kind": "lsp",
+      "language": "rust",
+      "binaryName": "lql-lsp",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"],
+      "sources": ["user-setting", "bundled"],
+      "required": true,
+      "githubRelease": {
+        "signature": true,
+        "provenance": true,
+        "sbom": true,
+        "signerWorkflow": "Nimblesite/DataProvider/.github/workflows/release.yml@refs/tags/v*"
+      }
+    },
+    {
+      "id": "dataprovider-migrate",
+      "kind": "cli",
+      "language": "dotnet",
+      "binaryName": "DataProviderMigrate",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"],
+      "sources": ["bundled"],
+      "required": false,
+      "githubRelease": {
+        "signature": true,
+        "provenance": true,
+        "sbom": true,
+        "signerWorkflow": "Nimblesite/DataProvider/.github/workflows/release.yml@refs/tags/v*"
+      }
+    }
+  ]
+}

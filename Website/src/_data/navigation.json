@@ -3,6 +3,7 @@
     { "text": "Docs", "url": "/docs/" },
     { "text": "API", "url": "/apidocs/" },
     { "text": "Blog", "url": "/blog/" },
+    { "text": "Releases", "url": "/releases/" },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider", "external": true }
   ],
   "docs": [
@@ -58,6 +59,7 @@
       "title": "More",
       "items": [
         { "text": "Blog", "url": "/blog/" },
+        { "text": "Releases", "url": "/releases/" },
         { "text": "About", "url": "/about/" }
       ]
     }

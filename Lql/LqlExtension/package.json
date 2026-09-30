@@ -2,7 +2,7 @@
   "name": "lql-language-support",
   "displayName": "Lambda Query Language (LQL)",
   "description": "Language support for Lambda Query Language with syntax highlighting, IntelliSense, and error checking",
-  "version": "0.1.0",
+  "version": "0.0.0-dev",
   "publisher": "lql-team",
   "engines": {
     "vscode": "^1.74.0"

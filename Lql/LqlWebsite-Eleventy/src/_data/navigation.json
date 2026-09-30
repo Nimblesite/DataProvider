@@ -5,6 +5,7 @@
     { "text": "Migrations", "url": "/#migrations" },
     { "text": "Tooling", "url": "/#tooling" },
     { "text": "Playground", "url": "/playground/" },
+    { "text": "Releases", "url": "/releases/" },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider", "external": true }
   ],
   "footer": [
@@ -12,6 +13,7 @@
     { "text": "Examples", "url": "/#examples" },
     { "text": "Migrations", "url": "/#migrations" },
     { "text": "Playground", "url": "/playground/" },
+    { "text": "Releases", "url": "/releases/" },
     { "text": "DataProvider", "url": "https://dataprovider.dev", "external": true },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/DataProvider", "external": true }
   ]

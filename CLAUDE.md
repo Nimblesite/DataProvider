@@ -7,13 +7,13 @@
 
 ⚠️ NEVER KILL ANY VSCODE PROCESS ⚠️
 
-<!-- agent-pmo:74cf183 -->
+<!-- agent-pmo:795a9c2 -->
 
 ## Project Overview
 
 DataProvider is a comprehensive .NET database access toolkit: source generation for SQL extension methods, the Lambda Query Language (LQL) transpiler, bidirectional offline-first sync, WebAuthn + RBAC auth, and an embeddable reporting platform. The LQL LSP is implemented in Rust with a VS Code extension in TypeScript. Healthcare sample applications live in a separate repo: [Nimblesite/ClinicalCoding](https://github.com/Nimblesite/ClinicalCoding).
 
-**Primary language(s):** C# (.NET 10.0), Rust, TypeScript, F#
+**Primary language(s):** C#, Rust, TypeScript, F#
 **Build command:** `make ci`
 **Test command:** `make test`
 **Lint command:** `make lint`
@@ -30,11 +30,41 @@ If the TMC server is available:
 5. Release locks immediately when done
 6. Never edit a locked file — wait or find another approach
 
+## Autonomy
+
+- **Act autonomously. Do NOT stop to ask the user questions.** When something is ambiguous, choose the most reasonable default, record the assumption, and continue to completion.
+- **No mid-task pauses for confirmation, clarification, or approval.** Deliver finished work plus a short summary of any assumptions made.
+- **Auto-memory is OFF.** All persistent rules go through a reviewed PR to this file — never auto-captured memory. (Claude Code: `"autoMemoryEnabled": false` in committed `.claude/settings.local.json`.)
+
+## Git discipline — only when you've been given the green light to use git
+
+- **Default to NOT touching git at all.** Use git only when the user has explicitly green-lit it for the task. Absent that, leave commits, branches, pushes, and merges to the user and CI.
+- **NEVER push to the default branch (`main`) directly.** Always PR → CI green → merge. No exceptions.
+- **Once you open a PR, OWN it until it's green.** Enable auto-merge where allowed (`gh pr merge --auto --squash`) so it lands when checks pass — then keep monitoring: on a failure, pull the logs, fix it, push, and loop until every required check passes. Never hand back a red or still-running PR.
+- **NEVER list yourself (the agent) as a commit co-author.** No `Co-Authored-By` trailer, no agent attribution. This is never overridable.
+- **Work on exactly ONE branch at a time, always** — even with multiple agents working concurrently (coordinate via TMC). Reuse the open feature branch.
+- **NEVER start a new branch when a feature branch already exists.** Check first; work on the open one. If multiple feature branches exist, merge them into one IMMEDIATELY before doing any other work.
+- **Worktrees are forbidden** unless the user explicitly directs you to use one.
+
+## Duplication — Deslop (MANDATORY)
+
+Spec: `[CI-DESLOP]`. Read the [docs](https://deslop.live/docs/for-ai/). False positives → log an issue with [Deslop](https://github.com/Nimblesite/Deslop/issues). Deslop earns its keep through **prevention, not cleanup.** Use its MCP tools on every code change:
+
+- **BEFORE you author** any function, method, class, helper, fixture, or test setup → call the **`find-similar`** MCP tool.
+  - `signals.fused ≥ 0.85`, or an `identical` / `nearly_identical` bucket → **REUSE the existing code. Do NOT write a duplicate.**
+  - `0.6 ≤ fused < 0.85` → open the canonical occurrence and bias hard toward reusing/extending it.
+  - `fused < 0.6` or empty → proceed and write the new code.
+- **AFTER you change code** → call **`rescan`**, then **`top-offenders`** (worst clusters by severity) and **`cluster-by-id`** (full members + signals for a cluster you intend to merge). Use **`report-for-file`** / **`report-for-range`** to inspect a specific file or selection. Call **`schema-doc`** once per session to learn the report shape.
+- **NEVER game the gate.** Do not silence findings by widening `max_duplication_percent`, marking code `hidden`, or splitting it into trivially different shapes.
+
+The duplication budget lives in committed `.deslop.toml` (`max_duplication_percent`). CI runs `deslop .` and the build **TANKS** (exit 3) if duplication exceeds it. The threshold ratchets **DOWN only** — lower it in the same PR when you reduce duplication; never raise it without written justification.
+
 ## Hard Rules — Universal (no exceptions)
 
 - **Parsing SQL with anything other than the ⭐️ OFFICIAL 👨🏼‍⚖️ ⭐️ platform specific parser = ⛔️ILLEGAL** - Use the actual .NET parser specified by the DB maintainer
 - **DO NOT use git or Docker commands.** No `git add`, `git commit`, `git push`, or any git/Docker command. CI and GitHub Actions handle these.
-- **ZERO DUPLICATION.** Before writing any code, search the codebase for existing implementations. Move code, don't copy it.
+- **ZERO DUPLICATION.** Before writing any code, search the codebase for existing implementations. Move code, don't copy it. Run the Deslop MCP tools before AND after every change — see [Duplication — Deslop](#duplication--deslop-mandatory).
+- **DATA MODELS — generate with typeDiagram, NEVER by hand.** Define every data model (domain types, DTOs, entities, enums, ADTs) in [typeDiagram](https://typediagram.dev/docs/) and generate the language code from it. The committed model is the source of truth; `make build` regenerates the types — never edit generated files, never hand-craft a model. If typeDiagram can't express a case, file an issue on its repo and reference it at a minimal temporary shim. Implements `[MODEL-TYPEDIAGRAM]`.
 - **NEVER THROW** — Return `Result<T,E>`. Wrap failures in try/catch
 - **No casting/!** — Pattern match on type only
 - **No suppressing warnings** — Illegal. Fix the code, not the linter.
@@ -131,9 +161,6 @@ Always include these in `Directory.Build.props`:
 
 - LQL is database platform INDEPENDENT. It MUST work exactly the same on whatever platform it is transpiled to. Failure for this to happen must be logged as a GitHub issue
 
-## LQL 
-- LQL is database platform INDEPENDENT. It MUST work exactly the same on whatever platform it is transpiled to. Failure for this to happen must be logged as a GitHub issue
-
 ## CSS
 
 - **MINIMAL CSS** — Do not duplicate CSS classes
@@ -228,7 +255,7 @@ DataProvider/
 
 ## Config
 
-- .NET 10.0, C# latest, nullable, warnings as errors
+- .NET, C# latest, nullable, warnings as errors
 - Central config in `Directory.Build.props`
 - Format: `dotnet csharpier .`
 

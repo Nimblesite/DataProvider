@@ -10,6 +10,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
+    <!-- Implements [MIG-AOT-YAML]: only the low-level parser/emitter event API is
+         used (AOT-safe). The reflection-based Serializer/Deserializer builders are
+         not referenced; schema YAML is read/written by SchemaYamlSerializer's
+         hand-written, reflection-free mapper. -->
     <PackageReference Include="YamlDotNet" Version="16.2.1" />
   </ItemGroup>
 

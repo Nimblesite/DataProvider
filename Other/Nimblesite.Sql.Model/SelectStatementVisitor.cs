@@ -460,27 +460,10 @@ internal sealed class SelectStatementVisitor : ExpressionVisitor
             _ => null,
         };
 
-    private static object? ExtractValue(Expression expression)
-    {
-        try
-        {
-            return expression switch
-            {
-                ConstantExpression constant => constant.Value,
-                _ => Expression.Lambda(expression).Compile().DynamicInvoke(),
-            };
-        }
-        catch (InvalidOperationException)
-        {
-            // Expected - expression cannot be evaluated at compile time
-            return default;
-        }
-        catch (ArgumentException)
-        {
-            // Expected - invalid expression structure
-            return default;
-        }
-    }
+    // Implements [MIG-AOT-DYNCODE]: walk the subtree to a constant instead of
+    // Expression.Compile().DynamicInvoke() (IL3050, breaks Native AOT).
+    private static object? ExtractValue(Expression expression) =>
+        ConstantExpressionEvaluator.TryEvaluate(expression);
 
     private static string FormatValue(object? value) =>
         value switch

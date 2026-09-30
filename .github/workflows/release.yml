@@ -1,121 +1,294 @@
-name: Release NuGet Packages
+# agent-pmo:795a9c2
+# Tag-triggered release. Stamps the tag version into the runner working tree only
+# (NO commit/push/tag bump after the tag exists — [SWR-VERSION-BUILD-STAMPING]),
+# runs the CI + CodeQL hard gate, then publishes NuGet packages, per-platform binaries
+# (GitHub Release), per-platform VSIX (Marketplace), Homebrew + Scoop, and deploys
+# both documentation sites. [SWR-REL-WORKFLOW] [SWR-REL-GITHUB]
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+# Least privilege by default; write/id-token are granted per job. [SWR-SEC-TOKEN-PRIVILEGE]
+permissions:
+  contents: read
 
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  OWNER_REPO: Nimblesite/DataProvider
 
 jobs:
-  publish:
+  # ── Stamp + gate ──────────────────────────────────────────────────────────
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
+    environment: release
     permissions:
-      contents: write
+      contents: read
     outputs:
-      version: ${{ steps.version.outputs.VERSION }}
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Pack solution
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
+          persist-credentials: false
+      - name: Derive version from tag
+        id: v
+        shell: bash
         run: |
           set -euo pipefail
-          dotnet pack DataProvider.sln -c Release \
-            -p:Version="$VERSION" \
-            -p:PackageVersion="$VERSION" \
-            -o ./nupkgs
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Stamp version into runner working tree (never committed)
+        shell: bash
+        run: python3 tools/shipwright-version-stamp.py --tag "${GITHUB_REF_NAME}" --root .
+      - name: Validate Shipwright manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/validate-manifest.py shipwright.json
+          python3 tools/validate-manifest.py Lql/LqlExtension/shipwright.json
 
+  # ── CodeQL hard release gate (blocks every publish job) ───────────────────
+  codeql-gate:
+    needs: prepare
+    uses: ./.github/workflows/codeql.yml
+    with:
+      gate: true
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+  # ── NuGet packages ────────────────────────────────────────────────────────
+  publish-nuget:
+    needs: [prepare, codeql-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v5.0.0
+        with:
+          dotnet-version: "9.0.x"
+      - name: Stamp version from tag
+        shell: bash
+        run: python3 tools/shipwright-version-stamp.py --tag "v${{ needs.prepare.outputs.version }}" --root .
+      - name: Pack solution
+        shell: bash
+        run: dotnet pack DataProvider.sln -c Release -o ./nupkgs
       - name: Push packages to NuGet
+        shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${NUGET_API_KEY:-}" ]; then
-            echo "NUGET_API_KEY secret is not set." >&2
+            echo "::error::NUGET_API_KEY secret is not set." >&2
             exit 1
           fi
           shopt -s nullglob
           packages=(./nupkgs/*.nupkg)
           if [ ${#packages[@]} -eq 0 ]; then
-            echo "No packages produced — failing." >&2
+            echo "::error::No packages produced — failing." >&2
             exit 1
           fi
           for pkg in "${packages[@]}"; do
-            echo "::group::Push $pkg"
             dotnet nuget push "$pkg" \
               --api-key "$NUGET_API_KEY" \
               --source https://api.nuget.org/v3/index.json \
               --skip-duplicate
-            echo "::endgroup::"
           done
 
-      - name: Update version in Directory.Build.props
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
-        run: |
-          set -euo pipefail
-          # Tag-triggered runs check out a detached HEAD. Find the unique remote
-          # branch that contains the tagged commit so we know where to push the
-          # version-bump back to. If 0 or >1 branches contain it, fail loudly —
-          # we will not guess.
-          git fetch --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          mapfile -t BRANCHES < <(git branch -r --contains HEAD --format='%(refname:short)' \
-            | sed 's|^origin/||' \
-            | grep -vx 'HEAD' \
-            | sort -u)
-          if [ ${#BRANCHES[@]} -eq 0 ]; then
-            echo "No remote branch contains the tagged commit. Refusing to push." >&2
-            exit 1
-          fi
-          if [ ${#BRANCHES[@]} -gt 1 ]; then
-            echo "Tagged commit belongs to multiple branches: ${BRANCHES[*]}. Refusing to guess." >&2
-            exit 1
-          fi
-          TARGET_BRANCH="${BRANCHES[0]}"
-          echo "Pushing version bump to origin/$TARGET_BRANCH"
-          sed -i 's|<Version>.*</Version>|<Version>'"$VERSION"'</Version>|' Directory.Build.props
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Directory.Build.props
-          git diff --cached --quiet || git commit -m "chore: bump version to $VERSION [skip ci]"
-          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+  # ── Per-platform binaries → GitHub Release ────────────────────────────────
+  release-binaries:
+    needs: [prepare, codeql-gate]
+    uses: ./.github/workflows/release-binary-multiplatform.yml
+    with:
+      binary_name: lql-lsp
+      version: ${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
 
-      - name: Create GitHub Release
+  # ── Per-platform .NET Native AOT migration CLI → GitHub Release [MIG-AOT-CI] ─
+  release-dotnet-binaries:
+    needs: [prepare, codeql-gate]
+    uses: ./.github/workflows/release-dotnet-aot-multiplatform.yml
+    with:
+      binary_name: DataProviderMigrate
+      version: ${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  # ── Extract per-asset checksums from the signed SHA256SUMS ─────────────────
+  checksums:
+    needs: [prepare, release-binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      darwin_arm64: ${{ steps.x.outputs.darwin_arm64 }}
+      win32_x64: ${{ steps.x.outputs.win32_x64 }}
+    steps:
+      - name: Fetch and parse SHA256SUMS from the release
+        id: x
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" --generate-notes
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "v${VERSION}" --repo "${OWNER_REPO}" --pattern SHA256SUMS --dir .
+          darwin="$(grep -E "lql-lsp-${VERSION}-darwin-arm64\.tar\.gz$" SHA256SUMS | awk '{print $1}')"
+          win="$(grep -E "lql-lsp-${VERSION}-win32-x64\.zip$" SHA256SUMS | awk '{print $1}')"
+          test -n "$darwin" && test -n "$win"
+          echo "darwin_arm64=${darwin}" >> "$GITHUB_OUTPUT"
+          echo "win32_x64=${win}" >> "$GITHUB_OUTPUT"
 
+  # ── Homebrew tap ──────────────────────────────────────────────────────────
+  publish-brew:
+    needs: [prepare, checksums]
+    if: needs.prepare.outputs.prerelease == 'false'
+    uses: ./.github/workflows/publish-brew-tap.yml
+    with:
+      tap_repo: Nimblesite/homebrew-lql
+      formula_name: lql-lsp
+      version: ${{ needs.prepare.outputs.version }}
+      asset_url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/lql-lsp-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz
+      sha256: ${{ needs.checksums.outputs.darwin_arm64 }}
+      binary_name: lql-lsp
+      homepage: https://github.com/Nimblesite/DataProvider
+      description: Lambda Query Language LSP server
+    secrets:
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # ── Scoop bucket ──────────────────────────────────────────────────────────
+  publish-scoop:
+    needs: [prepare, checksums]
+    if: needs.prepare.outputs.prerelease == 'false'
+    uses: ./.github/workflows/publish-scoop-bucket.yml
+    with:
+      bucket_repo: Nimblesite/scoop-lql
+      manifest_name: lql-lsp
+      version: ${{ needs.prepare.outputs.version }}
+      url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/lql-lsp-${{ needs.prepare.outputs.version }}-win32-x64.zip
+      sha256: ${{ needs.checksums.outputs.win32_x64 }}
+      bin: lql-lsp.exe
+      homepage: https://github.com/Nimblesite/DataProvider
+      description: Lambda Query Language LSP server
+    secrets:
+      bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+
+  # ── Migration CLI checksums (from its own signed SHA256SUMS) [MIG-AOT-CI] ──
+  dotnet-checksums:
+    needs: [prepare, release-dotnet-binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      darwin_arm64: ${{ steps.x.outputs.darwin_arm64 }}
+      win32_x64: ${{ steps.x.outputs.win32_x64 }}
+    steps:
+      - name: Fetch and parse DataProviderMigrate-SHA256SUMS from the release
+        id: x
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "v${VERSION}" --repo "${OWNER_REPO}" --pattern DataProviderMigrate-SHA256SUMS --dir .
+          darwin="$(grep -E "DataProviderMigrate-${VERSION}-darwin-arm64\.tar\.gz$" DataProviderMigrate-SHA256SUMS | awk '{print $1}')"
+          win="$(grep -E "DataProviderMigrate-${VERSION}-win32-x64\.zip$" DataProviderMigrate-SHA256SUMS | awk '{print $1}')"
+          test -n "$darwin" && test -n "$win"
+          echo "darwin_arm64=${darwin}" >> "$GITHUB_OUTPUT"
+          echo "win32_x64=${win}" >> "$GITHUB_OUTPUT"
+
+  # ── Homebrew tap (migration CLI) ──────────────────────────────────────────
+  publish-brew-migrate:
+    needs: [prepare, dotnet-checksums]
+    if: needs.prepare.outputs.prerelease == 'false'
+    uses: ./.github/workflows/publish-brew-tap.yml
+    with:
+      tap_repo: Nimblesite/homebrew-lql
+      formula_name: dataprovider-migrate
+      version: ${{ needs.prepare.outputs.version }}
+      asset_url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/DataProviderMigrate-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz
+      sha256: ${{ needs.dotnet-checksums.outputs.darwin_arm64 }}
+      binary_name: DataProviderMigrate
+      homepage: https://github.com/Nimblesite/DataProvider
+      description: DataProvider database schema migration CLI (YAML → SQLite/PostgreSQL)
+    secrets:
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # ── Scoop bucket (migration CLI) ──────────────────────────────────────────
+  publish-scoop-migrate:
+    needs: [prepare, dotnet-checksums]
+    if: needs.prepare.outputs.prerelease == 'false'
+    uses: ./.github/workflows/publish-scoop-bucket.yml
+    with:
+      bucket_repo: Nimblesite/scoop-lql
+      manifest_name: dataprovider-migrate
+      version: ${{ needs.prepare.outputs.version }}
+      url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/DataProviderMigrate-${{ needs.prepare.outputs.version }}-win32-x64.zip
+      sha256: ${{ needs.dotnet-checksums.outputs.win32_x64 }}
+      bin: DataProviderMigrate.exe
+      homepage: https://github.com/Nimblesite/DataProvider
+      description: DataProvider database schema migration CLI (YAML → SQLite/PostgreSQL)
+    secrets:
+      bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+
+  # ── Per-platform VSIX → VS Code Marketplace (Entra OIDC, no PAT) ───────────
+  publish-vsix:
+    needs: [prepare, codeql-gate, release-binaries]
+    uses: ./.github/workflows/publish-vsix-per-platform.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      pre_release: ${{ needs.prepare.outputs.prerelease == 'true' }}
+      marketplace_environment: release
+    secrets:
+      azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+      azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+  # ── Documentation sites (both deploy on release) ──────────────────────────
   deploy-lql-website:
-    needs: publish
+    needs: [prepare, publish-nuget]
     uses: ./.github/workflows/deploy-lql-website.yml
     with:
-      version: ${{ needs.publish.outputs.version }}
+      version: ${{ needs.prepare.outputs.version }}
     permissions:
       contents: read
       pages: write
       id-token: write
 
   deploy-website:
-    needs: [publish, deploy-lql-website]
+    needs: [prepare, publish-nuget, deploy-lql-website]
     uses: ./.github/workflows/deploy-pages.yml
     with:
-      version: ${{ needs.publish.outputs.version }}
+      version: ${{ needs.prepare.outputs.version }}
     secrets: inherit
     permissions:
       contents: read

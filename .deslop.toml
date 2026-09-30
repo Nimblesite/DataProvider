@@ -1,0 +1,15 @@
+# agent-pmo:795a9c2
+# Deslop duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP]
+# Single source of truth for this repo's duplication budget. Committed, PR-reviewed,
+# ratcheted DOWN only (never up without written justification).
+# CI runs `deslop .`, which reads this file and exits 3 (tanking the build) when
+# measured repo-wide duplication exceeds the value below.
+# Docs: https://deslop.live/docs/for-ai/
+#
+# NOTE: the local Deslop CLI on the authoring machine (0.5.1) is far behind the
+# current release (0.14.0) and did not produce a clean measurement, so this keeps
+# the conservative template default. After the first CI run reports the real
+# `metrics.duplication_percent`, ratchet this DOWN to that measured value (round
+# up ~0.3% for cross-runner jitter). Never raise it without written justification.
+[threshold]
+max_duplication_percent = 5.0

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make fmt-check *)",
+      "Bash(gh issue *)"
+    ]
+  },
+  "autoMemoryEnabled": false
+}

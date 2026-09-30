@@ -1,0 +1,7 @@
+# macos-13 is a real GitHub-hosted Intel runner (required for the darwin-x64
+# build leg per Shipwright manifest-and-platforms.md); actionlint's bundled
+# label list lags, so declare it as a known self-hosted-style label to silence
+# the false "unknown label" report. [SWR-VSIX-TARGETS]
+self-hosted-runner:
+  labels:
+    - macos-13

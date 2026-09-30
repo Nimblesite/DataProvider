@@ -1,0 +1,40 @@
+---
+layout: layouts/base.njk
+title: "Releases — DataProvider"
+description: "Every DataProvider release with full release notes, generated at build time from the GitHub Releases for DataProvider."
+permalink: /releases/
+---
+
+{#
+  agent-pmo:795a9c2
+  /releases/ page. Implements [WEB-RELEASES].
+  Renders the build-time `release` data (src/_data/release.js).
+  Notes are rendered with the `releaseNotes` filter (markdown-it, html:false).
+#}
+
+<section style="padding: var(--space-12) 0;">
+  <div class="container" style="max-width: 800px;">
+    <h1>Releases</h1>
+    <p>Every DataProvider release with full notes — generated at build time from the GitHub Releases.</p>
+    <p><a href="{{ release.releasesUrl }}" rel="noopener">View all releases on GitHub &#8599;</a></p>
+
+    {% if release.available and release.items.length %}
+    {% for item in release.items %}
+    <article id="{{ item.tag }}" style="margin-top: var(--space-8);">
+      <h2><a href="{{ item.url }}" rel="noopener">{{ item.title }}</a> <code>{{ item.tag }}</code></h2>
+      <p>
+        {% if item.publishedDate %}<time datetime="{{ item.publishedAt }}">{{ item.publishedDate }}</time>{% endif %}
+        {% if item.prerelease %}&middot; Prerelease{% endif %}
+      </p>
+      {% if item.body %}
+      {{ item.body | releaseNotes | safe }}
+      {% else %}
+      <p><a href="{{ item.url }}" rel="noopener">Read the notes on GitHub</a></p>
+      {% endif %}
+    </article>
+    {% endfor %}
+    {% else %}
+    <p>Releases will appear here once the first version ships. <a href="{{ release.releasesUrl }}" rel="noopener">View all releases on GitHub</a></p>
+    {% endif %}
+  </div>
+</section>

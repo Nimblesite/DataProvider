@@ -4,7 +4,9 @@
     <NuGetAudit>false</NuGetAudit>
     <NuGetAuditMode>disabled</NuGetAuditMode>
     <RestoreAuditProperties>false</RestoreAuditProperties>
-    <Version>0.9.12-beta</Version>
+    <!-- Source stays at the placeholder; release stamps the tag version in the
+         runner working tree only. [SWR-VERSION-BUILD-STAMPING] -->
+    <Version>0.0.0-dev</Version>
     <Authors>ChristianFindlay</Authors>
     <Company>Nimblesite</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
