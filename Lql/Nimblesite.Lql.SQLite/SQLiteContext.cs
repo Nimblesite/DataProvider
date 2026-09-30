@@ -280,42 +280,7 @@ public sealed class SQLiteContext : ISqlContext
         if (statement.WhereConditions.Count > 0)
         {
             sql.Append(" WHERE ");
-            for (int i = 0; i < statement.WhereConditions.Count; i++)
-            {
-                var condition = statement.WhereConditions[i];
-                var formatted = FormatWhereCondition(condition);
-
-                // Add space before condition based on specific rules
-                if (i > 0)
-                {
-                    var prevCondition = statement.WhereConditions[i - 1];
-
-                    // Space before closing parenthesis only if prev wasn't opening
-                    if (condition is Parenthesis { IsOpening: false })
-                    {
-                        if (prevCondition is not Parenthesis { IsOpening: true })
-                        {
-                            sql.Append(' ');
-                        }
-                    }
-                    // Space before everything else except after opening parenthesis
-                    else if (prevCondition is not Parenthesis { IsOpening: true })
-                    {
-                        sql.Append(' ');
-                    }
-                }
-
-                sql.Append(formatted);
-
-                // Add space after opening parenthesis only
-                if (
-                    condition is Parenthesis { IsOpening: true }
-                    && i < statement.WhereConditions.Count - 1
-                )
-                {
-                    sql.Append(' ');
-                }
-            }
+            sql.Append(WhereConditionSql.Join(statement.WhereConditions, FormatWhereCondition));
         }
 
         // GROUP BY clause

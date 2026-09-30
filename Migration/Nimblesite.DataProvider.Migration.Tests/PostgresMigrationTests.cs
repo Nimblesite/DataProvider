@@ -1429,8 +1429,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
     // preinstalled). These tests prove the full pipeline — YAML schema
     // -> VectorType -> PostgresDdlGenerator -> CREATE EXTENSION vector
     // -> CREATE TABLE -> INSERT -> SELECT -> round-trip — works against
-    // a real database, which is the exact path HealthcareSamples needs
-    // to unblock its embeddings column.
+    // a real database, including vector columns used by external consumers.
     // ═══════════════════════════════════════════════════════════════════
 
     [Fact]

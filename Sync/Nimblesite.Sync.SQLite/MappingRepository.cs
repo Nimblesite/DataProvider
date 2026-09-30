@@ -10,86 +10,111 @@ namespace Nimblesite.Sync.SQLite;
 public static class MappingRepository
 {
     /// <summary>
+    /// Creates, configures, and executes a command, converting SqliteException
+    /// into the supplied error result. Shared by all repository operations.
+    /// </summary>
+    private static TResult Execute<TResult>(
+        SqliteConnection connection,
+        Action<SqliteCommand> setSql,
+        (string Name, object Value)[] parameters,
+        Func<SqliteCommand, TResult> execute,
+        Func<string, TResult> onError
+    )
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            setSql(cmd);
+            foreach (var (name, value) in parameters)
+            {
+                cmd.Parameters.AddWithValue(name, value);
+            }
+
+            return execute(cmd);
+        }
+        catch (SqliteException ex)
+        {
+            return onError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Maps the current reader row to a MappingStateEntry.
+    /// </summary>
+    private static MappingStateEntry ReadMappingState(SqliteDataReader reader) =>
+        new(reader.GetString(0), reader.GetInt64(1), reader.GetString(2), reader.GetInt64(3));
+
+    /// <summary>
+    /// Maps the current reader row to a RecordHashEntry.
+    /// </summary>
+    private static RecordHashEntry ReadRecordHash(SqliteDataReader reader) =>
+        new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+
+    /// <summary>
     /// Gets mapping state by ID.
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <param name="mappingId">Mapping identifier.</param>
     /// <returns>Mapping state or null if not found.</returns>
-    public static MappingStateResult GetMappingState(SqliteConnection connection, string mappingId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static MappingStateResult GetMappingState(
+        SqliteConnection connection,
+        string mappingId
+    ) =>
+        Execute<MappingStateResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 SELECT mapping_id, last_synced_version, last_sync_timestamp, records_synced
                 FROM _sync_mapping_state
                 WHERE mapping_id = @mappingId
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read())
+                """,
+            [("@mappingId", mappingId)],
+            cmd =>
             {
-                return new MappingStateOk(null);
-            }
+                using var reader = cmd.ExecuteReader();
+                if (!reader.Read())
+                {
+                    return new MappingStateOk(null);
+                }
 
-            return new MappingStateOk(
-                new MappingStateEntry(
-                    reader.GetString(0),
-                    reader.GetInt64(1),
-                    reader.GetString(2),
-                    reader.GetInt64(3)
-                )
-            );
-        }
-        catch (SqliteException ex)
-        {
-            return new MappingStateError(
-                new SyncErrorDatabase($"Failed to get mapping state: {ex.Message}")
-            );
-        }
-    }
+                return new MappingStateOk(ReadMappingState(reader));
+            },
+            message => new MappingStateError(
+                new SyncErrorDatabase($"Failed to get mapping state: {message}")
+            )
+        );
 
     /// <summary>
     /// Gets all mapping states.
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>List of mapping states.</returns>
-    public static MappingStateListResult GetAllMappingStates(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static MappingStateListResult GetAllMappingStates(SqliteConnection connection) =>
+        Execute<MappingStateListResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 SELECT mapping_id, last_synced_version, last_sync_timestamp, records_synced
                 FROM _sync_mapping_state
                 ORDER BY mapping_id
-                """;
-
-            var states = new List<MappingStateEntry>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+                """,
+            [],
+            cmd =>
             {
-                states.Add(
-                    new MappingStateEntry(
-                        reader.GetString(0),
-                        reader.GetInt64(1),
-                        reader.GetString(2),
-                        reader.GetInt64(3)
-                    )
-                );
-            }
+                var states = new List<MappingStateEntry>();
+                using var reader = cmd.ExecuteReader();
 
-            return new MappingStateListOk(states);
-        }
-        catch (SqliteException ex)
-        {
-            return new MappingStateListError(
-                new SyncErrorDatabase($"Failed to get mapping states: {ex.Message}")
-            );
-        }
-    }
+                while (reader.Read())
+                {
+                    states.Add(ReadMappingState(reader));
+                }
+
+                return new MappingStateListOk(states);
+            },
+            message => new MappingStateListError(
+                new SyncErrorDatabase($"Failed to get mapping states: {message}")
+            )
+        );
 
     /// <summary>
     /// Upserts mapping state.
@@ -100,34 +125,33 @@ public static class MappingRepository
     public static BoolSyncResult UpsertMappingState(
         SqliteConnection connection,
         MappingStateEntry state
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    ) =>
+        Execute<BoolSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 INSERT INTO _sync_mapping_state (mapping_id, last_synced_version, last_sync_timestamp, records_synced)
                 VALUES (@mappingId, @version, @timestamp, @records)
                 ON CONFLICT (mapping_id) DO UPDATE SET
                     last_synced_version = @version,
                     last_sync_timestamp = @timestamp,
                     records_synced = @records
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", state.MappingId);
-            cmd.Parameters.AddWithValue("@version", state.LastSyncedVersion);
-            cmd.Parameters.AddWithValue("@timestamp", state.LastSyncTimestamp);
-            cmd.Parameters.AddWithValue("@records", state.RecordsSynced);
-            cmd.ExecuteNonQuery();
-
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to upsert mapping state: {ex.Message}")
-            );
-        }
-    }
+                """,
+            [
+                ("@mappingId", state.MappingId),
+                ("@version", state.LastSyncedVersion),
+                ("@timestamp", state.LastSyncTimestamp),
+                ("@records", state.RecordsSynced),
+            ],
+            cmd =>
+            {
+                cmd.ExecuteNonQuery();
+                return new BoolSyncOk(true);
+            },
+            message => new BoolSyncError(
+                new SyncErrorDatabase($"Failed to upsert mapping state: {message}")
+            )
+        );
 
     /// <summary>
     /// Deletes mapping state.
@@ -135,24 +159,24 @@ public static class MappingRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="mappingId">Mapping identifier.</param>
     /// <returns>Success or error.</returns>
-    public static BoolSyncResult DeleteMappingState(SqliteConnection connection, string mappingId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_mapping_state WHERE mapping_id = @mappingId";
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            cmd.ExecuteNonQuery();
-
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to delete mapping state: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult DeleteMappingState(
+        SqliteConnection connection,
+        string mappingId
+    ) =>
+        Execute<BoolSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = "DELETE FROM _sync_mapping_state WHERE mapping_id = @mappingId",
+            [("@mappingId", mappingId)],
+            cmd =>
+            {
+                cmd.ExecuteNonQuery();
+                return new BoolSyncOk(true);
+            },
+            message => new BoolSyncError(
+                new SyncErrorDatabase($"Failed to delete mapping state: {message}")
+            )
+        );
 
     /// <summary>
     /// Gets record hash by mapping ID and source PK.
@@ -165,41 +189,30 @@ public static class MappingRepository
         SqliteConnection connection,
         string mappingId,
         string sourcePk
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    ) =>
+        Execute<RecordHashResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 SELECT mapping_id, source_pk, payload_hash, synced_at
                 FROM _sync_record_hashes
                 WHERE mapping_id = @mappingId AND source_pk = @sourcePk
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            cmd.Parameters.AddWithValue("@sourcePk", sourcePk);
-
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read())
+                """,
+            [("@mappingId", mappingId), ("@sourcePk", sourcePk)],
+            cmd =>
             {
-                return new RecordHashOk(null);
-            }
+                using var reader = cmd.ExecuteReader();
+                if (!reader.Read())
+                {
+                    return new RecordHashOk(null);
+                }
 
-            return new RecordHashOk(
-                new RecordHashEntry(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.GetString(2),
-                    reader.GetString(3)
-                )
-            );
-        }
-        catch (SqliteException ex)
-        {
-            return new RecordHashError(
-                new SyncErrorDatabase($"Failed to get record hash: {ex.Message}")
-            );
-        }
-    }
+                return new RecordHashOk(ReadRecordHash(reader));
+            },
+            message => new RecordHashError(
+                new SyncErrorDatabase($"Failed to get record hash: {message}")
+            )
+        );
 
     /// <summary>
     /// Upserts record hash.
@@ -207,33 +220,35 @@ public static class MappingRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="hash">Record hash to save.</param>
     /// <returns>Success or error.</returns>
-    public static BoolSyncResult UpsertRecordHash(SqliteConnection connection, RecordHashEntry hash)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static BoolSyncResult UpsertRecordHash(
+        SqliteConnection connection,
+        RecordHashEntry hash
+    ) =>
+        Execute<BoolSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 INSERT INTO _sync_record_hashes (mapping_id, source_pk, payload_hash, synced_at)
                 VALUES (@mappingId, @sourcePk, @hash, @syncedAt)
                 ON CONFLICT (mapping_id, source_pk) DO UPDATE SET
                     payload_hash = @hash,
                     synced_at = @syncedAt
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", hash.MappingId);
-            cmd.Parameters.AddWithValue("@sourcePk", hash.SourcePk);
-            cmd.Parameters.AddWithValue("@hash", hash.PayloadHash);
-            cmd.Parameters.AddWithValue("@syncedAt", hash.SyncedAt);
-            cmd.ExecuteNonQuery();
-
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to upsert record hash: {ex.Message}")
-            );
-        }
-    }
+                """,
+            [
+                ("@mappingId", hash.MappingId),
+                ("@sourcePk", hash.SourcePk),
+                ("@hash", hash.PayloadHash),
+                ("@syncedAt", hash.SyncedAt),
+            ],
+            cmd =>
+            {
+                cmd.ExecuteNonQuery();
+                return new BoolSyncOk(true);
+            },
+            message => new BoolSyncError(
+                new SyncErrorDatabase($"Failed to upsert record hash: {message}")
+            )
+        );
 
     /// <summary>
     /// Deletes record hash.
@@ -246,28 +261,24 @@ public static class MappingRepository
         SqliteConnection connection,
         string mappingId,
         string sourcePk
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    ) =>
+        Execute<BoolSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = """
                 DELETE FROM _sync_record_hashes
                 WHERE mapping_id = @mappingId AND source_pk = @sourcePk
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            cmd.Parameters.AddWithValue("@sourcePk", sourcePk);
-            cmd.ExecuteNonQuery();
-
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to delete record hash: {ex.Message}")
-            );
-        }
-    }
+                """,
+            [("@mappingId", mappingId), ("@sourcePk", sourcePk)],
+            cmd =>
+            {
+                cmd.ExecuteNonQuery();
+                return new BoolSyncOk(true);
+            },
+            message => new BoolSyncError(
+                new SyncErrorDatabase($"Failed to delete record hash: {message}")
+            )
+        );
 
     /// <summary>
     /// Deletes all record hashes for a mapping.
@@ -278,24 +289,17 @@ public static class MappingRepository
     public static IntSyncResult DeleteRecordHashesByMapping(
         SqliteConnection connection,
         string mappingId
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_record_hashes WHERE mapping_id = @mappingId";
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            var count = cmd.ExecuteNonQuery();
-
-            return new IntSyncOk(count);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete record hashes: {ex.Message}")
-            );
-        }
-    }
+    ) =>
+        Execute<IntSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText = "DELETE FROM _sync_record_hashes WHERE mapping_id = @mappingId",
+            [("@mappingId", mappingId)],
+            cmd => new IntSyncOk(cmd.ExecuteNonQuery()),
+            message => new IntSyncError(
+                new SyncErrorDatabase($"Failed to delete record hashes: {message}")
+            )
+        );
 
     /// <summary>
     /// Counts record hashes for a mapping.
@@ -303,23 +307,18 @@ public static class MappingRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="mappingId">Mapping identifier.</param>
     /// <returns>Count or error.</returns>
-    public static LongSyncResult CountRecordHashes(SqliteConnection connection, string mappingId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT COUNT(*) FROM _sync_record_hashes WHERE mapping_id = @mappingId";
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            var count = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
-
-            return new LongSyncOk(count);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to count record hashes: {ex.Message}")
-            );
-        }
-    }
+    public static LongSyncResult CountRecordHashes(SqliteConnection connection, string mappingId) =>
+        Execute<LongSyncResult>(
+            connection,
+            cmd =>
+                cmd.CommandText =
+                    "SELECT COUNT(*) FROM _sync_record_hashes WHERE mapping_id = @mappingId",
+            [("@mappingId", mappingId)],
+            cmd => new LongSyncOk(
+                Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture)
+            ),
+            message => new LongSyncError(
+                new SyncErrorDatabase($"Failed to count record hashes: {message}")
+            )
+        );
 }

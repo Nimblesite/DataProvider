@@ -182,8 +182,8 @@ public sealed class FormatAdapterTests
         var report = new ReportExecutionResult(
             ReportId: "mixed-report",
             ExecutedAt: executedAt,
-            DataSources: ImmutableDictionary<string, DataSourceResult>.Empty
-                .Add(
+            DataSources: ImmutableDictionary<string, DataSourceResult>
+                .Empty.Add(
                     "patients",
                     new DataSourceResult(
                         ColumnNames: ["id", "note", "count"],
@@ -191,10 +191,7 @@ public sealed class FormatAdapterTests
                         TotalRows: 1
                     )
                 )
-                .Add(
-                    "empty",
-                    new DataSourceResult(ColumnNames: ["id"], Rows: [], TotalRows: 0)
-                )
+                .Add("empty", new DataSourceResult(ColumnNames: ["id"], Rows: [], TotalRows: 0))
         );
 
         using var document = JsonDocument.Parse(FormatAdapter.ToJson(report));

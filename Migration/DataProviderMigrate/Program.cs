@@ -1,8 +1,10 @@
 using System.Collections.Immutable;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
 using Nimblesite.DataProvider.Migration.SQLite;
+using Nimblesite.DataProvider.Migration.SqlServer;
 using Npgsql;
 using SchemaIntegrityResultError = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -30,7 +32,7 @@ public static partial class Program
     /// <summary>
     /// Entry point - dispatches to migrate or export subcommand.
     /// Usage:
-    ///   migrate: dotnet run -- migrate --schema path/to/schema.yaml --output path/to/database.db --provider [sqlite|postgres]
+    ///   migrate: dotnet run -- migrate --schema path/to/schema.yaml --output path/to/database.db --provider [sqlite|postgres|sqlserver]
     ///   export:  dotnet run -- export --assembly path/to/assembly.dll --type Namespace.SchemaClass --output path/to/schema.yaml
     /// </summary>
     public static int Main(string[] args)
@@ -137,6 +139,12 @@ public static partial class Program
                 args.AllowDestructive,
                 args.Phase
             ),
+            "sqlserver" or "mssql" => MigrateSqlServerDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
             _ => ShowProviderError(args.Provider),
         };
     }
@@ -179,7 +187,8 @@ public static partial class Program
                         ops,
                         SqliteDdlGenerator.Generate,
                         new MigrationOptions { AllowDestructive = allowDestructive }
-                    )
+                    ),
+                (_, desired) => SqliteSchemaNormalizer.Normalize(desired)
             );
         }
         catch (Exception ex)
@@ -221,6 +230,41 @@ public static partial class Program
         catch (Exception ex)
         {
             Console.WriteLine($"Error: PostgreSQL connection/migration failed: {ex}");
+            return 1;
+        }
+    }
+
+    // Implements [MIG-SQLSERVER].
+    private static int MigrateSqlServerDatabase(
+        SchemaDefinition schema,
+        string connectionString,
+        bool allowDestructive,
+        MigratePhase phase
+    )
+    {
+        try
+        {
+            using var connection = new SqlConnection(connectionString);
+            connection.Open();
+            Console.WriteLine("Connected to SQL Server database");
+
+            return ApplyDiff(
+                schema,
+                allowDestructive,
+                phase,
+                () => SqlServerSchemaInspector.Inspect(connection),
+                ops =>
+                    MigrationRunner.Apply(
+                        connection,
+                        ops,
+                        SqlServerDdlGenerator.Generate,
+                        new MigrationOptions { AllowDestructive = allowDestructive }
+                    )
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: SQL Server connection/migration failed: {ex}");
             return 1;
         }
     }
@@ -418,12 +462,14 @@ public static partial class Program
             Console.WriteLine($"Error: policy catalog normalization failed: {error.Value}");
             return null;
         }
-        return (
-            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
-                SchemaDefinition,
-                MigrationError
-            >)result
-        ).Value;
+        return
+            result
+                is Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                    SchemaDefinition,
+                    MigrationError
+                > ok
+            ? ok.Value
+            : null;
     }
 
     private static int WriteIntegrityResult(ImmutableArray<string> mismatches)
@@ -482,7 +528,7 @@ public static partial class Program
     private static int ShowProviderError(string provider)
     {
         Console.WriteLine(
-            $"Error: Unknown provider '{provider}'\nValid providers: sqlite, postgres"
+            $"Error: Unknown provider '{provider}'\nValid providers: sqlite, postgres, sqlserver"
         );
         return 1;
     }
@@ -500,7 +546,7 @@ public static partial class Program
               export    Export C# schema class to YAML file
 
             Usage:
-              DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres]
+              DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres|sqlserver]
               DataProviderMigrate export --assembly assembly.dll --type Namespace.SchemaClass --output schema.yaml
 
             Run 'DataProviderMigrate <command> --help' for command-specific options.
@@ -529,8 +575,8 @@ public static partial class Program
 
             Options:
               --schema, -s         Path to YAML schema definition file (required)
-              --output, -o         Path to output database file (SQLite) or connection string (Postgres)
-              --provider, -p       Database provider: sqlite or postgres (default: sqlite)
+              --output, -o         Path to output database file (SQLite) or connection string (Postgres, SQL Server)
+              --provider, -p       Database provider: sqlite, postgres or sqlserver (default: sqlite)
               --allow-destructive  Permit DROP/DISABLE operations (drift cleanup, FORCE removal,
                                    policy drops). Off by default for safety.
               --phase              Operations to apply: all (default), structural, rls.
@@ -592,7 +638,7 @@ public static partial class Program
                     if (i + 1 >= args.Length)
                     {
                         return new MigrateParseResult.Failure(
-                            "--provider requires an argument (sqlite or postgres)"
+                            "--provider requires an argument (sqlite, postgres or sqlserver)"
                         );
                     }
 

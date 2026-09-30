@@ -157,8 +157,7 @@ public static class PostgresPolicyCatalogNormalizer
             WHERE schemaname = pg_my_temp_schema()::regnamespace::text AND viewname = @view
             """;
         command.Parameters.AddWithValue("view", view);
-        var definition = command.ExecuteScalar() as string;
-        if (definition is null)
+        if (command.ExecuteScalar() is not string definition)
         {
             throw new InvalidOperationException(
                 $"Temporary policy view {view} was not found in pg_views"

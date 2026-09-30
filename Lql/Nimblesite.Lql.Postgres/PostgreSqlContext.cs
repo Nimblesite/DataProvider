@@ -170,6 +170,17 @@ public sealed class PostgreSqlContext : ISqlContext
     {
         var statement = _builder.Build();
 
+        return GenerateStatementSQL(statement);
+    }
+
+    /// <summary>Generates PostgreSQL SQL from an already-built statement.</summary>
+    /// <param name="statement">The SQL statement to generate from</param>
+    /// <returns>The PostgreSQL SQL string</returns>
+    public static string ToPostgreSqlSql(SelectStatement statement) =>
+        GenerateStatementSQL(statement);
+
+    private static string GenerateStatementSQL(SelectStatement statement)
+    {
         if (statement.Unions.Count > 0)
         {
             return GenerateUnionSQL(statement);
@@ -183,7 +194,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// </summary>
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The SELECT SQL string</returns>
-    private string GenerateSelectSQL(SelectStatement statement)
+    private static string GenerateSelectSQL(SelectStatement statement)
     {
         var sql = new StringBuilder();
 
@@ -311,9 +322,9 @@ public sealed class PostgreSqlContext : ISqlContext
             }
 
             // Quoted identifier `"foo"`. If followed by `.` it's a
-            // `"fhir_Slot".` qualifier and can be rewritten to its alias.
+            // `"MixedTable".` qualifier and can be rewritten to its alias.
             // Otherwise (followed by whitespace/end) it's the FROM/JOIN
-            // declaration form `"fhir_Slot" f` and must be left alone.
+            // declaration form `"MixedTable" f` and must be left alone.
             if (c == '"')
             {
                 var quoteStart = i;
@@ -377,7 +388,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// </summary>
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The UNION SQL string</returns>
-    private string GenerateUnionSQL(SelectStatement statement)
+    private static string GenerateUnionSQL(SelectStatement statement)
     {
         var sql = new StringBuilder();
 
@@ -434,13 +445,8 @@ public sealed class PostgreSqlContext : ISqlContext
     /// </summary>
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The FROM clause string</returns>
-    private string GenerateFromClause(SelectStatement statement)
+    private static string GenerateFromClause(SelectStatement statement)
     {
-        if (_baseTable == null)
-        {
-            return "";
-        }
-
         var sql = new StringBuilder();
 
         var baseTable = statement.Tables.Count > 0 ? statement.Tables.First() : null;
@@ -497,7 +503,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The WHERE clause string</returns>
     private static string GenerateWhereClause(SelectStatement statement) =>
-        $"\nWHERE {string.Join(" AND ", statement.WhereConditions.Select(GenerateWhereConditionSql))}";
+        $"\nWHERE {WhereConditionSql.Join(statement.WhereConditions, GenerateWhereConditionSql)}";
 
     /// <summary>
     /// Generates SQL for a single WHERE condition
@@ -519,7 +525,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// so PostgreSQL preserves their case (matches the FormatTableName
     /// behaviour above). ExpressionColumn values pass through
     /// QuoteIdentifier as well so qualified references like
-    /// `icd10_chapter.Id` get the trailing component quoted.
+    /// `reference_table.Id` get the trailing component quoted.
     /// </summary>
     /// <param name="columnInfo">The column info</param>
     /// <returns>The SQL string for the column</returns>
@@ -530,7 +536,7 @@ public sealed class PostgreSqlContext : ISqlContext
                 ? QuoteIdentifier(n.Name)
                 // Bug #24: also quote the TableAlias if it needs it.
                 // When the FROM clause uses a quoted mixed-case table name
-                // (e.g. `FROM "fhir_Patient"`), the column qualifier must
+                // (e.g. `FROM "MixedTable"`), the column qualifier must
                 // also be quoted to look up the same table.
                 : $"{QuoteBareIdentifier(n.TableAlias)}.{QuoteIdentifier(n.Name)}",
             WildcardColumn w => string.IsNullOrEmpty(w.TableAlias)
@@ -604,7 +610,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// <summary>
     /// Formats a table name for PostgreSQL. PostgreSQL folds unquoted
     /// identifiers to lower case, so any identifier that contains an
-    /// uppercase character (e.g. `fhir_Patient`) MUST be double-quoted
+    /// uppercase character (e.g. `MixedTable`) MUST be double-quoted
     /// to survive a round-trip. Identifiers that are already lowercase
     /// (the previous behaviour) are emitted unquoted to preserve the
     /// existing test fixture output.
@@ -807,11 +813,11 @@ public sealed class PostgreSqlContext : ISqlContext
                         var tailIdent = expression[tailStart..tailEnd];
 
                         // Bug #24: also quote the prefix when it needs
-                        // quoting (e.g. `fhir_Patient.Id` ->
-                        // `"fhir_Patient"."Id"`). PG folds the unquoted
+                        // quoting (e.g. `MixedTable.Id` ->
+                        // `"MixedTable"."Id"`). PG folds the unquoted
                         // table-name qualifier to lower case otherwise
                         // and the lookup against a quoted FROM table
-                        // ("fhir_Patient") fails.
+                        // ("MixedTable") fails.
                         if (NeedsQuoting(firstIdent))
                         {
                             sb.Append('"').Append(firstIdent).Append('"');

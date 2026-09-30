@@ -23,7 +23,7 @@ public sealed class PostgreSqlFunctionMapping : FunctionMappingProviderBase
     /// Creates the PostgreSQL function mappings
     /// </summary>
     /// <returns>Dictionary of function mappings</returns>
-    private static ImmutableDictionary<string, FunctionMap> CreateFunctionMappings() =>
+    internal static ImmutableDictionary<string, FunctionMap> CreateFunctionMappings() =>
         new Dictionary<string, FunctionMap>
         {
             ["count"] = new(
@@ -69,7 +69,7 @@ public sealed class PostgreSqlFunctionMapping : FunctionMappingProviderBase
     /// Creates the PostgreSQL syntax mapping
     /// </summary>
     /// <returns>The PostgreSQL syntax mapping</returns>
-    private static SqlSyntaxMapping CreateSyntaxMapping() =>
+    internal static SqlSyntaxMapping CreateSyntaxMapping() =>
         new(
             LimitClause: "LIMIT {0}",
             OffsetClause: "OFFSET {0}",

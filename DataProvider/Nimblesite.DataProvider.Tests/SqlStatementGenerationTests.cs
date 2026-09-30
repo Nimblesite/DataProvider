@@ -15,7 +15,9 @@ public sealed class SqlStatementGenerationTests
         params string[] fragments
     )
     {
-        var sql = RenderForProvider(statement, provider);
+        // Identifier quoting is provider syntax; PostgresSqlModelIdentifierTests pins it.
+        var sql = RenderForProvider(statement, provider)
+            .Replace("\"", "", StringComparison.Ordinal);
         Assert.NotEmpty(sql);
         foreach (var fragment in fragments)
         {

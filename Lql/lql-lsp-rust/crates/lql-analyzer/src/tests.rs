@@ -1,10 +1,17 @@
 #[cfg(test)]
 mod diagnostics_tests {
-    use crate::diagnostics::{analyze, DiagnosticSeverity};
+    use crate::diagnostics::{analyze, Diagnostic, DiagnosticSeverity};
     use crate::scope::ScopeMap;
 
     fn empty_scope() -> ScopeMap {
         ScopeMap::new()
+    }
+
+    fn diags_matching<'a>(diags: &'a [Diagnostic], needle: &str) -> Vec<&'a Diagnostic> {
+        diags
+            .iter()
+            .filter(|d| d.message.contains(needle))
+            .collect()
     }
 
     // ── analyze: empty / comments ──────────────────────────────────────
@@ -30,20 +37,14 @@ mod diagnostics_tests {
     #[test]
     fn correct_pipe_spacing_no_warning() {
         let diags = analyze("users |> select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "Pipeline");
         assert!(pipe_diags.is_empty());
     }
 
     #[test]
     fn missing_space_before_pipe() {
         let diags = analyze("users|> select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("preceded by a space"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "preceded by a space");
         assert_eq!(pipe_diags.len(), 1);
         assert_eq!(pipe_diags[0].severity, DiagnosticSeverity::Warning);
         assert_eq!(pipe_diags[0].line, 0);
@@ -53,10 +54,7 @@ mod diagnostics_tests {
     #[test]
     fn missing_space_after_pipe() {
         let diags = analyze("users |>select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("followed by a space"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "followed by a space");
         assert_eq!(pipe_diags.len(), 1);
         assert_eq!(pipe_diags[0].severity, DiagnosticSeverity::Warning);
     }
@@ -64,50 +62,35 @@ mod diagnostics_tests {
     #[test]
     fn missing_space_both_sides() {
         let diags = analyze("users|>select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "Pipeline");
         assert_eq!(pipe_diags.len(), 2);
     }
 
     #[test]
     fn tab_before_pipe_is_ok() {
         let diags = analyze("users\t|> select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("preceded"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "preceded");
         assert!(pipe_diags.is_empty());
     }
 
     #[test]
     fn tab_after_pipe_is_ok() {
         let diags = analyze("users |>\tselect(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("followed"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "followed");
         assert!(pipe_diags.is_empty());
     }
 
     #[test]
     fn pipe_at_end_of_line_no_after_warning() {
         let diags = analyze("users |>", &empty_scope());
-        let after: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("followed"))
-            .collect();
+        let after = diags_matching(&diags, "followed");
         assert!(after.is_empty());
     }
 
     #[test]
     fn pipe_at_start_of_line_no_before_warning() {
         let diags = analyze("|> select(users.id)", &empty_scope());
-        let before: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("preceded"))
-            .collect();
+        let before = diags_matching(&diags, "preceded");
         assert!(before.is_empty());
     }
 
@@ -117,10 +100,7 @@ mod diagnostics_tests {
             "a |> filter(fn(r) => r.a.x > 1) |> select(a.id)",
             &empty_scope(),
         );
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "Pipeline");
         assert!(pipe_diags.is_empty());
     }
 
@@ -128,10 +108,7 @@ mod diagnostics_tests {
     fn multiline_pipe_spacing() {
         let source = "users\n|> filter(fn(r) => r.users.age > 18)\n|> select(users.name)";
         let diags = analyze(source, &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "Pipeline");
         assert!(pipe_diags.is_empty());
     }
 
@@ -139,20 +116,14 @@ mod diagnostics_tests {
     #[test]
     fn known_function_no_diagnostic() {
         let diags = analyze("users |> select(users.id)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown");
         assert!(unknown.is_empty());
     }
 
     #[test]
     fn unknown_function_reported() {
         let diags = analyze("users |> foobar(users.id)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown");
         assert_eq!(unknown.len(), 1);
         assert!(unknown[0].message.contains("foobar"));
         assert_eq!(unknown[0].severity, DiagnosticSeverity::Info);
@@ -163,10 +134,7 @@ mod diagnostics_tests {
         let mut scope = ScopeMap::new();
         scope.add_binding("my_func".to_string(), 0, 0);
         let diags = analyze("x |> my_func(x.id)", &scope);
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown");
         assert!(unknown.is_empty());
     }
 
@@ -174,10 +142,7 @@ mod diagnostics_tests {
     fn keyword_not_reported_as_unknown() {
         // "fn" after pipe should not be flagged
         let diags = analyze("users |> filter(fn(r) => r.users.id > 0)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown function: `fn`"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown function: `fn`");
         assert!(unknown.is_empty());
     }
 
@@ -246,10 +211,7 @@ mod diagnostics_tests {
         for func in known {
             let source = format!("x |> {func}(x.id)");
             let diags = analyze(&source, &empty_scope());
-            let unknown: Vec<_> = diags
-                .iter()
-                .filter(|d| d.message.contains("Unknown"))
-                .collect();
+            let unknown = diags_matching(&diags, "Unknown");
             assert!(
                 unknown.is_empty(),
                 "Function `{func}` should be recognized but got: {:?}",
@@ -261,10 +223,7 @@ mod diagnostics_tests {
     #[test]
     fn case_insensitive_function_check() {
         let diags = analyze("x |> SELECT(x.id)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown");
         assert!(unknown.is_empty());
     }
 
@@ -275,10 +234,7 @@ mod diagnostics_tests {
             "users |> filter(fn(r) => r.users.name = 'blah(')",
             &empty_scope(),
         );
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown function: `blah`"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown function: `blah`");
         assert!(unknown.is_empty());
     }
 
@@ -288,20 +244,14 @@ mod diagnostics_tests {
             r"users |> filter(fn(r) => r.users.name = 'it\'s(test')",
             &empty_scope(),
         );
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown function: `s`"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown function: `s`");
         assert!(unknown.is_empty());
     }
 
     #[test]
     fn identifier_not_followed_by_paren_not_reported() {
         let diags = analyze("users |> select(users.foobar)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Unknown"))
-            .collect();
+        let unknown = diags_matching(&diags, "Unknown");
         assert!(unknown.is_empty());
     }
 
@@ -339,10 +289,7 @@ mod diagnostics_tests {
         for kw in keywords {
             let source = format!("x |> filter(fn(r) => {kw}(r.x.y))");
             let diags = analyze(&source, &empty_scope());
-            let unknown: Vec<_> = diags
-                .iter()
-                .filter(|d| d.message.contains(&format!("Unknown function: `{kw}`")))
-                .collect();
+            let unknown = diags_matching(&diags, &format!("Unknown function: `{kw}`"));
             assert!(unknown.is_empty(), "Keyword `{kw}` flagged as unknown");
         }
     }
@@ -350,20 +297,14 @@ mod diagnostics_tests {
     #[test]
     fn function_with_whitespace_before_paren() {
         let diags = analyze("x |> foobar  (x.id)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("foobar"))
-            .collect();
+        let unknown = diags_matching(&diags, "foobar");
         assert_eq!(unknown.len(), 1);
     }
 
     #[test]
     fn underscore_identifier_as_function() {
         let diags = analyze("x |> _my_func(x.id)", &empty_scope());
-        let unknown: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("_my_func"))
-            .collect();
+        let unknown = diags_matching(&diags, "_my_func");
         assert_eq!(unknown.len(), 1);
     }
 
@@ -395,10 +336,7 @@ mod diagnostics_tests {
     fn diagnostics_report_correct_line_numbers() {
         let source = "users |> select(users.id)\norders|>filter(fn(r) => r.orders.x > 0)";
         let diags = analyze(source, &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("preceded"))
-            .collect();
+        let pipe_diags = diags_matching(&diags, "preceded");
         assert_eq!(pipe_diags.len(), 1);
         assert_eq!(pipe_diags[0].line, 1);
     }

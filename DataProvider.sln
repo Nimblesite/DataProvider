@@ -99,6 +99,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nimblesite.DataProvider.Par
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lql", "Lql\Lql\Lql.csproj", "{0309F6C0-C462-49D6-83D5-7C4B93066AD3}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Migration", "Migration", "{C7F49633-8D5E-7E19-1580-A6459B2EAE66}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nimblesite.DataProvider.Migration.SqlServer", "Migration\Nimblesite.DataProvider.Migration.SqlServer\Nimblesite.DataProvider.Migration.SqlServer.csproj", "{D16BF05C-1614-442E-972F-4208ADA0FF5C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -613,6 +617,18 @@ Global
 		{0309F6C0-C462-49D6-83D5-7C4B93066AD3}.Release|x64.Build.0 = Release|Any CPU
 		{0309F6C0-C462-49D6-83D5-7C4B93066AD3}.Release|x86.ActiveCfg = Release|Any CPU
 		{0309F6C0-C462-49D6-83D5-7C4B93066AD3}.Release|x86.Build.0 = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|x64.Build.0 = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Debug|x86.Build.0 = Debug|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|x64.ActiveCfg = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|x64.Build.0 = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|x86.ActiveCfg = Release|Any CPU
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -656,6 +672,7 @@ Global
 		{844487F2-1F62-4EAA-AE15-0E2A73C5EC96} = {6C7402B1-8968-47EB-8CE8-51768E9CAD79}
 		{8E38A258-EA12-40DD-9268-9A6047DB2368} = {6C7402B1-8968-47EB-8CE8-51768E9CAD79}
 		{0309F6C0-C462-49D6-83D5-7C4B93066AD3} = {54B846BA-A27D-B76F-8730-402A5742FF43}
+		{D16BF05C-1614-442E-972F-4208ADA0FF5C} = {C7F49633-8D5E-7E19-1580-A6459B2EAE66}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {53128A75-E7B6-4B83-B079-A309FCC2AD9C}

@@ -51,4 +51,23 @@ public static class SqlStatementExtensionsSqlServer
         var context = new SqlServerContext();
         return PipelineProcessor.ConvertPipelineToSql(pipeline, context);
     }
+
+    /// <summary>
+    /// Converts a Nimblesite.Sql.Model.SelectStatement to SQL Server syntax.
+    /// Implements [DP-SQL-MODEL-DIALECTS].
+    /// </summary>
+    /// <param name="statement">The SelectStatement to convert</param>
+    /// <returns>A Result containing either SQL Server SQL string or a SqlError</returns>
+    public static Result<string, SqlError> ToSqlServer(this SelectStatement statement)
+    {
+        try
+        {
+            var sql = SqlServerContext.ToSqlServerSql(statement);
+            return new Result<string, SqlError>.Ok<string, SqlError>(sql);
+        }
+        catch (Exception ex)
+        {
+            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
+        }
+    }
 }

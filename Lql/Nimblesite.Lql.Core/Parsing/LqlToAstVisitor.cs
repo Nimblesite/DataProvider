@@ -255,7 +255,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         if (logicalExpr != null)
         {
             // Process the logical expression with lambda variable scope
-            string conditionText = ProcessLambdaLogicalExpr(logicalExpr, parameters);
+            string conditionText = ProcessLambdaLogicalExpr(logicalExpr, parameters, _lambdaScope);
             return new Identifier(conditionText);
         }
 
@@ -270,16 +270,20 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// </summary>
     /// <param name="logicalExpr">The logical expression context.</param>
     /// <param name="lambdaVariables">The lambda variable names.</param>
+    /// <param name="inheritedScope">Variables from any enclosing lambda.</param>
     /// <returns>The processed condition text.</returns>
     private static string ProcessLambdaLogicalExpr(
         LqlParser.LogicalExprContext logicalExpr,
-        List<string> lambdaVariables
+        List<string> lambdaVariables,
+        HashSet<string>? inheritedScope = null
     )
     {
-        // Create a new visitor instance with lambda variable scope
+        // Create a new visitor instance with lambda variable scope. Variables
+        // from an enclosing lambda (e.g. `row` in correlated subqueries)
+        // remain visible so their references resolve to the outer tables.
         var visitor = new LqlToAstVisitor();
         visitor._lambdaScope = new HashSet<string>(
-            lambdaVariables,
+            lambdaVariables.Concat(inheritedScope ?? []),
             StringComparer.OrdinalIgnoreCase
         );
 
@@ -433,6 +437,15 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             return $"{left} IS {(isNot ? "NOT " : string.Empty)}NULL";
         }
 
+        // Handle EXISTS (subquery) predicates.
+        if (comparison.existsExpr() != null)
+        {
+            return FormatSubquery(
+                "EXISTS",
+                ProcessSubqueryToSql(comparison.existsExpr().pipeExpr(), lambdaScope)
+            );
+        }
+
         if (comparison.inExpr() != null)
         {
             return ProcessInExpressionToSql(comparison.inExpr(), lambdaScope);
@@ -452,6 +465,14 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         HashSet<string>? lambdaScope
     )
     {
+        // Implements [LQL-PREDICATE-IN-LIST] and [LQL-PREDICATE-IN-SUBQUERY]:
+        // `x in (pipeline |> ...)` becomes `x IN (SELECT ...)`.
+        if (inExpr.pipeExpr() is { } inSubquery)
+        {
+            var subqueryLeft = ProcessInLeftExpressionToSql(inExpr, lambdaScope);
+            return $"{subqueryLeft} {FormatSubquery("IN", ProcessSubqueryToSql(inSubquery, lambdaScope))}";
+        }
+
         // Implements [LQL-PREDICATE-IN-LIST].
         if (inExpr.argList() == null)
         {
@@ -464,6 +485,125 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         var values = inExpr.argList().arg().Select(arg => ProcessFnCallArgToSql(arg, lambdaScope));
         return $"{left} IN ({string.Join(", ", values)})";
     }
+
+    /// <summary>
+    /// Extracts a subquery pipeline from an argument, which may be a bare
+    /// pipeExpr or a parenthesized `(pipeExpr)` expression.
+    /// </summary>
+    private static LqlParser.PipeExprContext? GetArgSubquery(LqlParser.ArgContext arg) =>
+        arg.pipeExpr() ?? arg.expr()?.pipeExpr();
+
+    /// <summary>
+    /// Merges the enclosing lambda scope into a subquery visitor so that
+    /// correlation references like `row.users.id` resolve against the outer
+    /// query's table instead of leaking the raw lambda parameter.
+    /// </summary>
+    private static LqlToAstVisitor CreateSubqueryVisitor(HashSet<string>? outerScope)
+    {
+        var visitor = new LqlToAstVisitor();
+        if (outerScope != null)
+        {
+            visitor._lambdaScope = new HashSet<string>(
+                outerScope,
+                StringComparer.OrdinalIgnoreCase
+            );
+        }
+        return visitor;
+    }
+
+    /// <summary>
+    /// Formats a subquery SQL body inside parentheses under the given keyword
+    /// (e.g. "EXISTS" or "IN"), indented by four spaces per line.
+    /// </summary>
+    private static string FormatSubquery(string keyword, string subquerySql) =>
+        $"{keyword} (\n    {subquerySql.Replace("\n", "\n    ", StringComparison.Ordinal)}\n)";
+
+    /// <summary>
+    /// Converts a nested pipeline expression into a scalar SQL subquery.
+    /// Implements [LQL-PREDICATE-IN-SUBQUERY] and [LQL-PREDICATE-EXISTS-SUBQUERY].
+    /// </summary>
+    private static string ProcessSubqueryToSql(
+        LqlParser.PipeExprContext pipeExpr,
+        HashSet<string>? outerScope
+    )
+    {
+        var node = CreateSubqueryVisitor(outerScope).VisitPipeExpr(pipeExpr);
+        return node is Pipeline pipeline
+            ? RenderSubqueryPipelineToSql(pipeline, pipeExpr)
+            : throw new SqlErrorException(
+                CreateSqlErrorStatic("Unsupported subquery expression", pipeExpr)
+            );
+    }
+
+    /// <summary>
+    /// Renders a subquery pipeline (base table plus filter/select/group steps)
+    /// as a single-line-free SELECT statement body.
+    /// </summary>
+    private static string RenderSubqueryPipelineToSql(
+        Pipeline pipeline,
+        LqlParser.PipeExprContext context
+    )
+    {
+        var baseTable =
+            pipeline.Steps.OfType<IdentityStep>().FirstOrDefault()?.Base as Identifier
+            ?? throw new SqlErrorException(
+                CreateSqlErrorStatic("Subquery requires a base table", context)
+            );
+
+        var select = pipeline.Steps.OfType<SelectStep>().LastOrDefault();
+        var columns =
+            select == null
+                ? "1"
+                : string.Join(", ", select.Columns.Select(c => RenderSubqueryColumn(c, context)));
+
+        var clauses = new List<string> { $"SELECT {columns}", $"FROM {baseTable.Name}" };
+        AppendSubqueryFilterAndGrouping(pipeline, clauses, context);
+        return string.Join("\n", clauses);
+    }
+
+    /// <summary>
+    /// Appends WHERE / GROUP BY / HAVING clauses from the subquery pipeline.
+    /// </summary>
+    private static void AppendSubqueryFilterAndGrouping(
+        Pipeline pipeline,
+        List<string> clauses,
+        LqlParser.PipeExprContext context
+    )
+    {
+        var filter = pipeline.Steps.OfType<FilterStep>().LastOrDefault();
+        if (filter?.Condition is ExpressionCondition expression)
+        {
+            clauses.Add($"WHERE {expression.Expression}");
+        }
+
+        var groupBy = pipeline.Steps.OfType<GroupByStep>().LastOrDefault();
+        if (groupBy != null)
+        {
+            clauses.Add($"GROUP BY {string.Join(", ", groupBy.Columns)}");
+        }
+
+        var having = pipeline.Steps.OfType<HavingStep>().LastOrDefault();
+        if (having != null)
+        {
+            clauses.Add($"HAVING {having.Condition}");
+        }
+    }
+
+    /// <summary>
+    /// Renders a single subquery select column.
+    /// </summary>
+    private static string RenderSubqueryColumn(ColumnInfo column, ParserRuleContext context) =>
+        $"{column switch
+        {
+            NamedColumn named => named.TableAlias == null
+                ? named.Name
+                : $"{named.TableAlias}.{named.Name}",
+            ExpressionColumn expression => expression.Expression,
+            WildcardColumn => "*",
+            _ => throw new SqlErrorException(
+                CreateSqlErrorStatic($"Unsupported subquery column: {column.GetType().Name}", context)
+            ),
+        }}{(column.Alias == null ? string.Empty : $" AS {column.Alias}")}";
 
     private static string ProcessInLeftExpressionToSql(
         LqlParser.InExprContext inExpr,
@@ -758,6 +898,17 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         {
             return $"{fnName}()";
         }
+
+        // Implements [LQL-PREDICATE-EXISTS-SUBQUERY]: exists(pipeExpr)
+        // becomes an EXISTS (SELECT ...) correlated subquery.
+        if (
+            string.Equals(fnName, "exists", StringComparison.OrdinalIgnoreCase)
+            && args.arg().Length == 1
+            && GetArgSubquery(args.arg()[0]) is { } existsSubquery
+        )
+        {
+            return FormatSubquery("EXISTS", ProcessSubqueryToSql(existsSubquery, lambdaScope));
+        }
         var argTexts = args.arg().Select(a => ProcessFnCallArgToSql(a, lambdaScope)).ToList();
         return $"{fnName}({string.Join(", ", argTexts)})";
     }
@@ -886,7 +1037,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             "join" => CreateJoinStepWithType(baseNode, args, "INNER JOIN", expr),
             "left_join" => CreateJoinStepWithType(baseNode, args, "LEFT JOIN", expr),
             "cross_join" => CreateJoinStepWithType(baseNode, args, "CROSS JOIN", expr),
-            "filter" => CreateFilterStep(baseNode, args),
+            "filter" => CreateFilterStepInstance(baseNode, args),
             "select" => CreateSelectStep(baseNode, args),
             "select_distinct" => CreateSelectDistinctStep(baseNode, args),
             "group_by" => CreateGroupByStep(baseNode, args),
@@ -948,14 +1099,14 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The filter step.</returns>
-    private static FilterStep CreateFilterStep(INode baseNode, LqlParser.ArgContext[] args)
+    private FilterStep CreateFilterStepInstance(INode baseNode, LqlParser.ArgContext[] args)
     {
         WhereCondition condition;
 
         if (args.Length > 0)
         {
             // Try to extract condition from arguments and convert to typed WhereCondition
-            var conditionText = ExtractConditionFromLambda(args[0]);
+            var conditionText = ExtractConditionFromLambda(args[0], _lambdaScope);
             condition = WhereCondition.FromExpression(conditionText);
         }
         else
@@ -1185,13 +1336,17 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// Extracts condition from lambda or other argument types.
     /// </summary>
     /// <param name="arg">The argument context.</param>
+    /// <param name="inheritedScope">Variables from any enclosing lambda.</param>
     /// <returns>The condition string.</returns>
-    private static string ExtractConditionFromLambda(LqlParser.ArgContext arg)
+    private static string ExtractConditionFromLambda(
+        LqlParser.ArgContext arg,
+        HashSet<string>? inheritedScope = null
+    )
     {
         // Check if this is a lambda expression directly
         if (arg.lambdaExpr() != null)
         {
-            return ExtractLambdaCondition(arg.lambdaExpr());
+            return ExtractLambdaCondition(arg.lambdaExpr(), inheritedScope);
         }
 
         // Check if this is a lambda function expression
@@ -1200,7 +1355,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             var exprContext = arg.expr();
             if (exprContext.lambdaExpr() != null)
             {
-                return ExtractLambdaCondition(exprContext.lambdaExpr());
+                return ExtractLambdaCondition(exprContext.lambdaExpr(), inheritedScope);
             }
 
             throw new SqlErrorException(
@@ -1231,7 +1386,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         // Check if this is a lambda expression directly
         if (arg.lambdaExpr() != null)
         {
-            return ExtractLambdaCondition(arg.lambdaExpr());
+            return ExtractLambdaCondition(arg.lambdaExpr(), inheritedScope);
         }
 
         throw new SqlErrorException(
@@ -1246,8 +1401,12 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// Extracts condition from a lambda expression.
     /// </summary>
     /// <param name="lambdaExpr">The lambda expression context.</param>
+    /// <param name="inheritedScope">Variables from any enclosing lambda.</param>
     /// <returns>The condition string.</returns>
-    private static string ExtractLambdaCondition(LqlParser.LambdaExprContext lambdaExpr)
+    private static string ExtractLambdaCondition(
+        LqlParser.LambdaExprContext lambdaExpr,
+        HashSet<string>? inheritedScope = null
+    )
     {
         // Extract the lambda variable names
         var parameters = lambdaExpr.IDENT().Select(ident => ident.GetText()).ToList();
@@ -1256,7 +1415,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         if (logicalExpr != null)
         {
             // Use the proper ANTLR visitor to process the logical expression
-            return ProcessLambdaLogicalExpr(logicalExpr, parameters);
+            return ProcessLambdaLogicalExpr(logicalExpr, parameters, inheritedScope);
         }
 
         throw new SqlErrorException(

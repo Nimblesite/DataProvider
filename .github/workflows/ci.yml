@@ -264,11 +264,20 @@ jobs:
       - name: Verify lql-lsp --version
         run: |
           ./Lql/lql-lsp-rust/target/release/lql-lsp --version
-          # Confirm the printed version matches the VSIX package.json version
-          BIN_VERSION=$(./Lql/lql-lsp-rust/target/release/lql-lsp --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          # Compare full versions, including prerelease suffixes. The committed
+          # placeholder is 0.0.0-dev on both sides until release stamping.
+          BIN_OUTPUT=$(./Lql/lql-lsp-rust/target/release/lql-lsp --version)
+          case "$BIN_OUTPUT" in
+            "lql-lsp "*) BIN_VERSION="${BIN_OUTPUT#* }" ;;
+            *) echo "ERROR: unexpected lql-lsp --version output: $BIN_OUTPUT"; exit 1 ;;
+          esac
           VSIX_VERSION=$(jq -r '.version' Lql/LqlExtension/package.json)
           echo "Binary version: $BIN_VERSION"
           echo "VSIX version:   $VSIX_VERSION"
+          if [ -z "$BIN_VERSION" ] || [ -z "$VSIX_VERSION" ]; then
+            echo "ERROR: binary or VSIX version is empty"
+            exit 1
+          fi
           if [ "$BIN_VERSION" != "$VSIX_VERSION" ]; then
             echo "ERROR: lql-lsp --version ($BIN_VERSION) does not match VSIX version ($VSIX_VERSION)"
             exit 1
@@ -301,10 +310,13 @@ jobs:
       - name: Install Deslop
         run: |
           set -euo pipefail
-          curl -fsSL -o /usr/local/bin/deslop \
-            "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-x86_64-unknown-linux-gnu"
-          chmod +x /usr/local/bin/deslop
-          deslop --version
+          mkdir -p "$RUNNER_TEMP/deslop-bin"
+          curl -fsSL \
+            "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/deslop-bin" --strip-components=1 \
+              "deslop-${DESLOP_VERSION}-linux-x64/deslop"
+          echo "$RUNNER_TEMP/deslop-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/deslop-bin/deslop" --version
       - name: Check duplication (reads .deslop.toml)
         run: deslop .
       - name: Upload Deslop report

@@ -1,15 +1,31 @@
 # agent-pmo:795a9c2
 # Deslop duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP]
-# Single source of truth for this repo's duplication budget. Committed, PR-reviewed,
-# ratcheted DOWN only (never up without written justification).
-# CI runs `deslop .`, which reads this file and exits 3 (tanking the build) when
-# measured repo-wide duplication exceeds the value below.
+# Single source of truth for this repo's duplication budget.
 # Docs: https://deslop.live/docs/for-ai/
-#
-# NOTE: the local Deslop CLI on the authoring machine (0.5.1) is far behind the
-# current release (0.14.0) and did not produce a clean measurement, so this keeps
-# the conservative template default. After the first CI run reports the real
-# `metrics.duplication_percent`, ratchet this DOWN to that measured value (round
-# up ~0.3% for cross-runner jitter). Never raise it without written justification.
+[defaults]
+# Generated ANTLR outputs cannot be deduplicated by hand. Excluding them before
+# analysis also avoids comparing millions of generated parser subtrees.
+exclude = [
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLLexer.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParser.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseListener.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserListener.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteLexer.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParser.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserBaseListener.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserBaseVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserListener.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserVisitor.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlBaseListener.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlBaseVisitor.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlLexer.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlListener.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlParser.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlVisitor.cs",
+  "Lql/lql-lsp-rust/crates/lql-parser/src/generated/**",
+]
+
 [threshold]
 max_duplication_percent = 5.0

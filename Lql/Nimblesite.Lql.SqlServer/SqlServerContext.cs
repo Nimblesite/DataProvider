@@ -129,6 +129,17 @@ public sealed class SqlServerContext : ISqlContext
     {
         var statement = _builder.Build();
 
+        return GenerateStatementSQL(statement);
+    }
+
+    /// <summary>
+    /// Generates SQL for an already-built statement, appending UNIONs
+    /// ([DP-SQL-MODEL-DIALECTS])
+    /// </summary>
+    /// <param name="statement">The SQL statement to generate from</param>
+    /// <returns>The SQL string</returns>
+    private string GenerateStatementSQL(SelectStatement statement)
+    {
         var sql = GenerateSelectSQL(statement);
 
         // Add UNIONs (only for non-INSERT queries)
@@ -140,6 +151,15 @@ public sealed class SqlServerContext : ISqlContext
 
         return sql;
     }
+
+    /// <summary>
+    /// Generates SQL Server SQL directly from a SelectStatement.
+    /// Implements [DP-SQL-MODEL-DIALECTS].
+    /// </summary>
+    /// <param name="statement">The SQL statement to generate from</param>
+    /// <returns>The SQL Server SQL string</returns>
+    public static string ToSqlServerSql(SelectStatement statement) =>
+        new SqlServerContext().GenerateStatementSQL(statement);
 
     /// <summary>
     /// Generates the SELECT portion of the SQL
@@ -209,11 +229,8 @@ public sealed class SqlServerContext : ISqlContext
     /// </summary>
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The FROM clause</returns>
-    private string GenerateFromClause(SelectStatement statement)
+    private static string GenerateFromClause(SelectStatement statement)
     {
-        if (_baseTable == null)
-            return "-- No base table";
-
         var baseTable = statement.Tables.Count > 0 ? statement.Tables.First() : null;
         if (baseTable == null)
             return "-- No base table";
@@ -255,15 +272,10 @@ public sealed class SqlServerContext : ISqlContext
     /// </summary>
     /// <param name="statement">The SQL statement to generate from</param>
     /// <returns>The WHERE clause or empty string</returns>
-    private static string GenerateWhereClause(SelectStatement statement)
-    {
-        if (statement.WhereConditions.Count == 0)
-            return "";
-
-        var processedConditions = statement.WhereConditions.Select(GenerateWhereConditionSql);
-
-        return $"WHERE {string.Join(" AND ", processedConditions)}";
-    }
+    private static string GenerateWhereClause(SelectStatement statement) =>
+        statement.WhereConditions.Count == 0
+            ? ""
+            : $"WHERE {WhereConditionSql.Join(statement.WhereConditions, GenerateWhereConditionSql)}";
 
     /// <summary>
     /// Generates SQL for a single WHERE condition

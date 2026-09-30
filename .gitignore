@@ -450,13 +450,6 @@ Generated_Code/
 # Build timestamps
 .timestamp
 
-# Dashboard vendor JS (downloaded at build time)
-Samples/Dashboard/Dashboard.Web/wwwroot/js/vendor/
-
-# Dashboard compiled JS (H5/Bridge output)
-Samples/Dashboard/Dashboard.Web/wwwroot/js/Dashboard.js
-Samples/Dashboard/Dashboard.Web/wwwroot/js/Dashboard.min.js
-Samples/Dashboard/Dashboard.Web/wwwroot/js/index.html
 Website/_site/
 
 Website/docfx/api/
@@ -473,14 +466,12 @@ Website/src/docs/migrations.md
 
 # Images copied from repo at build time
 Website/src/assets/images/lqldbbrowser.png
-Website/src/assets/images/Samples/
 
 Lql/Lql.TypeProvider.FSharp.Tests.Data/Generated/
 
 *.nupkg
 
 *.snupkg
-Samples/ICD10CM/.venv
 
 .playwright-mcp/
 

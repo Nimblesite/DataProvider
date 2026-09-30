@@ -222,7 +222,7 @@ public static class SchemaIntegrityVerifier
             mismatches
         );
         AddIf(
-            !SameIdentifier(actual.ReferencedSchema, expected.ReferencedSchema),
+            !SameSchema(actual.ReferencedSchema, expected.ReferencedSchema),
             $"{tablePath}: foreign key {name} referenced schema drifted",
             mismatches
         );
@@ -705,7 +705,8 @@ public static class SchemaIntegrityVerifier
     private static bool IsDefaultSchema(string schema) =>
         string.IsNullOrWhiteSpace(schema)
         || SameIdentifier(actual: schema, expected: "main")
-        || SameIdentifier(actual: schema, expected: "public");
+        || SameIdentifier(actual: schema, expected: "public")
+        || SameIdentifier(actual: schema, expected: "dbo");
 
     private static bool IsSqliteSchema(string schema) =>
         SameIdentifier(actual: schema, expected: "main");

@@ -466,7 +466,7 @@ internal static class PostgresCli
         if (colRef.Contains('.'))
         {
             // BUG4 fix: split on dot but only outside quoted segments. A
-            // qualified ref like "fhir_Patient"."Active" must split on the
+            // qualified ref like "MixedTable"."Active" must split on the
             // middle dot, not the dots inside quoted parts (there aren't
             // any here, but the simple Split is fine). Then strip the
             // surrounding `"` chars from the tail.
@@ -949,7 +949,7 @@ internal static class PostgresCli
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
         _ = sb.AppendLine("    {");
         _ = sb.AppendLine("        const string sql = @\"");
-        // BUG6 fix: quote schema + table in UPDATE so mixed-case fhir_Patient
+        // BUG6 fix: quote schema + table in UPDATE so mixed-case identifiers
         // round-trips through PG. Verbatim string -> use `""` escape form.
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
@@ -1182,16 +1182,42 @@ internal static class PostgresCli
             insertable.Select(c => $"{c.CSharpType} {ToPascalCase(c.Name)}")
         );
 
+        EmitBulkMethodPreamble(sb, table, pascalName, tupleType, upsert: false);
+
+        // BUG3 fix: quote every identifier in emitted INSERT so mixed-case
+        // columns (Id, ChapterNumber) round-trip. Bare idents were folded to
+        // lowercase by PG and the statement failed with "column ... does not
+        // exist". Matches SELECT path which already quotes.
+        var colNames = string.Join(", ", insertable.Select(c => $"\\\"{c.Name}\\\""));
+        EmitBulkValuesBuilder(sb, table, insertable, colNames);
+        _ = sb.AppendLine("        sql.Append(\" ON CONFLICT DO NOTHING\");");
+        EmitBulkCommandExecution(sb, insertable);
+    }
+
+    private static void EmitBulkMethodPreamble(
+        StringBuilder sb,
+        TableConfigItem table,
+        string pascalName,
+        string tupleType,
+        bool upsert
+    )
+    {
+        var operation = upsert ? "Upsert" : "Insert";
+        var operationLower = upsert ? "upsert" : "insert";
+        var verb = upsert ? "upserts" : "inserts";
+        var conflictDescription = upsert
+            ? "ON CONFLICT DO UPDATE to insert or update existing rows"
+            : "ON CONFLICT DO NOTHING to skip duplicates";
+        var outcome = upsert ? "affected" : "inserted";
+        var totalVariable = upsert ? "totalAffected" : "totalInserted";
+
         _ = sb.AppendLine();
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// <summary>");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"    /// Bulk inserts rows into {table.Name} using batched multi-row VALUES."
+            $"    /// Bulk {verb} rows into {table.Name} using batched multi-row VALUES."
         );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Uses ON CONFLICT DO NOTHING to skip duplicates."
-        );
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// Uses {conflictDescription}.");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// </summary>");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
@@ -1199,7 +1225,7 @@ internal static class PostgresCli
         );
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"    /// <param name=\"records\">Records to insert as tuples.</param>"
+            $"    /// <param name=\"records\">Records to {operationLower} as tuples.</param>"
         );
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
@@ -1207,11 +1233,11 @@ internal static class PostgresCli
         );
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"    /// <returns>Total rows inserted.</returns>"
+            $"    /// <returns>Total rows {outcome}.</returns>"
         );
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> BulkInsert{pascalName}Async("
+            $"    public static async Task<Result<int, SqlError>> Bulk{operation}{pascalName}Async("
         );
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        this NpgsqlConnection conn,");
         _ = sb.AppendLine(
@@ -1220,7 +1246,7 @@ internal static class PostgresCli
         );
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        int batchSize = 1000)");
         _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        var totalInserted = 0;");
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        var {totalVariable} = 0;");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"        var batch = new List<({tupleType})>(batchSize);"
@@ -1235,14 +1261,14 @@ internal static class PostgresCli
         _ = sb.AppendLine("                {");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"                    var result = await ExecuteBulkInsert{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
+            $"                    var result = await ExecuteBulk{operation}{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
         );
         _ = sb.AppendLine(
             "                    if (result is Result<int, SqlError>.Error<int, SqlError> err)"
         );
         _ = sb.AppendLine("                        return err;");
         _ = sb.AppendLine(
-            "                    totalInserted += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
+            $"                    {totalVariable} += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
         );
         _ = sb.AppendLine("                    batch.Clear();");
         _ = sb.AppendLine("                }");
@@ -1252,19 +1278,19 @@ internal static class PostgresCli
         _ = sb.AppendLine("            {");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"                var finalResult = await ExecuteBulkInsert{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
+            $"                var finalResult = await ExecuteBulk{operation}{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
         );
         _ = sb.AppendLine(
             "                if (finalResult is Result<int, SqlError>.Error<int, SqlError> finalErr)"
         );
         _ = sb.AppendLine("                    return finalErr;");
         _ = sb.AppendLine(
-            "                    totalInserted += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
+            $"                    {totalVariable} += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
         );
         _ = sb.AppendLine("            }");
         _ = sb.AppendLine();
         _ = sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(totalInserted);"
+            $"            return new Result<int, SqlError>.Ok<int, SqlError>({totalVariable});"
         );
         _ = sb.AppendLine("        }");
         _ = sb.AppendLine("        catch (Exception ex)");
@@ -1279,7 +1305,7 @@ internal static class PostgresCli
         // Generate batch execution helper
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"    private static async Task<Result<int, SqlError>> ExecuteBulkInsert{pascalName}BatchAsync("
+            $"    private static async Task<Result<int, SqlError>> ExecuteBulk{operation}{pascalName}BatchAsync("
         );
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        NpgsqlConnection conn,");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        List<({tupleType})> batch)");
@@ -1287,23 +1313,17 @@ internal static class PostgresCli
         _ = sb.AppendLine("        if (batch.Count == 0)");
         _ = sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
         _ = sb.AppendLine();
+    }
 
-        // BUG3 fix: quote every identifier in emitted INSERT so mixed-case
-        // columns (Id, ChapterNumber) round-trip. Bare idents were folded to
-        // lowercase by PG and the statement failed with "column ... does not
-        // exist". Matches SELECT path which already quotes.
-        var colNames = string.Join(", ", insertable.Select(c => $"\\\"{c.Name}\\\""));
-        EmitBulkValuesBuilder(sb, table, insertable, colNames);
-        _ = sb.AppendLine("        sql.Append(\" ON CONFLICT DO NOTHING\");");
+    private static void EmitBulkCommandExecution(StringBuilder sb, List<DatabaseColumn> insertable)
+    {
         _ = sb.AppendLine();
         _ = sb.AppendLine("        await using var cmd = new NpgsqlCommand(sql.ToString(), conn);");
         _ = sb.AppendLine();
         _ = sb.AppendLine("        for (int i = 0; i < batch.Count; i++)");
         _ = sb.AppendLine("        {");
         _ = sb.AppendLine("            var rec = batch[i];");
-
         EmitBulkParameterBindings(sb, insertable);
-
         _ = sb.AppendLine("        }");
         _ = sb.AppendLine();
         _ = sb.AppendLine(
@@ -1387,111 +1407,7 @@ internal static class PostgresCli
             insertable.Select(c => $"{c.CSharpType} {ToPascalCase(c.Name)}")
         );
 
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Bulk upserts rows into {table.Name} using batched multi-row VALUES."
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Uses ON CONFLICT DO UPDATE to insert or update existing rows."
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// <param name=\"conn\">Open database connection.</param>"
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// <param name=\"records\">Records to upsert as tuples.</param>"
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// <param name=\"batchSize\">Max rows per batch (default 1000).</param>"
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// <returns>Total rows affected.</returns>"
-        );
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> BulkUpsert{pascalName}Async("
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        this NpgsqlConnection conn,");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        IEnumerable<({tupleType})> records,"
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        int batchSize = 1000)");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        var totalAffected = 0;");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        var batch = new List<({tupleType})>(batchSize);"
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        try");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine("            foreach (var record in records)");
-        _ = sb.AppendLine("            {");
-        _ = sb.AppendLine("                batch.Add(record);");
-        _ = sb.AppendLine("                if (batch.Count >= batchSize)");
-        _ = sb.AppendLine("                {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                    var result = await ExecuteBulkUpsert{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
-        );
-        _ = sb.AppendLine(
-            "                    if (result is Result<int, SqlError>.Error<int, SqlError> err)"
-        );
-        _ = sb.AppendLine("                        return err;");
-        _ = sb.AppendLine(
-            "                    totalAffected += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
-        );
-        _ = sb.AppendLine("                    batch.Clear();");
-        _ = sb.AppendLine("                }");
-        _ = sb.AppendLine("            }");
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("            if (batch.Count > 0)");
-        _ = sb.AppendLine("            {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                var finalResult = await ExecuteBulkUpsert{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
-        );
-        _ = sb.AppendLine(
-            "                if (finalResult is Result<int, SqlError>.Error<int, SqlError> finalErr)"
-        );
-        _ = sb.AppendLine("                    return finalErr;");
-        _ = sb.AppendLine(
-            "                    totalAffected += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
-        );
-        _ = sb.AppendLine("            }");
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(totalAffected);"
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("        catch (Exception ex)");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));"
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
-        _ = sb.AppendLine();
-
-        // Generate batch execution helper
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    private static async Task<Result<int, SqlError>> ExecuteBulkUpsert{pascalName}BatchAsync("
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        NpgsqlConnection conn,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        List<({tupleType})> batch)");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        if (batch.Count == 0)");
-        _ = sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
-        _ = sb.AppendLine();
+        EmitBulkMethodPreamble(sb, table, pascalName, tupleType, upsert: true);
 
         // BUG3 fix: quote every identifier in emitted bulk-upsert SQL. Same
         // reasoning as bulk insert above. Applies to the ON CONFLICT pk list
@@ -1523,22 +1439,7 @@ internal static class PostgresCli
             );
         }
 
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        await using var cmd = new NpgsqlCommand(sql.ToString(), conn);");
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        for (int i = 0; i < batch.Count; i++)");
-        _ = sb.AppendLine("        {");
-        _ = sb.AppendLine("            var rec = batch[i];");
-
-        EmitBulkParameterBindings(sb, insertable);
-
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(
-            "        var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);"
-        );
-        _ = sb.AppendLine("        return new Result<int, SqlError>.Ok<int, SqlError>(rows);");
-        _ = sb.AppendLine("    }");
+        EmitBulkCommandExecution(sb, insertable);
     }
 
     /// <summary>

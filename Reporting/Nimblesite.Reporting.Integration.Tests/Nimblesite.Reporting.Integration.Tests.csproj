@@ -59,9 +59,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Tests.Shared\PostgresContainerFixture.cs" Link="Shared\PostgresContainerFixture.cs" />
-    <Compile Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPostgresContainerFixture.cs" Link="Shared\MigrationPostgresContainerFixture.cs" />
-    <Compile Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPlatformFixture.cs" Link="Shared\MigrationPlatformFixture.cs" />
+    <Compile
+      Include="..\..\Tests.Shared\PostgresContainerFixture.cs"
+      Link="Shared\PostgresContainerFixture.cs"
+    />
+    <Compile
+      Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPostgresContainerFixture.cs"
+      Link="Shared\MigrationPostgresContainerFixture.cs"
+    />
+    <Compile
+      Include="..\..\Migration\Nimblesite.DataProvider.Migration.Tests\MigrationPlatformFixture.cs"
+      Link="Shared\MigrationPlatformFixture.cs"
+    />
   </ItemGroup>
 
   <!--

@@ -53,6 +53,25 @@ public static class SqlStatementExtensionsPostgreSQL
     }
 
     /// <summary>
+    /// Converts a Nimblesite.Sql.Model.SelectStatement to PostgreSQL syntax.
+    /// Implements [DP-SQL-MODEL-DIALECTS].
+    /// </summary>
+    /// <param name="statement">The SelectStatement to convert</param>
+    /// <returns>A Result containing either PostgreSQL SQL string or a SqlError</returns>
+    public static Result<string, SqlError> ToPostgreSql(this SelectStatement statement)
+    {
+        try
+        {
+            var sql = PostgreSqlContext.ToPostgreSqlSql(statement);
+            return new Result<string, SqlError>.Ok<string, SqlError>(sql);
+        }
+        catch (Exception ex)
+        {
+            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
+        }
+    }
+
+    /// <summary>
     /// Wraps a bare identifier in double quotes only when it contains
     /// uppercase ASCII (which Postgres would otherwise fold). Lower-case
     /// identifiers are passed through to preserve existing test fixture

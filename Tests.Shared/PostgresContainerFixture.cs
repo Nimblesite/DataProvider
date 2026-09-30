@@ -130,6 +130,9 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
         {
             Database = dbName,
             Pooling = false,
+            // Keep the throwaway container password on opened connections so
+            // tests can hand connection.ConnectionString to the migrate CLI.
+            PersistSecurityInfo = true,
         }.ConnectionString;
 
     private string NextDatabaseName(string namePrefix)

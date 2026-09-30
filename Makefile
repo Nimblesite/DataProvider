@@ -5,7 +5,7 @@
 # All targets are language-agnostic. Add language-specific helpers below.
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix help
+.PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix clinical help
 
 # Installed VS Code extension id (publisher.name from Lql/LqlExtension/package.json)
 VSIX_EXT_ID = lql-team.lql-language-support
@@ -114,6 +114,11 @@ aot:
 vsix:
 	@echo "==> Building and packaging VSIX..."
 	bash Lql/lql-lsp-rust/build-vsix.sh
+
+## clinical: Build + test ClinicalCoding (../ClinicalCoding) against this checkout via a local
+##           NuGet feed ([CI-CLINICAL-LOCAL]). Override CLINICAL_DIR / CLINICAL_TARGETS as needed.
+clinical:
+	bash tools/clinical-local.sh
 
 ## rebuild-install-vsix: Full clean cycle — uninstall, clean, rebuild, package, install ([MAKE-IDE-EXT])
 rebuild-install-vsix: _vsix_uninstall _vsix_clean vsix
@@ -449,3 +454,4 @@ help:
 	@echo "  check          - lint + test (pre-commit shortcut)"
 	@echo "  coverage       - Generate and open HTML coverage report"
 	@echo "  vsix           - Build LSP + compile & package VS Code extension (.vsix)"
+	@echo "  clinical       - Test ../ClinicalCoding against this checkout (local NuGet feed)"

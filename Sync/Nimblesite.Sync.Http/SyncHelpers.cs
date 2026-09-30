@@ -229,15 +229,4 @@ public static class SyncHelpers
         conn.Open();
         return Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
     }
-
-    private static SyncLogEntry ToSyncLogEntry(SyncLogEntryDto change) =>
-        new(
-            change.Version,
-            change.TableName,
-            change.PkValue,
-            Enum.Parse<SyncOperation>(change.Operation, true),
-            change.Payload,
-            change.Origin,
-            change.Timestamp
-        );
 }

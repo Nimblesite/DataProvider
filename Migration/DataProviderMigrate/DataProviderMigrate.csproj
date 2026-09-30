@@ -7,13 +7,13 @@
     <PackageId>DataProviderMigrate</PackageId>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>DataProviderMigrate</ToolCommandName>
-    <Description>CLI tool for DataProvider database schema migrations from YAML (SQLite + PostgreSQL).</Description>
+    <Description>CLI tool for DataProvider database schema migrations from YAML (SQLite, PostgreSQL, SQL Server).</Description>
     <Authors>ChristianFindlay</Authors>
     <Company>Nimblesite</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Nimblesite/DataProvider</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>dataprovider;migration;schema;yaml;sqlite;postgres;dotnet-tool</PackageTags>
+    <PackageTags>dataprovider;migration;schema;yaml;sqlite;postgres;sqlserver;dotnet-tool</PackageTags>
   </PropertyGroup>
 
   <!-- Implements [MIG-AOT-EXPORT] + [MIG-AOT-CSPROJ]. A Native AOT publish
@@ -46,5 +46,6 @@
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.Core\Nimblesite.DataProvider.Migration.Core.csproj" />
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.SQLite\Nimblesite.DataProvider.Migration.SQLite.csproj" />
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.Postgres\Nimblesite.DataProvider.Migration.Postgres.csproj" />
+    <ProjectReference Include="..\Nimblesite.DataProvider.Migration.SqlServer\Nimblesite.DataProvider.Migration.SqlServer.csproj" />
   </ItemGroup>
 </Project>

@@ -915,14 +915,22 @@ PostgreSQL-specific considerations:
 - Transactional DDL supported
 - Case-sensitive identifiers (lowercase by default)
 
-### 9.4 SQL Server Provider
+### 9.4 SQL Server Provider [MIG-SQLSERVER]
 
-SQL Server-specific considerations:
+`Nimblesite.DataProvider.Migration.SqlServer` provides `SqlServerDdlGenerator`,
+`SqlServerSchemaInspector` and `SqlServerTypeMapper`; `DataProviderMigrate
+--provider sqlserver` (alias `mssql`) runs the shared inspect, diff, apply and
+verify pipeline.
 
-- NVARCHAR for Unicode strings
+- NVARCHAR for Unicode strings; `Text` maps to NVARCHAR(MAX)
 - UNIQUEIDENTIFIER for UUIDs
-- Limited transactional DDL
-- Schema support (dbo, etc.)
+- Portable default schemas (`public`, `main`, empty) map to `dbo`
+- Constraint names default to `PK_<table>`, `UQ_<table>_<cols>`, `FK_<table>_<cols>`
+- Relaxing NOT NULL reads the live column type from `sys.columns` because
+  `ALTER COLUMN` must restate it
+- Not supported (fails loudly): RLS ([RLS-MSSQL]), triggers, roles, grants,
+  functions, expression indexes, LQL defaults, `RESTRICT` foreign key actions
+- Known drift: `NVarChar(max)` and `Json` read back as `Text`
 
 ---
 

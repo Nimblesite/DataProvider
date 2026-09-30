@@ -172,7 +172,10 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         ForeignKeyDefinition[] kept =
         [
             ForeignKey("kept_a_id", "kept_a"),
-            ForeignKey("kept_b_id", "kept_b") with { Name = "FK_children_kept_b_id" },
+            ForeignKey("kept_b_id", "kept_b") with
+            {
+                Name = "FK_children_kept_b_id",
+            },
         ];
         var foreignKeys = includeObsolete
             ? kept.Append(
@@ -217,7 +220,12 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         };
 
     private static ColumnDefinition Id() =>
-        new() { Name = "id", Type = PortableTypes.Uuid, IsNullable = false };
+        new()
+        {
+            Name = "id",
+            Type = PortableTypes.Uuid,
+            IsNullable = false,
+        };
 
     private static ColumnDefinition UuidColumn(string name) =>
         new() { Name = name, Type = PortableTypes.Uuid };
@@ -231,18 +239,22 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         };
 
     private static SchemaDefinition Inspect(NpgsqlConnection connection) =>
-        Assert.IsType<SchemaResultOk>(
-            PostgresSchemaInspector.Inspect(connection, "public", NullLogger.Instance)
-        ).Value;
+        Assert
+            .IsType<SchemaResultOk>(
+                PostgresSchemaInspector.Inspect(connection, "public", NullLogger.Instance)
+            )
+            .Value;
 
     private static IReadOnlyList<SchemaOperation> Diff(
         SchemaDefinition current,
         SchemaDefinition desired,
         bool destructive = false
     ) =>
-        Assert.IsType<OperationsResultOk>(
-            SchemaDiff.Calculate(current, desired, allowDestructive: destructive)
-        ).Value;
+        Assert
+            .IsType<OperationsResultOk>(
+                SchemaDiff.Calculate(current, desired, allowDestructive: destructive)
+            )
+            .Value;
 
     private static IReadOnlyList<SchemaOperation> Migrate(
         NpgsqlConnection connection,
@@ -275,7 +287,8 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         NpgsqlConnection connection,
         SchemaDefinition desired
     ) =>
-        Assert.IsType<SchemaIntegrityOk>(SchemaIntegrityVerifier.Verify(Inspect(connection), desired))
+        Assert
+            .IsType<SchemaIntegrityOk>(SchemaIntegrityVerifier.Verify(Inspect(connection), desired))
             .Value;
 
     private static void AssertNoDrift(NpgsqlConnection connection, SchemaDefinition desired) =>
