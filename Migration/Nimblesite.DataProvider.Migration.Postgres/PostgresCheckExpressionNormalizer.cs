@@ -137,6 +137,19 @@ internal static class PostgresCheckExpressionNormalizer
         return $"{Render(any.Left)} IN ({string.Join(", ", literals)})";
     }
 
+    private static string? RenderLiteralValue(Value value)
+    {
+        if (value is Value.SingleQuotedString s)
+        {
+            return $"'{s.Value.Replace("'", "''", StringComparison.Ordinal)}'";
+        }
+        if (value is Value.Number n)
+        {
+            return n.Value;
+        }
+        return null;
+    }
+
     private static string? ExtractStringLiteral(Expression element)
     {
         var unwrapped = element;
@@ -148,15 +161,7 @@ internal static class PostgresCheckExpressionNormalizer
         {
             return null;
         }
-        if (lit.Value is Value.SingleQuotedString s)
-        {
-            return $"'{s.Value.Replace("'", "''", StringComparison.Ordinal)}'";
-        }
-        if (lit.Value is Value.Number n)
-        {
-            return n.Value;
-        }
-        return null;
+        return RenderLiteralValue(lit.Value);
     }
 
     private static string Render(Expression expression)
@@ -171,13 +176,10 @@ internal static class PostgresCheckExpressionNormalizer
         }
         if (expression is Expression.LiteralValue lit)
         {
-            if (lit.Value is Value.SingleQuotedString s)
+            var rendered = RenderLiteralValue(lit.Value);
+            if (rendered is not null)
             {
-                return $"'{s.Value.Replace("'", "''", StringComparison.Ordinal)}'";
-            }
-            if (lit.Value is Value.Number n)
-            {
-                return n.Value;
+                return rendered;
             }
         }
         if (expression is Expression.BinaryOp bin)

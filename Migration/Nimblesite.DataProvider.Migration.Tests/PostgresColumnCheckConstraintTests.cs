@@ -50,7 +50,15 @@ public sealed class PostgresColumnCheckConstraintTests(PostgresContainerFixture 
                 """
             );
 
-            Apply(connection, Calculate(Inspect(connection), schema));
+            PostgresTestDb.Apply(
+                connection,
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    schema,
+                    Logger
+                ),
+                Logger
+            );
 
             Assert.Equal(
                 [
@@ -61,14 +69,20 @@ public sealed class PostgresColumnCheckConstraintTests(PostgresContainerFixture 
                 ConstraintNames(connection)
             );
 
-            var inspected = Inspect(connection).Tables.Single(t => t.Name == "bundles");
+            var inspected = PostgresTestDb
+                .Inspect(connection, Logger)
+                .Tables.Single(t => t.Name == "bundles");
             var sha256 = inspected.Columns.Single(c => c.Name == "sha256");
             var sizeBytes = inspected.Columns.Single(c => c.Name == "size_bytes");
 
             Assert.Equal("bundles_sha256_fmt_chk", sha256.CheckConstraintName);
             Assert.Equal("bundles_size_bytes_nonneg_chk", sizeBytes.CheckConstraintName);
             Assert.DoesNotContain(
-                Calculate(Inspect(connection), schema),
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    schema,
+                    Logger
+                ),
                 operation => operation is AddCheckConstraintOperation
             );
         }
@@ -77,50 +91,6 @@ public sealed class PostgresColumnCheckConstraintTests(PostgresContainerFixture 
             await connection.DisposeAsync().ConfigureAwait(true);
             NpgsqlConnection.ClearPool(connection);
         }
-    }
-
-    private static SchemaDefinition Inspect(NpgsqlConnection connection)
-    {
-        var result = PostgresSchemaInspector.Inspect(connection, SchemaName, Logger);
-        if (result is SchemaResultOk ok)
-        {
-            return ok.Value;
-        }
-
-        Assert.Fail("Expected PostgreSQL schema inspection to succeed.");
-        return Schema.Define("failed").Build();
-    }
-
-    private static IReadOnlyList<SchemaOperation> Calculate(
-        SchemaDefinition current,
-        SchemaDefinition desired
-    )
-    {
-        var result = SchemaDiff.Calculate(current, desired, logger: Logger);
-        if (result is OperationsResultOk ok)
-        {
-            return ok.Value;
-        }
-
-        Assert.Fail("Expected PostgreSQL schema diff to succeed.");
-        return [];
-    }
-
-    private static void Apply(
-        NpgsqlConnection connection,
-        IReadOnlyList<SchemaOperation> operations
-    )
-    {
-        var result = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            Logger
-        );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
     }
 
     private static string[] ConstraintNames(NpgsqlConnection connection)

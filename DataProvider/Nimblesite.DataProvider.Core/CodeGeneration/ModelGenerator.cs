@@ -21,15 +21,8 @@ public static class ModelGenerator
         IReadOnlyList<DatabaseColumn> columns
     )
     {
-        if (string.IsNullOrWhiteSpace(typeName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("typeName cannot be null or empty")
-            );
-
-        if (columns == null || columns.Count == 0)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("columns cannot be null or empty")
-            );
+        if (ValidateTypeNameAndColumns(typeName, columns) is { } error)
+            return new Result<string, SqlError>.Error<string, SqlError>(error);
 
         var sb = new StringBuilder();
 
@@ -277,15 +270,8 @@ public static class ModelGenerator
         IReadOnlyList<DatabaseColumn> columns
     )
     {
-        if (string.IsNullOrWhiteSpace(typeName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("typeName cannot be null or empty")
-            );
-
-        if (columns == null || columns.Count == 0)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("columns cannot be null or empty")
-            );
+        if (ValidateTypeNameAndColumns(typeName, columns) is { } error)
+            return new Result<string, SqlError>.Error<string, SqlError>(error);
 
         var sb = new StringBuilder();
         sb.AppendLine(CultureInfo.InvariantCulture, $"internal record {typeName}(");
@@ -303,4 +289,12 @@ public static class ModelGenerator
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
+
+    private static SqlError? ValidateTypeNameAndColumns(
+        string typeName,
+        IReadOnlyList<DatabaseColumn>? columns
+    ) =>
+        string.IsNullOrWhiteSpace(typeName) ? new SqlError("typeName cannot be null or empty")
+        : columns == null || columns.Count == 0 ? new SqlError("columns cannot be null or empty")
+        : null;
 }

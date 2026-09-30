@@ -18,6 +18,7 @@ public static class SchemaYamlSerializer
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
         .WithTypeConverter(new RlsOperationYamlConverter())
+        .WithTypeConverter(new TriggerEnumYamlConverter())
         .WithTypeConverter(new PostgresGrantTargetYamlConverter())
         .ConfigureDefaultValuesHandling(
             DefaultValuesHandling.OmitDefaults
@@ -35,6 +36,7 @@ public static class SchemaYamlSerializer
         .WithTypeConverter(new PortableTypeYamlConverter())
         .WithTypeConverter(new ForeignKeyActionYamlConverter())
         .WithTypeConverter(new RlsOperationYamlConverter())
+        .WithTypeConverter(new TriggerEnumYamlConverter())
         .WithTypeConverter(new PostgresGrantTargetYamlConverter())
         .WithTypeMapping<IReadOnlyList<TableDefinition>, List<TableDefinition>>()
         .WithTypeMapping<IReadOnlyList<PostgresRoleDefinition>, List<PostgresRoleDefinition>>()
@@ -60,6 +62,8 @@ public static class SchemaYamlSerializer
         >()
         .WithTypeMapping<IReadOnlyList<RlsPolicyDefinition>, List<RlsPolicyDefinition>>()
         .WithTypeMapping<IReadOnlyList<RlsOperation>, List<RlsOperation>>()
+        .WithTypeMapping<IReadOnlyList<TriggerDefinition>, List<TriggerDefinition>>()
+        .WithTypeMapping<IReadOnlyList<TriggerEvent>, List<TriggerEvent>>()
         .WithTypeMapping<IReadOnlyList<string>, List<string>>()
         .Build();
 
@@ -409,6 +413,8 @@ internal sealed class PropertyDefaultValueFilter(IObjectGraphVisitor<IEmitter> n
             // RlsPolicySetDefinition / RlsPolicyDefinition semantic defaults
             { "enabled", (typeof(bool), true) },
             { "isPermissive", (typeof(bool), true) },
+            // TriggerDefinition semantic defaults ([MIG-TRIGGER-YAML])
+            { "forEachRow", (typeof(bool), true) },
             // PostgreSQL support object semantic defaults
             { "language", (typeof(string), "sql") },
             { "volatility", (typeof(string), "stable") },

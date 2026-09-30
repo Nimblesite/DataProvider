@@ -154,6 +154,20 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
     /// <summary>
+    /// Seeds SQLite source + Postgres target with fresh origins and returns the User->Customer mapping.
+    /// </summary>
+    private SyncMappingConfig SetupUserToCustomerScenario()
+    {
+        var sourceOrigin = Guid.NewGuid().ToString();
+        var targetOrigin = Guid.NewGuid().ToString();
+
+        SetupSqliteSource(sourceOrigin);
+        SetupPostgresTarget(targetOrigin);
+
+        return CreateUserToCustomerMapping();
+    }
+
+    /// <summary>
     /// Merges the PK value into a payload for insert operations.
     /// PostgresChangeApplier expects PK to be in the payload.
     /// </summary>
@@ -404,13 +418,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void E2E_SyncWithMapping_TransformsData_AcrossDatabases()
     {
         // Arrange - set up databases with DIFFERENT schemas
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
-
-        SetupSqliteSource(sourceOrigin);
-        SetupPostgresTarget(targetOrigin);
-
-        var config = CreateUserToCustomerMapping();
+        var config = SetupUserToCustomerScenario();
 
         // Act - insert User in SQLite source
         using (var cmd = _sqliteConn.CreateCommand())
@@ -483,13 +491,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void E2E_MultipleRecords_AllTransformedCorrectly()
     {
         // Arrange
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
-
-        SetupSqliteSource(sourceOrigin);
-        SetupPostgresTarget(targetOrigin);
-
-        var config = CreateUserToCustomerMapping();
+        var config = SetupUserToCustomerScenario();
 
         // Insert multiple users
         var users = new[]

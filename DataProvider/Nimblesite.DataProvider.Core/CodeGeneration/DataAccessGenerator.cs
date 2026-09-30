@@ -123,6 +123,26 @@ public static partial class DataAccessGenerator
     }
 
     /// <summary>
+    /// Appends AddWithValue parameter-binding lines for the given columns.
+    /// Nullable columns coalesce to DBNull.Value; non-nullable bind directly.
+    /// </summary>
+    private static void AppendParameterBindings(
+        StringBuilder sb,
+        IReadOnlyList<DatabaseColumn> columns
+    )
+    {
+        foreach (var column in columns)
+        {
+            var escaped = EscapeReservedKeyword(column.Name);
+            var value = column.IsNullable ? $"{escaped} ?? (object)DBNull.Value" : escaped;
+            sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"                command.Parameters.AddWithValue(\"@{column.Name}\", {value});"
+            );
+        }
+    }
+
+    /// <summary>
     /// Generates a data access extension method for querying
     /// </summary>
     /// <param name="className">Extension class name</param>
@@ -383,24 +403,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("            {");
 
         // Add parameters
-        foreach (var column in insertableColumns)
-        {
-            var paramName = EscapeReservedKeyword(column.Name);
-            if (column.IsNullable)
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {paramName} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {paramName});"
-                );
-            }
-        }
+        AppendParameterBindings(sb, insertableColumns);
 
         sb.AppendLine();
         sb.AppendLine(
@@ -620,24 +623,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("            {");
 
         // Add parameters (nullable types use null-coalescing to DBNull.Value)
-        foreach (var column in allColumns)
-        {
-            var escaped = EscapeReservedKeyword(column.Name);
-            if (column.IsNullable)
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {escaped} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {escaped});"
-                );
-            }
-        }
+        AppendParameterBindings(sb, allColumns);
 
         sb.AppendLine();
         sb.AppendLine(

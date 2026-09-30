@@ -177,7 +177,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1","Name":"alice"}""");
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
@@ -204,7 +204,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry(
             "User",
             """{"Id":"u1"}""",
@@ -230,7 +230,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry(
             "User",
             """{"Id":"u1"}""",
@@ -260,7 +260,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry(
             "User",
             """{"Id":"u1"}""",
@@ -292,7 +292,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry(
             "User",
             """{"Id":"u1"}""",
@@ -325,7 +325,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry(
             "User",
             """{"Id":"u1"}""",
@@ -353,7 +353,7 @@ public sealed class LqlExpressionEvaluatorTests
         };
 
         var mapping = CreateMappingWithColumns("user-mapping", "User", "Customer", columnMappings);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
         var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1","Name":"alice"}""");
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
@@ -407,7 +407,7 @@ public sealed class LqlExpressionEvaluatorTests
             "ServerUser",
             columnMappings
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
 
         var mobileEntry = CreateEntry(
             "MobileUser",
@@ -469,7 +469,7 @@ public sealed class LqlExpressionEvaluatorTests
             "ModernCustomer",
             columnMappings
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
 
         var legacyEntry = CreateEntry(
             "LegacyCustomer",
@@ -521,7 +521,7 @@ public sealed class LqlExpressionEvaluatorTests
             "AuditLog",
             columnMappings
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = CreateStrictConfig(mapping);
 
         var orderEntry = CreateEntry(
             "Order",
@@ -618,6 +618,9 @@ public sealed class LqlExpressionEvaluatorTests
             Origin: "test-origin",
             Timestamp: "2024-01-01T00:00:00Z"
         );
+
+    private static SyncMappingConfig CreateStrictConfig(TableMapping mapping) =>
+        new("1.0", UnmappedTableBehavior.Strict, [mapping]);
 
     #endregion
 }

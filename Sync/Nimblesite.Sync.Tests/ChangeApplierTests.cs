@@ -1,6 +1,5 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Outcome;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -53,7 +52,7 @@ public sealed class ChangeApplierTests : IDisposable
             Logger
         );
 
-        var applyResult = AssertSuccess(result);
+        var applyResult = TestDb.AssertSuccess(result);
         Assert.Single(appliedEntries);
         Assert.Equal("other-origin", appliedEntries[0].Origin);
         Assert.Equal(1, applyResult.AppliedCount);
@@ -111,7 +110,7 @@ public sealed class ChangeApplierTests : IDisposable
             Logger
         );
 
-        var applyResult = AssertSuccess(result);
+        var applyResult = TestDb.AssertSuccess(result);
         Assert.Equal(2, applyResult.AppliedCount);
         Assert.Equal(2, attemptCounts[1]); // Child tried twice
         Assert.Equal(1, attemptCounts[2]); // Parent tried once
@@ -184,7 +183,7 @@ public sealed class ChangeApplierTests : IDisposable
 
         var result = ChangeApplier.ApplyBatch(batch, "my-origin", 3, ApplyToDb, Logger);
 
-        var applyResult = AssertSuccess(result);
+        var applyResult = TestDb.AssertSuccess(result);
         Assert.Equal(2, applyResult.AppliedCount);
 
         // Verify final state
@@ -268,12 +267,6 @@ public sealed class ChangeApplierTests : IDisposable
         {
             return new BoolSyncError(new SyncErrorDatabase(ex.Message));
         }
-    }
-
-    private static T AssertSuccess<T>(Result<T, SyncError> result)
-    {
-        Assert.IsType<Result<T, SyncError>.Ok<T, SyncError>>(result);
-        return ((Result<T, SyncError>.Ok<T, SyncError>)result).Value;
     }
 
     public void Dispose() => _db.Dispose();

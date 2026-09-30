@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using Outcome;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -18,7 +17,7 @@ public sealed class BatchManagerTests : IDisposable
             _logger
         );
 
-        var batch = AssertSuccess(result);
+        var batch = TestDb.AssertSuccess(result);
         Assert.Empty(batch.Changes);
         Assert.Equal(0, batch.FromVersion);
         Assert.Equal(0, batch.ToVersion);
@@ -52,7 +51,7 @@ public sealed class BatchManagerTests : IDisposable
             _logger
         );
 
-        var batch = AssertSuccess(result);
+        var batch = TestDb.AssertSuccess(result);
         Assert.Equal(2, batch.Changes.Count);
         Assert.Equal(0, batch.FromVersion);
         Assert.Equal(2, batch.ToVersion);
@@ -81,7 +80,7 @@ public sealed class BatchManagerTests : IDisposable
             _logger
         );
 
-        var batch = AssertSuccess(result);
+        var batch = TestDb.AssertSuccess(result);
         Assert.Equal(3, batch.Changes.Count);
         Assert.True(batch.HasMore);
         Assert.Equal(3, batch.ToVersion);
@@ -109,7 +108,7 @@ public sealed class BatchManagerTests : IDisposable
             _logger
         );
 
-        var batch = AssertSuccess(result);
+        var batch = TestDb.AssertSuccess(result);
         Assert.Equal(2, batch.Changes.Count);
         Assert.Equal(4, batch.Changes[0].Version);
         Assert.Equal(5, batch.Changes[1].Version);
@@ -148,16 +147,10 @@ public sealed class BatchManagerTests : IDisposable
             _logger
         );
 
-        var totalApplied = AssertSuccess(result);
+        var totalApplied = TestDb.AssertSuccess(result);
         Assert.Equal(10, totalApplied);
         Assert.Equal(4, appliedBatches.Count);
         Assert.Equal(10, lastVersion);
-    }
-
-    private static T AssertSuccess<T>(Result<T, SyncError> result)
-    {
-        Assert.IsType<Result<T, SyncError>.Ok<T, SyncError>>(result);
-        return ((Result<T, SyncError>.Ok<T, SyncError>)result).Value;
     }
 
     public void Dispose() => _db.Dispose();

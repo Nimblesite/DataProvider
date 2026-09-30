@@ -1310,33 +1310,31 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
                 // Check for IDENT first
                 if (namedArg.IDENT()?.GetText() == name)
                 {
-                    var comparisonText =
-                        namedArg.comparison() != null
-                            ? ProcessComparisonToSql(namedArg.comparison(), null)
-                            : null;
-                    var logicalText =
-                        namedArg.logicalExpr() != null
-                            ? ProcessLogicalExpressionToSql(namedArg.logicalExpr(), null)
-                            : null;
-                    return comparisonText ?? logicalText;
+                    return ResolveNamedArgValue(namedArg);
                 }
 
                 // Check for ON keyword
                 if (name == "on" && namedArg.ON() != null)
                 {
-                    var comparisonText =
-                        namedArg.comparison() != null
-                            ? ProcessComparisonToSql(namedArg.comparison(), null)
-                            : null;
-                    var logicalText =
-                        namedArg.logicalExpr() != null
-                            ? ProcessLogicalExpressionToSql(namedArg.logicalExpr(), null)
-                            : null;
-                    return comparisonText ?? logicalText;
+                    return ResolveNamedArgValue(namedArg);
                 }
             }
         }
         return null;
+    }
+
+    // Resolves a named-arg value to SQL, preferring a comparison over a logicalExpr.
+    private static string? ResolveNamedArgValue(LqlParser.NamedArgContext namedArg)
+    {
+        var comparisonText =
+            namedArg.comparison() != null
+                ? ProcessComparisonToSql(namedArg.comparison(), null)
+                : null;
+        var logicalText =
+            namedArg.logicalExpr() != null
+                ? ProcessLogicalExpressionToSql(namedArg.logicalExpr(), null)
+                : null;
+        return comparisonText ?? logicalText;
     }
 
     /// <summary>

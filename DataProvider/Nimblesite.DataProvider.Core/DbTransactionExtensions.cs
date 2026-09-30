@@ -37,17 +37,12 @@ public static class DbTransactionExtensions
 
         try
         {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
+            if (transaction.Connection is not { } connection)
+                return new Result<IReadOnlyList<T>, SqlError>.Error<IReadOnlyList<T>, SqlError>(
+                    SqlError.Create("Transaction or connection is null")
+                );
 
-            if (parameters != null)
-            {
-                foreach (var parameter in parameters)
-                {
-                    command.Parameters.Add(parameter);
-                }
-            }
+            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
 
             var results = new List<T>();
             using var reader = command.ExecuteReader();
@@ -97,17 +92,12 @@ public static class DbTransactionExtensions
 
         try
         {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
+            if (transaction.Connection is not { } connection)
+                return new Result<int, SqlError>.Error<int, SqlError>(
+                    SqlError.Create("Transaction or connection is null")
+                );
 
-            if (parameters != null)
-            {
-                foreach (var parameter in parameters)
-                {
-                    command.Parameters.Add(parameter);
-                }
-            }
+            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
 
             var rowsAffected = command.ExecuteNonQuery();
             return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);
@@ -144,17 +134,12 @@ public static class DbTransactionExtensions
 
         try
         {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
+            if (transaction.Connection is not { } connection)
+                return new Result<T?, SqlError>.Error<T?, SqlError>(
+                    SqlError.Create("Transaction or connection is null")
+                );
 
-            if (parameters != null)
-            {
-                foreach (var parameter in parameters)
-                {
-                    command.Parameters.Add(parameter);
-                }
-            }
+            using var command = CreateConfiguredCommand(connection, transaction, sql, parameters);
 
             var result = command.ExecuteScalar();
             return new Result<T?, SqlError>.Ok<T?, SqlError>(result is T value ? value : default);
@@ -163,5 +148,25 @@ public static class DbTransactionExtensions
         {
             return new Result<T?, SqlError>.Error<T?, SqlError>(SqlError.FromException(ex));
         }
+    }
+
+    private static IDbCommand CreateConfiguredCommand(
+        IDbConnection connection,
+        IDbTransaction transaction,
+        string sql,
+        IEnumerable<IDataParameter>? parameters
+    )
+    {
+        var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        if (parameters != null)
+        {
+            foreach (var parameter in parameters)
+            {
+                command.Parameters.Add(parameter);
+            }
+        }
+        return command;
     }
 }

@@ -106,9 +106,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
 
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
@@ -128,9 +126,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
         );
 
-        var inspected = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var inspected = InspectPublic();
 
         Assert.Contains(inspected.Tables, t => t.Name == "customers");
         Assert.Contains(inspected.Tables, t => t.Name == "invoices");
@@ -154,9 +150,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -183,9 +177,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
 
         var upgradeOps = (
             (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
@@ -206,9 +198,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // Assert
         Assert.True(result is MigrationApplyResultOk);
 
-        var finalSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var finalSchema = InspectPublic();
         var products = finalSchema.Tables.Single(t => t.Name == "products");
         Assert.Equal(4, products.Columns.Count);
     }
@@ -228,9 +218,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -264,9 +252,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
 
         var upgradeOps = (
             (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
@@ -286,9 +272,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // Assert
         Assert.True(result is MigrationApplyResultOk);
 
-        var finalSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var finalSchema = InspectPublic();
         Assert.Contains(finalSchema.Tables, t => t.Name == "items");
     }
 
@@ -308,9 +292,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -337,9 +319,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
 
         var upgradeOps = (
             (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
@@ -359,9 +339,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // Assert
         Assert.True(result is MigrationApplyResultOk);
 
-        var finalSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var finalSchema = InspectPublic();
         var logs = finalSchema.Tables.Single(t => t.Name == "logs");
         Assert.Contains(logs.Indexes, i => i.Name == "idx_logs_level");
     }
@@ -384,9 +362,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // Act - Run migration twice
         for (var i = 0; i < 2; i++)
         {
-            var currentSchema = (
-                (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-            ).Value;
+            var currentSchema = InspectPublic();
 
             var operations = (
                 (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
@@ -430,9 +406,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -487,9 +461,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var current = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
         ).Value;
@@ -528,9 +500,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -584,9 +554,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -650,9 +618,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -723,9 +689,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -790,9 +754,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // but CREATE INDEX IF NOT EXISTS ensures idempotency at the database level
         for (var i = 0; i < 2; i++)
         {
-            var currentSchema = (
-                (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-            ).Value;
+            var currentSchema = InspectPublic();
 
             var operations = (
                 (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
@@ -845,9 +807,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Apply v1
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -873,9 +833,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act - Calculate upgrade operations
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
         var upgradeOps = (
             (OperationsResultOk)
                 SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
@@ -928,9 +886,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Apply v1
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -956,9 +912,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
         var upgradeOps = (
             (OperationsResultOk)
                 SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
@@ -1013,9 +967,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -1042,9 +994,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act - Calculate without destructive flag
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
         var upgradeOps = (
             (OperationsResultOk)
                 SchemaDiff.Calculate(currentSchema, v2, allowDestructive: false, logger: _logger)
@@ -1069,9 +1019,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Table("public", "dropme", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
@@ -1094,9 +1042,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var currentSchema = InspectPublic();
 
         var operations = (
             (OperationsResultOk)
@@ -1117,9 +1063,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // Assert
         Assert.True(result is MigrationApplyResultOk);
 
-        var finalSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var finalSchema = InspectPublic();
         Assert.DoesNotContain(finalSchema.Tables, t => t.Name == "dropme");
         Assert.Contains(finalSchema.Tables, t => t.Name == "keepers");
     }
@@ -1148,9 +1092,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1197,9 +1139,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1265,9 +1205,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1319,9 +1257,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1377,9 +1313,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1447,9 +1381,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             .Build();
 
         // Act
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1525,9 +1457,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         // If the source-side fix is still in progress, this test will
         // fail loudly on CREATE TABLE, proving the gap.
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
 
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
@@ -1549,9 +1479,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         );
 
         // Assert — documents table exists
-        var inspected = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var inspected = InspectPublic();
         Assert.Contains(inspected.Tables, t => t.Name == "documents");
 
         // Assert — pgvector extension is installed in the database
@@ -1622,9 +1550,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             )
             .Build();
 
-        var emptySchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var emptySchema = InspectPublic();
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
@@ -1662,4 +1588,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         command.Parameters.AddWithValue("@gender", gender);
         command.ExecuteNonQuery();
     }
+
+    private SchemaDefinition InspectPublic() =>
+        ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)).Value;
 }

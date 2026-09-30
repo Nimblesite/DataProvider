@@ -29,13 +29,25 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
 
         try
         {
-            Apply(connection, Calculate(Inspect(connection), SchemaWithoutUnique()));
+            PostgresTestDb.Apply(
+                connection,
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    SchemaWithoutUnique(),
+                    Logger
+                ),
+                Logger
+            );
 
-            var live = Inspect(connection);
+            var live = PostgresTestDb.Inspect(connection, Logger);
             var agentConfigs = live.Tables.Single(t => t.Name == "agent_configs");
             Assert.Empty(agentConfigs.UniqueConstraints);
 
-            var upgrade = Calculate(Inspect(connection), SchemaWithUnique());
+            var upgrade = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                SchemaWithUnique(),
+                Logger
+            );
 
             Assert.Contains(
                 upgrade,
@@ -45,9 +57,11 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
                     && add.UniqueConstraint.Columns.SequenceEqual(["tenant_id", "name"])
             );
 
-            Apply(connection, upgrade);
+            PostgresTestDb.Apply(connection, upgrade, Logger);
 
-            var converged = Inspect(connection).Tables.Single(t => t.Name == "agent_configs");
+            var converged = PostgresTestDb
+                .Inspect(connection, Logger)
+                .Tables.Single(t => t.Name == "agent_configs");
             Assert.Contains(
                 converged.UniqueConstraints,
                 c =>
@@ -55,7 +69,11 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
                     && c.Columns.SequenceEqual(["tenant_id", "name"])
             );
 
-            var replay = Calculate(Inspect(connection), SchemaWithUnique());
+            var replay = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                SchemaWithUnique(),
+                Logger
+            );
             Assert.DoesNotContain(replay, op => op is AddUniqueConstraintOperation);
         }
         finally
@@ -135,51 +153,5 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
                 : [],
         };
         return new SchemaDefinition { Name = "issue55", Tables = [tenants, agentConfigs] };
-    }
-
-    private static SchemaDefinition Inspect(NpgsqlConnection connection)
-    {
-        var result = PostgresSchemaInspector.Inspect(connection, SchemaName, Logger);
-        if (result is SchemaResultOk ok)
-        {
-            return ok.Value;
-        }
-        Assert.Fail("Expected PostgreSQL schema inspection to succeed.");
-        return new SchemaDefinition { Name = "failed", Tables = [] };
-    }
-
-    private static IReadOnlyList<SchemaOperation> Calculate(
-        SchemaDefinition current,
-        SchemaDefinition desired
-    )
-    {
-        var result = SchemaDiff.Calculate(
-            current: current,
-            desired: desired,
-            allowDestructive: false,
-            logger: Logger
-        );
-        if (result is OperationsResultOk ok)
-        {
-            return ok.Value;
-        }
-        Assert.Fail("Expected PostgreSQL schema diff to succeed.");
-        return [];
-    }
-
-    private static void Apply(
-        NpgsqlConnection connection,
-        IReadOnlyList<SchemaOperation> operations
-    )
-    {
-        var result = MigrationRunner.Apply(
-            connection: connection,
-            operations: operations,
-            generateDdl: PostgresDdlGenerator.Generate,
-            options: MigrationOptions.Default,
-            logger: Logger
-        );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
     }
 }

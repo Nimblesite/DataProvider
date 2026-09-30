@@ -61,9 +61,7 @@ public sealed class SpecComplianceTests : IDisposable
     public void Spec_S5_OriginId_IncludedInEveryChangeLogEntry()
     {
         // Spec S5.5: Origin ID MUST be included in every change log entry
-        InsertPerson("p1", "Alice", "alice@example.com");
-        UpdatePerson("p1", "Alice Updated", "alice2@example.com");
-        DeletePerson("p1");
+        SeedInsertUpdateDeleteP1();
 
         var changes = FetchChanges(0);
         Assert.Equal(3, changes.Count);
@@ -103,9 +101,7 @@ public sealed class SpecComplianceTests : IDisposable
     public void Spec_S7_UnifiedChangeLog_AllOperationsInSingleTable()
     {
         // Spec S7.1: All changes in single unified table with JSON payloads
-        InsertPerson("p1", "Alice", "alice@example.com");
-        UpdatePerson("p1", "Alice Updated", "alice2@example.com");
-        DeletePerson("p1");
+        SeedInsertUpdateDeleteP1();
 
         var changes = FetchChanges(0);
         Assert.Equal(3, changes.Count);
@@ -939,6 +935,13 @@ public sealed class SpecComplianceTests : IDisposable
         cmd.CommandText = "DELETE FROM Person WHERE Id = @id";
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
+    }
+
+    private void SeedInsertUpdateDeleteP1()
+    {
+        InsertPerson("p1", "Alice", "alice@example.com");
+        UpdatePerson("p1", "Alice Updated", "alice2@example.com");
+        DeletePerson("p1");
     }
 
     private List<SyncLogEntry> FetchChanges(long fromVersion)

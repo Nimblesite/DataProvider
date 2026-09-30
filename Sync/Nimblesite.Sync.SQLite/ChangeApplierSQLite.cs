@@ -44,11 +44,6 @@ public static class ChangeApplierSQLite
         }
     }
 
-    [SuppressMessage(
-        "Security",
-        "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "Table names come from internal sync log, not user input"
-    )]
     private static BoolSyncResult ApplyInsert(SqliteConnection connection, SyncLogEntry entry)
     {
         if (string.IsNullOrEmpty(entry.Payload))
@@ -62,6 +57,20 @@ public static class ChangeApplierSQLite
             return new BoolSyncError(new SyncErrorDatabase("Invalid payload JSON"));
         }
 
+        return ApplyUpsert(connection, entry, data);
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Table names come from internal sync log, not user input"
+    )]
+    private static BoolSyncResult ApplyUpsert(
+        SqliteConnection connection,
+        SyncLogEntry entry,
+        Dictionary<string, JsonElement> data
+    )
+    {
         var columns = string.Join(", ", data.Keys);
         var parameters = string.Join(", ", data.Keys.Select(k => $"@{k}"));
 
@@ -97,14 +106,10 @@ public static class ChangeApplierSQLite
         }
 
         // Extract PK info
-        var pkData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.PkValue);
-        if (pkData == null || pkData.Count == 0)
+        if (ParsePkValue(entry.PkValue) is not (string pkColumn, object pkValue))
         {
             return new BoolSyncError(new SyncErrorDatabase("Invalid pk_value JSON"));
         }
-
-        var pkColumn = pkData.Keys.First();
-        var pkValue = JsonElementToValue(pkData[pkColumn]);
 
         // Check for version-based conflict resolution
         // If record has a Version column, only apply if incoming version is newer
@@ -140,20 +145,7 @@ public static class ChangeApplierSQLite
         }
 
         // Apply the update using UPSERT
-        var columns = string.Join(", ", data.Keys);
-        var parameters = string.Join(", ", data.Keys.Select(k => $"@{k}"));
-
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText =
-            $"INSERT OR REPLACE INTO {entry.TableName} ({columns}) VALUES ({parameters})";
-
-        foreach (var kvp in data)
-        {
-            cmd.Parameters.AddWithValue($"@{kvp.Key}", JsonElementToValue(kvp.Value));
-        }
-
-        cmd.ExecuteNonQuery();
-        return new BoolSyncOk(true);
+        return ApplyUpsert(connection, entry, data);
     }
 
     [SuppressMessage(
@@ -163,14 +155,10 @@ public static class ChangeApplierSQLite
     )]
     private static BoolSyncResult ApplyDelete(SqliteConnection connection, SyncLogEntry entry)
     {
-        var pkData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.PkValue);
-        if (pkData == null || pkData.Count == 0)
+        if (ParsePkValue(entry.PkValue) is not (string pkColumn, object pkValue))
         {
             return new BoolSyncError(new SyncErrorDatabase("Invalid pk_value JSON"));
         }
-
-        var pkColumn = pkData.Keys.First();
-        var pkValue = JsonElementToValue(pkData[pkColumn]);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"DELETE FROM {entry.TableName} WHERE {pkColumn} = @pk";
@@ -178,6 +166,18 @@ public static class ChangeApplierSQLite
         cmd.ExecuteNonQuery();
 
         return new BoolSyncOk(true);
+    }
+
+    private static (string PkColumn, object PkValue)? ParsePkValue(string pkValue)
+    {
+        var pkData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(pkValue);
+        if (pkData == null || pkData.Count == 0)
+        {
+            return null;
+        }
+
+        var pkColumn = pkData.Keys.First();
+        return (pkColumn, JsonElementToValue(pkData[pkColumn]));
     }
 
     private static object JsonElementToValue(JsonElement element) =>

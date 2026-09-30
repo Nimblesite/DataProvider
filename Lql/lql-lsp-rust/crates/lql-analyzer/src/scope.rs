@@ -1,7 +1,8 @@
-use antlr_rust::tree::ParseTree;
+use antlr_rust::tree::{ParseTree, TerminalNode};
 use lql_parser::{
     parse_lql, ArgContextAttrs, ArgListContextAttrs, ExprContextAttrs, FunctionCallContextAttrs,
-    LetStmtContextAttrs, PipeExprContextAttrs, ProgramContextAttrs, StatementContextAttrs,
+    LetStmtContextAttrs, LqlParserContextType, PipeExprContextAttrs, ProgramContextAttrs,
+    StatementContextAttrs,
 };
 use std::collections::HashMap;
 
@@ -174,6 +175,36 @@ fn collect_fn_calls_from_pipe<'input>(
     }
 }
 
+/// Build a `FunctionCallInfo` from an IDENT terminal node and append it to `calls`.
+fn push_fn_call<'input>(
+    ident: &TerminalNode<'input, LqlParserContextType>,
+    calls: &mut Vec<FunctionCallInfo>,
+) {
+    let name = ident.symbol.text.to_string();
+    let line = (ident.symbol.line - 1) as u32;
+    let col = ident.symbol.column as u32;
+    let end_col = col + name.len() as u32;
+    calls.push(FunctionCallInfo {
+        name,
+        line,
+        col,
+        end_col,
+    });
+}
+
+/// Collect function calls from a single `functionCall` node (its IDENT plus nested argList).
+fn collect_fn_calls_from_function_call<'input>(
+    fc: &lql_parser::FunctionCallContext<'input>,
+    calls: &mut Vec<FunctionCallInfo>,
+) {
+    if let Some(ident) = fc.IDENT() {
+        push_fn_call(&ident, calls);
+    }
+    if let Some(inner_args) = fc.argList() {
+        collect_fn_calls_from_arg_list(&inner_args, calls);
+    }
+}
+
 /// Collect function calls from an expr node.
 fn collect_fn_calls_from_expr<'input>(
     expr: &lql_parser::ExprContext<'input>,
@@ -182,16 +213,7 @@ fn collect_fn_calls_from_expr<'input>(
     // expr with IDENT + argList is a function call form
     if let Some(ident) = expr.IDENT() {
         if expr.argList().is_some() {
-            let name = ident.symbol.text.to_string();
-            let line = (ident.symbol.line - 1) as u32;
-            let col = ident.symbol.column as u32;
-            let end_col = col + name.len() as u32;
-            calls.push(FunctionCallInfo {
-                name,
-                line,
-                col,
-                end_col,
-            });
+            push_fn_call(&ident, calls);
         }
     }
 
@@ -214,43 +236,14 @@ fn collect_fn_calls_from_arg_list<'input>(
     for arg in arg_list.arg_all() {
         // Direct functionCall rule in arg
         if let Some(fc) = arg.functionCall() {
-            if let Some(ident) = fc.IDENT() {
-                let name = ident.symbol.text.to_string();
-                let line = (ident.symbol.line - 1) as u32;
-                let col = ident.symbol.column as u32;
-                let end_col = col + name.len() as u32;
-                calls.push(FunctionCallInfo {
-                    name,
-                    line,
-                    col,
-                    end_col,
-                });
-            }
-            // Recurse into functionCall's own argList
-            if let Some(inner_args) = fc.argList() {
-                collect_fn_calls_from_arg_list(&inner_args, calls);
-            }
+            collect_fn_calls_from_function_call(&fc, calls);
         }
 
         // columnAlias may contain a functionCall
         if let Some(col_alias) = arg.columnAlias() {
             use lql_parser::ColumnAliasContextAttrs;
             if let Some(fc) = col_alias.functionCall() {
-                if let Some(ident) = fc.IDENT() {
-                    let name = ident.symbol.text.to_string();
-                    let line = (ident.symbol.line - 1) as u32;
-                    let col = ident.symbol.column as u32;
-                    let end_col = col + name.len() as u32;
-                    calls.push(FunctionCallInfo {
-                        name,
-                        line,
-                        col,
-                        end_col,
-                    });
-                }
-                if let Some(inner_args) = fc.argList() {
-                    collect_fn_calls_from_arg_list(&inner_args, calls);
-                }
+                collect_fn_calls_from_function_call(&fc, calls);
             }
         }
 

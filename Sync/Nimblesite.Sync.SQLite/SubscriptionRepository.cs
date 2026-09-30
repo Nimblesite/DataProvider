@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 
 namespace Nimblesite.Sync.SQLite;
@@ -13,34 +14,15 @@ public static class SubscriptionRepository
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>List of subscriptions or database error.</returns>
-    public static SubscriptionListResult GetAll(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-                FROM _sync_subscriptions
-                ORDER BY created_at ASC
-                """;
-
-            var subscriptions = new List<SyncSubscription>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                subscriptions.Add(ReadSubscription(reader));
-            }
-
-            return new SubscriptionListOk(subscriptions);
-        }
-        catch (SqliteException ex)
-        {
-            return new SubscriptionListError(
-                new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static SubscriptionListResult GetAll(SqliteConnection connection) =>
+        QueryList(
+            connection,
+            """
+            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
+            FROM _sync_subscriptions
+            ORDER BY created_at ASC
+            """
+        );
 
     /// <summary>
     /// Gets a subscription by ID.
@@ -83,36 +65,20 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="tableName">Table name to filter by.</param>
     /// <returns>List of subscriptions for the table or database error.</returns>
-    public static SubscriptionListResult GetByTable(SqliteConnection connection, string tableName)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-                FROM _sync_subscriptions
-                WHERE table_name = @tableName
-                ORDER BY created_at ASC
-                """;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
-
-            var subscriptions = new List<SyncSubscription>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                subscriptions.Add(ReadSubscription(reader));
-            }
-
-            return new SubscriptionListOk(subscriptions);
-        }
-        catch (SqliteException ex)
-        {
-            return new SubscriptionListError(
-                new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static SubscriptionListResult GetByTable(
+        SqliteConnection connection,
+        string tableName
+    ) =>
+        QueryList(
+            connection,
+            """
+            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
+            FROM _sync_subscriptions
+            WHERE table_name = @tableName
+            ORDER BY created_at ASC
+            """,
+            cmd => cmd.Parameters.AddWithValue("@tableName", tableName)
+        );
 
     /// <summary>
     /// Gets subscriptions for a specific origin.
@@ -120,36 +86,20 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="originId">Origin ID to filter by.</param>
     /// <returns>List of subscriptions for the origin or database error.</returns>
-    public static SubscriptionListResult GetByOrigin(SqliteConnection connection, string originId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-                FROM _sync_subscriptions
-                WHERE origin_id = @originId
-                ORDER BY created_at ASC
-                """;
-            cmd.Parameters.AddWithValue("@originId", originId);
-
-            var subscriptions = new List<SyncSubscription>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                subscriptions.Add(ReadSubscription(reader));
-            }
-
-            return new SubscriptionListOk(subscriptions);
-        }
-        catch (SqliteException ex)
-        {
-            return new SubscriptionListError(
-                new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static SubscriptionListResult GetByOrigin(
+        SqliteConnection connection,
+        string originId
+    ) =>
+        QueryList(
+            connection,
+            """
+            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
+            FROM _sync_subscriptions
+            WHERE origin_id = @originId
+            ORDER BY created_at ASC
+            """,
+            cmd => cmd.Parameters.AddWithValue("@originId", originId)
+        );
 
     /// <summary>
     /// Inserts a subscription into _sync_subscriptions.
@@ -271,7 +221,42 @@ public static class SubscriptionRepository
         }
     }
 
-    private static SyncSubscription ReadSubscription(SqliteDataReader reader) =>
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL comes from internal constant literals, not user input"
+    )]
+    private static SubscriptionListResult QueryList(
+        SqliteConnection connection,
+        string sql,
+        Action<SqliteCommand>? bindParameters = null
+    )
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            bindParameters?.Invoke(cmd);
+
+            var subscriptions = new List<SyncSubscription>();
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                subscriptions.Add(ReadSubscription(reader));
+            }
+
+            return new SubscriptionListOk(subscriptions);
+        }
+        catch (SqliteException ex)
+        {
+            return new SubscriptionListError(
+                new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
+            );
+        }
+    }
+
+    internal static SyncSubscription ReadSubscription(SqliteDataReader reader) =>
         new(
             SubscriptionId: reader.GetString(0),
             OriginId: reader.GetString(1),
@@ -282,7 +267,7 @@ public static class SubscriptionRepository
             ExpiresAt: reader.IsDBNull(6) ? null : reader.GetString(6)
         );
 
-    private static SubscriptionType ParseSubscriptionType(string type) =>
+    internal static SubscriptionType ParseSubscriptionType(string type) =>
         type.ToLowerInvariant() switch
         {
             "record" => SubscriptionType.Record,

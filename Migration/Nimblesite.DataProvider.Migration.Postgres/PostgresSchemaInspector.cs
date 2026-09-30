@@ -344,6 +344,12 @@ public static partial class PostgresSchemaInspector
                     UniqueConstraints = uniqueConstraints.AsReadOnly(),
                     CheckConstraints = checkConstraints.AsReadOnly(),
                     RowLevelSecurity = rls,
+                    // [MIG-TRIGGER-PG] read declarative trigger guards by name.
+                    Triggers = PostgresTriggerSchemaInspector.Inspect(
+                        connection,
+                        schemaName,
+                        tableName
+                    ),
                 }
             );
         }

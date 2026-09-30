@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-SQLITE] tests from docs/specs/rls-spec.md.
@@ -9,26 +7,27 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// </summary>
 public sealed class SqliteRlsMigrationTests
 {
-    private static readonly ILogger Logger = NullLogger.Instance;
-
     [Fact]
     public void Sqlite_EnableRls_CreatesRlsContextTable()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            Apply(connection, [new EnableRlsOperation("main", "Documents")]);
+            SqliteTestDb.Apply(connection, [new EnableRlsOperation("main", "Documents")]);
 
-            Assert.Equal(1, CountMasterRows(connection, "table", "__rls_context"));
+            Assert.Equal(1, SqliteTestDb.CountMasterRows(connection, "table", "__rls_context"));
         });
     }
 
     [Fact]
     public void Sqlite_CreatePolicy_Insert_TriggerBlocksCrossOwnerInsert()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.Insert])));
-            SetUser(connection, "user-a");
+            SqliteTestDb.ApplySchema(
+                connection,
+                DocumentsSchema(OwnerPolicy([RlsOperation.Insert]))
+            );
+            SqliteTestDb.SetUser(connection, "user-a");
 
             InsertDocument(connection, "doc-a", "user-a");
 
@@ -42,14 +41,17 @@ public sealed class SqliteRlsMigrationTests
     [Fact]
     public void Sqlite_CreatePolicy_Update_TriggerBlocksCrossOwnerUpdate()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.Update])));
-            SetUser(connection, "user-a");
+            SqliteTestDb.ApplySchema(
+                connection,
+                DocumentsSchema(OwnerPolicy([RlsOperation.Update]))
+            );
+            SqliteTestDb.SetUser(connection, "user-a");
             InsertDocument(connection, "doc-a", "user-a");
 
             var ex = Assert.Throws<SqliteException>(() =>
-                Execute(connection, "UPDATE [Documents] SET [OwnerId]='user-b'")
+                SqliteTestDb.Execute(connection, "UPDATE [Documents] SET [OwnerId]='user-b'")
             );
             Assert.Contains("RLS-SQLITE", ex.Message, StringComparison.Ordinal);
         });
@@ -58,15 +60,18 @@ public sealed class SqliteRlsMigrationTests
     [Fact]
     public void Sqlite_CreatePolicy_Delete_TriggerBlocksCrossOwnerDelete()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.Delete])));
-            SetUser(connection, "user-a");
+            SqliteTestDb.ApplySchema(
+                connection,
+                DocumentsSchema(OwnerPolicy([RlsOperation.Delete]))
+            );
+            SqliteTestDb.SetUser(connection, "user-a");
             InsertDocument(connection, "doc-a", "user-a");
-            SetUser(connection, "user-b");
+            SqliteTestDb.SetUser(connection, "user-b");
 
             var ex = Assert.Throws<SqliteException>(() =>
-                Execute(connection, "DELETE FROM [Documents] WHERE [Id]='doc-a'")
+                SqliteTestDb.Execute(connection, "DELETE FROM [Documents] WHERE [Id]='doc-a'")
             );
             Assert.Contains("RLS-SQLITE", ex.Message, StringComparison.Ordinal);
         });
@@ -75,43 +80,44 @@ public sealed class SqliteRlsMigrationTests
     [Fact]
     public void Sqlite_CreatePolicy_GroupMembership_TriggerUsesSubquery()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, GroupMembershipSchema());
-            SetUser(connection, "user-a");
+            SqliteTestDb.ApplySchema(connection, GroupMembershipSchema());
+            SqliteTestDb.SetUser(connection, "user-a");
 
             Assert.Throws<SqliteException>(() => InsertDocument(connection, "doc-a", "user-a"));
 
             InsertMembership(connection, "membership-a", "user-a");
             InsertDocument(connection, "doc-b", "user-a");
-            Assert.Equal(1, CountRows(connection, "Documents"));
+            Assert.Equal(1, SqliteTestDb.CountRows(connection, "Documents"));
         });
     }
 
     [Fact]
     public void Sqlite_SelectPolicy_CreatesSecureView()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.Select])));
+            SqliteTestDb.ApplySchema(
+                connection,
+                DocumentsSchema(OwnerPolicy([RlsOperation.Select]))
+            );
             InsertDocument(connection, "doc-a", "user-a");
             InsertDocument(connection, "doc-b", "user-b");
-            SetUser(connection, "user-a");
+            SqliteTestDb.SetUser(connection, "user-a");
 
-            Assert.Equal(1, CountRows(connection, "Documents_secure"));
+            Assert.Equal(1, SqliteTestDb.CountRows(connection, "Documents_secure"));
         });
     }
 
     [Fact]
     public void Sqlite_SchemaInspector_ReadsBackTriggers()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.All])));
+            SqliteTestDb.ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.All])));
 
-            var inspected = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, Logger)
-            ).Value;
+            var inspected = SqliteTestDb.Inspect(connection);
             var rls = inspected.Tables.Single(t => t.Name == "Documents").RowLevelSecurity;
 
             Assert.NotNull(rls);
@@ -139,17 +145,20 @@ public sealed class SqliteRlsMigrationTests
     [Fact]
     public void Sqlite_DisableRls_DropsSecureView()
     {
-        WithDb(connection =>
+        SqliteTestDb.WithDb(connection =>
         {
-            ApplySchema(connection, DocumentsSchema(OwnerPolicy([RlsOperation.Select])));
+            SqliteTestDb.ApplySchema(
+                connection,
+                DocumentsSchema(OwnerPolicy([RlsOperation.Select]))
+            );
 
-            Apply(
+            SqliteTestDb.Apply(
                 connection,
                 [new DisableRlsOperation("main", "Documents")],
                 MigrationOptions.Destructive
             );
 
-            Assert.Equal(0, CountMasterRows(connection, "view", "Documents_secure"));
+            Assert.Equal(0, SqliteTestDb.CountMasterRows(connection, "view", "Documents_secure"));
         });
     }
 
@@ -221,85 +230,15 @@ public sealed class SqliteRlsMigrationTests
                 """,
         };
 
-    private static void ApplySchema(SqliteConnection connection, SchemaDefinition schema)
-    {
-        var current = ((SchemaResultOk)SqliteSchemaInspector.Inspect(connection, Logger)).Value;
-        var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: Logger)).Value;
-        Apply(connection, ops);
-    }
-
-    private static void Apply(
-        SqliteConnection connection,
-        IReadOnlyList<SchemaOperation> ops,
-        MigrationOptions? options = null
-    )
-    {
-        var result = MigrationRunner.Apply(
-            connection,
-            ops,
-            SqliteDdlGenerator.Generate,
-            options ?? MigrationOptions.Default,
-            Logger
-        );
-        Assert.True(result is MigrationApplyResultOk);
-    }
-
-    private static void SetUser(SqliteConnection connection, string userId)
-    {
-        Execute(connection, "DELETE FROM [__rls_context]");
-        Execute(connection, $"INSERT INTO [__rls_context]([current_user_id]) VALUES ('{userId}')");
-    }
-
     private static void InsertDocument(SqliteConnection connection, string id, string ownerId) =>
-        Execute(
+        SqliteTestDb.Execute(
             connection,
             $"INSERT INTO [Documents]([Id], [OwnerId], [Title]) VALUES ('{id}', '{ownerId}', 't')"
         );
 
     private static void InsertMembership(SqliteConnection connection, string id, string userId) =>
-        Execute(
+        SqliteTestDb.Execute(
             connection,
             $"INSERT INTO [UserGroupMemberships]([Id], [UserId]) VALUES ('{id}', '{userId}')"
         );
-
-    private static void Execute(SqliteConnection connection, string sql)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
-    }
-
-    private static int CountRows(SqliteConnection connection, string tableName) =>
-        Count(connection, $"SELECT COUNT(*) FROM [{tableName}]");
-
-    private static int CountMasterRows(SqliteConnection connection, string type, string name) =>
-        Count(
-            connection,
-            $"SELECT COUNT(*) FROM sqlite_master WHERE type='{type}' AND name='{name}'"
-        );
-
-    private static int Count(SqliteConnection connection, string sql)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
-    }
-
-    private static void WithDb(Action<SqliteConnection> test)
-    {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"sqliterls_{Guid.NewGuid()}.db");
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
-        try
-        {
-            test(connection);
-        }
-        finally
-        {
-            if (File.Exists(dbPath))
-            {
-                File.Delete(dbPath);
-            }
-        }
-    }
 }

@@ -412,6 +412,17 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
         TriggerGenerator.CreateTriggers(conn, "Person", NullLogger.Instance);
     }
 
+    private static SyncLogEntry ParseChangeEntry(JsonElement change) =>
+        new SyncLogEntry(
+            Version: change.GetProperty("version").GetInt64(),
+            TableName: change.GetProperty("tableName").GetString() ?? "",
+            PkValue: change.GetProperty("pkValue").GetString() ?? "",
+            Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
+            Payload: change.GetProperty("payload").GetString() ?? "",
+            Origin: change.GetProperty("origin").GetString() ?? "",
+            Timestamp: change.GetProperty("timestamp").GetString() ?? ""
+        );
+
     public void Dispose()
     {
         _client.Dispose();
@@ -530,15 +541,7 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
         // Apply changes to client (operation is returned as integer enum value)
         foreach (var change in changesArray.EnumerateArray())
         {
-            var entry = new SyncLogEntry(
-                Version: change.GetProperty("version").GetInt64(),
-                TableName: change.GetProperty("tableName").GetString() ?? "",
-                PkValue: change.GetProperty("pkValue").GetString() ?? "",
-                Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
-                Payload: change.GetProperty("payload").GetString() ?? "",
-                Origin: change.GetProperty("origin").GetString() ?? "",
-                Timestamp: change.GetProperty("timestamp").GetString() ?? ""
-            );
+            var entry = ParseChangeEntry(change);
 
             SyncSessionManager.EnableSuppression(_clientConn);
             var result = ChangeApplierSQLite.ApplyChange(_clientConn, entry);
@@ -588,15 +591,7 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
 
         foreach (var change in pullDoc.RootElement.GetProperty("changes").EnumerateArray())
         {
-            var entry = new SyncLogEntry(
-                Version: change.GetProperty("version").GetInt64(),
-                TableName: change.GetProperty("tableName").GetString() ?? "",
-                PkValue: change.GetProperty("pkValue").GetString() ?? "",
-                Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
-                Payload: change.GetProperty("payload").GetString() ?? "",
-                Origin: change.GetProperty("origin").GetString() ?? "",
-                Timestamp: change.GetProperty("timestamp").GetString() ?? ""
-            );
+            var entry = ParseChangeEntry(change);
 
             if (entry.Origin != _clientOriginId)
             {

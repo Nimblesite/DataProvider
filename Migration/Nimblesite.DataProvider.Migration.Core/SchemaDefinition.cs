@@ -181,6 +181,12 @@ public sealed record TableDefinition
     /// table and each contained policy is applied. Implements [RLS-CORE-POLICY].
     /// </summary>
     public RlsPolicySetDefinition? RowLevelSecurity { get; init; }
+
+    /// <summary>
+    /// Declarative trigger guards on this table. Implements
+    /// [MIG-TRIGGER-MODEL] (GitHub issue 82).
+    /// </summary>
+    public IReadOnlyList<TriggerDefinition> Triggers { get; init; } = [];
 }
 
 /// <summary>

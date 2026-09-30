@@ -42,6 +42,22 @@ public sealed class SQLiteContextE2ETests : IDisposable
 
     private static Identifier Id(string name) => new(name);
 
+    private static Pipeline CountByCountryPipeline()
+    {
+        var pipeline = WithIdentity("users");
+        pipeline.Steps.Add(
+            new SelectStep([
+                ColumnInfo.Named("country"),
+                ColumnInfo.FromExpression("COUNT(*)", alias: "cnt"),
+            ])
+            {
+                Base = Id("users"),
+            }
+        );
+        pipeline.Steps.Add(new GroupByStep(["country"]) { Base = Id("users") });
+        return pipeline;
+    }
+
     private void CreateSchemaAndSeed()
     {
         using var cmd = _connection.CreateCommand();
@@ -119,17 +135,7 @@ public sealed class SQLiteContextE2ETests : IDisposable
     [Fact]
     public void PipelineProcessor_GroupByWithHaving_GeneratesGroupByAndHavingSql()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([
-                ColumnInfo.Named("country"),
-                ColumnInfo.FromExpression("COUNT(*)", alias: "cnt"),
-            ])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(new GroupByStep(["country"]) { Base = Id("users") });
+        var pipeline = CountByCountryPipeline();
         pipeline.Steps.Add(new HavingStep { Base = Id("users"), Condition = "COUNT(*) > 1" });
 
         var context = new SQLiteContext();
@@ -346,17 +352,7 @@ public sealed class SQLiteContextE2ETests : IDisposable
     [Fact]
     public void PipelineProcessor_GroupByExecute_ReturnsAggregatedRows()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([
-                ColumnInfo.Named("country"),
-                ColumnInfo.FromExpression("COUNT(*)", alias: "cnt"),
-            ])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(new GroupByStep(["country"]) { Base = Id("users") });
+        var pipeline = CountByCountryPipeline();
         pipeline.Steps.Add(new OrderByStep([("cnt", "DESC")]) { Base = Id("users") });
 
         var context = new SQLiteContext();

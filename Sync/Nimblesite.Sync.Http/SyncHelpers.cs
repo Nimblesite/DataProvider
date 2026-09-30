@@ -126,15 +126,7 @@ public static class SyncHelpers
                 if (change.Origin == originId)
                     continue;
 
-                var entry = new SyncLogEntry(
-                    change.Version,
-                    change.TableName,
-                    change.PkValue,
-                    Enum.Parse<SyncOperation>(change.Operation, true),
-                    change.Payload,
-                    change.Origin,
-                    change.Timestamp
-                );
+                var entry = ToSyncLogEntry(change);
 
                 var result = SQLite.ChangeApplierSQLite.ApplyChange(conn, entry);
                 if (result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>)
@@ -168,15 +160,7 @@ public static class SyncHelpers
                 if (change.Origin == originId)
                     continue;
 
-                var entry = new SyncLogEntry(
-                    change.Version,
-                    change.TableName,
-                    change.PkValue,
-                    Enum.Parse<SyncOperation>(change.Operation, true),
-                    change.Payload,
-                    change.Origin,
-                    change.Timestamp
-                );
+                var entry = ToSyncLogEntry(change);
 
                 var result = Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger);
                 if (result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>)
@@ -227,4 +211,15 @@ public static class SyncHelpers
         conn.Open();
         return Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
     }
+
+    private static SyncLogEntry ToSyncLogEntry(SyncLogEntryDto change) =>
+        new(
+            change.Version,
+            change.TableName,
+            change.PkValue,
+            Enum.Parse<SyncOperation>(change.Operation, true),
+            change.Payload,
+            change.Origin,
+            change.Timestamp
+        );
 }

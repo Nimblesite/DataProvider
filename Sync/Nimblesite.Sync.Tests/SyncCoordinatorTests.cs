@@ -762,29 +762,21 @@ public sealed class SyncCoordinatorTests : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    private static string? GetPersonName(SqliteConnection db, string id)
+    private static string? GetName(SqliteConnection db, string table, string id)
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Person WHERE Id = $id";
+        cmd.CommandText = $"SELECT Name FROM {table} WHERE Id = $id";
         cmd.Parameters.AddWithValue("$id", id);
         return cmd.ExecuteScalar() as string;
     }
 
-    private static string? GetParentName(SqliteConnection db, string id)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Parent WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
-    }
+    private static string? GetPersonName(SqliteConnection db, string id) =>
+        GetName(db, "Person", id);
 
-    private static string? GetChildName(SqliteConnection db, string id)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Child WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
-    }
+    private static string? GetParentName(SqliteConnection db, string id) =>
+        GetName(db, "Parent", id);
+
+    private static string? GetChildName(SqliteConnection db, string id) => GetName(db, "Child", id);
 
     private static void SetLastSyncVersion(SqliteConnection db, long version)
     {

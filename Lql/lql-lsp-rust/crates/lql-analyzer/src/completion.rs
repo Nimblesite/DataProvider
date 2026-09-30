@@ -249,6 +249,27 @@ fn pipeline_completions(prefix: &str) -> Vec<CompletionItem> {
         .collect()
 }
 
+fn build_completions(
+    entries: Vec<(&str, &str, &str)>,
+    prefix: &str,
+    kind: CompletionKind,
+    with_snippet: bool,
+    sort_priority: u8,
+) -> Vec<CompletionItem> {
+    entries
+        .into_iter()
+        .filter(|(name, _, _)| name.starts_with(prefix))
+        .map(|(name, detail, doc)| CompletionItem {
+            label: name.into(),
+            kind,
+            detail: detail.into(),
+            documentation: doc.into(),
+            insert_text: with_snippet.then(|| format!("{name}($0)")),
+            sort_priority,
+        })
+        .collect()
+}
+
 fn aggregate_completions(prefix: &str) -> Vec<CompletionItem> {
     let fns = vec![
         ("count", "Count rows", "count(*) or count(column)"),
@@ -261,17 +282,7 @@ fn aggregate_completions(prefix: &str) -> Vec<CompletionItem> {
         ("dense_rank", "Dense rank", "dense_rank() over (...)"),
     ];
 
-    fns.into_iter()
-        .filter(|(name, _, _)| name.starts_with(prefix))
-        .map(|(name, detail, doc)| CompletionItem {
-            label: name.into(),
-            kind: CompletionKind::Function,
-            detail: detail.into(),
-            documentation: doc.into(),
-            insert_text: Some(format!("{name}($0)")),
-            sort_priority: 2,
-        })
-        .collect()
+    build_completions(fns, prefix, CompletionKind::Function, true, 2)
 }
 
 fn string_function_completions(prefix: &str) -> Vec<CompletionItem> {
@@ -291,17 +302,7 @@ fn string_function_completions(prefix: &str) -> Vec<CompletionItem> {
         ("coalesce", "First non-null", "coalesce(val1, val2, ...)"),
     ];
 
-    fns.into_iter()
-        .filter(|(name, _, _)| name.starts_with(prefix))
-        .map(|(name, detail, doc)| CompletionItem {
-            label: name.into(),
-            kind: CompletionKind::Function,
-            detail: detail.into(),
-            documentation: doc.into(),
-            insert_text: Some(format!("{name}($0)")),
-            sort_priority: 2,
-        })
-        .collect()
+    build_completions(fns, prefix, CompletionKind::Function, true, 2)
 }
 
 fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
@@ -319,17 +320,7 @@ fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
         ("distinct", "Distinct modifier", "Remove duplicates"),
     ];
 
-    kws.into_iter()
-        .filter(|(name, _, _)| name.starts_with(prefix))
-        .map(|(name, detail, doc)| CompletionItem {
-            label: name.into(),
-            kind: CompletionKind::Keyword,
-            detail: detail.into(),
-            documentation: doc.into(),
-            insert_text: None,
-            sort_priority: 3,
-        })
-        .collect()
+    build_completions(kws, prefix, CompletionKind::Keyword, false, 3)
 }
 
 fn lambda_completions(prefix: &str) -> Vec<CompletionItem> {
@@ -343,17 +334,7 @@ fn lambda_completions(prefix: &str) -> Vec<CompletionItem> {
         ("exists", "EXISTS subquery", "Check subquery has results"),
     ];
 
-    ops.into_iter()
-        .filter(|(name, _, _)| name.starts_with(prefix))
-        .map(|(name, detail, doc)| CompletionItem {
-            label: name.into(),
-            kind: CompletionKind::Keyword,
-            detail: detail.into(),
-            documentation: doc.into(),
-            insert_text: None,
-            sort_priority: 3,
-        })
-        .collect()
+    build_completions(ops, prefix, CompletionKind::Keyword, false, 3)
 }
 
 #[cfg(test)]

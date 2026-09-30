@@ -18,26 +18,8 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             Name = "live",
             Tables =
             [
-                new TableDefinition
+                BaseUsageEventsTable() with
                 {
-                    Schema = "public",
-                    Name = "usage_events",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "kind",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
                     CheckConstraints =
                     [
                         new CheckConstraintDefinition
@@ -102,28 +84,17 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             Name = "live",
             Tables =
             [
-                new TableDefinition
+                BaseUsageEventsTable() with
                 {
-                    Schema = "public",
-                    Name = "usage_events",
                     Columns =
                     [
-                        new ColumnDefinition
+                        BaseUsageEventsTable().Columns[0],
+                        BaseUsageEventsTable().Columns[1] with
                         {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "kind",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
                             CheckConstraint =
                                 "kind IN ('request','input_tokens','output_tokens','sandbox_seconds')",
                         },
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
                 },
             ],
         };
@@ -172,26 +143,8 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             Name = "stable",
             Tables =
             [
-                new TableDefinition
+                BaseUsageEventsTable() with
                 {
-                    Schema = "public",
-                    Name = "usage_events",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "kind",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
                     CheckConstraints =
                     [
                         new CheckConstraintDefinition
@@ -216,4 +169,27 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
         Assert.DoesNotContain(ops, op => op is DropCheckConstraintOperation);
         Assert.DoesNotContain(ops, op => op is AddCheckConstraintOperation);
     }
+
+    private static TableDefinition BaseUsageEventsTable() =>
+        new()
+        {
+            Schema = "public",
+            Name = "usage_events",
+            Columns =
+            [
+                new ColumnDefinition
+                {
+                    Name = "id",
+                    Type = PortableTypes.Uuid,
+                    IsNullable = false,
+                },
+                new ColumnDefinition
+                {
+                    Name = "kind",
+                    Type = PortableTypes.Text,
+                    IsNullable = false,
+                },
+            ],
+            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
+        };
 }

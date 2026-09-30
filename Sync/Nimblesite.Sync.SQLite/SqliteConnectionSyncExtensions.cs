@@ -29,7 +29,7 @@ public static class SqliteConnectionSyncExtensions
 
             while (reader.Read())
             {
-                subscriptions.Add(ReadSubscription(reader));
+                subscriptions.Add(SubscriptionRepository.ReadSubscription(reader));
             }
 
             return new SubscriptionListOk(subscriptions);
@@ -65,7 +65,7 @@ public static class SqliteConnectionSyncExtensions
 
             while (reader.Read())
             {
-                subscriptions.Add(ReadSubscription(reader));
+                subscriptions.Add(SubscriptionRepository.ReadSubscription(reader));
             }
 
             return new SubscriptionListOk(subscriptions);
@@ -377,24 +377,4 @@ public static class SqliteConnectionSyncExtensions
             );
         }
     }
-
-    private static SyncSubscription ReadSubscription(SqliteDataReader reader) =>
-        new(
-            SubscriptionId: reader.GetString(0),
-            OriginId: reader.GetString(1),
-            Type: ParseSubscriptionType(reader.GetString(2)),
-            TableName: reader.GetString(3),
-            Filter: reader.IsDBNull(4) ? null : reader.GetString(4),
-            CreatedAt: reader.GetString(5),
-            ExpiresAt: reader.IsDBNull(6) ? null : reader.GetString(6)
-        );
-
-    private static SubscriptionType ParseSubscriptionType(string type) =>
-        type.ToLowerInvariant() switch
-        {
-            "record" => SubscriptionType.Record,
-            "table" => SubscriptionType.Table,
-            "query" => SubscriptionType.Query,
-            _ => SubscriptionType.Table,
-        };
 }

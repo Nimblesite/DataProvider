@@ -6,7 +6,7 @@ internal static class SqliteRlsSchemaInspector
 {
     public static RlsPolicySetDefinition? Inspect(SqliteConnection connection, string tableName)
     {
-        var triggers = ReadTriggerNames(connection, tableName);
+        var triggers = SqliteTriggerNames.Read(connection, tableName, $"rls_%_{tableName}");
         if (triggers.Count == 0)
         {
             return null;
@@ -23,70 +23,29 @@ internal static class SqliteRlsSchemaInspector
         return policies.Count == 0 ? null : new RlsPolicySetDefinition { Policies = policies };
     }
 
-    private static List<string> ReadTriggerNames(SqliteConnection connection, string tableName)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT name FROM sqlite_master
-            WHERE type = 'trigger' AND tbl_name = @table AND name LIKE @pattern
-            ORDER BY name
-            """;
-        command.Parameters.AddWithValue("@table", tableName);
-        command.Parameters.AddWithValue("@pattern", $"rls_%_{tableName}");
-        using var reader = command.ExecuteReader();
-        var names = new List<string>();
-        while (reader.Read())
-        {
-            names.Add(reader.GetString(0));
-        }
-        return names;
-    }
-
     private static SqliteRlsTriggerPolicy? ToTriggerPolicy(string name, string tableName)
     {
-        var suffix = $"_{tableName}";
-        if (
-            !name.StartsWith("rls_", StringComparison.Ordinal)
-            || !name.EndsWith(suffix, StringComparison.Ordinal)
-        )
-        {
-            return null;
-        }
-
-        var body = name[4..^suffix.Length];
-        var operation = ReadOperation(body);
-        return operation is null
+        var parsed = SqliteTriggerNames.Parse(
+            name,
+            "rls_",
+            tableName,
+            SqliteTriggerNames.DmlEventTokens
+        );
+        return parsed is null
             ? null
-            : new SqliteRlsTriggerPolicy(body[(operation.SqlName.Length + 1)..], operation);
+            : new SqliteRlsTriggerPolicy(parsed.BaseName, ToOperation(parsed.EventToken));
     }
 
-    private static SqliteRlsOperationName? ReadOperation(string body)
-    {
-        foreach (var op in OperationNames())
+    private static RlsOperation ToOperation(string eventToken) =>
+        eventToken switch
         {
-            if (body.StartsWith($"{op.SqlName}_", StringComparison.Ordinal))
-            {
-                return op;
-            }
-        }
-        return null;
-    }
-
-    private static RlsPolicyDefinition ToPolicy(IGrouping<string, SqliteRlsTriggerPolicy> group) =>
-        new()
-        {
-            Name = group.Key,
-            Operations = group.Select(p => p.Operation.RlsOperation).Distinct().ToList(),
+            "insert" => RlsOperation.Insert,
+            "update" => RlsOperation.Update,
+            _ => RlsOperation.Delete,
         };
 
-    private static IEnumerable<SqliteRlsOperationName> OperationNames() =>
-        [
-            new("insert", RlsOperation.Insert),
-            new("update", RlsOperation.Update),
-            new("delete", RlsOperation.Delete),
-        ];
+    private static RlsPolicyDefinition ToPolicy(IGrouping<string, SqliteRlsTriggerPolicy> group) =>
+        new() { Name = group.Key, Operations = group.Select(p => p.Operation).Distinct().ToList() };
 }
 
-internal sealed record SqliteRlsTriggerPolicy(string Name, SqliteRlsOperationName Operation);
-
-internal sealed record SqliteRlsOperationName(string SqlName, RlsOperation RlsOperation);
+internal sealed record SqliteRlsTriggerPolicy(string Name, RlsOperation Operation);

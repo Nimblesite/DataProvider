@@ -134,20 +134,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new(null, "source", TransformType.Constant, "mobile-app"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: ["PasswordHash", "SecurityStamp"],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
         // Act - Insert in source with SOURCE schema columns
         using (var cmd = source.CreateCommand())
@@ -226,20 +213,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new(null, "source", TransformType.Constant, "sync-test"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: ["PasswordHash", "SecurityStamp"],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
         // Insert in source
         using (var cmd = source.CreateCommand())
@@ -419,20 +393,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Insert
         using (var cmd = source.CreateCommand())
@@ -491,20 +452,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
         var sourceOrigin = Guid.NewGuid().ToString();
         using var source = CreateSourceDb(sourceOrigin);
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig([], []);
 
         // Insert then delete
         using (var cmd = source.CreateCommand())
@@ -618,20 +566,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Insert with NULL email
         using (var cmd = source.CreateCommand())
@@ -676,20 +611,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Unicode characters: Japanese, Chinese, Korean, Arabic, Emoji
         var unicodeNames = new[]
@@ -782,20 +704,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Special chars
         var specialCases = new[]
@@ -867,20 +776,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Insert with empty string (not NULL)
         using (var cmd = source.CreateCommand())
@@ -923,20 +819,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Very long string (10000 chars)
         var longName = new string('A', 10000);
@@ -999,20 +882,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new(null, "notes", TransformType.Constant, ""),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         using (var cmd = source.CreateCommand())
         {
@@ -1051,27 +921,10 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
         var sourceOrigin = Guid.NewGuid().ToString();
         using var source = CreateSourceDb(sourceOrigin);
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: [],
-            ExcludedColumns:
-            [
-                "FullName",
-                "EmailAddress",
-                "PasswordHash",
-                "SecurityStamp",
-                "CreatedAt",
-            ],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
+        var mappingConfig = UserToCustomerConfig(
+            [],
+            ["FullName", "EmailAddress", "PasswordHash", "SecurityStamp", "CreatedAt"]
         );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
 
         using (var cmd = source.CreateCommand())
         {
@@ -1119,20 +972,7 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
             new("EmailAddress", "email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-to-customer",
-            SourceTable: "User",
-            TargetTable: "customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "customer_id"),
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-        var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
         // Name contains JSON-like structure
         var jsonLikeName = "{\"first\":\"John\",\"last\":\"Doe\"}";
@@ -1179,6 +1019,29 @@ public sealed class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAs
     }
 
     #endregion
+
+    private static SyncMappingConfig UserToCustomerConfig(
+        IReadOnlyList<ColumnMapping> columnMappings,
+        IReadOnlyList<string> excludedColumns
+    ) =>
+        new(
+            "1.0",
+            UnmappedTableBehavior.Strict,
+            [
+                new TableMapping(
+                    Id: "user-to-customer",
+                    SourceTable: "User",
+                    TargetTable: "customer",
+                    Direction: MappingDirection.Push,
+                    Enabled: true,
+                    PkMapping: new PkMapping("Id", "customer_id"),
+                    ColumnMappings: columnMappings,
+                    ExcludedColumns: excludedColumns,
+                    Filter: null,
+                    SyncTracking: new SyncTrackingConfig()
+                ),
+            ]
+        );
 
     /// <summary>
     /// Helper to apply a mapped entry to PostgreSQL target table.

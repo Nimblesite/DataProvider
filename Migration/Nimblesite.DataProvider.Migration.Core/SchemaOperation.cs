@@ -115,6 +115,16 @@ public sealed record AlterRlsPolicyOperation(
     RlsPolicyDefinition Policy
 ) : SchemaOperation;
 
+/// <summary>
+/// Create a declarative trigger guard. Additive. Implements
+/// [MIG-TRIGGER-DIFF] (GitHub issue 82).
+/// </summary>
+public sealed record CreateTriggerOperation(
+    string Schema,
+    string TableName,
+    TriggerDefinition Trigger
+) : SchemaOperation;
+
 // ═══════════════════════════════════════════════════════════════════
 // DESTRUCTIVE OPERATIONS - Require explicit opt-in
 // ═══════════════════════════════════════════════════════════════════
@@ -175,6 +185,14 @@ public sealed record RevokePrivilegesOperation(PostgresGrantDefinition Grant) : 
 /// Drop a row-level security policy. DESTRUCTIVE - requires explicit opt-in.
 /// </summary>
 public sealed record DropRlsPolicyOperation(string Schema, string TableName, string PolicyName)
+    : SchemaOperation;
+
+/// <summary>
+/// Drop a declarative trigger guard -- removes an enforcement rule.
+/// DESTRUCTIVE - requires explicit opt-in. Implements [MIG-TRIGGER-DIFF]
+/// (GitHub issue 82).
+/// </summary>
+public sealed record DropTriggerOperation(string Schema, string TableName, string TriggerName)
     : SchemaOperation;
 
 /// <summary>

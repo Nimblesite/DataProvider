@@ -254,6 +254,7 @@ public static class SqliteSchemaInspector
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
                     RowLevelSecurity = SqliteRlsSchemaInspector.Inspect(connection, tableName),
+                    Triggers = SqliteTriggerSchemaInspector.Inspect(connection, tableName),
                 }
             );
         }

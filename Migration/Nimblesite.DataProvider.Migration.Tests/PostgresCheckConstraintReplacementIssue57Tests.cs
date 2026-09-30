@@ -20,16 +20,22 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
 
         try
         {
-            Apply(
+            PostgresTestDb.Apply(
                 connection,
-                Calculate(Inspect(connection), SchemaWithKindCheck("usage_events_kind_check_v1"))
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    SchemaWithKindCheck("usage_events_kind_check_v1"),
+                    Logger
+                ),
+                Logger
             );
             Assert.True(LiveExpressionContains(connection, "input_tokens"));
             Assert.False(LiveExpressionContains(connection, "llm_input_tokens"));
 
-            var upgrade = Calculate(
-                Inspect(connection),
-                SchemaWithKindCheck("usage_events_kind_check_v2")
+            var upgrade = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                SchemaWithKindCheck("usage_events_kind_check_v2"),
+                Logger
             );
             Assert.Contains(
                 upgrade,
@@ -39,14 +45,15 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
             );
             Assert.Contains(upgrade, op => op is AddCheckConstraintOperation);
 
-            Apply(connection, upgrade);
+            PostgresTestDb.Apply(connection, upgrade, Logger);
 
             Assert.True(LiveExpressionContains(connection, "llm_input_tokens"));
             Assert.False(LiveExpressionContains(connection, "'input_tokens'"));
 
-            var replay = Calculate(
-                Inspect(connection),
-                SchemaWithKindCheck("usage_events_kind_check_v2")
+            var replay = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                SchemaWithKindCheck("usage_events_kind_check_v2"),
+                Logger
             );
             Assert.DoesNotContain(replay, op => op is DropCheckConstraintOperation);
             Assert.DoesNotContain(replay, op => op is AddCheckConstraintOperation);
@@ -104,52 +111,6 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
                 },
             ],
         };
-    }
-
-    private static SchemaDefinition Inspect(NpgsqlConnection connection)
-    {
-        var result = PostgresSchemaInspector.Inspect(connection, SchemaName, Logger);
-        if (result is SchemaResultOk ok)
-        {
-            return ok.Value;
-        }
-        Assert.Fail("Expected PostgreSQL schema inspection to succeed.");
-        return new SchemaDefinition { Name = "failed", Tables = [] };
-    }
-
-    private static IReadOnlyList<SchemaOperation> Calculate(
-        SchemaDefinition current,
-        SchemaDefinition desired
-    )
-    {
-        var result = SchemaDiff.Calculate(
-            current: current,
-            desired: desired,
-            allowDestructive: false,
-            logger: Logger
-        );
-        if (result is OperationsResultOk ok)
-        {
-            return ok.Value;
-        }
-        Assert.Fail("Expected PostgreSQL schema diff to succeed.");
-        return [];
-    }
-
-    private static void Apply(
-        NpgsqlConnection connection,
-        IReadOnlyList<SchemaOperation> operations
-    )
-    {
-        var result = MigrationRunner.Apply(
-            connection: connection,
-            operations: operations,
-            generateDdl: PostgresDdlGenerator.Generate,
-            options: MigrationOptions.Default,
-            logger: Logger
-        );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
     }
 
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)

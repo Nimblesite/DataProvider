@@ -8,6 +8,28 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// </summary>
 public sealed class SchemaDiffUniqueConstraintIssue55Tests
 {
+    private static IReadOnlyList<ColumnDefinition> AgentConfigColumns() =>
+        [
+            new ColumnDefinition
+            {
+                Name = "id",
+                Type = PortableTypes.Uuid,
+                IsNullable = false,
+            },
+            new ColumnDefinition
+            {
+                Name = "tenant_id",
+                Type = PortableTypes.Uuid,
+                IsNullable = false,
+            },
+            new ColumnDefinition
+            {
+                Name = "name",
+                Type = PortableTypes.Text,
+                IsNullable = false,
+            },
+        ];
+
     [Fact]
     public void Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation()
     {
@@ -20,27 +42,7 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
                 {
                     Schema = "public",
                     Name = "agent_configs",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "name",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
+                    Columns = AgentConfigColumns(),
                     PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
                 },
             ],
@@ -103,27 +105,7 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
                 {
                     Schema = "public",
                     Name = "agent_configs",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "name",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
+                    Columns = AgentConfigColumns(),
                     PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
                     UniqueConstraints = [unique],
                 },

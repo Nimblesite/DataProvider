@@ -140,6 +140,7 @@ public static class MigrationRunner
                 or DropFunctionOperation
                 or RevokePrivilegesOperation
                 or DropRlsPolicyOperation
+                or DropTriggerOperation
                 or DisableRlsOperation
                 or DisableForceRlsOperation;
 }

@@ -2,6 +2,8 @@
 #pragma warning disable CA2000 // Dispose objects before losing scope
 #pragma warning disable CA1849 // Synchronous blocking calls
 
+using System.Data.Common;
+
 namespace Nimblesite.DataProvider.Tests.Fakes;
 
 public class FakeDbConnectionTests
@@ -134,20 +136,8 @@ public class FakeDbConnectionTests
     [Fact]
     public void FakeCommand_UsesDataReaderFactory()
     {
-        // Arrange
-        var connection = new FakeDbConnection(sql => new FakeDataReader(
-            ["Id", "Name"],
-            [typeof(int), typeof(string)],
-            [
-                [1, "Test User"],
-            ]
-        ));
-
-        connection.Open();
-
-        // Act
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT * FROM Users";
+        // Arrange & Act
+        using var command = CreateTestUserCommand();
         using var reader = command.ExecuteReader();
 
         // Assert
@@ -184,7 +174,19 @@ public class FakeDbConnectionTests
     [Fact]
     public async Task FakeDataReader_SupportsAsyncOperations()
     {
-        // Arrange
+        // Arrange & Act
+        using var command = CreateTestUserCommand();
+        using var reader = await command.ExecuteReaderAsync();
+
+        // Assert
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(1, reader.GetInt32(0));
+        Assert.Equal("Test User", reader.GetString(1));
+        Assert.False(await reader.IsDBNullAsync(0));
+    }
+
+    private static DbCommand CreateTestUserCommand()
+    {
         var connection = new FakeDbConnection(sql => new FakeDataReader(
             ["Id", "Name"],
             [typeof(int), typeof(string)],
@@ -195,15 +197,8 @@ public class FakeDbConnectionTests
 
         connection.Open();
 
-        // Act
-        using var command = connection.CreateCommand();
+        var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM Users";
-        using var reader = await command.ExecuteReaderAsync();
-
-        // Assert
-        Assert.True(await reader.ReadAsync());
-        Assert.Equal(1, reader.GetInt32(0));
-        Assert.Equal("Test User", reader.GetString(1));
-        Assert.False(await reader.IsDBNullAsync(0));
+        return command;
     }
 }

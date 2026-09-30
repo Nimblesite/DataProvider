@@ -17,16 +17,9 @@ public static class SqlStatementExtensionsPostgreSQL
     {
         ArgumentNullException.ThrowIfNull(statement);
 
-        if (statement.ParseError != null)
+        if (LqlStatementValidator.Validate(statement) is SqlError error)
         {
-            return new Result<string, SqlError>.Error<string, SqlError>(statement.ParseError);
-        }
-
-        if (statement.AstNode == null)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("No AST node found in statement")
-            );
+            return new Result<string, SqlError>.Error<string, SqlError>(error);
         }
 
         try

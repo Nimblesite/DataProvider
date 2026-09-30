@@ -133,6 +133,8 @@ public static partial class PostgresDdlGenerator
                 $"DROP POLICY IF EXISTS \"{op.PolicyName}\" ON \"{op.Schema}\".\"{op.TableName}\"",
             CreateRlsPolicyOperation op => GenerateCreateRlsPolicy(op),
             AlterRlsPolicyOperation op => GenerateAlterRlsPolicy(op),
+            CreateTriggerOperation op => PostgresTriggerDdlBuilder.GenerateCreate(op),
+            DropTriggerOperation op => PostgresTriggerDdlBuilder.GenerateDrop(op),
             _ => throw new NotSupportedException(
                 $"Unknown operation type: {operation.GetType().Name}"
             ),

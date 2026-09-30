@@ -65,10 +65,7 @@ public sealed class SchemaDiffTests
     public void Calculate_NewColumn_AddsColumn()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var current = UsersIdOnly("Current");
 
         var desired = Schema
             .Define("Desired")
@@ -199,10 +196,7 @@ public sealed class SchemaDiffTests
             )
             .Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = UsersIdOnly("Desired");
 
         // Act
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: false);
@@ -228,10 +222,7 @@ public sealed class SchemaDiffTests
             )
             .Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = UsersIdOnly("Desired");
 
         // Act
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
@@ -261,10 +252,7 @@ public sealed class SchemaDiffTests
             )
             .Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = UsersIdOnly("Desired");
 
         // Act
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: false);
@@ -291,10 +279,7 @@ public sealed class SchemaDiffTests
             )
             .Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = UsersIdOnly("Desired");
 
         // Act
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
@@ -695,4 +680,10 @@ public sealed class SchemaDiffTests
             PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
             RowLevelSecurity = rls,
         };
+
+    private static SchemaDefinition UsersIdOnly(string name) =>
+        Schema
+            .Define(name)
+            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
+            .Build();
 }

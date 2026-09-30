@@ -6,23 +6,23 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
     [Fact]
     public void GrantRunAs_AppliesNapAuthShapeGrantsThroughSchemaOwner()
     {
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var owner = $"grant_owner_{suffix}";
-        var migrate = $"grant_migrate_{suffix}";
-        var appUser = $"grant_app_user_{suffix}";
+        var (suffix, owner, migrate, appUser) = NewGrantRoles();
         var appAdmin = $"grant_app_admin_{suffix}";
         var schema = $"auth_{suffix}";
 
         using var connection = fixture.CreateDatabase("grant_run_as");
-        Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
-        Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
-        Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
-        Exec(connection, $"CREATE ROLE {Q(appAdmin)} NOLOGIN");
-        Exec(connection, $"GRANT {Q(owner)} TO {Q("test")}");
-        Exec(connection, $"GRANT {Q(owner)} TO {Q(migrate)}");
-        Exec(connection, $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}");
-        Exec(connection, $"CREATE SCHEMA {Q(schema)} AUTHORIZATION {Q(owner)}");
-        Exec(
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appAdmin)} NOLOGIN");
+        PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q("test")}");
+        PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q(migrate)}");
+        PostgresTestDb.Exec(
+            connection,
+            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
+        );
+        PostgresTestDb.Exec(connection, $"CREATE SCHEMA {Q(schema)} AUTHORIZATION {Q(owner)}");
+        PostgresTestDb.Exec(
             connection,
             $"SET ROLE {Q(owner)}; CREATE TABLE {Q(schema)}.{Q("users")}(id uuid PRIMARY KEY); RESET ROLE"
         );
@@ -46,16 +46,16 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
     [Fact]
     public void GrantRunAs_MissingRoleMembership_ReturnsClearGrantToMessage()
     {
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var owner = $"grant_owner_{suffix}";
-        var migrate = $"grant_migrate_{suffix}";
-        var appUser = $"grant_app_user_{suffix}";
+        var (_, owner, migrate, appUser) = NewGrantRoles();
 
         using var connection = fixture.CreateDatabase("grant_run_as_missing");
-        Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
-        Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
-        Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
-        Exec(connection, $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
+        PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
+        PostgresTestDb.Exec(
+            connection,
+            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
+        );
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
         var result = MigrationRunner.Apply(
@@ -81,6 +81,17 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         var error = ((MigrationApplyResultError)result).Value;
         Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", error.Message);
         Assert.Contains($"GRANT \"{owner}\" TO \"{migrate}\"", error.Message);
+    }
+
+    private static (string Suffix, string Owner, string Migrate, string AppUser) NewGrantRoles()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        return (
+            suffix,
+            $"grant_owner_{suffix}",
+            $"grant_migrate_{suffix}",
+            $"grant_app_user_{suffix}"
+        );
     }
 
     private static IReadOnlyList<SchemaOperation> NapAuthGrants(
@@ -166,13 +177,6 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
             command.Parameters.AddWithValue(parameter.Name, parameter.Value);
         }
         return command.ExecuteScalar() is true;
-    }
-
-    private static void Exec(NpgsqlConnection connection, string sql)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
     }
 
     private static NpgsqlConnection OpenRoleConnection(

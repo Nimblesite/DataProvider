@@ -255,10 +255,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncBatch_CreatesCorrectRecord()
     {
-        var changes = new List<SyncLogEntry>
-        {
-            new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS"),
-        };
+        var changes = SingleInsertChange();
         var batch = new SyncBatch(changes, 0, 1, false);
 
         Assert.Single(batch.Changes);
@@ -270,10 +267,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncBatch_HasMore_True()
     {
-        var changes = new List<SyncLogEntry>
-        {
-            new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS"),
-        };
+        var changes = SingleInsertChange();
         var batch = new SyncBatch(changes, 0, 1, true);
 
         Assert.True(batch.HasMore);
@@ -282,10 +276,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncBatch_WithHash()
     {
-        var changes = new List<SyncLogEntry>
-        {
-            new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS"),
-        };
+        var changes = SingleInsertChange();
         var batch = new SyncBatch(changes, 0, 1, false, "abc123hash");
 
         Assert.Equal("abc123hash", batch.Hash);
@@ -298,4 +289,7 @@ public sealed class SyncStateTests
         Assert.Equal(ConflictStrategy.ServerWins, (ConflictStrategy)1);
         Assert.Equal(ConflictStrategy.ClientWins, (ConflictStrategy)2);
     }
+
+    private static IReadOnlyList<SyncLogEntry> SingleInsertChange() =>
+        new List<SyncLogEntry> { new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS") };
 }
