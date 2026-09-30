@@ -377,6 +377,12 @@ Multiple policies on the same table combine as AND conditions inside a single tr
 
 ## 10. Schema Diff [RLS-DIFF]
 
+For an existing PostgreSQL policy, compare both `USING` and `WITH CHECK`
+predicates after PostgreSQL expression parsing. A changed predicate produces
+an `AlterRlsPolicyOperation` even when the policy name is unchanged. Schema
+integrity verification also reports predicate drift. Re-inspecting and
+reapplying a converged policy produces no operation.
+
 `SchemaDiff.Calculate` gains RLS diff logic comparing `TableDefinition.RowLevelSecurity` between current and desired schemas:
 
 - Table exists in desired with RLS enabled but not in current -> emit `EnableRlsOperation` then `CreateRlsPolicyOperation` for each policy

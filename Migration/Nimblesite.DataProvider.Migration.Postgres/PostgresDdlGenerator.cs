@@ -101,6 +101,8 @@ public static partial class PostgresDdlGenerator
         {
             CreateTableOperation op => GenerateCreateTable(op.Table),
             AddColumnOperation op => GenerateAddColumn(op),
+            MakeColumnNullableOperation op =>
+                $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ALTER COLUMN \"{op.ColumnName}\" DROP NOT NULL",
             CreateIndexOperation op => GenerateCreateIndex(op),
             AddForeignKeyOperation op => GenerateAddForeignKey(op),
             AddCheckConstraintOperation op => GenerateAddCheckConstraint(op),
@@ -130,6 +132,7 @@ public static partial class PostgresDdlGenerator
             DropRlsPolicyOperation op =>
                 $"DROP POLICY IF EXISTS \"{op.PolicyName}\" ON \"{op.Schema}\".\"{op.TableName}\"",
             CreateRlsPolicyOperation op => GenerateCreateRlsPolicy(op),
+            AlterRlsPolicyOperation op => GenerateAlterRlsPolicy(op),
             _ => throw new NotSupportedException(
                 $"Unknown operation type: {operation.GetType().Name}"
             ),
@@ -153,27 +156,42 @@ public static partial class PostgresDdlGenerator
         );
         sb.Append(CultureInfo.InvariantCulture, $" TO {RlsRolesToPgClause(op.Policy.Roles)}");
 
+        AppendPolicyPredicates(sb, op.Policy);
+        return sb.ToString();
+    }
+
+    private static string GenerateAlterRlsPolicy(AlterRlsPolicyOperation op)
+    {
+        ValidatePolicyPredicates(op.Policy);
+        var sb = new StringBuilder(
+            $"ALTER POLICY \"{op.Policy.Name}\" ON \"{op.Schema}\".\"{op.TableName}\""
+        );
+        AppendPolicyPredicates(sb, op.Policy);
+        return sb.ToString();
+    }
+
+    private static void AppendPolicyPredicates(StringBuilder sb, RlsPolicyDefinition policy)
+    {
         // Raw-SQL escape hatch (issue #36) takes precedence over LQL.
-        if (!string.IsNullOrWhiteSpace(op.Policy.UsingSql))
+        if (!string.IsNullOrWhiteSpace(policy.UsingSql))
         {
-            sb.Append(CultureInfo.InvariantCulture, $" USING ({op.Policy.UsingSql})");
+            sb.Append(CultureInfo.InvariantCulture, $" USING ({policy.UsingSql})");
         }
-        else if (!string.IsNullOrWhiteSpace(op.Policy.UsingLql))
+        else if (!string.IsNullOrWhiteSpace(policy.UsingLql))
         {
-            var sql = TranslateOrThrow(op.Policy.UsingLql, op.Policy.Name);
+            var sql = TranslateOrThrow(policy.UsingLql, policy.Name);
             sb.Append(CultureInfo.InvariantCulture, $" USING ({sql})");
         }
 
-        if (!string.IsNullOrWhiteSpace(op.Policy.WithCheckSql))
+        if (!string.IsNullOrWhiteSpace(policy.WithCheckSql))
         {
-            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({op.Policy.WithCheckSql})");
+            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({policy.WithCheckSql})");
         }
-        else if (!string.IsNullOrWhiteSpace(op.Policy.WithCheckLql))
+        else if (!string.IsNullOrWhiteSpace(policy.WithCheckLql))
         {
-            var sql = TranslateOrThrow(op.Policy.WithCheckLql, op.Policy.Name);
+            var sql = TranslateOrThrow(policy.WithCheckLql, policy.Name);
             sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({sql})");
         }
-        return sb.ToString();
     }
 
     private static void ValidatePolicyPredicates(RlsPolicyDefinition policy)

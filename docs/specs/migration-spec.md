@@ -795,7 +795,16 @@ The following patterns are not conformant:
 | Columns | Match by name within table (case-insensitive) |
 | Indexes | Match by name (case-insensitive) |
 | Primary Keys | Match by table (only one per table) |
-| Foreign Keys | Match by name (case-insensitive) |
+| Foreign Keys | Match named constraints by name and relationship; match unnamed declarations by relationship |
+
+### 8.2.1 Existing-database upgrades [MIG-EXISTING-DATABASE-UPGRADE]
+
+An additive PostgreSQL migration relaxes an existing `NOT NULL` column when the
+desired schema marks it nullable. A foreign key declared without a name is
+created on an existing table after its columns and referenced tables exist.
+Re-running a partially applied migration repairs a missing foreign key.
+Destructive cleanup drops only foreign keys absent from the desired schema;
+repeated additive and destructive runs produce no further operations.
 
 ### 8.3 Diff Algorithm
 

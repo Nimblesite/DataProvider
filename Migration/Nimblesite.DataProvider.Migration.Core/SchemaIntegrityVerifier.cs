@@ -403,7 +403,22 @@ public static class SchemaIntegrityVerifier
                 mismatches.Add(
                     $"{TablePath(table: expected)}: missing row-level security policy {expectedPolicy.Name}"
                 );
+                continue;
             }
+            if (IsSqliteSchema(actual.Schema))
+            {
+                continue;
+            }
+            AddIf(
+                !RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} USING predicate drifted",
+                mismatches
+            );
+            AddIf(
+                !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
+                mismatches
+            );
         }
     }
 

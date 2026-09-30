@@ -24,6 +24,12 @@ public sealed record AddColumnOperation(string Schema, string TableName, ColumnD
     : SchemaOperation;
 
 /// <summary>
+/// Allow NULL values in an existing column. Implements [MIG-EXISTING-DATABASE-UPGRADE].
+/// </summary>
+public sealed record MakeColumnNullableOperation(string Schema, string TableName, string ColumnName)
+    : SchemaOperation;
+
+/// <summary>
 /// Create an index on a table.
 /// </summary>
 public sealed record CreateIndexOperation(string Schema, string TableName, IndexDefinition Index)
@@ -95,6 +101,15 @@ public sealed record EnableForceRlsOperation(string Schema, string TableName) : 
 /// Create a row-level security policy. Additive.
 /// </summary>
 public sealed record CreateRlsPolicyOperation(
+    string Schema,
+    string TableName,
+    RlsPolicyDefinition Policy
+) : SchemaOperation;
+
+/// <summary>
+/// Update predicates of an existing row-level security policy. Implements [RLS-DIFF].
+/// </summary>
+public sealed record AlterRlsPolicyOperation(
     string Schema,
     string TableName,
     RlsPolicyDefinition Policy

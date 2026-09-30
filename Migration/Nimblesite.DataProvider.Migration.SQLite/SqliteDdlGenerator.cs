@@ -15,6 +15,9 @@ public static class SqliteDdlGenerator
         {
             CreateTableOperation op => GenerateCreateTable(op.Table),
             AddColumnOperation op => GenerateAddColumn(op),
+            MakeColumnNullableOperation => throw new NotSupportedException(
+                "SQLite cannot relax NOT NULL on an existing column without rebuilding its table."
+            ),
             CreateIndexOperation op => GenerateCreateIndex(op),
             AddForeignKeyOperation => throw new NotSupportedException(
                 "SQLite does not support adding foreign keys to existing tables. Recreate the table instead."
@@ -38,6 +41,9 @@ public static class SqliteDdlGenerator
             ),
             EnableRlsOperation => SqliteRlsDdlBuilder.GenerateEnable(),
             CreateRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateCreatePolicy(op),
+            AlterRlsPolicyOperation => throw new NotSupportedException(
+                "SQLite cannot inspect existing RLS predicates for an in-place policy update."
+            ),
             DropRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateDropPolicy(op),
             DisableRlsOperation op => SqliteRlsDdlBuilder.GenerateDisable(op),
             _ => throw new NotSupportedException(

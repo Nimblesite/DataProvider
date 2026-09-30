@@ -53,6 +53,7 @@ public static partial class SchemaDiff
         {
             var operations = new List<SchemaOperation>();
             var rlsOperations = new List<SchemaOperation>();
+            var foreignKeyAdditions = new List<SchemaOperation>();
 
             operations.AddRange(CalculateRoleDiff(current, desired, logger));
 
@@ -102,6 +103,13 @@ public static partial class SchemaDiff
                         allowDestructive,
                         logger
                     );
+                    var fkOps = CalculateForeignKeyDiff(
+                        currentTable,
+                        desiredTable,
+                        allowDestructive,
+                        logger
+                    );
+                    operations.AddRange(fkOps.OfType<DropForeignKeyOperation>());
                     operations.AddRange(columnOps);
 
                     // Check for index additions
@@ -113,14 +121,8 @@ public static partial class SchemaDiff
                     );
                     operations.AddRange(indexOps);
 
-                    // Check for foreign key additions
-                    var fkOps = CalculateForeignKeyDiff(
-                        currentTable,
-                        desiredTable,
-                        allowDestructive,
-                        logger
-                    );
-                    operations.AddRange(fkOps);
+                    // Add foreign keys after all referenced tables and columns exist.
+                    foreignKeyAdditions.AddRange(fkOps.OfType<AddForeignKeyOperation>());
 
                     var uniqueOps = CalculateUniqueConstraintDiff(
                         currentTable,
@@ -169,6 +171,7 @@ public static partial class SchemaDiff
                 .ToList();
             var grantOps = CalculateGrantDiff(current, desired, allowDestructive, logger).ToList();
 
+            operations.AddRange(foreignKeyAdditions);
             operations.AddRange(functionOps.Where(op => !IsSupportCleanupOperation(op)));
             operations.AddRange(grantOps.Where(op => !IsSupportCleanupOperation(op)));
             operations.AddRange(rlsOperations);
@@ -203,7 +206,7 @@ public static partial class SchemaDiff
         // Add new columns
         foreach (var desiredColumn in desired.Columns)
         {
-            if (!currentColumns.ContainsKey(desiredColumn.Name))
+            if (!currentColumns.TryGetValue(desiredColumn.Name, out var currentColumn))
             {
                 logger?.LogDebug(
                     "Column {Schema}.{Table}.{Column} not found, will add",
@@ -212,6 +215,14 @@ public static partial class SchemaDiff
                     desiredColumn.Name
                 );
                 yield return new AddColumnOperation(desired.Schema, desired.Name, desiredColumn);
+            }
+            else if (!currentColumn.IsNullable && desiredColumn.IsNullable)
+            {
+                yield return new MakeColumnNullableOperation(
+                    desired.Schema,
+                    desired.Name,
+                    desiredColumn.Name
+                );
             }
         }
 
@@ -322,15 +333,15 @@ public static partial class SchemaDiff
             yield return new EnableForceRlsOperation(desired.Schema, desired.Name);
         }
 
-        var currentPolicyNames =
-            currentRls?.Policies.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
-            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var currentPolicies =
+            currentRls?.Policies.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, RlsPolicyDefinition>(StringComparer.OrdinalIgnoreCase);
 
         if (desiredEnabled)
         {
             foreach (var policy in desiredRls!.Policies)
             {
-                if (!currentPolicyNames.Contains(policy.Name))
+                if (!currentPolicies.TryGetValue(policy.Name, out var currentPolicy))
                 {
                     logger?.LogDebug(
                         "Creating RLS policy {Policy} on {Schema}.{Table}",
@@ -339,6 +350,16 @@ public static partial class SchemaDiff
                         desired.Name
                     );
                     yield return new CreateRlsPolicyOperation(desired.Schema, desired.Name, policy);
+                }
+                else if (
+                    current?.Schema != "main"
+                    && (
+                        !RlsPolicyPredicates.SameUsing(currentPolicy, policy)
+                        || !RlsPolicyPredicates.SameWithCheck(currentPolicy, policy)
+                    )
+                )
+                {
+                    yield return new AlterRlsPolicyOperation(desired.Schema, desired.Name, policy);
                 }
             }
         }
@@ -400,14 +421,10 @@ public static partial class SchemaDiff
         ILogger? logger
     )
     {
-        var currentFks = current
-            .ForeignKeys.Where(fk => fk.Name is not null)
-            .ToDictionary(fk => fk.Name!, StringComparer.OrdinalIgnoreCase);
-
         // Add new foreign keys
         foreach (var desiredFk in desired.ForeignKeys)
         {
-            if (desiredFk.Name is not null && !currentFks.ContainsKey(desiredFk.Name))
+            if (!current.ForeignKeys.Any(fk => ForeignKeysMatch(fk, desiredFk)))
             {
                 logger?.LogDebug(
                     "Foreign key {FkName} on {Schema}.{Table} not found, will add",
@@ -422,13 +439,12 @@ public static partial class SchemaDiff
         // Drop removed foreign keys (only if destructive allowed)
         if (allowDestructive)
         {
-            var desiredFks = desired
-                .ForeignKeys.Where(fk => fk.Name is not null)
-                .ToDictionary(fk => fk.Name!, StringComparer.OrdinalIgnoreCase);
-
             foreach (var currentFk in current.ForeignKeys)
             {
-                if (currentFk.Name is not null && !desiredFks.ContainsKey(currentFk.Name))
+                if (
+                    currentFk.Name is not null
+                    && !desired.ForeignKeys.Any(fk => ForeignKeysMatch(currentFk, fk))
+                )
                 {
                     logger?.LogDebug("Foreign key {FkName} will be dropped", currentFk.Name);
                     yield return new DropForeignKeyOperation(
