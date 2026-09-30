@@ -1,0 +1,4 @@
+icd10am_code_embedding
+|> join(icd10am_code, on = icd10am_code_embedding.CodeId = icd10am_code.Id)
+|> filter(fn(row) => row.icd10am_code.Code = @code)
+|> select(icd10am_code_embedding.Id, icd10am_code_embedding.CodeId, icd10am_code_embedding.Embedding, icd10am_code_embedding.EmbeddingModel, icd10am_code_embedding.LastUpdated, icd10am_code.Code, icd10am_code.ShortDescription)

@@ -1,0 +1,4 @@
+icd10am_category
+|> filter(fn(row) => row.icd10am_category.BlockId = @blockId)
+|> select(icd10am_category.Id, icd10am_category.BlockId, icd10am_category.CategoryCode, icd10am_category.Title, icd10am_category.LastUpdated, icd10am_category.VersionId)
+|> order_by(icd10am_category.CategoryCode)

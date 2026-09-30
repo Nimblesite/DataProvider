@@ -50,6 +50,20 @@
             "env": {
                 "DOTNET_ENVIRONMENT": "Development"
             }
+        },
+        {
+            "name": "ICD-10-CM CLI",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/Samples/ICD10CM/ICD10AM.Cli/bin/Debug/net9.0/ICD10AM.Cli.dll",
+            "args": ["http://localhost:5558"],
+            "cwd": "${workspaceFolder}/Samples/ICD10CM/ICD10AM.Cli",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "env": {
+                "EMBEDDING_URL": "http://localhost:8000"
+            }
         }
     ]
 }

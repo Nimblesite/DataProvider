@@ -1,0 +1,4 @@
+achi_code
+|> join(achi_block, on = achi_code.BlockId = achi_block.Id)
+|> filter(fn(row) => row.achi_code.Code = @code)
+|> select(achi_code.Id, achi_code.BlockId, achi_code.Code, achi_code.ShortDescription, achi_code.LongDescription, achi_code.Billable, achi_code.EffectiveFrom, achi_code.EffectiveTo, achi_code.Edition, achi_code.LastUpdated, achi_code.VersionId, achi_block.BlockNumber, achi_block.Title AS BlockTitle)

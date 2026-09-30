@@ -1,0 +1,21 @@
+# Generated files
+*.generated.sql
+*.db
+Generated/
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+
+# Build outputs
+bin/
+obj/
+
+# IDE
+.idea/
+.vs/
+*.user
+icd10cm.db.backup
