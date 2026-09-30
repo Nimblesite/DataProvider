@@ -95,7 +95,12 @@ public static class SchemaIntegrityVerifier
             }
             VerifyColumn(
                 actual: actualColumn,
-                expected: expectedColumn,
+                expected: PrimaryKeyNullability.UsesPlatformDefault(expected, expectedColumn)
+                    ? expectedColumn with
+                    {
+                        IsNullable = actualColumn.IsNullable,
+                    }
+                    : expectedColumn,
                 path: $"{TablePath(table: expected)}.{expectedColumn.Name}",
                 isSqlite: IsSqliteSchema(actual.Schema),
                 mismatches: mismatches

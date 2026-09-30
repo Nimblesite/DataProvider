@@ -85,7 +85,7 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
         }
         catch (DbException ex)
         {
-            return Error(new SqlError("Failed to get column metadata", ex));
+            return Error(new SqlError($"Failed to get column metadata: {ex.Message}", ex));
         }
         catch (InvalidOperationException ex)
         {

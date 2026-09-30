@@ -84,7 +84,16 @@ public static class SqlServerDdlGenerator
     private static string GenerateCreateTable(TableDefinition table)
     {
         var definitions = table
-            .Columns.Select(ColumnDef)
+            .Columns.Select(column =>
+                ColumnDef(
+                    PrimaryKeyNullability.UsesPlatformDefault(table, column)
+                        ? column with
+                        {
+                            IsNullable = false,
+                        }
+                        : column
+                )
+            )
             .Concat(PrimaryKey(table))
             .Concat(table.ForeignKeys.Select(fk => ForeignKey(table.Name, fk)))
             .Concat(table.UniqueConstraints.Select(uc => Unique(table.Name, uc)))

@@ -224,7 +224,11 @@ public static partial class SchemaDiff
                 );
                 yield return new AddColumnOperation(desired.Schema, desired.Name, desiredColumn);
             }
-            else if (!currentColumn.IsNullable && desiredColumn.IsNullable)
+            else if (
+                !currentColumn.IsNullable
+                && desiredColumn.IsNullable
+                && !PrimaryKeyNullability.UsesPlatformDefault(desired, desiredColumn)
+            )
             {
                 yield return new MakeColumnNullableOperation(
                     desired.Schema,
