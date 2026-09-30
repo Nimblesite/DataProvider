@@ -220,5 +220,4 @@ public static class SqliteDdlGenerator
             ForeignKeyAction.Restrict => "RESTRICT",
             _ => "NO ACTION",
         };
-
 }
