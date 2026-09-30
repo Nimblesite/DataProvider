@@ -25,7 +25,7 @@ public sealed partial class GeneratedOperationsPlatformTests
         string schema
     )
     {
-        MigrateSchema(provider, output, RelationsSchema(schema));
+        MigrateSchema(provider, output, RelationsSchema(provider, schema));
         var ids = new RelationIds(
             Guid.NewGuid(),
             Guid.NewGuid(),

@@ -124,22 +124,22 @@ public sealed partial class GeneratedOperationsPlatformTests
         switch (table)
         {
             case "Customer":
-                command.CommandText = "SELECT * FROM Customer";
+                command.CommandText = """SELECT * FROM "Customer" """;
                 break;
             case "Invoice":
-                command.CommandText = "SELECT * FROM Invoice";
+                command.CommandText = """SELECT * FROM "Invoice" """;
                 break;
             case "InvoiceLine":
-                command.CommandText = "SELECT * FROM InvoiceLine";
+                command.CommandText = """SELECT * FROM "InvoiceLine" """;
                 break;
             case "Address":
-                command.CommandText = "SELECT * FROM Address";
+                command.CommandText = """SELECT * FROM "Address" """;
                 break;
             case "Orders":
-                command.CommandText = "SELECT * FROM Orders";
+                command.CommandText = """SELECT * FROM "Orders" """;
                 break;
             case "OrderItem":
-                command.CommandText = "SELECT * FROM OrderItem";
+                command.CommandText = """SELECT * FROM "OrderItem" """;
                 break;
             default:
                 Assert.Fail($"Unsupported generated table: {table}");

@@ -83,7 +83,7 @@
   <Target
     Name="TranspileLqlAndGenerateDataProvider"
     BeforeTargets="BeforeCompile;CoreCompile"
-    Inputs="$(MSBuildProjectDirectory)/DataProvider.json;@(AdditionalFiles);@(LqlFiles)"
+    Inputs="$(MSBuildProjectDirectory)/DataProvider.json;@(AdditionalFiles);@(LqlFiles);$(DataProviderToolDll)"
     Outputs="$(MSBuildProjectDirectory)/Generated/.timestamp"
   >
     <!-- Clean and recreate Generated folder to avoid stale files -->

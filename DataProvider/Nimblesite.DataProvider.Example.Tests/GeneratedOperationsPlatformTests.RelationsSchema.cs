@@ -4,18 +4,18 @@ namespace Nimblesite.DataProvider.Example.Tests;
 
 public sealed partial class GeneratedOperationsPlatformTests
 {
-    private static SchemaDefinition RelationsSchema(string schema) =>
+    private static SchemaDefinition RelationsSchema(string provider, string schema) =>
         new()
         {
             Name = "generated_relations",
             Tables =
             [
-                CustomerTable(schema),
+                CustomerTable(provider, schema),
                 EntityTable(
                     schema,
                     "Invoice",
                     [
-                        UuidColumn("Id"),
+                        IdColumn(provider, "Id"),
                         TextColumn("InvoiceNumber"),
                         TextColumn("InvoiceDate"),
                         TextColumn("CustomerName"),
@@ -29,8 +29,8 @@ public sealed partial class GeneratedOperationsPlatformTests
                     schema,
                     "InvoiceLine",
                     [
-                        UuidColumn("Id"),
-                        UuidColumn("InvoiceId"),
+                        IdColumn(provider, "Id"),
+                        IdColumn(provider, "InvoiceId"),
                         TextColumn("Description"),
                         DecimalColumn("Quantity"),
                         DecimalColumn("UnitPrice"),
@@ -44,8 +44,8 @@ public sealed partial class GeneratedOperationsPlatformTests
                     schema,
                     "Address",
                     [
-                        UuidColumn("Id"),
-                        UuidColumn("CustomerId"),
+                        IdColumn(provider, "Id"),
+                        IdColumn(provider, "CustomerId"),
                         TextColumn("Street"),
                         TextColumn("City"),
                         TextColumn("State"),
@@ -58,10 +58,10 @@ public sealed partial class GeneratedOperationsPlatformTests
                     schema,
                     "Orders",
                     [
-                        UuidColumn("Id"),
+                        IdColumn(provider, "Id"),
                         TextColumn("OrderNumber"),
                         TextColumn("OrderDate"),
-                        UuidColumn("CustomerId"),
+                        IdColumn(provider, "CustomerId"),
                         DecimalColumn("TotalAmount"),
                         TextColumn("Status"),
                     ],
@@ -71,8 +71,8 @@ public sealed partial class GeneratedOperationsPlatformTests
                     schema,
                     "OrderItem",
                     [
-                        UuidColumn("Id"),
-                        UuidColumn("OrderId"),
+                        IdColumn(provider, "Id"),
+                        IdColumn(provider, "OrderId"),
                         TextColumn("ProductName"),
                         DecimalColumn("Quantity"),
                         DecimalColumn("Price"),

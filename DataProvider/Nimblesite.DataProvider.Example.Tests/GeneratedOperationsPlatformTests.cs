@@ -75,9 +75,11 @@ public sealed partial class GeneratedOperationsPlatformTests
         try
         {
             await container.StartAsync().ConfigureAwait(false);
+            // An opened NpgsqlConnection drops the password from ConnectionString, so
+            // the migrate CLI gets the container's full connection string.
             using var connection = new NpgsqlConnection(container.GetConnectionString());
             await connection.OpenAsync().ConfigureAwait(false);
-            await verify(connection, "postgres", connection.ConnectionString, "public")
+            await verify(connection, "postgres", container.GetConnectionString(), "public")
                 .ConfigureAwait(false);
         }
         finally
@@ -233,18 +235,18 @@ public sealed partial class GeneratedOperationsPlatformTests
             new SchemaDefinition
             {
                 Name = "generated_operations",
-                Tables = [CustomerTable(schemaName)],
+                Tables = [CustomerTable(provider, schemaName)],
             }
         );
 
-    private static TableDefinition CustomerTable(string schemaName) =>
+    private static TableDefinition CustomerTable(string provider, string schemaName) =>
         new()
         {
             Schema = schemaName,
             Name = "Customer",
             Columns =
             [
-                UuidColumn("Id"),
+                IdColumn(provider, "Id"),
                 TextColumn("CustomerName"),
                 TextColumn("Email"),
                 TextColumn("Phone"),
@@ -287,6 +289,12 @@ public sealed partial class GeneratedOperationsPlatformTests
             IsNullable = false,
         };
 
+    // The generated operations bind ids as strings: the Example schema they are generated
+    // from declares text ids. PostgreSQL has no implicit text -> uuid assignment cast, so
+    // the ids are text columns there; SQLite and SQL Server convert the strings to UUIDs.
+    private static ColumnDefinition IdColumn(string provider, string name) =>
+        provider == "postgres" ? TextColumn(name) : UuidColumn(name);
+
     private static ColumnDefinition UuidColumn(string name) =>
         new()
         {
@@ -299,7 +307,7 @@ public sealed partial class GeneratedOperationsPlatformTests
     {
         using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT Id, CustomerName, Email, Phone, CreatedDate FROM Customer ORDER BY CustomerName";
+            """SELECT "Id", "CustomerName", "Email", "Phone", "CreatedDate" FROM "Customer" ORDER BY "CustomerName" """;
         using var reader = command.ExecuteReader();
         var rows = ImmutableArray.CreateBuilder<CustomerSnapshot>();
         while (reader.Read())
