@@ -89,7 +89,9 @@ internal static class SqlServerCatalogQueries
                 scale: NullableInt(r, 6)
             ),
             IsNullable = r.GetString(7) == "YES",
-            DefaultValue = r.IsDBNull(8) ? null : StripOuterParens(r.GetString(8)),
+            DefaultValue = r.IsDBNull(8)
+                ? null
+                : SqlExpressionText.StripOuterParens(r.GetString(8)),
             IsIdentity = NullableInt(r, 9) == 1,
         };
 
@@ -158,7 +160,7 @@ internal static class SqlServerCatalogQueries
                 r.GetString(1),
                 r.GetString(2),
                 r.GetBoolean(3),
-                r.IsDBNull(4) ? null : StripOuterParens(r.GetString(4)),
+                r.IsDBNull(4) ? null : SqlExpressionText.StripOuterParens(r.GetString(4)),
                 r.GetString(5)
             )
         );
@@ -178,7 +180,7 @@ internal static class SqlServerCatalogQueries
                 r.GetString(1),
                 r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetString(3),
-                StripOuterParens(r.GetString(4))
+                SqlExpressionText.StripOuterParens(r.GetString(4))
             )
         );
 
@@ -211,37 +213,4 @@ internal static class SqlServerCatalogQueries
             "SET_DEFAULT" => ForeignKeyAction.SetDefault,
             _ => ForeignKeyAction.NoAction,
         };
-
-    /// <summary>
-    /// SQL Server stores defaults, filters and checks wrapped in parentheses,
-    /// e.g. <c>((0))</c>. Remove every pair that encloses the whole expression.
-    /// </summary>
-    internal static string StripOuterParens(string sql)
-    {
-        var text = sql.Trim();
-        while (text.Length >= 2 && text[0] == '(' && ClosesAtEnd(text))
-        {
-            text = text[1..^1].Trim();
-        }
-        return text;
-    }
-
-    private static bool ClosesAtEnd(string text)
-    {
-        var depth = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            depth += text[i] switch
-            {
-                '(' => 1,
-                ')' => -1,
-                _ => 0,
-            };
-            if (depth == 0)
-            {
-                return i == text.Length - 1;
-            }
-        }
-        return false;
-    }
 }

@@ -747,7 +747,9 @@ public static class SchemaIntegrityVerifier
         var builder = new StringBuilder();
         AppendNormalizedSql(value: value, builder: builder);
         var normalized = builder.ToString().Trim().TrimEnd(';').Trim();
-        return StripTrailingTypeCast(normalized);
+        return SqlExpressionText.StripOuterParens(
+            StripTrailingTypeCast(SqlExpressionText.StripOuterParens(normalized))
+        );
     }
 
     // Implements [MIG-VERIFY-DEFAULTS-AND-GRANTS] (#59 Bug 1):
