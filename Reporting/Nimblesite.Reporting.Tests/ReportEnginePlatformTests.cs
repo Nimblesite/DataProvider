@@ -180,7 +180,8 @@ public sealed record ReportEnginePlatformTests
         Assert.NotEqual(default, result.Value.ExecutedAt);
         var source = Assert.Single(result.Value.DataSources);
         Assert.Equal("probe", source.Key);
-        Assert.Equal(["metric_value", "state"], source.Value.ColumnNames);
+        // ImmutableArray's IEquatable is reference equality; compare the elements.
+        Assert.Equal(["metric_value", "state"], source.Value.ColumnNames.AsEnumerable());
         Assert.Equal(1, source.Value.TotalRows);
         var row = Assert.Single(source.Value.Rows);
         Assert.Equal(2, row.Length);

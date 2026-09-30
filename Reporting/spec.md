@@ -280,6 +280,21 @@ For the MVP, report definitions are loaded from JSON files on disk (no database 
 
 All API endpoints require authentication with a Gatekeeper Bearer token.
 
+- Tokens are Gatekeeper's HS256 JWTs, validated locally (signature + `exp`) with the
+  same base64 key Gatekeeper signs with, configured as `Jwt:SigningKey`.
+- Every `/api` request without a valid, unexpired token gets `401`. Static renderer
+  files are public; CORS preflights are answered before authentication.
+- Fail closed: with no (or a malformed) signing key, every `/api` request is rejected.
+
+### Data Source Connections [REPORT-CONNECTIONS]
+
+`ConnectionStrings:{ref}` entries are opened with the provider they target, detected
+from connection string keywords (`Host` → PostgreSQL; `Server`, `Initial Catalog`,
+`User Id`, `Integrated Security`, `TrustServerCertificate` → SQL Server; otherwise
+SQLite). `ConnectionProviders:{ref}` (`Sqlite`, `Postgres`, `SqlServer`) overrides
+detection. LQL data sources are transpiled for their connection's provider, and the
+engine disposes each connection after its query.
+
 ## MVP Scope
 
 ### Phase 1 (This PR)

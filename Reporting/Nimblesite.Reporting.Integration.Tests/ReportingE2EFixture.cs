@@ -141,7 +141,16 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
     /// </summary>
     public async Task<IPage> CreatePageAsync()
     {
-        var page = await Browser!.NewPageAsync();
+        // The report viewer calls the bearer-protected API ([REPORT-AUTH-BEARER]).
+        var page = await Browser!.NewPageAsync(
+            new BrowserNewPageOptions
+            {
+                ExtraHTTPHeaders = new Dictionary<string, string>
+                {
+                    ["Authorization"] = $"Bearer {GatekeeperTestTokens.Create()}",
+                },
+            }
+        );
         page.Console += (_, msg) => Console.WriteLine($"[BROWSER {msg.Type}] {msg.Text}");
         page.PageError += (_, err) => Console.WriteLine($"[PAGE ERROR] {err}");
         return page;
@@ -164,6 +173,20 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
 
         await page.GotoAsync(FrontendUrl);
         return page;
+    }
+
+    /// <summary>
+    /// Creates an HttpClient that authenticates to the API with a valid Gatekeeper token.
+    /// </summary>
+    public static HttpClient CreateApiClient()
+    {
+        var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                GatekeeperTestTokens.Create()
+            );
+        return client;
     }
 
     private void CreateDatabaseFromYaml()
@@ -225,6 +248,7 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
                 webBuilder.UseUrls("http://127.0.0.1:0");
                 webBuilder.UseSetting("ConnectionStrings:reporting-db", _connectionString);
                 webBuilder.UseSetting("ReportsDirectory", reportsDir);
+                webBuilder.UseSetting("Jwt:SigningKey", GatekeeperTestTokens.SigningKey);
                 webBuilder.UseStartup<ReportingApiStartup>();
             })
             .Build();
@@ -259,7 +283,8 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
 
     private static async Task WaitForApiAsync(string baseUrl, string endpoint)
     {
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        using var client = CreateApiClient();
+        client.Timeout = TimeSpan.FromSeconds(2);
         for (var i = 0; i < 60; i++)
         {
             try

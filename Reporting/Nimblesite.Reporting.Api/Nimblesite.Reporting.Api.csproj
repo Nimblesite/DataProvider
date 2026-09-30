@@ -10,11 +10,13 @@
     <ProjectReference Include="..\..\Lql\Nimblesite.Lql.Core\Nimblesite.Lql.Core.csproj" />
     <ProjectReference Include="..\..\Lql\Nimblesite.Lql.SQLite\Nimblesite.Lql.SQLite.csproj" />
     <ProjectReference Include="..\..\Lql\Nimblesite.Lql.Postgres\Nimblesite.Lql.Postgres.csproj" />
+    <ProjectReference Include="..\..\Lql\Nimblesite.Lql.SqlServer\Nimblesite.Lql.SqlServer.csproj" />
     <ProjectReference Include="..\..\Other\Nimblesite.Sql.Model\Nimblesite.Sql.Model.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
     <PackageReference Include="Npgsql" Version="9.0.2" />
   </ItemGroup>
 

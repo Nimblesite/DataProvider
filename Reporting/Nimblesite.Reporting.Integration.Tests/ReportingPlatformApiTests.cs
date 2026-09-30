@@ -145,7 +145,7 @@ public sealed record ReportingPlatformApiTests
                 server.Features.Get<IServerAddressesFeature>()
             );
             var apiUrl = Assert.Single(addresses.Addresses);
-            using var client = new HttpClient();
+            using var client = ReportingE2EFixture.CreateApiClient();
             await AssertReportJourneyAsync(client, apiUrl).ConfigureAwait(false);
         }
         finally
@@ -218,6 +218,7 @@ public sealed record ReportingPlatformApiTests
                 webBuilder.UseUrls("http://127.0.0.1:0");
                 webBuilder.UseSetting("ConnectionStrings:reporting-db", connectionString);
                 webBuilder.UseSetting("ReportsDirectory", reportsDirectory);
+                webBuilder.UseSetting("Jwt:SigningKey", GatekeeperTestTokens.SigningKey);
                 webBuilder.UseStartup<ReportingApiStartup>();
             })
             .Build();
