@@ -24,6 +24,14 @@ public static class SqlStatementExtensionsPostgreSQL
 
         try
         {
+            // Implements [LQL-CTE] and [LQL-DERIVED-TABLE].
+            if (statement.AstNode is { } node && SubqueryLayout.Applies(node))
+            {
+                return new Result<string, SqlError>.Ok<string, SqlError>(
+                    SubqueryLayout.Render(node, SqlPaging.LimitOffset)
+                );
+            }
+
             if (statement.AstNode is Pipeline pipeline)
             {
                 var sql = ConvertPipelineToPostgreSQL(pipeline);

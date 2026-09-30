@@ -24,6 +24,14 @@ public static class SqlStatementExtensionsSqlServer
 
         try
         {
+            // Implements [LQL-CTE] and [LQL-DERIVED-TABLE].
+            if (statement.AstNode is { } node && SubqueryLayout.Applies(node))
+            {
+                return new Result<string, SqlError>.Ok<string, SqlError>(
+                    SubqueryLayout.Render(node, SqlServerPaging)
+                );
+            }
+
             if (statement.AstNode is Pipeline pipeline)
             {
                 var sql = ConvertPipelineToSqlServer(pipeline);
@@ -70,4 +78,18 @@ public static class SqlStatementExtensionsSqlServer
             return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
         }
     }
+
+    /// <summary>
+    /// SQL Server paging: TOP for a bare limit, OFFSET/FETCH once an offset is involved.
+    /// </summary>
+    private static SqlPaging SqlServerPaging(string? limit, string? offset) =>
+        offset is null
+            ? new SqlPaging(limit is null ? "" : $"TOP {limit} ", [])
+            : new SqlPaging(
+                "",
+                [
+                    $"OFFSET {offset} ROWS",
+                    .. limit is null ? Array.Empty<string>() : [$"FETCH NEXT {limit} ROWS ONLY"],
+                ]
+            );
 }

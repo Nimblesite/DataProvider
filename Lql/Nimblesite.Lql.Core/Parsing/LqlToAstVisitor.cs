@@ -85,6 +85,11 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <returns>The statement's AST node.</returns>
     public override INode VisitStatement([NotNull] LqlParser.StatementContext context)
     {
+        if (context.withStmt() != null)
+        {
+            return Visit(context.withStmt());
+        }
+
         if (context.letStmt() != null)
         {
             return Visit(context.letStmt());
@@ -97,6 +102,37 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
 
         throw new SqlErrorException(CreateSqlError("Unknown statement type", context));
     }
+
+    /// <summary>
+    /// Visits <c>with name as (pipeline), ... main</c>. Implements [LQL-CTE].
+    /// </summary>
+    /// <param name="context">The with statement context.</param>
+    /// <returns>The statement with its common table expressions.</returns>
+    public override INode VisitWithStmt([NotNull] LqlParser.WithStmtContext context) =>
+        new WithQuery(
+            [
+                .. context
+                    .cteDef()
+                    .Select(cte => new CommonTableExpression(
+                        cte.IDENT().GetText(),
+                        AsPipeline(Visit(cte.pipeExpr()), cte)
+                    )),
+            ],
+            AsPipeline(Visit(context.pipeExpr()), context)
+        );
+
+    /// <summary>
+    /// Wraps a bare table reference in a one-step pipeline.
+    /// </summary>
+    private static Pipeline AsPipeline(INode node, ParserRuleContext context) =>
+        node switch
+        {
+            Pipeline pipeline => pipeline,
+            Identifier table => new Pipeline { Steps = { new IdentityStep { Base = table } } },
+            _ => throw new SqlErrorException(
+                CreateSqlErrorStatic("Expected a pipeline or table name", context)
+            ),
+        };
 
     /// <summary>
     /// Visits a let statement and stores the variable.
@@ -529,81 +565,11 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     {
         var node = CreateSubqueryVisitor(outerScope).VisitPipeExpr(pipeExpr);
         return node is Pipeline pipeline
-            ? RenderSubqueryPipelineToSql(pipeline, pipeExpr)
+            ? SubqueryLayout.CorrelatedBody(pipeline)
             : throw new SqlErrorException(
                 CreateSqlErrorStatic("Unsupported subquery expression", pipeExpr)
             );
     }
-
-    /// <summary>
-    /// Renders a subquery pipeline (base table plus filter/select/group steps)
-    /// as a single-line-free SELECT statement body.
-    /// </summary>
-    private static string RenderSubqueryPipelineToSql(
-        Pipeline pipeline,
-        LqlParser.PipeExprContext context
-    )
-    {
-        var baseTable =
-            pipeline.Steps.OfType<IdentityStep>().FirstOrDefault()?.Base as Identifier
-            ?? throw new SqlErrorException(
-                CreateSqlErrorStatic("Subquery requires a base table", context)
-            );
-
-        var select = pipeline.Steps.OfType<SelectStep>().LastOrDefault();
-        var columns =
-            select == null
-                ? "1"
-                : string.Join(", ", select.Columns.Select(c => RenderSubqueryColumn(c, context)));
-
-        var clauses = new List<string> { $"SELECT {columns}", $"FROM {baseTable.Name}" };
-        AppendSubqueryFilterAndGrouping(pipeline, clauses, context);
-        return string.Join("\n", clauses);
-    }
-
-    /// <summary>
-    /// Appends WHERE / GROUP BY / HAVING clauses from the subquery pipeline.
-    /// </summary>
-    private static void AppendSubqueryFilterAndGrouping(
-        Pipeline pipeline,
-        List<string> clauses,
-        LqlParser.PipeExprContext context
-    )
-    {
-        var filter = pipeline.Steps.OfType<FilterStep>().LastOrDefault();
-        if (filter?.Condition is ExpressionCondition expression)
-        {
-            clauses.Add($"WHERE {expression.Expression}");
-        }
-
-        var groupBy = pipeline.Steps.OfType<GroupByStep>().LastOrDefault();
-        if (groupBy != null)
-        {
-            clauses.Add($"GROUP BY {string.Join(", ", groupBy.Columns)}");
-        }
-
-        var having = pipeline.Steps.OfType<HavingStep>().LastOrDefault();
-        if (having != null)
-        {
-            clauses.Add($"HAVING {having.Condition}");
-        }
-    }
-
-    /// <summary>
-    /// Renders a single subquery select column.
-    /// </summary>
-    private static string RenderSubqueryColumn(ColumnInfo column, ParserRuleContext context) =>
-        $"{column switch
-        {
-            NamedColumn named => named.TableAlias == null
-                ? named.Name
-                : $"{named.TableAlias}.{named.Name}",
-            ExpressionColumn expression => expression.Expression,
-            WildcardColumn => "*",
-            _ => throw new SqlErrorException(
-                CreateSqlErrorStatic($"Unsupported subquery column: {column.GetType().Name}", context)
-            ),
-        }}{(column.Alias == null ? string.Empty : $" AS {column.Alias}")}";
 
     private static string ProcessInLeftExpressionToSql(
         LqlParser.InExprContext inExpr,
@@ -1074,7 +1040,13 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             throw new SqlErrorException(CreateSqlError("join requires table", context));
         }
 
-        string rightTable = ExtractIdentifier(args[0]);
+        // Implements [LQL-DERIVED-TABLE]: join((pipeline), on = ...) joins a derived table.
+        var derived = GetArgSubquery(args[0]) is { } subquery
+            ? AsPipeline(Visit(subquery), subquery)
+            : null;
+        string rightTable = derived is null
+            ? ExtractIdentifier(args[0])
+            : BaseTableName(derived, context);
         string? onCondition = null;
 
         // For CROSS JOIN, no ON condition is needed
@@ -1090,8 +1062,23 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         // For now, we'll use empty string as leftTable - this gets resolved later in pipeline processing
         var joinRelationship = new JoinRelationship("", rightTable, onCondition ?? "", joinType);
 
-        return new JoinStep { Base = baseNode, JoinRelationship = joinRelationship };
+        return new JoinStep
+        {
+            Base = baseNode,
+            JoinRelationship = joinRelationship,
+            DerivedTable = derived,
+        };
     }
+
+    /// <summary>
+    /// The base table a derived-table pipeline reads from; it names the derived table's alias.
+    /// </summary>
+    private static string BaseTableName(Pipeline pipeline, ParserRuleContext context) =>
+        pipeline.Steps.OfType<IdentityStep>().FirstOrDefault()?.Base is Identifier table
+            ? table.Name
+            : throw new SqlErrorException(
+                CreateSqlErrorStatic("A derived table pipeline needs a base table", context)
+            );
 
     /// <summary>
     /// Creates a filter step.
@@ -1608,7 +1595,12 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// </summary>
     /// <param name="functionCall">The function call context.</param>
     /// <returns>The formatted function call text.</returns>
-    private static string ExtractFunctionCall(LqlParser.FunctionCallContext functionCall)
+    private static string ExtractFunctionCall(LqlParser.FunctionCallContext functionCall) =>
+        functionCall.windowSpec() is { } windowSpec
+            ? $"{ExtractPlainFunctionCall(functionCall)} {RenderWindowClause(windowSpec)}"
+            : ExtractPlainFunctionCall(functionCall);
+
+    private static string ExtractPlainFunctionCall(LqlParser.FunctionCallContext functionCall)
     {
         // Build the function call properly using the grammar structure
         string functionName = functionCall.IDENT().GetText();
@@ -1686,38 +1678,34 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             functionCall = $"{functionName}({string.Join(", ", args)})";
         }
 
-        // Build window specification
-        var windowSpec = context.windowSpec();
-        string windowClause = "OVER (";
+        return $"{functionCall} {RenderWindowClause(context.windowSpec())}";
+    }
 
-        if (windowSpec.partitionClause() != null)
-        {
-            var partitionArgs = windowSpec
-                .partitionClause()
-                .argList()
-                .arg()
-                .Select(arg => StripTablePrefix(ExtractIdentifier(arg)))
-                .ToArray();
-            windowClause += $"PARTITION BY {string.Join(", ", partitionArgs)}";
-        }
-
-        if (windowSpec.orderClause() != null)
-        {
-            if (windowSpec.partitionClause() != null)
-                windowClause += " ";
-
-            var orderArgs = windowSpec
-                .orderClause()
-                .argList()
-                .arg()
-                .Select(ProcessWindowOrderItem)
-                .ToArray();
-            windowClause += $"ORDER BY {string.Join(", ", orderArgs)}";
-        }
-
-        windowClause += ")";
-
-        return $"{functionCall} {windowClause}";
+    /// <summary>
+    /// Renders a window specification as <c>OVER (PARTITION BY ... ORDER BY ...)</c>.
+    /// </summary>
+    /// <param name="windowSpec">The window specification context.</param>
+    /// <returns>The OVER clause.</returns>
+    private static string RenderWindowClause(LqlParser.WindowSpecContext windowSpec)
+    {
+        var partition = windowSpec.partitionClause() is { } partitionClause
+            ? "PARTITION BY "
+                + string.Join(
+                    ", ",
+                    partitionClause
+                        .argList()
+                        .arg()
+                        .Select(arg => StripTablePrefix(ExtractIdentifier(arg)))
+                )
+            : null;
+        var order = windowSpec.orderClause() is { } orderClause
+            ? "ORDER BY "
+                + string.Join(
+                    ", ",
+                    orderClause.orderByArgList().orderByArg().Select(ProcessWindowOrderItem)
+                )
+            : null;
+        return $"OVER ({string.Join(" ", new[] { partition, order }.OfType<string>())})";
     }
 
     /// <summary>
@@ -1748,45 +1736,23 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <summary>
     /// Processes an order item for window functions, handling direction (ASC/DESC) properly.
     /// </summary>
-    /// <param name="arg">The argument context containing the order item.</param>
+    /// <param name="item">The ORDER BY item inside the window specification.</param>
     /// <returns>The formatted order item with proper spacing.</returns>
-    private static string ProcessWindowOrderItem(LqlParser.ArgContext arg)
+    private static string ProcessWindowOrderItem(LqlParser.OrderByArgContext item)
     {
-        // Check if it's a comparison with orderDirection
-        if (arg.comparison() != null)
+        var column =
+            item.arithmeticExpr() != null ? ExtractArithmeticExpression(item.arithmeticExpr())
+            : item.functionCall() != null ? ExtractFunctionCall(item.functionCall())
+            : item.qualifiedIdent() != null
+                ? ProcessQualifiedIdentifierToSql(item.qualifiedIdent(), null)
+            : item.IDENT().GetText();
+        var direction = item.orderDirection() switch
         {
-            var comparison = arg.comparison();
-
-            // Check if it has an orderDirection
-            if (comparison.orderDirection() != null)
-            {
-                var direction = comparison.orderDirection().ASC() != null ? "ASC" : "DESC";
-
-                // Extract the column name (could be qualifiedIdent or IDENT)
-                var columnName =
-                    comparison.qualifiedIdent(0) != null
-                        ? ProcessQualifiedIdentifierToSql(comparison.qualifiedIdent(0), null)
-                        : comparison.IDENT(0)?.GetText()
-                            ?? throw new NotSupportedException(
-                                "Unknown comparison type in ExtractWindowFunction"
-                            );
-
-                return $"{StripTablePrefix(columnName)} {direction}";
-            }
-
-            // If no direction specified, just get the column name
-            var colName =
-                comparison.qualifiedIdent(0) != null
-                    ? ProcessQualifiedIdentifierToSql(comparison.qualifiedIdent(0), null)
-                    : comparison.IDENT(0)?.GetText()
-                        ?? throw new NotSupportedException(
-                            "Unsupported comparison type in ExtractWindowFunction"
-                        );
-            return StripTablePrefix(colName);
-        }
-
-        // Fallback to simple extraction
-        return StripTablePrefix(ExtractIdentifier(arg));
+            null => "",
+            var d when d.ASC() != null => " ASC",
+            _ => " DESC",
+        };
+        return $"{StripTablePrefix(column)}{direction}";
     }
 
     /// <summary>

@@ -36,6 +36,45 @@ membership in a non-empty literal list. Pipeline filter bodies, including
 target platform. This supports compact role-membership predicates such as
 `m.role in ('owner', 'admin')` without expanding to `OR` chains.
 
+### Common Table Expressions [LQL-CTE]
+
+`with name as (pipeline), other as (pipeline) main-pipeline` names pipelines that
+the main pipeline (and later CTEs) can use as tables. It transpiles to
+`WITH name AS (...), other AS (...) SELECT ...` on every dialect.
+
+```
+with high_value_customers as (
+    orders |> group_by(orders.user_id) |> having(fn(g) => sum(orders.total) > 10000) |> select(orders.user_id)
+)
+users |> join(high_value_customers, on = users.id = high_value_customers.user_id) |> select(users.id)
+```
+
+### Derived Tables [LQL-DERIVED-TABLE]
+
+`join((pipeline), on = ...)` joins the result of a parenthesized pipeline. The
+derived table is aliased after its base table, and outer references to that base
+table (`orders.order_count`) resolve to the derived table.
+
+### Subquery Layout [LQL-SUBQUERY-LAYOUT]
+
+Statements with CTEs or derived tables are rendered identically on SQLite,
+PostgreSQL and SQL Server, one clause per line:
+
+- Queries that join sources alias each source by the initials of its
+  underscore-separated name (`users` → `u`, `high_value_customers` → `hvc`, with a
+  numeric suffix on collision) and qualify columns with those aliases.
+- A standalone single-table body (a CTE or derived table) drops its table
+  qualifiers; EXISTS/IN bodies keep them, because they may correlate with the
+  outer query.
+- Nested bodies are indented four spaces inside `(` … `)`.
+- Several `filter` steps are ANDed, each parenthesized so an `OR` inside one
+  filter cannot bind across the `AND`.
+- Only paging differs by dialect: `LIMIT`/`OFFSET` on SQLite and PostgreSQL,
+  `TOP n` or `OFFSET … ROWS FETCH NEXT … ROWS ONLY` on SQL Server. LIMIT/OFFSET
+  inside EXISTS/IN bodies are rejected rather than dropped.
+- SQLite otherwise renders statements on one line; a WHERE holding a multi-line
+  subquery switches it to one clause per line.
+
 Futures:
 
 join(table2, on = …)      

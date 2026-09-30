@@ -208,6 +208,7 @@ public sealed class SQLiteContext : ISqlContext
     private static string GenerateSQLiteSQL(SelectStatement statement)
     {
         var sql = new System.Text.StringBuilder();
+        var separator = ClauseSeparator(statement);
 
         // SELECT clause
         sql.Append("SELECT ");
@@ -228,7 +229,7 @@ public sealed class SQLiteContext : ISqlContext
         // FROM clause with JOINs
         if (statement.Tables.Count > 0)
         {
-            sql.Append(" FROM ");
+            sql.Append(separator).Append("FROM ");
             var baseTable = statement.Tables.First();
             sql.Append(baseTable.Name);
             if (!string.IsNullOrEmpty(baseTable.Alias))
@@ -255,7 +256,7 @@ public sealed class SQLiteContext : ISqlContext
 
                 sql.Append(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    $" {fullJoinType} {table.Name}"
+                    $"{separator}{fullJoinType} {table.Name}"
                 );
 
                 if (!string.IsNullOrEmpty(table.Alias))
@@ -279,28 +280,28 @@ public sealed class SQLiteContext : ISqlContext
         // WHERE clause
         if (statement.WhereConditions.Count > 0)
         {
-            sql.Append(" WHERE ");
+            sql.Append(separator).Append("WHERE ");
             sql.Append(WhereConditionSql.Join(statement.WhereConditions, FormatWhereCondition));
         }
 
         // GROUP BY clause
         if (statement.GroupByColumns.Count > 0)
         {
-            sql.Append(" GROUP BY ");
+            sql.Append(separator).Append("GROUP BY ");
             sql.Append(string.Join(", ", statement.GroupByColumns.Select(FormatColumn)));
         }
 
         // HAVING clause
         if (!string.IsNullOrEmpty(statement.HavingCondition))
         {
-            sql.Append(" HAVING ");
+            sql.Append(separator).Append("HAVING ");
             sql.Append(statement.HavingCondition);
         }
 
         // ORDER BY clause
         if (statement.OrderByItems.Count > 0)
         {
-            sql.Append(" ORDER BY ");
+            sql.Append(separator).Append("ORDER BY ");
             sql.Append(
                 string.Join(", ", statement.OrderByItems.Select(o => $"{o.Column} {o.Direction}"))
             );
@@ -309,19 +310,31 @@ public sealed class SQLiteContext : ISqlContext
         // LIMIT clause
         if (!string.IsNullOrEmpty(statement.Limit))
         {
-            sql.Append(" LIMIT ");
+            sql.Append(separator).Append("LIMIT ");
             sql.Append(statement.Limit);
         }
 
         // OFFSET clause
         if (!string.IsNullOrEmpty(statement.Offset))
         {
-            sql.Append(" OFFSET ");
+            sql.Append(separator).Append("OFFSET ");
             sql.Append(statement.Offset);
         }
 
         return sql.ToString();
     }
+
+    /// <summary>
+    /// Statements are single-line, except that a WHERE holding a nested (multi-line)
+    /// subquery puts each clause on its own line, matching the other dialects'
+    /// subquery layout. Implements [LQL-SUBQUERY-LAYOUT].
+    /// </summary>
+    private static string ClauseSeparator(SelectStatement statement) =>
+        statement.WhereConditions.Any(c =>
+            c is ExpressionCondition e && e.Expression.Contains('\n', StringComparison.Ordinal)
+        )
+            ? "\n"
+            : " ";
 
     /// <summary>
     /// Formats a column for SQL output

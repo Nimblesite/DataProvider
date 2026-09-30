@@ -1326,6 +1326,7 @@ dependencies = [
 name = "lql-lsp"
 version = "0.0.0-dev"
 dependencies = [
+ "futures",
  "lql-analyzer",
  "lql-parser",
  "reqwest",

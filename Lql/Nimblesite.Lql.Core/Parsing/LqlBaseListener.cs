@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-// Generated from Nimblesite.Lql.Core.g4 by ANTLR 4.13.1
+// Generated from Lql.g4 by ANTLR 4.13.1
 
 // Unreachable code detected
 #pragma warning disable 0162
@@ -60,6 +60,30 @@ public partial class LqlBaseListener : ILqlListener {
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitStatement([NotNull] LqlParser.StatementContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="LqlParser.withStmt"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterWithStmt([NotNull] LqlParser.WithStmtContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="LqlParser.withStmt"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitWithStmt([NotNull] LqlParser.WithStmtContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="LqlParser.cteDef"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterCteDef([NotNull] LqlParser.CteDefContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="LqlParser.cteDef"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitCteDef([NotNull] LqlParser.CteDefContext context) { }
 	/// <summary>
 	/// Enter a parse tree produced by <see cref="LqlParser.letStmt"/>.
 	/// <para>The default implementation does nothing.</para>
@@ -132,6 +156,30 @@ public partial class LqlBaseListener : ILqlListener {
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitOrderClause([NotNull] LqlParser.OrderClauseContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="LqlParser.orderByArgList"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterOrderByArgList([NotNull] LqlParser.OrderByArgListContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="LqlParser.orderByArgList"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitOrderByArgList([NotNull] LqlParser.OrderByArgListContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="LqlParser.orderByArg"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterOrderByArg([NotNull] LqlParser.OrderByArgContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="LqlParser.orderByArg"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitOrderByArg([NotNull] LqlParser.OrderByArgContext context) { }
 	/// <summary>
 	/// Enter a parse tree produced by <see cref="LqlParser.lambdaExpr"/>.
 	/// <para>The default implementation does nothing.</para>

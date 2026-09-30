@@ -6,7 +6,7 @@
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.Sql.Model]*,[Nimblesite.Lql.SQLite]*"
     },
     "DataProvider/Nimblesite.DataProvider.Example": {
-      "threshold": 36,
+      "threshold": 37,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.DataProvider.Example]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Lql/Nimblesite.Lql.Core": {
@@ -50,10 +50,10 @@
       "include": "[Nimblesite.Reporting.Engine]*,[Nimblesite.Reporting.Api]*"
     },
     "Lql/lql-lsp-rust": {
-      "threshold": 95
+      "threshold": 97
     },
     "Lql/LqlExtension": {
-      "threshold": 46
+      "threshold": 49
     }
   }
 }

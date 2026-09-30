@@ -11,15 +11,15 @@ use crate::LqlLexer;
 /// with readable names so downstream crates don't depend on T__N magic numbers.
 pub mod token_types {
     /// `|>` pipe operator
-    pub const PIPE: isize = 3; // T__2
+    pub const PIPE: isize = super::super::generated::lqllexer::T__5;
     /// `(`
-    pub const OPEN_PAREN: isize = 4; // T__3
+    pub const OPEN_PAREN: isize = super::super::generated::lqllexer::T__1;
     /// `)`
-    pub const CLOSE_PAREN: isize = 5; // T__4
+    pub const CLOSE_PAREN: isize = super::super::generated::lqllexer::T__2;
     /// `,`
-    pub const COMMA: isize = 6; // T__5
+    pub const COMMA: isize = super::super::generated::lqllexer::T__0;
     /// `.`
-    pub const DOT: isize = 9; // T__8
+    pub const DOT: isize = super::super::generated::lqllexer::T__8;
     /// `--` line comment
     pub const COMMENT: isize = super::super::generated::lqllexer::COMMENT;
     /// Whitespace

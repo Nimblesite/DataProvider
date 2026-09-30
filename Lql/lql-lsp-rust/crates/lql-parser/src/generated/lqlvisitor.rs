@@ -1,5 +1,5 @@
-#![allow(nonstandard_style)]
 // Generated from /home/user/DataProvider/Lql/Lql/Parsing/Lql.g4 by ANTLR 4.8
+// Generated from Lql.g4 by ANTLR 4.8
 use super::lqlparser::*;
 use antlr_rust::tree::{ParseTreeVisitor, ParseTreeVisitorCompat};
 
@@ -21,6 +21,22 @@ pub trait LqlVisitor<'input>: ParseTreeVisitor<'input, LqlParserContextType> {
      * @param ctx the parse tree
      */
     fn visit_statement(&mut self, ctx: &StatementContext<'input>) {
+        self.visit_children(ctx)
+    }
+
+    /**
+     * Visit a parse tree produced by {@link LqlParser#withStmt}.
+     * @param ctx the parse tree
+     */
+    fn visit_withStmt(&mut self, ctx: &WithStmtContext<'input>) {
+        self.visit_children(ctx)
+    }
+
+    /**
+     * Visit a parse tree produced by {@link LqlParser#cteDef}.
+     * @param ctx the parse tree
+     */
+    fn visit_cteDef(&mut self, ctx: &CteDefContext<'input>) {
         self.visit_children(ctx)
     }
 
@@ -285,6 +301,22 @@ pub trait LqlVisitorCompat<'input>:
     }
 
     /**
+     * Visit a parse tree produced by {@link LqlParser#withStmt}.
+     * @param ctx the parse tree
+     */
+    fn visit_withStmt(&mut self, ctx: &WithStmtContext<'input>) -> Self::Return {
+        self.visit_children(ctx)
+    }
+
+    /**
+     * Visit a parse tree produced by {@link LqlParser#cteDef}.
+     * @param ctx the parse tree
+     */
+    fn visit_cteDef(&mut self, ctx: &CteDefContext<'input>) -> Self::Return {
+        self.visit_children(ctx)
+    }
+
+    /**
      * Visit a parse tree produced by {@link LqlParser#letStmt}.
      * @param ctx the parse tree
      */
@@ -536,6 +568,16 @@ where
 
     fn visit_statement(&mut self, ctx: &StatementContext<'input>) {
         let result = <Self as LqlVisitorCompat>::visit_statement(self, ctx);
+        *<Self as ParseTreeVisitorCompat>::temp_result(self) = result;
+    }
+
+    fn visit_withStmt(&mut self, ctx: &WithStmtContext<'input>) {
+        let result = <Self as LqlVisitorCompat>::visit_withStmt(self, ctx);
+        *<Self as ParseTreeVisitorCompat>::temp_result(self) = result;
+    }
+
+    fn visit_cteDef(&mut self, ctx: &CteDefContext<'input>) {
+        let result = <Self as LqlVisitorCompat>::visit_cteDef(self, ctx);
         *<Self as ParseTreeVisitorCompat>::temp_result(self) = result;
     }
 

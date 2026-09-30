@@ -1862,4 +1862,163 @@ mod tests {
         // saturating_add(u64::MAX, 5000) saturates at u64::MAX
         assert!(msg.contains(&format!("{}ms delay", u64::MAX)));
     }
+
+    // ── initialized() + AI completion merge ───────────────────────────
+
+    fn sqlite_schema_db(name: &str) -> String {
+        let path = std::env::temp_dir().join(format!("{name}_{}.db", std::process::id()));
+        let path_str = path.to_str().expect("utf-8 temp path").to_string();
+        let _ = std::fs::remove_file(&path);
+        let conn = rusqlite::Connection::open(&path_str).expect("open sqlite");
+        conn.execute_batch("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL);")
+            .expect("create table");
+        path_str
+    }
+
+    /// `initialized()` logs through the client; drain its socket so those sends complete.
+    fn drain_client_messages(socket: tower_lsp::ClientSocket) {
+        use futures::StreamExt;
+        tokio::spawn(async move {
+            let (mut requests, _responses) = socket.split();
+            while requests.next().await.is_some() {}
+        });
+    }
+
+    async fn initialize_with(backend: &LqlBackend, options: serde_json::Value) {
+        backend
+            .initialize(InitializeParams {
+                initialization_options: Some(options),
+                ..Default::default()
+            })
+            .await
+            .expect("initialize");
+        backend.initialized(InitializedParams {}).await;
+    }
+
+    async fn completion_labels(backend: &LqlBackend, uri: &Url, position: Position) -> Vec<String> {
+        let params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position,
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+            context: None,
+        };
+        match backend.completion(params).await.expect("completion") {
+            Some(CompletionResponse::Array(items)) => items.into_iter().map(|i| i.label).collect(),
+            other => panic!("expected completion array, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_initialized_loads_sqlite_schema_and_activates_ai_provider() {
+        let db = sqlite_schema_db("lql_initialized_schema");
+        let (service, socket) = LspService::new(LqlBackend::new);
+        drain_client_messages(socket);
+        initialize_with(
+            service.inner(),
+            serde_json::json!({
+                "connectionString": db,
+                "aiProvider": { "provider": "test", "endpoint": "http://unused" }
+            }),
+        )
+        .await;
+
+        let schema = service
+            .inner()
+            .schema
+            .read()
+            .await
+            .clone()
+            .expect("schema loaded");
+        assert_eq!(schema.table_names(), vec!["users"]);
+        assert!(service.inner().ai_provider.read().await.is_some());
+        let _ = std::fs::remove_file(&db);
+    }
+
+    #[tokio::test]
+    async fn test_initialized_schema_fetch_failure_leaves_schema_empty() {
+        let (service, socket) = LspService::new(LqlBackend::new);
+        drain_client_messages(socket);
+        initialize_with(
+            service.inner(),
+            serde_json::json!({
+                "connectionString": "host=127.0.0.1 port=1 dbname=none user=none connect_timeout=2",
+                "aiProvider": { "provider": "test", "endpoint": "http://unused", "enabled": false }
+            }),
+        )
+        .await;
+
+        assert!(service.inner().schema.read().await.is_none());
+        assert!(service.inner().ai_provider.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_completion_merges_ai_items_with_schema_context() {
+        use lql_analyzer::{ColumnInfo, SchemaCache, TableInfo};
+        let (service, _socket) = LspService::new(LqlBackend::new);
+        service
+            .inner()
+            .set_ai_provider(Arc::new(ai::TestAiProvider))
+            .await;
+        *service.inner().schema.write().await = Some(SchemaCache::from_tables(vec![TableInfo {
+            name: "users".to_string(),
+            schema: "public".to_string(),
+            columns: vec![
+                ColumnInfo {
+                    name: "id".to_string(),
+                    sql_type: "uuid".to_string(),
+                    is_nullable: false,
+                    is_primary_key: true,
+                },
+                ColumnInfo {
+                    name: "name".to_string(),
+                    sql_type: "text".to_string(),
+                    is_nullable: true,
+                    is_primary_key: false,
+                },
+            ],
+        }]));
+        let uri = Url::parse("file:///ai_merge.lql").unwrap();
+        open_doc(service.inner(), &uri, "users |> ").await;
+
+        let labels = completion_labels(service.inner(), &uri, Position::new(0, 9)).await;
+
+        assert!(
+            labels.contains(&"ai_suggest_filter".to_string()),
+            "{labels:?}"
+        );
+        assert!(
+            labels.contains(&"ai_suggest_join".to_string()),
+            "{labels:?}"
+        );
+        assert!(labels.contains(&"select".to_string()), "{labels:?}");
+    }
+
+    #[tokio::test]
+    async fn test_completion_drops_ai_items_after_timeout() {
+        let db = sqlite_schema_db("lql_ai_timeout");
+        let (service, socket) = LspService::new(LqlBackend::new);
+        drain_client_messages(socket);
+        initialize_with(
+            service.inner(),
+            serde_json::json!({
+                "connectionString": db,
+                "aiProvider": { "provider": "test_slow", "endpoint": "http://unused", "timeoutMs": 20 }
+            }),
+        )
+        .await;
+        let uri = Url::parse("file:///ai_timeout.lql").unwrap();
+        open_doc(service.inner(), &uri, "users |> ").await;
+
+        let labels = completion_labels(service.inner(), &uri, Position::new(0, 9)).await;
+
+        assert!(
+            !labels.contains(&"ai_slow_result".to_string()),
+            "{labels:?}"
+        );
+        assert!(labels.contains(&"select".to_string()), "{labels:?}");
+        let _ = std::fs::remove_file(&db);
+    }
 }

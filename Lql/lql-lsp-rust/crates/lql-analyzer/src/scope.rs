@@ -1,8 +1,8 @@
 use antlr_rust::tree::{ParseTree, TerminalNode};
 use lql_parser::{
-    parse_lql, ArgContextAttrs, ArgListContextAttrs, ExprContextAttrs, FunctionCallContextAttrs,
-    LetStmtContextAttrs, LqlParserContextType, PipeExprContextAttrs, ProgramContextAttrs,
-    StatementContextAttrs,
+    parse_lql, ArgContextAttrs, ArgListContextAttrs, CteDefContextAttrs, ExprContextAttrs,
+    FunctionCallContextAttrs, LetStmtContextAttrs, LqlParserContextType, PipeExprContextAttrs,
+    ProgramContextAttrs, StatementContextAttrs, WithStmtContextAttrs,
 };
 use std::collections::HashMap;
 
@@ -72,13 +72,25 @@ pub fn build_scope(source: &str) -> ScopeMap {
         // Extract let bindings from letStmt nodes
         if let Some(let_stmt) = stmt.letStmt() {
             if let Some(ident) = let_stmt.IDENT() {
-                let name = ident.symbol.text.to_string();
-                let line = (ident.symbol.line - 1) as u32;
-                let col = ident.symbol.column as u32;
-                scope.add_binding(name, line, col);
+                add_ident_binding(&ident, &mut scope);
             }
             // Collect table references from the let statement's pipe expression
             if let Some(pipe_expr) = let_stmt.pipeExpr() {
+                collect_tables_from_pipe(&pipe_expr, &mut scope);
+            }
+        }
+
+        // CTE names bind like `let` names; their bodies and the main pipeline reference tables.
+        if let Some(with_stmt) = stmt.withStmt() {
+            for cte in with_stmt.cteDef_all() {
+                if let Some(ident) = cte.IDENT() {
+                    add_ident_binding(&ident, &mut scope);
+                }
+                if let Some(pipe_expr) = cte.pipeExpr() {
+                    collect_tables_from_pipe(&pipe_expr, &mut scope);
+                }
+            }
+            if let Some(pipe_expr) = with_stmt.pipeExpr() {
                 collect_tables_from_pipe(&pipe_expr, &mut scope);
             }
         }
@@ -90,6 +102,14 @@ pub fn build_scope(source: &str) -> ScopeMap {
     }
 
     scope
+}
+
+/// Register the binding named by an IDENT token at its source position.
+fn add_ident_binding(ident: &TerminalNode<'_, LqlParserContextType>, scope: &mut ScopeMap) {
+    let name = ident.symbol.text.to_string();
+    let line = (ident.symbol.line - 1) as u32;
+    let col = ident.symbol.column as u32;
+    scope.add_binding(name, line, col);
 }
 
 /// Collect table names from a pipe expression.
@@ -154,6 +174,18 @@ pub fn collect_function_calls(source: &str) -> Vec<FunctionCallInfo> {
     for stmt in result.tree.statement_all() {
         if let Some(let_stmt) = stmt.letStmt() {
             if let Some(pipe_expr) = let_stmt.pipeExpr() {
+                collect_fn_calls_from_pipe(&pipe_expr, &mut calls);
+            }
+        }
+        if let Some(with_stmt) = stmt.withStmt() {
+            for pipe_expr in with_stmt
+                .cteDef_all()
+                .iter()
+                .filter_map(|cte| cte.pipeExpr())
+            {
+                collect_fn_calls_from_pipe(&pipe_expr, &mut calls);
+            }
+            if let Some(pipe_expr) = with_stmt.pipeExpr() {
                 collect_fn_calls_from_pipe(&pipe_expr, &mut calls);
             }
         }
@@ -335,6 +367,31 @@ mod tests {
     }
 
     // ── build_scope tests ──
+
+    #[test]
+    fn test_build_scope_cte_names_are_bindings() {
+        let scope = build_scope(
+            "with big as (orders |> filter(fn(o) => o.orders.total > 5)), \
+             vip as (users |> select(users.id)) \
+             big |> join(vip, on = big.user_id = vip.id) |> select(big.user_id)",
+        );
+        assert!(scope.has_binding("big"));
+        assert!(scope.has_binding("vip"));
+        let binding = scope.get_binding("big").expect("cte binding");
+        assert_eq!((binding.line, binding.col), (0, 5));
+        assert!(scope.table_names().contains(&"orders"));
+        assert!(scope.table_names().contains(&"users"));
+    }
+
+    #[test]
+    fn test_collect_function_calls_includes_cte_bodies_and_main_pipeline() {
+        let calls = collect_function_calls(
+            "with big as (orders |> filter(fn(o) => o.orders.total > 5)) big |> select(big.user_id)",
+        );
+        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"filter"), "{names:?}");
+        assert!(names.contains(&"select"), "{names:?}");
+    }
 
     #[test]
     fn test_build_scope_let_binding() {

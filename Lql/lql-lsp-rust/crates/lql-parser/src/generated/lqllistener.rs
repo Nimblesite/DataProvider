@@ -1,5 +1,5 @@
-#![allow(nonstandard_style)]
 // Generated from /home/user/DataProvider/Lql/Lql/Parsing/Lql.g4 by ANTLR 4.8
+// Generated from Lql.g4 by ANTLR 4.8
 use super::lqlparser::*;
 use antlr_rust::tree::ParseTreeListener;
 
@@ -24,6 +24,26 @@ pub trait LqlListener<'input>: ParseTreeListener<'input, LqlParserContextType> {
      * @param ctx the parse tree
      */
     fn exit_statement(&mut self, _ctx: &StatementContext<'input>) {}
+    /**
+     * Enter a parse tree produced by {@link LqlParser#withStmt}.
+     * @param ctx the parse tree
+     */
+    fn enter_withStmt(&mut self, _ctx: &WithStmtContext<'input>) {}
+    /**
+     * Exit a parse tree produced by {@link LqlParser#withStmt}.
+     * @param ctx the parse tree
+     */
+    fn exit_withStmt(&mut self, _ctx: &WithStmtContext<'input>) {}
+    /**
+     * Enter a parse tree produced by {@link LqlParser#cteDef}.
+     * @param ctx the parse tree
+     */
+    fn enter_cteDef(&mut self, _ctx: &CteDefContext<'input>) {}
+    /**
+     * Exit a parse tree produced by {@link LqlParser#cteDef}.
+     * @param ctx the parse tree
+     */
+    fn exit_cteDef(&mut self, _ctx: &CteDefContext<'input>) {}
     /**
      * Enter a parse tree produced by {@link LqlParser#letStmt}.
      * @param ctx the parse tree

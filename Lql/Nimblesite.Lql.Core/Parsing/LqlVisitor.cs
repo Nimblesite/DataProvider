@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-// Generated from Nimblesite.Lql.Core.g4 by ANTLR 4.13.1
+// Generated from Lql.g4 by ANTLR 4.13.1
 
 // Unreachable code detected
 #pragma warning disable 0162
@@ -45,6 +45,18 @@ public interface ILqlVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitStatement([NotNull] LqlParser.StatementContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="LqlParser.withStmt"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitWithStmt([NotNull] LqlParser.WithStmtContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="LqlParser.cteDef"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitCteDef([NotNull] LqlParser.CteDefContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="LqlParser.letStmt"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
@@ -80,6 +92,18 @@ public interface ILqlVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitOrderClause([NotNull] LqlParser.OrderClauseContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="LqlParser.orderByArgList"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitOrderByArgList([NotNull] LqlParser.OrderByArgListContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="LqlParser.orderByArg"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitOrderByArg([NotNull] LqlParser.OrderByArgContext context);
 	/// <summary>
 	/// Visit a parse tree produced by <see cref="LqlParser.lambdaExpr"/>.
 	/// </summary>
