@@ -218,21 +218,18 @@ public sealed partial class GeneratedOperationsCoverageTests
     [Fact]
     public async Task UpdateCustomerAsync_WithNonExistentId_ReturnsZeroRows()
     {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateCustomerAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.UpdateCustomerAsync(
                         "nonexistent-id",
                         "Updated",
                         "u@t.com",
                         "555-0000",
                         "2024-01-01"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(0, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 0,
+                seed: true
+            )
             .ConfigureAwait(false);
     }
 
@@ -240,12 +237,9 @@ public sealed partial class GeneratedOperationsCoverageTests
     [Fact]
     public async Task UpdateInvoiceAsync_WithNonExistentId_ReturnsZeroRows()
     {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateInvoiceAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.UpdateInvoiceAsync(
                         "nonexistent",
                         "INV-X",
                         "2024-01-01",
@@ -254,10 +248,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         0.0,
                         0.0,
                         "n"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(0, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 0,
+                seed: true
+            )
             .ConfigureAwait(false);
     }
 
@@ -265,12 +259,9 @@ public sealed partial class GeneratedOperationsCoverageTests
     [Fact]
     public async Task UpdateAddressAsync_WithNonExistentId_ReturnsZeroRows()
     {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateAddressAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.UpdateAddressAsync(
                         "nonexistent",
                         "cust-1",
                         "St",
@@ -278,10 +269,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         "ST",
                         "00000",
                         "US"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(0, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 0,
+                seed: true
+            )
             .ConfigureAwait(false);
     }
 
@@ -289,12 +280,9 @@ public sealed partial class GeneratedOperationsCoverageTests
     [Fact]
     public async Task UpdateInvoiceLineAsync_WithNonExistentId_ReturnsZeroRows()
     {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateInvoiceLineAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.UpdateInvoiceLineAsync(
                         "nonexistent",
                         "inv-1",
                         "Desc",
@@ -303,10 +291,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         10.0,
                         0.0,
                         "n"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(0, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 0,
+                seed: true
+            )
             .ConfigureAwait(false);
     }
 
@@ -314,22 +302,12 @@ public sealed partial class GeneratedOperationsCoverageTests
     [Fact]
     public async Task UpdateOrderItemAsync_WithNonExistentId_ReturnsZeroRows()
     {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateOrderItemAsync(
-                        "nonexistent",
-                        "ord-1",
-                        "Product",
-                        1.0,
-                        10.0,
-                        10.0
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(0, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.UpdateOrderItemAsync("nonexistent", "ord-1", "Product", 1.0, 10.0, 10.0),
+                expectedRows: 0,
+                seed: true
+            )
             .ConfigureAwait(false);
     }
 }

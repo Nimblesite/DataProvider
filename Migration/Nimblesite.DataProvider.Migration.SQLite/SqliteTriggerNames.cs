@@ -29,6 +29,33 @@ internal static class SqliteTriggerNames
         return names;
     }
 
+    /// <summary>
+    /// Read managed triggers with their stored <c>sqlite_master.sql</c> text so
+    /// callers can inspect trigger bodies (for example RLS predicates).
+    /// </summary>
+    public static List<ManagedTriggerDefinition> ReadDefinitions(
+        SqliteConnection connection,
+        string tableName,
+        string pattern
+    )
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name, sql FROM sqlite_master
+            WHERE type = 'trigger' AND tbl_name = @table AND name LIKE @pattern
+            ORDER BY name
+            """;
+        command.Parameters.AddWithValue("@table", tableName);
+        command.Parameters.AddWithValue("@pattern", pattern);
+        using var reader = command.ExecuteReader();
+        var triggers = new List<ManagedTriggerDefinition>();
+        while (reader.Read())
+        {
+            triggers.Add(new ManagedTriggerDefinition(reader.GetString(0), reader.GetString(1)));
+        }
+        return triggers;
+    }
+
     public static ParsedTriggerName? Parse(
         string name,
         string prefix,
@@ -59,3 +86,6 @@ internal static class SqliteTriggerNames
 
 /// <summary>Trigger name split into its event token and base name.</summary>
 internal sealed record ParsedTriggerName(string EventToken, string BaseName);
+
+/// <summary>A managed trigger together with its stored CREATE TRIGGER text.</summary>
+internal sealed record ManagedTriggerDefinition(string Name, string Sql);

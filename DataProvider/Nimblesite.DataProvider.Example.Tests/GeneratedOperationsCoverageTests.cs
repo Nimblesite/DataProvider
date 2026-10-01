@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Data.Sqlite;
 using Nimblesite.Sql.Model;
 using Outcome;
@@ -6,6 +7,7 @@ using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
     int,
     Nimblesite.Sql.Model.SqlError
 >;
+using AffectedRowsResult = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>;
 
 namespace Nimblesite.DataProvider.Example.Tests;
 
@@ -41,33 +43,26 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
     [Fact]
     public async Task InsertCustomerAsync_WithValidData_ReturnsOk()
     {
-        await SetupSchema().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.InsertCustomerAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.InsertCustomerAsync(
                         Guid.NewGuid().ToString(),
                         "Test Customer",
                         "test@test.com",
                         "555-1234",
                         "2024-01-01"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 1
+            )
             .ConfigureAwait(false);
     }
 
     [Fact]
     public async Task InsertInvoiceAsync_WithValidData_ReturnsOk()
     {
-        await SetupSchema().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.InsertInvoiceAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.InsertInvoiceAsync(
                         Guid.NewGuid().ToString(),
                         "INV-TEST-001",
                         "2024-06-01",
@@ -76,10 +71,9 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
                         1500.00,
                         null,
                         "Test invoice"
-                    )
-                    .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
-            })
+                    ),
+                expectedRows: 1
+            )
             .ConfigureAwait(false);
     }
 
@@ -280,6 +274,24 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
 
         using var command = new SqliteCommand(createTablesScript, _connection);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    // Implements [CI-DESLOP]: retain the result type and row-count assertions
+    // for each generated operation while sharing schema and transaction setup.
+    private async Task AssertAffectedRows(
+        Func<IDbTransaction, Task<AffectedRowsResult>> execute,
+        int expectedRows,
+        bool seed = false
+    )
+    {
+        await (seed ? SetupSchemaAndSeed() : SetupSchema()).ConfigureAwait(false);
+        await _connection
+            .Transact(async transaction =>
+            {
+                var result = await execute(transaction).ConfigureAwait(false);
+                Assert.Equal(expectedRows, Assert.IsType<AffectedRowsOk>(result).Value);
+            })
+            .ConfigureAwait(false);
     }
 
     private async Task SetupSchemaAndSeed()

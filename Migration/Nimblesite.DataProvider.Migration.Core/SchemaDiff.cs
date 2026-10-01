@@ -363,10 +363,17 @@ public static partial class SchemaDiff
                     );
                     yield return new CreateRlsPolicyOperation(desired.Schema, desired.Name, policy);
                 }
-                else if (current?.Schema != "main")
+                else
                 {
-                    var recreate = RlsPolicyPredicates.RequiresRecreate(currentPolicy, policy);
-                    if (recreate)
+                    // Implements [RLS-DIFF] for SQLite (issue #98): predicates
+                    // are read from the RLS triggers/secure view, so a changed
+                    // predicate drifts exactly like on Postgres. SQLite cannot
+                    // ALTER a trigger or view in place, so drift is emitted as
+                    // a replacement. Policies whose live predicates could not
+                    // be verified are left untouched rather than re-applied.
+                    var platform =
+                        current?.Schema == "main" ? RlsPlatform.Sqlite : RlsPlatform.Postgres;
+                    if (RlsPolicyPredicates.RequiresRecreate(currentPolicy, policy))
                     {
                         yield return new ReplaceRlsPolicyOperation(
                             desired.Schema,
@@ -374,16 +381,17 @@ public static partial class SchemaDiff
                             policy
                         );
                     }
-                    else if (
-                        !RlsPolicyPredicates.SameUsing(currentPolicy, policy)
-                        || !RlsPolicyPredicates.SameWithCheck(currentPolicy, policy)
-                    )
+                    else if (PredicateDrift(currentPolicy, policy, platform))
                     {
-                        yield return new AlterRlsPolicyOperation(
+                        logger?.LogDebug(
+                            "Replacing RLS policy {Policy} on {Schema}.{Table} after predicate change",
+                            policy.Name,
                             desired.Schema,
-                            desired.Name,
-                            policy
+                            desired.Name
                         );
+                        yield return platform == RlsPlatform.Sqlite
+                            ? new ReplaceRlsPolicyOperation(desired.Schema, desired.Name, policy)
+                            : new AlterRlsPolicyOperation(desired.Schema, desired.Name, policy);
                     }
                 }
             }
@@ -438,6 +446,22 @@ public static partial class SchemaDiff
             }
         }
     }
+
+    // Implements [RLS-DIFF]. On SQLite an unreadable policy carries no
+    // predicate text at all; comparing it would always report drift and
+    // re-apply the policy on every run, so it is treated as unverifiable.
+    private static bool PredicateDrift(
+        RlsPolicyDefinition currentPolicy,
+        RlsPolicyDefinition policy,
+        RlsPlatform platform
+    ) =>
+        platform == RlsPlatform.Sqlite && PredicateUnreadable(currentPolicy)
+            ? false
+            : !RlsPolicyPredicates.SameUsing(currentPolicy, policy, platform)
+                || !RlsPolicyPredicates.SameWithCheck(currentPolicy, policy, platform);
+
+    private static bool PredicateUnreadable(RlsPolicyDefinition policy) =>
+        policy.UsingSql is null && policy.WithCheckSql is null;
 
     private static IEnumerable<SchemaOperation> CalculateForeignKeyDiff(
         TableDefinition current,

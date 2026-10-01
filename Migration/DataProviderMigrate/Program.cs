@@ -221,7 +221,19 @@ public static partial class Program
                         connection,
                         ops,
                         PostgresDdlGenerator.Generate,
-                        new MigrationOptions { AllowDestructive = allowDestructive }
+                        new MigrationOptions { AllowDestructive = allowDestructive },
+                        verifyBeforeCommit: () =>
+                            VerifySchemaIntegrity(
+                                schema,
+                                phase,
+                                () => PostgresSchemaInspector.Inspect(connection, "public"),
+                                (live, target) =>
+                                    PostgresPolicyCatalogNormalizer.Normalize(
+                                        connection,
+                                        live,
+                                        target
+                                    )
+                            ) == 0
                     ),
                 (live, target) =>
                     PostgresPolicyCatalogNormalizer.Normalize(connection, live, target)
@@ -259,7 +271,8 @@ public static partial class Program
                         ops,
                         SqlServerDdlGenerator.Generate,
                         new MigrationOptions { AllowDestructive = allowDestructive }
-                    )
+                    ),
+                (_, desired) => SqlServerSchemaNormalizer.Normalize(desired)
             );
         }
         catch (Exception ex)

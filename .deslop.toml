@@ -6,6 +6,8 @@
 # Generated ANTLR outputs cannot be deduplicated by hand. Excluding them before
 # analysis also avoids comparing millions of generated parser subtrees.
 exclude = [
+  # Reporting is outside the requested duplication audit scope.
+  "Reporting/**",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLLexer.cs",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParser.cs",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseListener.cs",

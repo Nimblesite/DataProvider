@@ -111,7 +111,7 @@ public static class PostgresChangeApplier
         var i = 0;
         foreach (var kvp in payload)
         {
-            cmd.Parameters.AddWithValue($"@p{i}", GetJsonValue(kvp.Value));
+            AddValue(cmd, $"@p{i}", GetJsonValue(kvp.Value));
             i++;
         }
 
@@ -155,7 +155,7 @@ public static class PostgresChangeApplier
             if (!kvp.Key.Equals(pkColumn, StringComparison.OrdinalIgnoreCase))
             {
                 setClauses.Add($"{kvp.Key.ToLowerInvariant()} = @p{paramIndex}");
-                cmd.Parameters.AddWithValue($"@p{paramIndex}", GetJsonValue(kvp.Value));
+                AddValue(cmd, $"@p{paramIndex}", GetJsonValue(kvp.Value));
                 paramIndex++;
             }
         }
@@ -169,7 +169,7 @@ public static class PostgresChangeApplier
         var tableName = entry.TableName.ToLowerInvariant();
         cmd.CommandText =
             $"UPDATE {tableName} SET {string.Join(", ", setClauses)} WHERE {pkColumnLower} = @pkValue";
-        cmd.Parameters.AddWithValue("@pkValue", pkValue);
+        AddValue(cmd, "@pkValue", pkValue);
 
         var affected = cmd.ExecuteNonQuery();
         if (affected == 0)
@@ -200,7 +200,7 @@ public static class PostgresChangeApplier
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"DELETE FROM {tableName} WHERE {pkColumnLower} = @pkValue";
-        cmd.Parameters.AddWithValue("@pkValue", pkValue);
+        AddValue(cmd, "@pkValue", pkValue);
 
         cmd.ExecuteNonQuery();
         logger.LogDebug("POSTGRES APPLY: Delete successful for {Table}", entry.TableName);
@@ -224,6 +224,16 @@ public static class PostgresChangeApplier
         error = null;
         return (pkColumn, pkColumn.ToLowerInvariant(), GetJsonValue(pkJson[pkColumn]));
     }
+
+    // Sync payloads carry uuid, timestamp and similar values as JSON strings. Sending
+    // strings untyped lets PostgreSQL convert them to each target column's type instead
+    // of rejecting text for a uuid column (42804).
+    private static void AddValue(NpgsqlCommand cmd, string name, object value) =>
+        cmd.Parameters.Add(
+            value is string
+                ? new NpgsqlParameter(name, NpgsqlTypes.NpgsqlDbType.Unknown) { Value = value }
+                : new NpgsqlParameter(name, value)
+        );
 
     private static object GetJsonValue(JsonElement element) =>
         element.ValueKind switch

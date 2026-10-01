@@ -42,8 +42,9 @@ public static class SqliteDdlGenerator
             ),
             EnableRlsOperation => SqliteRlsDdlBuilder.GenerateEnable(),
             CreateRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateCreatePolicy(op),
+            ReplaceRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateReplacePolicy(op),
             AlterRlsPolicyOperation => throw new NotSupportedException(
-                "SQLite cannot inspect existing RLS predicates for an in-place policy update."
+                "SQLite cannot alter an RLS policy in place; SchemaDiff emits ReplaceRlsPolicyOperation for predicate changes."
             ),
             DropRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateDropPolicy(op),
             DisableRlsOperation op => SqliteRlsDdlBuilder.GenerateDisable(op),

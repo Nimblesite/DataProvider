@@ -16,16 +16,17 @@ internal static class SqliteRlsDdlBuilder
     public static string GenerateEnable() =>
         "CREATE TABLE IF NOT EXISTS [__rls_context] ([current_user_id] TEXT NOT NULL)";
 
-    public static string GenerateCreatePolicy(CreateRlsPolicyOperation op)
-    {
-        var ddl = new List<string>();
-        AddRestrictiveWarning(op.Policy, ddl);
-        AddInsertTrigger(op, ddl);
-        AddUpdateTrigger(op, ddl);
-        AddDeleteTrigger(op, ddl);
-        AddSecureView(op, ddl);
-        return string.Join(";\n", ddl);
-    }
+    public static string GenerateCreatePolicy(CreateRlsPolicyOperation op) =>
+        PolicyDdl(op.Policy, op.TableName);
+
+    // Implements [RLS-DIFF] (issue #98): SQLite triggers and views cannot be
+    // altered in place, so a changed policy is dropped and recreated. Runs in
+    // the migration transaction (ReplaceRlsPolicyOperation).
+    public static string GenerateReplacePolicy(ReplaceRlsPolicyOperation op) =>
+        string.Join(
+            ";\n",
+            DropObjects(op.PolicyName, op.TableName).Append(PolicyDdl(op.Policy, op.TableName))
+        );
 
     public static string GenerateDropPolicy(DropRlsPolicyOperation op) =>
         string.Join(
@@ -36,6 +37,26 @@ internal static class SqliteRlsDdlBuilder
                     $"DROP TRIGGER IF EXISTS [{TriggerName(sqlOp, op.PolicyName, op.TableName)}]"
                 )
         );
+
+    private static IEnumerable<string> DropObjects(string policyName, string tableName)
+    {
+        foreach (var sqlOp in Operations().Where(sqlOp => sqlOp != "select"))
+        {
+            yield return $"DROP TRIGGER IF EXISTS [{TriggerName(sqlOp, policyName, tableName)}]";
+        }
+        yield return $"DROP VIEW IF EXISTS [{tableName}_secure]";
+    }
+
+    private static string PolicyDdl(RlsPolicyDefinition policy, string tableName)
+    {
+        var ddl = new List<string>();
+        AddRestrictiveWarning(policy, ddl);
+        AddInsertTrigger(policy, tableName, ddl);
+        AddUpdateTrigger(policy, tableName, ddl);
+        AddDeleteTrigger(policy, tableName, ddl);
+        AddSecureView(policy, tableName, ddl);
+        return string.Join(";\n", ddl);
+    }
 
     public static string GenerateDisable(DisableRlsOperation op) =>
         $"DROP VIEW IF EXISTS [{op.TableName}_secure]";
@@ -48,56 +69,73 @@ internal static class SqliteRlsDdlBuilder
         }
     }
 
-    private static void AddInsertTrigger(CreateRlsPolicyOperation op, List<string> ddl)
+    private static void AddInsertTrigger(
+        RlsPolicyDefinition policy,
+        string tableName,
+        List<string> ddl
+    )
     {
-        if (Applies(op.Policy, RlsOperation.Insert) && HasText(op.Policy.WithCheckLql))
+        if (Applies(policy, RlsOperation.Insert) && HasText(policy.WithCheckLql))
         {
-            ddl.Add(Trigger(op, "insert", "INSERT", "NEW", op.Policy.WithCheckLql!));
+            ddl.Add(Trigger(policy, tableName, "insert", "INSERT", "NEW", policy.WithCheckLql!));
         }
     }
 
-    private static void AddUpdateTrigger(CreateRlsPolicyOperation op, List<string> ddl)
+    private static void AddUpdateTrigger(
+        RlsPolicyDefinition policy,
+        string tableName,
+        List<string> ddl
+    )
     {
-        if (Applies(op.Policy, RlsOperation.Update) && HasText(op.Policy.WithCheckLql))
+        if (Applies(policy, RlsOperation.Update) && HasText(policy.WithCheckLql))
         {
-            ddl.Add(Trigger(op, "update", "UPDATE", "NEW", op.Policy.WithCheckLql!));
+            ddl.Add(Trigger(policy, tableName, "update", "UPDATE", "NEW", policy.WithCheckLql!));
         }
     }
 
-    private static void AddDeleteTrigger(CreateRlsPolicyOperation op, List<string> ddl)
+    private static void AddDeleteTrigger(
+        RlsPolicyDefinition policy,
+        string tableName,
+        List<string> ddl
+    )
     {
-        if (Applies(op.Policy, RlsOperation.Delete) && HasText(op.Policy.UsingLql))
+        if (Applies(policy, RlsOperation.Delete) && HasText(policy.UsingLql))
         {
-            ddl.Add(Trigger(op, "delete", "DELETE", "OLD", op.Policy.UsingLql!));
+            ddl.Add(Trigger(policy, tableName, "delete", "DELETE", "OLD", policy.UsingLql!));
         }
     }
 
-    private static void AddSecureView(CreateRlsPolicyOperation op, List<string> ddl)
+    private static void AddSecureView(
+        RlsPolicyDefinition policy,
+        string tableName,
+        List<string> ddl
+    )
     {
-        if (Applies(op.Policy, RlsOperation.Select) && HasText(op.Policy.UsingLql))
+        if (Applies(policy, RlsOperation.Select) && HasText(policy.UsingLql))
         {
-            var predicate = Translate(op.Policy.UsingLql!, op.Policy.Name);
+            var predicate = Translate(policy.UsingLql!, policy.Name);
             ddl.Add(
-                $"CREATE VIEW IF NOT EXISTS [{op.TableName}_secure] AS SELECT * FROM [{op.TableName}] WHERE {predicate}"
+                $"CREATE VIEW IF NOT EXISTS [{tableName}_secure] AS SELECT * FROM [{tableName}] WHERE {predicate}"
             );
         }
     }
 
     private static string Trigger(
-        CreateRlsPolicyOperation op,
+        RlsPolicyDefinition policy,
+        string tableName,
         string sqlOp,
         string verb,
         string rowAlias,
         string lql
     )
     {
-        var predicate = PrefixRowColumns(Translate(lql, op.Policy.Name), rowAlias);
-        var name = TriggerName(sqlOp, op.Policy.Name, op.TableName);
+        var predicate = PrefixRowColumns(Translate(lql, policy.Name), rowAlias);
+        var name = TriggerName(sqlOp, policy.Name, tableName);
         return $"""
             CREATE TRIGGER IF NOT EXISTS [{name}]
-            BEFORE {verb} ON [{op.TableName}]
+            BEFORE {verb} ON [{tableName}]
             BEGIN
-              SELECT RAISE(ABORT, 'RLS-SQLITE: access denied [{op.Policy.Name}]')
+              SELECT RAISE(ABORT, 'RLS-SQLITE: access denied [{policy.Name}]')
               WHERE NOT ({predicate});
             END
             """;

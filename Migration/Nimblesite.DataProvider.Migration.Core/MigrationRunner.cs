@@ -13,13 +13,15 @@ public static class MigrationRunner
     /// <param name="generateDdl">Platform-specific DDL generator</param>
     /// <param name="options">Migration options</param>
     /// <param name="logger">Optional logger</param>
+    /// <param name="verifyBeforeCommit">Optional integrity check run inside the migration transaction</param>
     /// <returns>Result indicating success or failure</returns>
     public static MigrationApplyResult Apply(
         IDbConnection connection,
         IReadOnlyList<SchemaOperation> operations,
         Func<SchemaOperation, string> generateDdl,
         MigrationOptions options,
-        ILogger? logger = null
+        ILogger? logger = null,
+        Func<bool>? verifyBeforeCommit = null
     )
     {
         if (operations.Count == 0)
@@ -36,6 +38,12 @@ public static class MigrationRunner
         {
             return new MigrationApplyResult.Error<bool, MigrationError>(
                 MigrationError.FromMessage("Replacing an RLS policy requires a transaction")
+            );
+        }
+        if (!options.UseTransaction && !options.DryRun && verifyBeforeCommit is not null)
+        {
+            return new MigrationApplyResult.Error<bool, MigrationError>(
+                MigrationError.FromMessage("Pre-commit verification requires a transaction")
             );
         }
 
@@ -117,6 +125,14 @@ public static class MigrationRunner
                     MigrationError.FromMessage(
                         $"Migration failed: {failures.Count} of {operations.Count} operation(s) errored: {summary}"
                     )
+                );
+            }
+
+            if (!options.DryRun && verifyBeforeCommit is not null && !verifyBeforeCommit())
+            {
+                transaction?.Rollback();
+                return new MigrationApplyResult.Error<bool, MigrationError>(
+                    MigrationError.FromMessage("Schema integrity verification failed before commit")
                 );
             }
 

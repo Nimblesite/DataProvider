@@ -8,20 +8,38 @@ using PredicateOk = Outcome.Result<
 
 namespace Nimblesite.DataProvider.Migration.Core;
 
-// Implements [RLS-DIFF]: compare parsed PostgreSQL predicates so harmless
+// Implements [RLS-DIFF]: compare parsed policy predicates so harmless
 // catalog formatting does not hide changes or cause endless reapplication.
+// Postgres compares pg_policies text; SQLite compares predicates extracted
+// from the RLS triggers/secure view by SqliteRlsSchemaInspector (issue #98).
 internal static class RlsPolicyPredicates
 {
-    internal static bool SameUsing(RlsPolicyDefinition current, RlsPolicyDefinition desired) =>
-        Same(current.UsingSql, current.UsingLql, desired.UsingSql, desired.UsingLql, desired.Name);
+    internal static bool SameUsing(
+        RlsPolicyDefinition current,
+        RlsPolicyDefinition desired,
+        RlsPlatform platform = RlsPlatform.Postgres
+    ) =>
+        Same(
+            current.UsingSql,
+            current.UsingLql,
+            desired.UsingSql,
+            desired.UsingLql,
+            desired.Name,
+            platform
+        );
 
-    internal static bool SameWithCheck(RlsPolicyDefinition current, RlsPolicyDefinition desired) =>
+    internal static bool SameWithCheck(
+        RlsPolicyDefinition current,
+        RlsPolicyDefinition desired,
+        RlsPlatform platform = RlsPlatform.Postgres
+    ) =>
         Same(
             current.WithCheckSql,
             current.WithCheckLql,
             desired.WithCheckSql,
             desired.WithCheckLql,
-            desired.Name
+            desired.Name,
+            platform
         );
 
     internal static bool SameScope(RlsPolicyDefinition current, RlsPolicyDefinition desired) =>
@@ -61,23 +79,29 @@ internal static class RlsPolicyPredicates
         string? currentLql,
         string? desiredSql,
         string? desiredLql,
-        string policyName
+        string policyName,
+        RlsPlatform platform
     )
     {
-        var current = Resolve(currentSql, currentLql, policyName);
-        var desired = Resolve(desiredSql, desiredLql, policyName);
+        var current = Resolve(currentSql, currentLql, policyName, platform);
+        var desired = Resolve(desiredSql, desiredLql, policyName, platform);
         if (!current.Success || !desired.Success)
         {
             return false;
         }
-        var currentExpression = Parse(current.Sql);
-        var desiredExpression = Parse(desired.Sql);
+        var currentExpression = Parse(current.Sql, platform);
+        var desiredExpression = Parse(desired.Sql, platform);
         return currentExpression is not null && desiredExpression is not null
             ? Equivalent(currentExpression, desiredExpression)
             : string.Equals(current.Sql?.Trim(), desired.Sql?.Trim(), StringComparison.Ordinal);
     }
 
-    private static (bool Success, string? Sql) Resolve(string? sql, string? lql, string name)
+    private static (bool Success, string? Sql) Resolve(
+        string? sql,
+        string? lql,
+        string name,
+        RlsPlatform platform
+    )
     {
         if (!string.IsNullOrWhiteSpace(sql))
         {
@@ -87,11 +111,11 @@ internal static class RlsPolicyPredicates
         {
             return (true, null);
         }
-        var translated = RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, name);
+        var translated = RlsPredicateTranspiler.Translate(lql, platform, name);
         return translated is PredicateOk ok ? (true, ok.Value) : (false, null);
     }
 
-    private static Expression? Parse(string? sql)
+    private static Expression? Parse(string? sql, RlsPlatform platform)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -99,10 +123,7 @@ internal static class RlsPolicyPredicates
         }
         try
         {
-            var statements = new Parser().ParseSql(
-                $"SELECT 1 WHERE {sql}",
-                new PostgreSqlDialect()
-            );
+            var statements = new Parser().ParseSql($"SELECT 1 WHERE {sql}", Dialect(platform));
             if (
                 statements.Count == 1
                 && statements[0] is Statement.Select select
@@ -119,6 +140,11 @@ internal static class RlsPolicyPredicates
         }
         return null;
     }
+
+    // SQL Server policies fail closed before the diff runs, so unlisted
+    // platforms keep the Postgres dialect used before SQLite comparison existed.
+    private static Dialect Dialect(RlsPlatform platform) =>
+        platform == RlsPlatform.Sqlite ? new SQLiteDialect() : new PostgreSqlDialect();
 
     private static bool Equivalent(Expression current, Expression desired)
     {
