@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const { decodeHTML } = require('entities');
 
 const DOCFX_API_DIR = path.join(__dirname, '../docfx/api');
 const OUTPUT_DIR = path.join(__dirname, '../src/apidocs');
@@ -45,13 +46,8 @@ function formatExample(exampleArray) {
       code = codeMatch[1];
     }
 
-    // Unescape HTML entities
-    code = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+    // Implements [WEB-DOCFX-EXAMPLES]: decode exactly one layer of entities.
+    code = decodeHTML(code);
 
     md += '```csharp\n' + code.trim() + '\n```\n\n';
   }

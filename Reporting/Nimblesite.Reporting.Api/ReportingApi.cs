@@ -170,11 +170,7 @@ public static class ReportingApi
 
     private static Task Reject(HttpContext context, ILogger logger)
     {
-        logger.LogWarning(
-            "Rejected unauthenticated {Method} {Path}",
-            context.Request.Method,
-            context.Request.Path.Value
-        );
+        logger.LogWarning("Rejected unauthenticated reporting API request");
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         return Task.CompletedTask;
     }

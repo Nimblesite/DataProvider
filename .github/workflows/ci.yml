@@ -7,6 +7,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
+# Implements [SWR-SEC-TOKEN-PRIVILEGE]: build/test jobs only need repository reads.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -83,6 +87,12 @@ jobs:
       - name: Test release version stamper
         run: python3 tools/test-version-stamp.py
 
+      - name: Install website dependencies
+        run: npm ci --prefix Website --ignore-scripts --no-audit --no-fund
+
+      - name: Test documentation generator
+        run: python3 Website/scripts/test-api-docs.py
+
       - name: Build CLI tools (needed by F# Type Provider MSBuild targets)
         run: |
           dotnet build Migration/DataProviderMigrate -c Debug
@@ -137,6 +147,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin

@@ -9,6 +9,14 @@ every build, test, lint, and duplication job; only dependency review may be
 skipped for non-PR events. CI also runs `tools/test-version-stamp.py`, which
 checks stable and prerelease stamping and dry-run immutability.
 
+## Rust Coverage Instrumentation [CI-RUST-COVERAGE]
+
+`make test` and CI use Tarpaulin's LLVM engine explicitly on every platform.
+Linux must install `llvm-tools-preview`. Auto-selection previously used ptrace
+on Linux and LLVM on macOS, which counted different executable lines and made
+the locally ratcheted 98% floor inconsistent. Keep the same 98% floor, tests,
+and generated-parser/test-file exclusions with the explicit common engine.
+
 ## Initial Duplication Gate Baseline [CI-DESLOP-BASELINE]
 
 This PR introduces `.deslop.toml` and the Deslop CI gate; neither existed on
@@ -23,9 +31,9 @@ on 2026-10-04 produced:
 | Source | Analysed LOC | Duplicated LOC | Duplication |
 | --- | ---: | ---: | ---: |
 | Main `8e3af366e20d1b8db548fdbf20c23314a6a1927a` | 107,436 | 47,489 | 44.20212964% |
-| PR source after shared platform resolution and CLI console capture | 116,595 | 45,993 | 39.44680304% |
+| PR source after shared helpers and security regressions | 116,630 | 45,993 | 39.43496527% |
 
-The adoption ceiling is **39.45%**, rounded to two decimal places from the
+The adoption ceiling is **39.44%**, rounded to two decimal places from the
 measured PR source. This is below main's measured baseline and provides no
 growth allowance beyond rounding. The PR removes 1,496 measured duplicated
 lines. Real duplication remains; this baseline is not a claim that the debt
@@ -40,7 +48,7 @@ directory, copy this PR's `.deslop.toml` into it, and run `deslop .` using
 0.36.0 in that directory. Run the same command in the PR checkout. Compare
 `metrics.analysed_loc`, `metrics.duplicated_loc`, and
 `metrics.duplication_percent` in each `.deslop/deslop-report.json`.
-The former 5% value and 39.45% value change only the pass/fail ceiling, not
+The former 5% value and 39.44% value change only the pass/fail ceiling, not
 the scan or its findings.
 
 ## Local ClinicalCoding Testing [CI-CLINICAL-LOCAL]

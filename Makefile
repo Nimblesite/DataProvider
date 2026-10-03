@@ -75,6 +75,8 @@ build:
 test:
 	@echo "==> Testing..."
 	python3 tools/test-version-stamp.py
+	npm ci --prefix Website --ignore-scripts --no-audit --no-fund
+	python3 Website/scripts/test-api-docs.py
 	$(MAKE) _test
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
@@ -322,13 +324,14 @@ endif
 _build_rust:
 	cd Lql/lql-lsp-rust && cargo build --release
 
+# Implements [CI-RUST-COVERAGE]: use the same instrumentation on every platform.
 _test_rust:
 	@THRESHOLD=$$(jq -r '.projects["Lql/lql-lsp-rust"].threshold // .default_threshold' coverage-thresholds.json); \
 	echo ""; \
 	echo "============================================================"; \
 	echo "==> Testing Lql/lql-lsp-rust (threshold: $$THRESHOLD%)"; \
 	echo "============================================================"; \
-	cd Lql/lql-lsp-rust && cargo tarpaulin --workspace --skip-clean \
+	cd Lql/lql-lsp-rust && cargo tarpaulin --engine llvm --workspace --skip-clean \
 	  --exclude-files 'crates/lql-parser/src/generated/*' \
 	  --exclude-files 'crates/lql-lsp/tests/*' \
 	  2>&1 | tee /tmp/_dp_tarpaulin_out.txt; \
