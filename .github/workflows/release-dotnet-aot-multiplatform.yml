@@ -43,7 +43,7 @@ jobs:
             os: macos-15
             rid: osx-arm64
           - platform: darwin-x64
-            os: macos-13
+            os: macos-15-intel
             rid: osx-x64
           - platform: linux-x64
             os: ubuntu-latest

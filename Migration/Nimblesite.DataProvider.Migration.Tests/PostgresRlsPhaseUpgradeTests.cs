@@ -64,17 +64,14 @@ public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixtur
     }
 
     private static int RunCli(string connectionString, string schemaPath, string phase) =>
-        DataProviderMigrate.Program.Main([
-            "migrate",
-            "--schema",
-            schemaPath,
-            "--output",
-            connectionString,
-            "--provider",
-            "postgres",
-            "--phase",
-            phase,
-        ]);
+        MigrationCliConsole
+            .Migrate(
+                schemaPath: schemaPath,
+                provider: "postgres",
+                output: connectionString,
+                phase: phase
+            )
+            .ExitCode;
 
     private static (string Command, string? Using, string? WithCheck) ReadPolicy(
         NpgsqlConnection connection,

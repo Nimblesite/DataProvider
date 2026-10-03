@@ -43,29 +43,12 @@ public sealed class PostgresPolicyCatalogRoundTripTests(PostgresContainerFixture
         }
     }
 
-    private static (int Code, string Output) RunCli(string connectionString, string path)
-    {
-        var original = Console.Out;
-        using var output = new StringWriter();
-        Console.SetOut(output);
-        try
-        {
-            var code = DataProviderMigrate.Program.Main([
-                "migrate",
-                "--schema",
-                path,
-                "--provider",
-                "postgres",
-                "--output",
-                connectionString,
-            ]);
-            return (code, output.ToString());
-        }
-        finally
-        {
-            Console.SetOut(original);
-        }
-    }
+    private static (int Code, string Output) RunCli(string connectionString, string path) =>
+        MigrationCliConsole.Migrate(
+            schemaPath: path,
+            provider: "postgres",
+            output: connectionString
+        );
 
     private static string ReadPredicate(NpgsqlConnection connection, string name)
     {

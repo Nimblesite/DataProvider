@@ -17,42 +17,14 @@ function log(msg: string): void {
 
 /** Map platform/arch to the vsce target name used for bundled binaries. */
 function getVsceTarget(): string | undefined {
-  const platform = process.platform;
-  const arch = process.arch;
-
-  if (platform === "linux" && arch === "x64") {
-    return "linux-x64";
-  }
-  if (platform === "darwin" && arch === "x64") {
-    return "darwin-x64";
-  }
-  if (platform === "darwin" && arch === "arm64") {
-    return "darwin-arm64";
-  }
-  if (platform === "win32" && arch === "x64") {
-    return "win32-x64";
-  }
-  return undefined;
+  const target = `${process.platform}-${process.arch}`;
+  return ["linux-x64", "darwin-x64", "darwin-arm64", "win32-x64"].includes(target) ? target : undefined;
 }
 
 /** Map platform/arch to the release asset name. */
 function getLspAssetName(): string | undefined {
-  const platform = process.platform;
-  const arch = process.arch;
-
-  if (platform === "linux" && arch === "x64") {
-    return "lql-lsp-linux-x64";
-  }
-  if (platform === "darwin" && arch === "x64") {
-    return "lql-lsp-darwin-x64";
-  }
-  if (platform === "darwin" && arch === "arm64") {
-    return "lql-lsp-darwin-arm64";
-  }
-  if (platform === "win32" && arch === "x64") {
-    return "lql-lsp-windows-x64.exe";
-  }
-  return undefined;
+  const target = getVsceTarget();
+  return target === undefined ? undefined : target === "win32-x64" ? "lql-lsp-windows-x64.exe" : `lql-lsp-${target}`;
 }
 
 /** Get the extension version from package.json to find the matching GH release. */

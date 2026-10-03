@@ -90,19 +90,12 @@ public sealed record DeclaredSchemaRerunTests
         return connection.ConnectionString;
     }
 
-    // Exit code only: an integrity failure exits 1, and redirecting the process-wide
-    // Console here would race with Testcontainers loggers started by parallel tests.
+    // All CLI calls share the Console gate, including those checking only an exit code.
     private static void AssertMigrates(string provider, string schemaPath, string output) =>
         Assert.Equal(
             0,
-            DataProviderMigrate.Program.Main([
-                "migrate",
-                "--schema",
-                schemaPath,
-                "--provider",
-                provider,
-                "--output",
-                output,
-            ])
+            MigrationCliConsole
+                .Migrate(schemaPath: schemaPath, provider: provider, output: output)
+                .ExitCode
         );
 }

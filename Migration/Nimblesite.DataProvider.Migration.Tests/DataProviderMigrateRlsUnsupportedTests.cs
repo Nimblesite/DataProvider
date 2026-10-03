@@ -41,32 +41,12 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
         }
     }
 
-    private static (int ExitCode, string Output) RunMigrate(string schemaPath)
-    {
-        var originalOut = Console.Out;
-        using var output = new StringWriter(CultureInfo.InvariantCulture);
-        Console.SetOut(output);
-        try
-        {
-            var exitCode = DataProviderMigrate.Program.Main(
-                args:
-                [
-                    "migrate",
-                    "--schema",
-                    schemaPath,
-                    "--provider",
-                    "sqlserver",
-                    "--output",
-                    "unused",
-                ]
-            );
-            return (exitCode, output.ToString());
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
-    }
+    private static (int ExitCode, string Output) RunMigrate(string schemaPath) =>
+        MigrationCliConsole.Migrate(
+            schemaPath: schemaPath,
+            provider: "sqlserver",
+            output: "unused"
+        );
 
     private static string WriteTempSchemaFile(string contents)
     {

@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -78,6 +79,9 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: Test release version stamper
+        run: python3 tools/test-version-stamp.py
 
       - name: Build CLI tools (needed by F# Type Provider MSBuild targets)
         run: |
@@ -372,7 +376,10 @@ jobs:
           fail=0
           for job in lint-and-dataprovider build-and-test extension-tests deslop security; do
             result=$(echo "$results" | jq -r --arg j "$job" '.[$j].result')
-            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+            if [ "$job" = "security" ] && [ "$result" = "skipped" ]; then
+              continue
+            fi
+            if [ "$result" != "success" ]; then
               echo "::error::Required job '$job' did not succeed (result: $result)"
               fail=1
             fi

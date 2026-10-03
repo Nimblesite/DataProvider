@@ -45,7 +45,7 @@ jobs:
             os: macos-15
             npm_arch: arm64
           - target: darwin-x64
-            os: macos-13
+            os: macos-15-intel
             npm_arch: x64
           - target: linux-x64
             os: ubuntu-latest
@@ -129,6 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run compile
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
           flag=""
           if [ "${{ inputs.pre_release }}" = "true" ]; then flag="--pre-release"; fi
           npx vsce package --target ${{ matrix.target }} $flag \

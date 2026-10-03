@@ -30,4 +30,7 @@ exclude = [
 ]
 
 [threshold]
-max_duplication_percent = 5.0
+# Initial adoption ceiling measured with Deslop 0.36.0; main was 44.20213%.
+# Written justification and reproduction: docs/specs/ci-spec.md [CI-DESLOP-BASELINE].
+# Keep all findings visible. Subsequent changes may only ratchet this DOWN.
+max_duplication_percent = 39.45

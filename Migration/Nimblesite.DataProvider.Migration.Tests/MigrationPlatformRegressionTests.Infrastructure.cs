@@ -1,12 +1,9 @@
 using System.Data.Common;
-using System.Globalization;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed partial record MigrationPlatformRegressionTests
 {
-    private static readonly object CliConsoleLock = new();
-
     private Task WithTargetAsync(string provider, Action<MigrationTarget> run) =>
         WithAsyncTargetAsync(
             provider,
@@ -114,47 +111,12 @@ public sealed partial record MigrationPlatformRegressionTests
         bool allowDestructive
     )
     {
-        // Implements [MIG-CLI-COMMANDS]: the same YAML CLI path drives every provider.
-        lock (CliConsoleLock)
-        {
-            var originalOut = Console.Out;
-            var originalError = Console.Error;
-            using var output = new StringWriter(CultureInfo.InvariantCulture);
-            Console.SetOut(output);
-            Console.SetError(output);
-            try
-            {
-                string[] args = allowDestructive
-                    ?
-                    [
-                        "migrate",
-                        "--schema",
-                        path,
-                        "--provider",
-                        target.Provider,
-                        "--output",
-                        target.Output,
-                        "--allow-destructive",
-                    ]
-                    :
-                    [
-                        "migrate",
-                        "--schema",
-                        path,
-                        "--provider",
-                        target.Provider,
-                        "--output",
-                        target.Output,
-                    ];
-                var exitCode = DataProviderMigrate.Program.Main(args);
-                return (exitCode, output.ToString());
-            }
-            finally
-            {
-                Console.SetOut(originalOut);
-                Console.SetError(originalError);
-            }
-        }
+        return MigrationCliConsole.Migrate(
+            schemaPath: path,
+            provider: target.Provider,
+            output: target.Output,
+            allowDestructive: allowDestructive
+        );
     }
 
     private static SchemaDefinition WithSchema(SchemaDefinition definition, string schema) =>

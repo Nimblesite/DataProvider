@@ -1,5 +1,48 @@
 # CI and Local Verification
 
+## Release CI Gate [CI-RELEASE-GATE]
+
+Tag releases call the same reusable CI workflow used by pull requests and the
+CodeQL workflow before publishing packages, binaries, or VSIX files. Both
+workflows check out the tagged SHA. The CI aggregate requires success from
+every build, test, lint, and duplication job; only dependency review may be
+skipped for non-PR events. CI also runs `tools/test-version-stamp.py`, which
+checks stable and prerelease stamping and dry-run immutability.
+
+## Initial Duplication Gate Baseline [CI-DESLOP-BASELINE]
+
+This PR introduces `.deslop.toml` and the Deslop CI gate; neither existed on
+main. The initial 5% setting did not measure the existing repository and made
+the new gate fail even on unchanged main. This section is the written
+justification for correcting that initial adoption setting. It does not
+authorize increasing an established gate in future changes.
+
+With Deslop **0.36.0**, the same exclusions, and no hidden findings, the scans
+on 2026-10-04 produced:
+
+| Source | Analysed LOC | Duplicated LOC | Duplication |
+| --- | ---: | ---: | ---: |
+| Main `8e3af366e20d1b8db548fdbf20c23314a6a1927a` | 107,436 | 47,489 | 44.20212964% |
+| PR source after shared platform resolution and CLI console capture | 116,595 | 45,993 | 39.44680304% |
+
+The adoption ceiling is **39.45%**, rounded to two decimal places from the
+measured PR source. This is below main's measured baseline and provides no
+growth allowance beyond rounding. The PR removes 1,496 measured duplicated
+lines. Real duplication remains; this baseline is not a claim that the debt
+is resolved. The gate continues scanning the whole configured scope and
+uploading every finding. No new exclusions or hidden clusters were added to
+obtain this baseline. Subsequent reductions must ratchet the ceiling down.
+The unrelated-assertion false-positive evidence is retained in
+[Deslop issue #534](https://github.com/Nimblesite/Deslop/issues/534#issuecomment-5969944576).
+
+To reproduce, extract `git archive` of the main SHA above into a temporary
+directory, copy this PR's `.deslop.toml` into it, and run `deslop .` using
+0.36.0 in that directory. Run the same command in the PR checkout. Compare
+`metrics.analysed_loc`, `metrics.duplicated_loc`, and
+`metrics.duplication_percent` in each `.deslop/deslop-report.json`.
+The former 5% value and 39.45% value change only the pass/fail ceiling, not
+the scan or its findings.
+
 ## Local ClinicalCoding Testing [CI-CLINICAL-LOCAL]
 
 The healthcare reference app lives in its own repository,

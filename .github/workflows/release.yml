@@ -62,6 +62,13 @@ jobs:
           python3 tools/validate-manifest.py shipwright.json
           python3 tools/validate-manifest.py Lql/LqlExtension/shipwright.json
 
+  # Implements [CI-RELEASE-GATE]: run the same CI on the tagged SHA before publishing.
+  ci-gate:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   # ── CodeQL hard release gate (blocks every publish job) ───────────────────
   codeql-gate:
     needs: prepare
@@ -75,7 +82,7 @@ jobs:
 
   # ── NuGet packages ────────────────────────────────────────────────────────
   publish-nuget:
-    needs: [prepare, codeql-gate]
+    needs: [prepare, ci-gate, codeql-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
@@ -121,7 +128,7 @@ jobs:
 
   # ── Per-platform binaries → GitHub Release ────────────────────────────────
   release-binaries:
-    needs: [prepare, codeql-gate]
+    needs: [prepare, ci-gate, codeql-gate]
     uses: ./.github/workflows/release-binary-multiplatform.yml
     with:
       binary_name: lql-lsp
@@ -133,7 +140,7 @@ jobs:
 
   # ── Per-platform .NET Native AOT migration CLI → GitHub Release [MIG-AOT-CI] ─
   release-dotnet-binaries:
-    needs: [prepare, codeql-gate]
+    needs: [prepare, ci-gate, codeql-gate]
     uses: ./.github/workflows/release-dotnet-aot-multiplatform.yml
     with:
       binary_name: DataProviderMigrate
@@ -265,7 +272,7 @@ jobs:
 
   # ── Per-platform VSIX → VS Code Marketplace (Entra OIDC, no PAT) ───────────
   publish-vsix:
-    needs: [prepare, codeql-gate, release-binaries]
+    needs: [prepare, ci-gate, codeql-gate, release-binaries]
     uses: ./.github/workflows/publish-vsix-per-platform.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
