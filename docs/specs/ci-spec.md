@@ -10,7 +10,9 @@ skipped for non-PR events. CI also runs `tools/test-version-stamp.py`, which
 checks stable and prerelease stamping and dry-run immutability.
 It also verifies that locked Cargo workspace packages receive the tag version
 without changing registry dependencies, and that `cargo metadata --locked`
-accepts the stamped lockfile. Native AOT builds stamp their checkout before
+accepts the stamped lockfile. Make and CI share one test target that fetches
+the complete locked dependency graph before offline metadata verification,
+including dependencies for other platforms. Native AOT builds stamp their checkout before
 publishing so the migration CLI carries the release version.
 Native CLI archives include the complete publish output, including SQLite's
 native runtime library. Each platform extracts its archive and runs the existing
