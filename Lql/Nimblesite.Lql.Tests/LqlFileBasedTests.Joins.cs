@@ -7,24 +7,6 @@ namespace Nimblesite.Lql.Tests;
 /// </summary>
 public partial class LqlFileBasedTests
 {
-    /*
-    TODO: many of these are not generating the correct SQL
-    Note that the SQL Server version used to look like this but something changed.
-    INSERT INTO report_table (users.id, users.name)
-SELECT users.id, users.name
-FROM (
-    SELECT users.id, users.name
-    FROM users u
-    INNER JOIN orders o ON users.id = orders.user_id
-    WHERE orders.status = 'completed'
-
-    UNION
-
-    SELECT a.archived_users.id, a.archived_users.name
-    FROM archived_users a
-) AS all_users
-    */
-
     [Theory]
     [InlineData("join_simple", "PostgreSql")]
     [InlineData("join_simple", "SqlServer")]

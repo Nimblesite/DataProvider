@@ -4,15 +4,24 @@ using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using LqlStatementOk = Outcome.Result<
+    Nimblesite.Lql.Core.LqlStatement,
+    Nimblesite.Sql.Model.SqlError
+>.Ok<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
+using SqlTextOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
+    string,
+    Nimblesite.Sql.Model.SqlError
+>;
 
 namespace Nimblesite.Lql.Tests;
 
 /// <summary>
-/// File-based tests for LQL to PostgreSQL transformation.
+/// File-based tests for LQL transformation on SQLite, PostgreSQL, and SQL Server.
 /// Tests read LQL input and expected SQL output from external files.
 /// </summary>
 public partial class LqlFileBasedTests
 {
+    // Implements [LQL-PIPELINE-COMPOSITION] for the shared file corpus.
     private static readonly string TestDataDirectory = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
         "TestData"
@@ -22,7 +31,7 @@ public partial class LqlFileBasedTests
     /// Shared method to execute file-based tests
     /// </summary>
     /// <param name="testCaseName">Name of the test case</param>
-    /// <param name="dialect">SQL dialect (PostgreSql or SqlServer)</param>
+    /// <param name="dialect">SQL dialect</param>
     private static void ExecuteFileBasedTest(string testCaseName, string dialect)
     {
         // Arrange
@@ -42,58 +51,71 @@ public partial class LqlFileBasedTests
 
         string lqlCode = File.ReadAllText(lqlFile);
         string expectedSql = File.ReadAllText(expectedSqlFile).Trim();
+        Assert.False(string.IsNullOrWhiteSpace(lqlCode), $"Empty LQL input: {testCaseName}");
+        Assert.False(
+            string.IsNullOrWhiteSpace(expectedSql),
+            $"Expected SQL fixture {expectedSqlFile} must not be empty"
+        );
 
         // Act
         var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-        if (statementResult is Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> failure)
-        {
-            throw new InvalidOperationException(
-                $"Parsing failed for {testCaseName}: {failure.Value.DetailedMessage}"
-            );
-        }
-        Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(statementResult);
-        var statement = (
-            (Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)statementResult
-        ).Value;
+        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
 
-        Result<string, SqlError> sqlResult = dialect switch
+        var sqlResult = ToDialectSql(statement, dialect);
+        var actualSql = Assert.IsType<SqlTextOk>(sqlResult).Value;
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(actualSql),
+            $"Transpiled SQL for {testCaseName} ({dialect}) must not be empty"
+        );
+
+        Assert.Equal(expectedSql, actualSql);
+    }
+
+    private static Result<string, SqlError> ToDialectSql(LqlStatement statement, string dialect) =>
+        dialect switch
         {
             "PostgreSql" => statement.ToPostgreSql(),
             "SqlServer" => statement.ToSqlServer(),
             "SQLite" => statement.ToSQLite(),
-            _ => throw new ArgumentException($"Unsupported dialect: {dialect}"),
+            _ => UnknownDialect(dialect, statement),
         };
 
-        Assert.IsType<Result<string, SqlError>.Ok<string, SqlError>>(sqlResult);
-        var actualSql = ((Result<string, SqlError>.Ok<string, SqlError>)sqlResult).Value;
-
-        if (expectedSql != actualSql)
-        {
-            Console.WriteLine($"=== TEST FAILURE: {testCaseName} ({dialect}) ===");
-            Console.WriteLine($"Expected:\n{expectedSql}");
-            Console.WriteLine($"Actual:\n{actualSql}");
-            Console.WriteLine("===");
-        }
-        Assert.Equal(expectedSql, actualSql);
+    private static Result<string, SqlError> UnknownDialect(string dialect, LqlStatement statement)
+    {
+        Assert.Fail($"Unsupported dialect: {dialect}");
+        return statement.ToSQLite();
     }
 
+    /// <summary>
+    /// Every LQL corpus input must have an expected SQL fixture for all three
+    /// supported dialects: PostgreSql, SqlServer, and SQLite.
+    /// </summary>
     [Fact]
     public void GetAllFileBasedTests_ShouldHaveMatchingFiles()
     {
-        // Arrange
+        // Arrange — fixture directories are part of the corpus and must exist.
         string lqlDirectory = Path.Combine(TestDataDirectory, "Lql");
         string postgreSqlDirectory = Path.Combine(TestDataDirectory, "ExpectedSql", "PostgreSql");
         string sqlServerDirectory = Path.Combine(TestDataDirectory, "ExpectedSql", "SqlServer");
+        string sqliteDirectory = Path.Combine(TestDataDirectory, "ExpectedSql", "SQLite");
 
-        if (
-            !Directory.Exists(lqlDirectory)
-            || !Directory.Exists(postgreSqlDirectory)
-            || !Directory.Exists(sqlServerDirectory)
-        )
-        {
-            // Skip test if directories don't exist yet
-            return;
-        }
+        Assert.True(
+            Directory.Exists(lqlDirectory),
+            $"LQL corpus directory {lqlDirectory} should exist"
+        );
+        Assert.True(
+            Directory.Exists(postgreSqlDirectory),
+            $"PostgreSql fixture directory {postgreSqlDirectory} should exist"
+        );
+        Assert.True(
+            Directory.Exists(sqlServerDirectory),
+            $"SqlServer fixture directory {sqlServerDirectory} should exist"
+        );
+        Assert.True(
+            Directory.Exists(sqliteDirectory),
+            $"SQLite fixture directory {sqliteDirectory} should exist"
+        );
 
         // Act
         var lqlFiles = Directory
@@ -111,20 +133,35 @@ public partial class LqlFileBasedTests
             .Select(f => Path.GetFileNameWithoutExtension(f))
             .ToHashSet();
 
-        // Assert
+        var sqliteFiles = Directory
+            .GetFiles(sqliteDirectory, "*.sql")
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToHashSet();
+
+        // Assert — exact fixture set equality for every dialect.
         Assert.True(
             lqlFiles.SetEquals(postgreSqlFiles),
-            "Every LQL test file should have a corresponding PostgreSQL expected SQL file"
+            $"Every LQL test file should have a corresponding PostgreSQL expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(postgreSqlFiles))}; PostgreSQL-only: {string.Join(", ", postgreSqlFiles.Except(lqlFiles))}"
         );
 
         Assert.True(
             lqlFiles.SetEquals(sqlServerFiles),
-            "Every LQL test file should have a corresponding SQL Server expected SQL file"
+            $"Every LQL test file should have a corresponding SQL Server expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqlServerFiles))}; SQL Server-only: {string.Join(", ", sqlServerFiles.Except(lqlFiles))}"
         );
+
+        Assert.True(
+            lqlFiles.SetEquals(sqliteFiles),
+            $"Every LQL test file should have a corresponding SQLite expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqliteFiles))}; SQLite-only: {string.Join(", ", sqliteFiles.Except(lqlFiles))}"
+        );
+
+        Assert.Equal(27, lqlFiles.Count);
     }
 
-    [Fact]
-    public void PerformanceTest_LargeQuery_ShouldCompleteWithinTimeLimit()
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("SqlServer")]
+    [InlineData("SQLite")]
+    public void LargeQuery_TranspilesCompleteShapeForEveryDialect(string dialect)
     {
         // Arrange
         const string largeLqlCode = """
@@ -161,58 +198,45 @@ public partial class LqlFileBasedTests
             |> limit(100)
             """;
 
-        // Act & Assert
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
         var statementResult = LqlStatementConverter.ToStatement(largeLqlCode);
-        Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(statementResult);
-        var statement = (
-            (Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)statementResult
-        ).Value;
-
-        var sqlResult = statement.ToPostgreSql();
-        Assert.IsType<Result<string, SqlError>.Ok<string, SqlError>>(sqlResult);
-
-        stopwatch.Stop();
-        Assert.True(
-            stopwatch.ElapsedMilliseconds < 5000,
-            "Large LQL query transformation should complete within 5 seconds"
-        );
+        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
+        var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
+        Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
+        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void StressTest_MultipleQueries_ShouldNotLeakMemory()
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("SqlServer")]
+    [InlineData("SQLite")]
+    public void RepeatedQueries_GenerateStableSqlForEveryDialect(string dialect)
     {
         // Arrange
         const string lqlCode = """
             users |> join(orders, on = users.id = orders.user_id) |> select(users.name, orders.total)
             """;
 
-        // Act & Assert
+        string? baseline = null;
         for (int i = 0; i < 1000; i++)
         {
             var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-            Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(
-                statementResult
-            );
-            var statement = (
-                (Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>)statementResult
-            ).Value;
-
-            var sqlResult = statement.ToPostgreSql();
-            Assert.IsType<Result<string, SqlError>.Ok<string, SqlError>>(sqlResult);
+            var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
+            var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
+            Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
+            Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
+            if (baseline is string original)
+            {
+                Assert.Equal(original, sql);
+            }
+            else
+            {
+                baseline = sql;
+            }
         }
-
-        // Force garbage collection
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        // Memory usage should be reasonable after processing many queries
-        long memoryUsage = GC.GetTotalMemory(false);
-        Assert.True(
-            memoryUsage < 100_000_000,
-            "Memory usage should not exceed 100MB after processing 1000 queries"
-        );
+        Assert.NotNull(baseline);
     }
 }

@@ -10,13 +10,18 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
+    <!-- Implements [MIG-AOT-TEST]: explicit, visible skips for the native-binary
+         smoke tests when the published AOT binary is not present. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
     <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -25,11 +30,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../DataProvider/Nimblesite.DataProvider.Core/Nimblesite.DataProvider.Core.csproj" />
     <ProjectReference Include="../DataProviderMigrate/DataProviderMigrate.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.Core/Nimblesite.DataProvider.Migration.Core.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.SQLite/Nimblesite.DataProvider.Migration.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.Postgres/Nimblesite.DataProvider.Migration.Postgres.csproj" />
-    <ProjectReference Include="../DataProviderMigrate/DataProviderMigrate.csproj" />
+    <ProjectReference Include="../Nimblesite.DataProvider.Migration.SqlServer/Nimblesite.DataProvider.Migration.SqlServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

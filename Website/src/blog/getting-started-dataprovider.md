@@ -61,4 +61,4 @@ The `DataProvider` CLI validates every query against your schema at build time a
 
 - [Installation](/docs/installation/) — the full package reference
 - [Getting Started](/docs/getting-started/) — end-to-end walkthrough
-- [Clinical Coding Platform](/docs/samples/) — reference implementation
+- [Clinical Coding Platform](https://github.com/Nimblesite/ClinicalCoding) — reference implementation

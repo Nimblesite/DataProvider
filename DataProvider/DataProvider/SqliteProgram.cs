@@ -265,10 +265,14 @@ internal static class SqliteCli
                         // Also emit an MSBuild-formatted error so IDE Problem Matchers pick it up
                         Console.Error.WriteLine($"{sqlPath}(1,1): error DP0001: {prettyMeta}");
                         // Emit a compile-time error file so MSBuild surfaces the exact problem
-                        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                        var content =
-                            $"// Auto-generated due to SQL error in {sqlPath}\n#error {EscapeForPreprocessor(prettyMeta)}\n";
-                        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                        await WriteCompileTimeErrorFileAsync(
+                                outDir,
+                                baseName,
+                                sqlPath,
+                                reason: "SQL error",
+                                message: prettyMeta
+                            )
+                            .ConfigureAwait(false);
                         hadErrors = true;
                         continue;
                     }
@@ -304,10 +308,14 @@ internal static class SqliteCli
                         // Also emit an MSBuild-formatted error so IDE Problem Matchers pick it up
                         Console.Error.WriteLine($"{sqlPath}(1,1): error DL0002: {prettyGen}");
                         // Emit a compile-time error file so MSBuild surfaces the exact problem
-                        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                        var content =
-                            $"// Auto-generated due to SQL generation error in {sqlPath}\n#error {EscapeForPreprocessor(prettyGen)}\n";
-                        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                        await WriteCompileTimeErrorFileAsync(
+                                outDir,
+                                baseName,
+                                sqlPath,
+                                reason: "SQL generation error",
+                                message: prettyGen
+                            )
+                            .ConfigureAwait(false);
                         hadErrors = true;
                     }
                 }
@@ -320,11 +328,15 @@ internal static class SqliteCli
                     {
                         baseName = baseName[..^".generated".Length];
                     }
-                    var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                    var content =
-                        $"// Auto-generated due to unexpected error in {sqlPath}\n#error {EscapeForPreprocessor(ex.Message)}\n";
                     Console.Error.WriteLine($"{sqlPath}(1,1): error DL0003: {ex.Message}");
-                    await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                    await WriteCompileTimeErrorFileAsync(
+                            outDir,
+                            baseName,
+                            sqlPath,
+                            reason: "unexpected error",
+                            message: ex.Message
+                        )
+                        .ConfigureAwait(false);
                     hadErrors = true;
                 }
             }
@@ -361,7 +373,10 @@ internal static class SqliteCli
                                 var notNull = reader.GetInt32(3) == 1; // notnull column
                                 var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
 
-                                var csharpType = MapSqliteTypeToCSharpType(sqliteType, !notNull);
+                                var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(
+                                    sqliteType,
+                                    !notNull
+                                );
 
                                 columns.Add(
                                     new DatabaseColumn
@@ -462,6 +477,20 @@ internal static class SqliteCli
             Console.WriteLine($"❌ Unexpected error: {ex}");
             return 1;
         }
+    }
+
+    private static async Task WriteCompileTimeErrorFileAsync(
+        DirectoryInfo outDir,
+        string baseName,
+        string sqlPath,
+        string reason,
+        string message
+    )
+    {
+        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
+        var content =
+            $"// Auto-generated due to {reason} in {sqlPath}\n#error {EscapeForPreprocessor(message)}\n";
+        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -614,36 +643,5 @@ internal static class SqliteCli
         var prefix = connectionString[..idx];
         var suffix = semicolonIdx >= 0 ? connectionString[semicolonIdx..] : string.Empty;
         return $"{prefix}{dataSourcePrefix}{absolutePath}{suffix}";
-    }
-
-    /// <summary>
-    /// Maps SQLite types to C# types
-    /// </summary>
-    private static string MapSqliteTypeToCSharpType(string sqliteType, bool isNullable)
-    {
-        var baseType = sqliteType.ToUpperInvariant() switch
-        {
-            var t when t.Contains("INT", StringComparison.OrdinalIgnoreCase) => "long",
-            var t
-                when t.Contains("REAL", StringComparison.OrdinalIgnoreCase)
-                    || t.Contains("FLOAT", StringComparison.OrdinalIgnoreCase)
-                    || t.Contains("DOUBLE", StringComparison.OrdinalIgnoreCase) => "double",
-            var t
-                when t.Contains("DECIMAL", StringComparison.OrdinalIgnoreCase)
-                    || t.Contains("NUMERIC", StringComparison.OrdinalIgnoreCase) => "double",
-            var t when t.Contains("BOOL", StringComparison.OrdinalIgnoreCase) => "bool",
-            var t
-                when t.Contains("DATE", StringComparison.OrdinalIgnoreCase)
-                    || t.Contains("TIME", StringComparison.OrdinalIgnoreCase) => "string", // SQLite stores dates as text
-            var t when t.Contains("BLOB", StringComparison.OrdinalIgnoreCase) => "byte[]",
-            _ => "string",
-        };
-
-        if (isNullable && baseType != "string" && baseType != "byte[]")
-        {
-            return baseType + "?";
-        }
-
-        return baseType;
     }
 }

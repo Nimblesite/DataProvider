@@ -14,7 +14,11 @@ public static class SqliteDdlGenerator
         operation switch
         {
             CreateTableOperation op => GenerateCreateTable(op.Table),
+            RebuildTableOperation op => SqliteTableRebuild.Generate(op),
             AddColumnOperation op => GenerateAddColumn(op),
+            MakeColumnNullableOperation => throw new NotSupportedException(
+                "SQLite cannot relax NOT NULL on an existing column without rebuilding its table."
+            ),
             CreateIndexOperation op => GenerateCreateIndex(op),
             AddForeignKeyOperation => throw new NotSupportedException(
                 "SQLite does not support adding foreign keys to existing tables. Recreate the table instead."
@@ -38,14 +42,20 @@ public static class SqliteDdlGenerator
             ),
             EnableRlsOperation => SqliteRlsDdlBuilder.GenerateEnable(),
             CreateRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateCreatePolicy(op),
+            ReplaceRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateReplacePolicy(op),
+            AlterRlsPolicyOperation => throw new NotSupportedException(
+                "SQLite cannot alter an RLS policy in place; SchemaDiff emits ReplaceRlsPolicyOperation for predicate changes."
+            ),
             DropRlsPolicyOperation op => SqliteRlsDdlBuilder.GenerateDropPolicy(op),
             DisableRlsOperation op => SqliteRlsDdlBuilder.GenerateDisable(op),
+            CreateTriggerOperation op => SqliteTriggerDdlBuilder.GenerateCreate(op),
+            DropTriggerOperation op => SqliteTriggerDdlBuilder.GenerateDrop(op),
             _ => throw new NotSupportedException(
                 $"Unknown operation type: {operation.GetType().Name}"
             ),
         };
 
-    private static string GenerateCreateTable(TableDefinition table)
+    internal static string GenerateCreateTable(TableDefinition table)
     {
         var sb = new StringBuilder();
         sb.Append(CultureInfo.InvariantCulture, $"CREATE TABLE IF NOT EXISTS [{table.Name}] (");
@@ -154,7 +164,7 @@ public static class SqliteDdlGenerator
         return $"ALTER TABLE [{op.TableName}] ADD COLUMN {colDef}";
     }
 
-    private static string GenerateCreateIndex(CreateIndexOperation op)
+    internal static string GenerateCreateIndex(CreateIndexOperation op)
     {
         var unique = op.Index.IsUnique ? "UNIQUE " : "";
         // Expression indexes use Expressions verbatim, column indexes quote column names

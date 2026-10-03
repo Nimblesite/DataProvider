@@ -1,0 +1,37 @@
+# agent-pmo:795a9c2
+name: Dependabot auto-merge
+
+# Auto-merges Dependabot version-bump PRs INTO the `dependabot-upgrades` staging
+# branch so they never pile up for a human to clear ([GITHUB-DEPENDABOT]).
+#
+# Safe to merge unattended: nothing reaches `main` this way. The full
+# build/test (ci.yml) + CodeQL (codeql.yml) gate the single
+# `dependabot-upgrades -> main` consolidation PR, which is where review and the
+# expensive matrix actually run. This is a ~10-second merge bot, NOT the CI
+# pipeline.
+#
+# Lives at the repo root so it is present on `dependabot-upgrades` (cut from
+# main): `pull_request` runs the workflow from the PR base ref.
+on:
+  pull_request:
+    branches:
+      - dependabot-upgrades
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge into dependabot-upgrades
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Squash-merge the bump into the staging branch
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --squash --delete-branch "$PR_URL" \
+            || gh pr merge --squash --delete-branch "$PR_URL"

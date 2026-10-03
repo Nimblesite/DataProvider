@@ -260,7 +260,7 @@ Operation order is schema-safe: roles first, table DDL second, support functions
 
 ## 8. SQL Server Implementation [RLS-MSSQL]
 
-> **Status:** SQL Server package (`Nimblesite.DataProvider.Migration.SqlServer`) does not exist yet. This section defines the contract; implementation is deferred until that package ships. Any `CreateRlsPolicyOperation` targeting SQL Server before the package exists MUST emit `MIG-E-RLS-MSSQL-UNSUPPORTED`.
+> **Status:** The SQL Server migration package supports table and constraint migrations. Native RLS migration and inspection are not implemented. This section defines the deferred native RLS contract. Any RLS schema targeting SQL Server MUST emit `MIG-E-RLS-MSSQL-UNSUPPORTED` before changing the database until native RLS support is implemented.
 
 SQL Server RLS uses a two-step approach:
 1. An inline table-valued function (iTVF) as a filter or block predicate
@@ -377,10 +377,30 @@ Multiple policies on the same table combine as AND conditions inside a single tr
 
 ## 10. Schema Diff [RLS-DIFF]
 
+For an existing PostgreSQL policy, compare both `USING` and `WITH CHECK`
+predicates after PostgreSQL expression parsing. A changed predicate produces
+an `AlterRlsPolicyOperation` even when the policy name is unchanged. Schema
+integrity verification also reports predicate drift. Re-inspecting and
+reapplying a converged policy produces no operation.
+
+On SQLite, read `USING` from the secure view and `WITH CHECK` from the managed
+triggers using the SQLite SQL parser and tokenizer. SQL comments and quoted
+identifiers must not interfere with readback. Include the secure view's SELECT
+operation when reconstructing an ALL policy so an unchanged rerun is a no-op.
+If stored predicates cannot be read, reconcile the policy with its desired
+definition; an unknown predicate must never be treated as verified equality.
+
+The secure view must also be inspected when no RLS trigger exists. Generated
+views retain their policy name in a hex-encoded SQL comment, read with the SQL
+tokenizer, so SELECT-only policies can converge by name and predicate. Legacy
+views without this metadata are replaced transactionally with the declared
+policy instead of preserving the old predicate through `IF NOT EXISTS`.
+
 `SchemaDiff.Calculate` gains RLS diff logic comparing `TableDefinition.RowLevelSecurity` between current and desired schemas:
 
 - Table exists in desired with RLS enabled but not in current -> emit `EnableRlsOperation` then `CreateRlsPolicyOperation` for each policy
 - Policy in desired not in current -> emit `CreateRlsPolicyOperation`
+- Policy name exists in both but its `USING` or `WITH CHECK` predicate differs -> replace or alter that policy so both predicates match the desired definition. Compare each clause independently; an unchanged clause must retain its meaning.
 - Policy in current but not in desired (with `allowDestructive: true`) -> emit `DropRlsPolicyOperation`
 - RLS disabled in desired but enabled in current (with `allowDestructive: true`) -> emit `DisableRlsOperation`
 
@@ -396,7 +416,7 @@ Schema inspectors (`PostgresSchemaInspector`, `SqliteSchemaInspector`) must be e
 | `MIG-E-RLS-EMPTY-CHECK` | Policy has INSERT/UPDATE operations but no `WithCheckLql` |
 | `MIG-E-RLS-LQL-PARSE` | `UsingLql` / `WithCheckLql` failed LQL parse |
 | `MIG-E-RLS-LQL-TRANSPILE` | LQL transpilation to platform SQL failed |
-| `MIG-E-RLS-MSSQL-UNSUPPORTED` | SQL Server RLS attempted before `SqlServer` package ships |
+| `MIG-E-RLS-MSSQL-UNSUPPORTED` | SQL Server RLS attempted before native RLS migration support is implemented |
 | `MIG-W-RLS-SQLITE-SELECT-VIEW` | Informational: SELECT policy enforced via `_secure` view, not triggers |
 | `MIG-W-RLS-SQLITE-RESTRICTIVE-APPROX` | RESTRICTIVE policy approximated as AND condition in SQLite triggers |
 

@@ -4,7 +4,9 @@
     <NuGetAudit>false</NuGetAudit>
     <NuGetAuditMode>disabled</NuGetAuditMode>
     <RestoreAuditProperties>false</RestoreAuditProperties>
-    <Version>0.9.12-beta</Version>
+    <!-- Source stays at the placeholder; release stamps the tag version in the
+         runner working tree only. [SWR-VERSION-BUILD-STAMPING] -->
+    <Version>0.0.0-dev</Version>
     <Authors>ChristianFindlay</Authors>
     <Company>Nimblesite</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,6 +27,9 @@
     <WarningLevel>9999</WarningLevel>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <!-- Bound direct/IDE builds as well as make. -->
+    <BuildInParallel>false</BuildInParallel>
+    <UseSharedCompilation>false</UseSharedCompilation>
     <AnalysisMode>All</AnalysisMode>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CodeAnalysis.ruleset</CodeAnalysisRuleSet>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -51,6 +56,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
 
+    <!-- 1.0.1 bounds recursive analysis (RestClient.Net issue #146). -->
+    <PackageReference Include="Exhaustion" Version="1.0.1" PrivateAssets="all" />
+
     <!-- SqlParserCS for SQL parsing (not compatible with netstandard) -->
     <PackageReference
       Include="SqlParserCS"
@@ -64,12 +72,6 @@
       Version="1.0.0"
       Condition="!$(TargetFramework.StartsWith('netstandard'))"
     />
-
-    <!-- Exhaustive pattern matching analyzer -->
-    <PackageReference Include="Exhaustion" Version="1.0.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <!-- Code Analysis packages only for non-test projects -->

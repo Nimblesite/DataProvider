@@ -40,7 +40,7 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
     /// </summary>
     private static void BootstrapRolesAndGucReaders(NpgsqlConnection conn)
     {
-        Exec(
+        PostgresTestDb.Exec(
             conn,
             """
             DO $$ BEGIN
@@ -68,7 +68,7 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
     /// membership fns that reference tenant_members.
     /// </summary>
     private static void BootstrapMembershipFns(NpgsqlConnection conn) =>
-        Exec(
+        PostgresTestDb.Exec(
             conn,
             """
             CREATE OR REPLACE FUNCTION is_member(u uuid, t uuid) RETURNS bool
@@ -81,29 +81,55 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
             """
         );
 
-    private void ApplyAndGrant(SchemaDefinition desired, params string[] tableNames)
+    /// <summary>
+    /// Inspects the live public schema, diffs it against the desired schema,
+    /// applies the resulting operations, and asserts the migration succeeded.
+    /// </summary>
+    internal static void ApplySchema(
+        NpgsqlConnection connection,
+        SchemaDefinition desired,
+        ILogger logger
+    )
     {
         var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
+            (SchemaResultOk)PostgresSchemaInspector.Inspect(connection, "public", logger)
         ).Value;
         var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)
+            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: logger)
         ).Value;
+        ApplyOperations(connection, ops, logger);
+    }
+
+    /// <summary>
+    /// Applies pre-computed schema operations to Postgres and asserts the
+    /// migration succeeded.
+    /// </summary>
+    internal static void ApplyOperations(
+        NpgsqlConnection connection,
+        IReadOnlyList<SchemaOperation> operations,
+        ILogger logger
+    )
+    {
         var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
+            connection,
+            operations,
             PostgresDdlGenerator.Generate,
             MigrationOptions.Default,
-            _logger
+            logger
         );
         Assert.True(
             apply is MigrationApplyResultOk,
             $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
         );
+    }
+
+    private void ApplyAndGrant(SchemaDefinition desired, params string[] tableNames)
+    {
+        ApplySchema(connection: _connection, desired: desired, logger: _logger);
 
         foreach (var t in tableNames)
         {
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 $"GRANT USAGE ON SCHEMA public TO lql_user, lql_admin; "
                     + $"GRANT SELECT,INSERT,UPDATE,DELETE ON \"public\".\"{t}\" TO lql_user, lql_admin"
@@ -119,9 +145,17 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         Guid? user
     )
     {
-        Exec(conn, tx, $"SET LOCAL ROLE {role}");
-        Exec(conn, tx, $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'");
-        Exec(conn, tx, $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'");
+        PostgresTestDb.Exec(conn, tx, $"SET LOCAL ROLE {role}");
+        PostgresTestDb.Exec(
+            conn,
+            tx,
+            $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'"
+        );
+        PostgresTestDb.Exec(
+            conn,
+            tx,
+            $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'"
+        );
     }
 
     private static SchemaDefinition TenantMembersSchema() =>
@@ -263,11 +297,11 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         var userB = Guid.NewGuid();
 
         // Membership rows.
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userA}', '{tenantA}')"
         );
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userB}', '{tenantB}')"
         );
@@ -277,7 +311,7 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "lql_user", tenantA, userA);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO docs_iso(id, tenant_id, title) VALUES ('{docA}', '{tenantA}', 'a')"
@@ -290,7 +324,7 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "lql_user", tenantB, userB);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO docs_iso(id, tenant_id, title) VALUES ('{docB}', '{tenantB}', 'b')"
@@ -351,12 +385,12 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "lql_admin", null, null);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t1}', 'x')"
             );
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t2}', 'y')"
@@ -634,11 +668,11 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         var tenantB = Guid.NewGuid();
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userA}', '{tenantA}')"
         );
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userB}', '{tenantB}')"
         );
@@ -646,11 +680,11 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         // Conversations: convA in tenantA, convB in tenantB.
         var convA = Guid.NewGuid();
         var convB = Guid.NewGuid();
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO conversations(id, tenant_id) VALUES ('{convA}', '{tenantA}')"
         );
-        Exec(
+        PostgresTestDb.Exec(
             _connection,
             $"INSERT INTO conversations(id, tenant_id) VALUES ('{convB}', '{tenantB}')"
         );
@@ -660,7 +694,7 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "lql_user", tenantA, userA);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO messages(id, conversation_id, body) VALUES ('{msgA}', '{convA}', 'hi')"
@@ -742,20 +776,5 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM pg_policies WHERE tablename='docs_drop'";
         Assert.Equal(0L, (long)cmd.ExecuteScalar()!);
-    }
-
-    private static void Exec(NpgsqlConnection conn, string sql)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void Exec(NpgsqlConnection conn, NpgsqlTransaction tx, string sql)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
     }
 }

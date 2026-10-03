@@ -2,7 +2,7 @@
   "name": "lql-language-support",
   "displayName": "Lambda Query Language (LQL)",
   "description": "Language support for Lambda Query Language with syntax highlighting, IntelliSense, and error checking",
-  "version": "0.1.0",
+  "version": "0.0.0-dev",
   "publisher": "lql-team",
   "engines": {
     "vscode": "^1.74.0"
@@ -197,7 +197,7 @@
     "@types/mocha": "^10.0.0",
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
-    "@vscode/test-electron": "^2.2.0",
+    "@vscode/test-electron": "3.1.0",
     "eslint": "^9.0.0",
     "glob": "^8.0.3",
     "mocha": "^10.2.0",

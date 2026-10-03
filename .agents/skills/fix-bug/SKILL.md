@@ -4,7 +4,7 @@ description: Fix a bug using test-driven development. Use when the user reports 
 argument-hint: "[bug description]"
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash
 ---
-<!-- agent-pmo:74cf183 -->
+<!-- agent-pmo:795a9c2 -->
 
 # Bug Fix Skill — Test-First Workflow
 

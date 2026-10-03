@@ -175,7 +175,7 @@ public static partial class PostgresDdlGenerator
     private static string QuoteIdentList(IReadOnlyList<string> identifiers) =>
         string.Join(", ", identifiers.Select(QuoteIdent));
 
-    private static string QuoteIdent(string identifier) =>
+    internal static string QuoteIdent(string identifier) =>
         $"\"{identifier.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
 
     private static string QuoteLiteral(string value) =>

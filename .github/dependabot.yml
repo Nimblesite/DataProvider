@@ -1,0 +1,72 @@
+# agent-pmo:795a9c2
+# Dependabot — supply-chain defense without PR spam, and without burning CI on
+# `main` for routine bumps. Portfolio standard ([GITHUB-DEPENDABOT]).
+#
+# Routine VERSION bumps target the long-lived `dependabot-upgrades` STAGING
+# branch (never `main`). ci.yml / codeql.yml trigger only on
+# `pull_request: [main]`, so staging PRs run NO build/test/CodeQL; they are
+# auto-merged by .github/workflows/dependabot-automerge.yml. The batch reaches
+# `main` through ONE consolidation PR where CI/CodeQL run exactly once.
+# SECURITY updates ignore `target-branch` and still open against `main`.
+#
+# Ecosystems kept = the manifests THIS repo actually has: nuget (.csproj/.fsproj),
+# cargo (Lql/lql-lsp-rust workspace), npm (root + Website + LqlExtension +
+# LqlWebsite-Eleventy), and github-actions. No Python/Dart/Go manifests exist.
+#
+# REQUIREMENT: the `dependabot-upgrades` branch must exist and carry
+# dependabot-automerge.yml (cut from main AFTER both land on main).
+version: 2
+
+updates:
+  # GitHub Actions — every repo with workflows. Pinned actions are a prime
+  # supply-chain target, so keep them current.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # NuGet / .NET — *.csproj, *.fsproj across the solution.
+  - package-ecosystem: nuget
+    directory: /
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  # Cargo / Rust — the LQL LSP workspace.
+  - package-ecosystem: cargo
+    directory: /Lql/lql-lsp-rust
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  # npm / Node — root tooling + both Eleventy sites + the VS Code extension.
+  - package-ecosystem: npm
+    directories:
+      - "/"
+      - "/Website"
+      - "/Lql/LqlExtension"
+      - "/Lql/LqlWebsite-Eleventy"
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      npm:
+        patterns: ["*"]

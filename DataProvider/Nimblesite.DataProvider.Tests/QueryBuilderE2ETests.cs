@@ -12,31 +12,17 @@ namespace Nimblesite.DataProvider.Tests;
 /// </summary>
 public sealed class QueryBuilderE2ETests : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"qb_e2e_{Guid.NewGuid()}.db"
-    );
+    private readonly SqliteTestDatabase _db = new("qb_e2e");
+    private SqliteConnection _connection => _db.Connection;
 
-    private readonly SqliteConnection _connection;
+    internal SqliteConnection Connection => _connection;
 
     public QueryBuilderE2ETests()
     {
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
-        _connection.Open();
         CreateSchemaAndSeed();
     }
 
-    public void Dispose()
-    {
-        _connection.Dispose();
-        try
-        {
-            File.Delete(_dbPath);
-        }
-        catch (IOException)
-        { /* cleanup best-effort */
-        }
-    }
+    public void Dispose() => _db.Dispose();
 
     private void CreateSchemaAndSeed()
     {

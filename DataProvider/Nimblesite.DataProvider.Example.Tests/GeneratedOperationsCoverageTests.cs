@@ -1,7 +1,13 @@
+using System.Data;
 using Microsoft.Data.Sqlite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
+    int,
+    Nimblesite.Sql.Model.SqlError
+>;
+using AffectedRowsResult = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>;
 
 namespace Nimblesite.DataProvider.Example.Tests;
 
@@ -10,7 +16,7 @@ namespace Nimblesite.DataProvider.Example.Tests;
 /// <summary>
 /// Tests for generated Insert/Update operations and SampleDataSeeder
 /// </summary>
-public sealed class GeneratedOperationsCoverageTests : IDisposable
+public sealed partial class GeneratedOperationsCoverageTests : IDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteConnection _connection;
@@ -37,67 +43,26 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
     [Fact]
     public async Task InsertCustomerAsync_WithValidData_ReturnsOk()
     {
-        await SetupSchema().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.InsertCustomerAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.InsertCustomerAsync(
                         Guid.NewGuid().ToString(),
                         "Test Customer",
                         "test@test.com",
                         "555-1234",
                         "2024-01-01"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateCustomerAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                // First get an existing customer ID
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Customer LIMIT 1",
-                    mapper: reader => reader.GetString(0)
-                );
-                var customers = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
-                var customerId = customers.Value[0];
-
-                var result = await tx.UpdateCustomerAsync(
-                        customerId,
-                        "Updated Customer",
-                        "updated@test.com",
-                        "555-9999",
-                        "2024-06-01"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-                var ok = (Result<int, SqlError>.Ok<int, SqlError>)result;
-                Assert.Equal(1, ok.Value);
-            })
+                    ),
+                expectedRows: 1
+            )
             .ConfigureAwait(false);
     }
 
     [Fact]
     public async Task InsertInvoiceAsync_WithValidData_ReturnsOk()
     {
-        await SetupSchema().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.InsertInvoiceAsync(
+        await AssertAffectedRows(
+                execute: tx =>
+                    tx.InsertInvoiceAsync(
                         Guid.NewGuid().ToString(),
                         "INV-TEST-001",
                         "2024-06-01",
@@ -106,44 +71,9 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
                         1500.00,
                         null,
                         "Test invoice"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateInvoiceAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Invoice LIMIT 1",
-                    mapper: reader => reader.GetString(0)
-                );
-                var invoices = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
-                var invoiceId = invoices.Value[0];
-
-                var result = await tx.UpdateInvoiceAsync(
-                        invoiceId,
-                        "INV-UPDATED",
-                        "2024-07-01",
-                        "Updated Corp",
-                        "updated@billing.com",
-                        2000.00,
-                        100.00,
-                        "Updated notes"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
+                    ),
+                expectedRows: 1
+            )
             .ConfigureAwait(false);
     }
 
@@ -176,41 +106,7 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
                         "Test notes"
                     )
                     .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateInvoiceLineAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, InvoiceId FROM InvoiceLine LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), InvoiceId: reader.GetString(1))
-                );
-                var lines = (Result<IReadOnlyList<(string Id, string InvoiceId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string InvoiceId)>,
-                    SqlError
-                >)queryResult;
-                var line = lines.Value[0];
-
-                var result = await tx.UpdateInvoiceLineAsync(
-                        line.Id,
-                        line.InvoiceId,
-                        "Updated Description",
-                        3.0,
-                        100.00,
-                        300.00,
-                        10.0,
-                        "Updated notes"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
             })
             .ConfigureAwait(false);
     }
@@ -242,40 +138,7 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
                         "USA"
                     )
                     .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateAddressAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, CustomerId FROM Address LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), CustomerId: reader.GetString(1))
-                );
-                var addresses = (Result<IReadOnlyList<(string Id, string CustomerId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string CustomerId)>,
-                    SqlError
-                >)queryResult;
-                var addr = addresses.Value[0];
-
-                var result = await tx.UpdateAddressAsync(
-                        addr.Id,
-                        addr.CustomerId,
-                        "200 Updated Ave",
-                        "UpdatedCity",
-                        "UC",
-                        "67890",
-                        "USA"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
             })
             .ConfigureAwait(false);
     }
@@ -306,39 +169,7 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
                         "Pending"
                     )
                     .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateOrdersAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, CustomerId FROM Orders LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), CustomerId: reader.GetString(1))
-                );
-                var orders = (Result<IReadOnlyList<(string Id, string CustomerId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string CustomerId)>,
-                    SqlError
-                >)queryResult;
-                var order = orders.Value[0];
-
-                var result = await tx.UpdateOrdersAsync(
-                        order.Id,
-                        "ORD-UPDATED",
-                        "2024-07-01",
-                        order.CustomerId,
-                        1500.00,
-                        "Completed"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
             })
             .ConfigureAwait(false);
     }
@@ -369,155 +200,7 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
                         125.00
                     )
                     .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateOrderItemAsync_WithValidData_ReturnsOk()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, OrderId FROM OrderItem LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), OrderId: reader.GetString(1))
-                );
-                var items = (Result<IReadOnlyList<(string Id, string OrderId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string OrderId)>,
-                    SqlError
-                >)queryResult;
-                var item = items.Value[0];
-
-                var result = await tx.UpdateOrderItemAsync(
-                        item.Id,
-                        item.OrderId,
-                        "Updated Widget",
-                        10.0,
-                        50.00,
-                        500.00
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateCustomerAsync_WithNonExistentId_ReturnsZeroRows()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateCustomerAsync(
-                        "nonexistent-id",
-                        "Updated",
-                        "u@t.com",
-                        "555-0000",
-                        "2024-01-01"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-                var ok = (Result<int, SqlError>.Ok<int, SqlError>)result;
-                Assert.Equal(0, ok.Value);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateInvoiceAsync_WithNonExistentId_ReturnsZeroRows()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateInvoiceAsync(
-                        "nonexistent",
-                        "INV-X",
-                        "2024-01-01",
-                        "X",
-                        "x@t.com",
-                        0.0,
-                        0.0,
-                        "n"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateAddressAsync_WithNonExistentId_ReturnsZeroRows()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateAddressAsync(
-                        "nonexistent",
-                        "cust-1",
-                        "St",
-                        "City",
-                        "ST",
-                        "00000",
-                        "US"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateInvoiceLineAsync_WithNonExistentId_ReturnsZeroRows()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateInvoiceLineAsync(
-                        "nonexistent",
-                        "inv-1",
-                        "Desc",
-                        1.0,
-                        10.0,
-                        10.0,
-                        0.0,
-                        "n"
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-            })
-            .ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task UpdateOrderItemAsync_WithNonExistentId_ReturnsZeroRows()
-    {
-        await SetupSchemaAndSeed().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
-            {
-                var result = await tx.UpdateOrderItemAsync(
-                        "nonexistent",
-                        "ord-1",
-                        "Product",
-                        1.0,
-                        10.0,
-                        10.0
-                    )
-                    .ConfigureAwait(false);
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
             })
             .ConfigureAwait(false);
     }
@@ -593,6 +276,24 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
+    // Implements [CI-DESLOP]: retain the result type and row-count assertions
+    // for each generated operation while sharing schema and transaction setup.
+    private async Task AssertAffectedRows(
+        Func<IDbTransaction, Task<AffectedRowsResult>> execute,
+        int expectedRows,
+        bool seed = false
+    )
+    {
+        await (seed ? SetupSchemaAndSeed() : SetupSchema()).ConfigureAwait(false);
+        await _connection
+            .Transact(async transaction =>
+            {
+                var result = await execute(transaction).ConfigureAwait(false);
+                Assert.Equal(expectedRows, Assert.IsType<AffectedRowsOk>(result).Value);
+            })
+            .ConfigureAwait(false);
+    }
+
     private async Task SetupSchemaAndSeed()
     {
         await SetupSchema().ConfigureAwait(false);
@@ -616,21 +317,6 @@ public sealed class GeneratedOperationsCoverageTests : IDisposable
         await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
-    public void Dispose()
-    {
-        _connection?.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-#pragma warning disable CA1031 // Do not catch general exception types - file cleanup is best-effort
-            catch (IOException)
-            {
-                /* File may be locked */
-            }
-#pragma warning restore CA1031
-        }
-    }
+    public void Dispose() =>
+        CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
 }

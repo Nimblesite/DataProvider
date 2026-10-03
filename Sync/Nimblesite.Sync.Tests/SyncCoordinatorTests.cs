@@ -2,6 +2,14 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PullResultResult = Outcome.Result<
+    Nimblesite.Sync.Core.PullResult,
+    Nimblesite.Sync.Core.SyncError
+>;
+using PushResultResult = Outcome.Result<
+    Nimblesite.Sync.Core.PushResult,
+    Nimblesite.Sync.Core.SyncError
+>;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -38,17 +46,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     {
         var lastVersion = 0L;
 
-        var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            lastVersion,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result = PullFromServer(fromVersion: lastVersion, batch: new BatchConfig(100));
 
         Assert.IsType<PullResultOk>(result);
         var pull = ((PullResultOk)result).Value;
@@ -64,17 +62,7 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertPerson(_serverDb, "p1", "Alice");
         InsertPerson(_serverDb, "p2", "Bob");
 
-        var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
 
         Assert.IsType<PullResultOk>(result);
         var pull = ((PullResultOk)result).Value;
@@ -102,17 +90,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             ClientOrigin
         );
 
-        var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
 
         Assert.IsType<PullResultOk>(result);
         var pull = ((PullResultOk)result).Value;
@@ -131,17 +109,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             InsertPerson(_serverDb, $"p{i}", $"Person {i}");
         }
 
-        var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(10), // Small batches
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(10)); // Small batches
 
         Assert.IsType<PullResultOk>(result);
         var pull = ((PullResultOk)result).Value;
@@ -161,17 +129,7 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertParent(_serverDb, "parent1", "Parent One");
         InsertChild(_serverDb, "child1", "parent1", "Child One");
 
-        var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100, 3), // Allow retries
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100, 3)); // Allow retries
 
         Assert.IsType<PullResultOk>(result);
         var pull = ((PullResultOk)result).Value;
@@ -185,15 +143,16 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Pull_TriggerSuppressionFailure_ReturnsError()
     {
         var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => new BoolSyncError(new SyncErrorDatabase("Suppression failed")),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
+            myOriginId: ClientOrigin,
+            lastSyncedVersion: 0,
+            config: new BatchConfig(100),
+            fetchRemoteChanges: FetchServerChanges,
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: () =>
+                new BoolSyncError(new SyncErrorDatabase("Suppression failed")),
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastSyncedVersion: SaveClientSyncVersion,
+            logger: Logger
         );
 
         Assert.IsType<PullResultError>(result);
@@ -205,15 +164,16 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Pull_FetchError_ReturnsError()
     {
         var result = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => new SyncLogListError(new SyncErrorDatabase("Fetch failed")),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
+            myOriginId: ClientOrigin,
+            lastSyncedVersion: 0,
+            config: new BatchConfig(100),
+            fetchRemoteChanges: (from, limit) =>
+                new SyncLogListError(new SyncErrorDatabase("Fetch failed")),
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastSyncedVersion: SaveClientSyncVersion,
+            logger: Logger
         );
 
         Assert.IsType<PullResultError>(result);
@@ -226,15 +186,15 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var capturedVersion = 0L;
         _ = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => capturedVersion = v,
-            Logger
+            myOriginId: ClientOrigin,
+            lastSyncedVersion: 0,
+            config: new BatchConfig(100),
+            fetchRemoteChanges: FetchServerChanges,
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastSyncedVersion: v => capturedVersion = v,
+            logger: Logger
         );
 
         Assert.True(capturedVersion > 0);
@@ -247,14 +207,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     [Fact]
     public void Push_EmptyClient_ReturnsZeroChanges()
     {
-        var result = SyncCoordinator.Push(
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => ApplyChangesToTarget(_serverDb, changes, ServerOrigin),
-            v => SetLastPushVersion(_clientDb, v),
-            Logger
-        );
+        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
 
         Assert.IsType<PushResultOk>(result);
         var push = ((PushResultOk)result).Value;
@@ -267,14 +220,7 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertPerson(_clientDb, "p1", "Charlie");
         InsertPerson(_clientDb, "p2", "Diana");
 
-        var result = SyncCoordinator.Push(
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => ApplyChangesToTarget(_serverDb, changes, ServerOrigin),
-            v => SetLastPushVersion(_clientDb, v),
-            Logger
-        );
+        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
 
         Assert.IsType<PushResultOk>(result);
         var push = ((PushResultOk)result).Value;
@@ -292,14 +238,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             InsertPerson(_clientDb, $"p{i}", $"Person {i}");
         }
 
-        var result = SyncCoordinator.Push(
-            0,
-            new BatchConfig(10),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => ApplyChangesToTarget(_serverDb, changes, ServerOrigin),
-            v => SetLastPushVersion(_clientDb, v),
-            Logger
-        );
+        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(10));
 
         Assert.IsType<PushResultOk>(result);
         var push = ((PushResultOk)result).Value;
@@ -312,12 +251,12 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertPerson(_clientDb, "p1", "Alice");
 
         var result = SyncCoordinator.Push(
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => new BoolSyncError(new SyncErrorDatabase("Send failed")),
-            v => SetLastPushVersion(_clientDb, v),
-            Logger
+            lastPushedVersion: 0,
+            config: new BatchConfig(100),
+            fetchLocalChanges: FetchClientChanges,
+            sendToRemote: changes => new BoolSyncError(new SyncErrorDatabase("Send failed")),
+            updateLastPushedVersion: SaveClientPushVersion,
+            logger: Logger
         );
 
         Assert.IsType<PushResultError>(result);
@@ -337,19 +276,19 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertPerson(_clientDb, "c1", "ClientBob");
 
         var result = SyncCoordinator.Sync(
-            ClientOrigin,
-            0,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => ApplyChangesToTarget(_serverDb, changes, ServerOrigin),
-            v => SetLastPushVersion(_clientDb, v),
-            Logger
+            myOriginId: ClientOrigin,
+            lastServerVersion: 0,
+            lastPushVersion: 0,
+            config: new BatchConfig(100),
+            fetchRemoteChanges: FetchServerChanges,
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastServerVersion: SaveClientSyncVersion,
+            fetchLocalChanges: FetchClientChanges,
+            sendToRemote: SendChangesToServer,
+            updateLastPushVersion: SaveClientPushVersion,
+            logger: Logger
         );
 
         Assert.IsType<SyncResultOk>(result);
@@ -374,14 +313,15 @@ public sealed class SyncCoordinatorTests : IDisposable
             0,
             0,
             new BatchConfig(100),
-            (from, limit) => new SyncLogListError(new SyncErrorDatabase("Pull failed")),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => ApplyChangesToTarget(_serverDb, changes, ServerOrigin),
-            v => SetLastPushVersion(_clientDb, v),
+            fetchRemoteChanges: (from, limit) =>
+                new SyncLogListError(new SyncErrorDatabase("Pull failed")),
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastServerVersion: SaveClientSyncVersion,
+            fetchLocalChanges: FetchClientChanges,
+            sendToRemote: SendChangesToServer,
+            updateLastPushVersion: SaveClientPushVersion,
             Logger
         );
 
@@ -399,14 +339,14 @@ public sealed class SyncCoordinatorTests : IDisposable
             0,
             0,
             new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            (from, limit) => FetchChanges(_clientDb, from, limit),
-            changes => new BoolSyncError(new SyncErrorDatabase("Push failed")),
-            v => SetLastPushVersion(_clientDb, v),
+            fetchRemoteChanges: FetchServerChanges,
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastServerVersion: SaveClientSyncVersion,
+            fetchLocalChanges: FetchClientChanges,
+            sendToRemote: changes => new BoolSyncError(new SyncErrorDatabase("Push failed")),
+            updateLastPushVersion: SaveClientPushVersion,
             Logger
         );
 
@@ -420,17 +360,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     {
         // Initial sync
         InsertPerson(_serverDb, "s1", "ServerAlice");
-        var result1 = SyncCoordinator.Pull(
-            ClientOrigin,
-            0,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result1 = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
 
         var firstPull = ((PullResultOk)result1).Value;
         Assert.Equal(1, firstPull.ChangesApplied);
@@ -439,17 +369,7 @@ public sealed class SyncCoordinatorTests : IDisposable
         InsertPerson(_serverDb, "s2", "ServerBob");
 
         // Second sync from last version
-        var result2 = SyncCoordinator.Pull(
-            ClientOrigin,
-            firstPull.ToVersion,
-            new BatchConfig(100),
-            (from, limit) => FetchChanges(_serverDb, from, limit),
-            entry => ApplyChange(_clientDb, entry),
-            () => EnableSuppression(_clientDb),
-            () => DisableSuppression(_clientDb),
-            v => SetLastSyncVersion(_clientDb, v),
-            Logger
-        );
+        var result2 = PullFromServer(fromVersion: firstPull.ToVersion, batch: new BatchConfig(100));
 
         var secondPull = ((PullResultOk)result2).Value;
         Assert.Equal(1, secondPull.ChangesApplied); // Only Bob
@@ -459,6 +379,51 @@ public sealed class SyncCoordinatorTests : IDisposable
     #endregion
 
     #region Helper Methods
+
+    // Shared wiring: the delegate bundle bound to the client/server test databases
+    // that every pull/push test passes to SyncCoordinator.
+
+    private SyncLogListResult FetchServerChanges(long from, int limit) =>
+        FetchChanges(_serverDb, from, limit);
+
+    private SyncLogListResult FetchClientChanges(long from, int limit) =>
+        FetchChanges(_clientDb, from, limit);
+
+    private BoolSyncResult ApplyClientChange(SyncLogEntry entry) => ApplyChange(_clientDb, entry);
+
+    private BoolSyncResult EnableClientSuppression() => EnableSuppression(_clientDb);
+
+    private BoolSyncResult DisableClientSuppression() => DisableSuppression(_clientDb);
+
+    private void SaveClientSyncVersion(long version) => SetLastSyncVersion(_clientDb, version);
+
+    private BoolSyncResult SendChangesToServer(IReadOnlyList<SyncLogEntry> changes) =>
+        ApplyChangesToTarget(_serverDb, changes, ServerOrigin);
+
+    private void SaveClientPushVersion(long version) => SetLastPushVersion(_clientDb, version);
+
+    private PullResultResult PullFromServer(long fromVersion, BatchConfig batch) =>
+        SyncCoordinator.Pull(
+            myOriginId: ClientOrigin,
+            lastSyncedVersion: fromVersion,
+            config: batch,
+            fetchRemoteChanges: FetchServerChanges,
+            applyLocalChange: ApplyClientChange,
+            enableTriggerSuppression: EnableClientSuppression,
+            disableTriggerSuppression: DisableClientSuppression,
+            updateLastSyncedVersion: SaveClientSyncVersion,
+            logger: Logger
+        );
+
+    private PushResultResult PushFromClient(long fromVersion, BatchConfig batch) =>
+        SyncCoordinator.Push(
+            lastPushedVersion: fromVersion,
+            config: batch,
+            fetchLocalChanges: FetchClientChanges,
+            sendToRemote: SendChangesToServer,
+            updateLastPushedVersion: SaveClientPushVersion,
+            logger: Logger
+        );
 
     private static SqliteConnection CreateSyncDatabase(string originId, string dbPath)
     {
@@ -762,29 +727,21 @@ public sealed class SyncCoordinatorTests : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    private static string? GetPersonName(SqliteConnection db, string id)
+    private static string? GetName(SqliteConnection db, string table, string id)
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Person WHERE Id = $id";
+        cmd.CommandText = $"SELECT Name FROM {table} WHERE Id = $id";
         cmd.Parameters.AddWithValue("$id", id);
         return cmd.ExecuteScalar() as string;
     }
 
-    private static string? GetParentName(SqliteConnection db, string id)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Parent WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
-    }
+    private static string? GetPersonName(SqliteConnection db, string id) =>
+        GetName(db, "Person", id);
 
-    private static string? GetChildName(SqliteConnection db, string id)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Child WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
-    }
+    private static string? GetParentName(SqliteConnection db, string id) =>
+        GetName(db, "Parent", id);
+
+    private static string? GetChildName(SqliteConnection db, string id) => GetName(db, "Child", id);
 
     private static void SetLastSyncVersion(SqliteConnection db, long version)
     {

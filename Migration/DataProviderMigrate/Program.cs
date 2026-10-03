@@ -1,9 +1,10 @@
 using System.Collections.Immutable;
-using System.Reflection;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
 using Nimblesite.DataProvider.Migration.SQLite;
+using Nimblesite.DataProvider.Migration.SqlServer;
 using Npgsql;
 using SchemaIntegrityResultError = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -26,12 +27,12 @@ namespace DataProviderMigrate;
 /// CLI tool for database schema operations: migrate from YAML and export C# schemas to YAML.
 /// This is the ONLY canonical tool for database creation - all projects MUST use this.
 /// </summary>
-public static class Program
+public static partial class Program
 {
     /// <summary>
     /// Entry point - dispatches to migrate or export subcommand.
     /// Usage:
-    ///   migrate: dotnet run -- migrate --schema path/to/schema.yaml --output path/to/database.db --provider [sqlite|postgres]
+    ///   migrate: dotnet run -- migrate --schema path/to/schema.yaml --output path/to/database.db --provider [sqlite|postgres|sqlserver]
     ///   export:  dotnet run -- export --assembly path/to/assembly.dll --type Namespace.SchemaClass --output path/to/schema.yaml
     /// </summary>
     public static int Main(string[] args)
@@ -53,6 +54,22 @@ public static class Program
         };
     }
 
+#if AOT
+    // Implements [MIG-AOT-EXPORT]: the export command loads an arbitrary external
+    // assembly via reflection (Assembly.LoadFrom), which a self-contained Native
+    // AOT binary cannot do. The native build ships migrate only; export remains in
+    // the managed `dotnet tool`.
+    private static int RunExport(string[] args)
+    {
+        Console.WriteLine(
+            "Error: the 'export' command is not available in the native (AOT) build.\n"
+                + "It loads an external assembly via reflection, which Native AOT cannot do.\n"
+                + "Use the managed dotnet tool 'DataProviderMigrate export ...' instead."
+        );
+        return 1;
+    }
+#endif
+
     private static int RunMigrate(string[] args)
     {
         var parseResult = ParseMigrateArguments(args);
@@ -65,27 +82,21 @@ public static class Program
         };
     }
 
-    private static int RunExport(string[] args)
-    {
-        var parseResult = ParseExportArguments(args);
-
-        return parseResult switch
-        {
-            ExportParseResult.Success success => ExecuteExport(success),
-            ExportParseResult.Failure failure => ShowExportError(failure),
-            ExportParseResult.HelpRequested => ShowExportUsage(),
-        };
-    }
-
     // ── Migrate ──────────────────────────────────────────────────────────
 
     private static int ExecuteMigration(MigrateParseResult.Success args)
     {
+        // Implements [MIG-CLI-COMMANDS]: connection descriptions must not expose credentials.
+        var outputDescription =
+            args.Provider.Equals("postgres", StringComparison.OrdinalIgnoreCase)
+                ? "<PostgreSQL connection>"
+            : IsSqlServerProvider(provider: args.Provider) ? "<SQL Server connection>"
+            : args.OutputPath;
         Console.WriteLine(
             $"""
             DataProviderMigrate - Database Schema Tool
               Schema:   {args.SchemaPath}
-              Output:   {args.OutputPath}
+              Output:   {outputDescription}
               Provider: {args.Provider}
             """
         );
@@ -111,8 +122,8 @@ public static class Program
 
         if (IsSqlServerProvider(args.Provider) && SchemaContainsRls(schema))
         {
-            // Implements [RLS-MSSQL]. The SQL Server migration package does
-            // not exist yet, so RLS targeting SQL Server must fail closed.
+            // Implements [RLS-MSSQL]. Native SQL Server RLS migrations are
+            // not implemented, so RLS targeting SQL Server must fail closed.
             Console.WriteLine(MigrationError.RlsMssqlUnsupported().Message);
             return 1;
         }
@@ -126,6 +137,12 @@ public static class Program
                 args.Phase
             ),
             "postgres" => MigratePostgresDatabase(
+                schema,
+                args.OutputPath,
+                args.AllowDestructive,
+                args.Phase
+            ),
+            "sqlserver" or "mssql" => MigrateSqlServerDatabase(
                 schema,
                 args.OutputPath,
                 args.AllowDestructive,
@@ -168,12 +185,13 @@ public static class Program
                 phase,
                 () => SqliteSchemaInspector.Inspect(connection),
                 ops =>
-                    MigrationRunner.Apply(
+                    SqliteMigrationApplier.Apply(
                         connection,
+                        schema,
                         ops,
-                        SqliteDdlGenerator.Generate,
                         new MigrationOptions { AllowDestructive = allowDestructive }
-                    )
+                    ),
+                (_, desired) => SqliteSchemaNormalizer.Normalize(desired)
             );
         }
         catch (Exception ex)
@@ -206,13 +224,63 @@ public static class Program
                         connection,
                         ops,
                         PostgresDdlGenerator.Generate,
-                        new MigrationOptions { AllowDestructive = allowDestructive }
-                    )
+                        new MigrationOptions { AllowDestructive = allowDestructive },
+                        verifyBeforeCommit: () =>
+                            VerifySchemaIntegrity(
+                                schema,
+                                phase,
+                                () => PostgresSchemaInspector.Inspect(connection, "public"),
+                                (live, target) =>
+                                    PostgresPolicyCatalogNormalizer.Normalize(
+                                        connection,
+                                        live,
+                                        target
+                                    )
+                            ) == 0
+                    ),
+                (live, target) =>
+                    PostgresPolicyCatalogNormalizer.Normalize(connection, live, target)
             );
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error: PostgreSQL connection/migration failed: {ex}");
+            return 1;
+        }
+    }
+
+    // Implements [MIG-SQLSERVER].
+    private static int MigrateSqlServerDatabase(
+        SchemaDefinition schema,
+        string connectionString,
+        bool allowDestructive,
+        MigratePhase phase
+    )
+    {
+        try
+        {
+            using var connection = new SqlConnection(connectionString);
+            connection.Open();
+            Console.WriteLine("Connected to SQL Server database");
+
+            return ApplyDiff(
+                schema,
+                allowDestructive,
+                phase,
+                () => SqlServerSchemaInspector.Inspect(connection),
+                ops =>
+                    MigrationRunner.Apply(
+                        connection,
+                        ops,
+                        SqlServerDdlGenerator.Generate,
+                        new MigrationOptions { AllowDestructive = allowDestructive }
+                    ),
+                (_, desired) => SqlServerSchemaNormalizer.Normalize(desired)
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: SQL Server connection/migration failed: {ex}");
             return 1;
         }
     }
@@ -230,7 +298,12 @@ public static class Program
         bool allowDestructive,
         MigratePhase phase,
         Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
-        Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply
+        Func<IReadOnlyList<SchemaOperation>, Outcome.Result<bool, MigrationError>> apply,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize = null
     )
     {
         var inspectResult = inspect();
@@ -252,7 +325,12 @@ public static class Program
             >)inspectResult
         ).Value;
 
-        var diff = SchemaDiff.Calculate(current, schema, allowDestructive);
+        var comparisonSchema = NormalizeDesired(current, schema, normalize);
+        if (comparisonSchema is null)
+        {
+            return 1;
+        }
+        var diff = SchemaDiff.Calculate(current, comparisonSchema, allowDestructive);
         if (
             diff
             is Outcome.Result<IReadOnlyList<SchemaOperation>, MigrationError>.Error<
@@ -282,7 +360,12 @@ public static class Program
             // up-to-date message only on success so the CLI never claims success
             // ahead of a failing post-check.
             Console.WriteLine("No operations to apply — running schema integrity check");
-            var verifyExit = VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+            var verifyExit = VerifySchemaIntegrity(
+                schema: schema,
+                phase: phase,
+                inspect: inspect,
+                normalize: normalize
+            );
             if (verifyExit == 0)
             {
                 Console.WriteLine(
@@ -312,13 +395,23 @@ public static class Program
         }
 
         Console.WriteLine("Migration completed successfully");
-        return VerifySchemaIntegrity(schema: schema, phase: phase, inspect: inspect);
+        return VerifySchemaIntegrity(
+            schema: schema,
+            phase: phase,
+            inspect: inspect,
+            normalize: normalize
+        );
     }
 
     private static int VerifySchemaIntegrity(
         SchemaDefinition schema,
         MigratePhase phase,
-        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize = null
     )
     {
         var inspectResult = inspect();
@@ -340,9 +433,14 @@ public static class Program
                 MigrationError
             >)inspectResult
         ).Value;
+        var comparisonSchema = NormalizeDesired(live, schema, normalize);
+        if (comparisonSchema is null)
+        {
+            return 1;
+        }
         var verification = SchemaIntegrityVerifier.Verify(
             live: live,
-            desired: schema,
+            desired: comparisonSchema,
             includeSupportObjects: true,
             includeRls: phase != MigratePhase.Structural
         );
@@ -352,6 +450,42 @@ public static class Program
             SchemaIntegrityResultOk ok => WriteIntegrityResult(mismatches: ok.Value),
             SchemaIntegrityResultError error => WriteIntegrityError(error: error.Value),
         };
+    }
+
+    private static SchemaDefinition? NormalizeDesired(
+        SchemaDefinition live,
+        SchemaDefinition desired,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize
+    )
+    {
+        if (normalize is null)
+        {
+            return desired;
+        }
+        var result = normalize(live, desired);
+        if (
+            result
+            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
+                SchemaDefinition,
+                MigrationError
+            > error
+        )
+        {
+            Console.WriteLine($"Error: policy catalog normalization failed: {error.Value}");
+            return null;
+        }
+        return
+            result
+                is Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                    SchemaDefinition,
+                    MigrationError
+                > ok
+            ? ok.Value
+            : null;
     }
 
     private static int WriteIntegrityResult(ImmutableArray<string> mismatches)
@@ -401,6 +535,8 @@ public static class Program
             is EnableRlsOperation
                 or EnableForceRlsOperation
                 or CreateRlsPolicyOperation
+                or AlterRlsPolicyOperation
+                or ReplaceRlsPolicyOperation
                 or DropRlsPolicyOperation
                 or DisableRlsOperation
                 or DisableForceRlsOperation;
@@ -408,94 +544,9 @@ public static class Program
     private static int ShowProviderError(string provider)
     {
         Console.WriteLine(
-            $"Error: Unknown provider '{provider}'\nValid providers: sqlite, postgres"
+            $"Error: Unknown provider '{provider}'\nValid providers: sqlite, postgres, sqlserver"
         );
         return 1;
-    }
-
-    // ── Export ────────────────────────────────────────────────────────────
-
-    private static int ExecuteExport(ExportParseResult.Success args)
-    {
-        Console.WriteLine(
-            $"""
-            DataProviderMigrate - Export C# Schema to YAML
-              Assembly: {args.AssemblyPath}
-              Type:     {args.TypeName}
-              Output:   {args.OutputPath}
-            """
-        );
-
-        if (!File.Exists(args.AssemblyPath))
-        {
-            Console.WriteLine($"Error: Assembly not found: {args.AssemblyPath}");
-            return 1;
-        }
-
-        try
-        {
-            var assembly = Assembly.LoadFrom(args.AssemblyPath);
-            var schemaType = assembly.GetType(args.TypeName);
-
-            if (schemaType is null)
-            {
-                Console.WriteLine($"Error: Type '{args.TypeName}' not found in assembly");
-                return 1;
-            }
-
-            var schema = GetSchemaDefinition(schemaType);
-
-            if (schema is null)
-            {
-                Console.WriteLine(
-                    $"Error: Could not get SchemaDefinition from type '{args.TypeName}'\n  Expected: static property 'Definition' or static method 'Build()' returning SchemaDefinition"
-                );
-                return 1;
-            }
-
-            var directory = Path.GetDirectoryName(args.OutputPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            SchemaYamlSerializer.ToYamlFile(schema, args.OutputPath);
-            Console.WriteLine(
-                $"Successfully exported schema '{schema.Name}' with {schema.Tables.Count} tables\n  Output: {args.OutputPath}"
-            );
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex}");
-            return 1;
-        }
-    }
-
-    private static SchemaDefinition? GetSchemaDefinition(Type schemaType)
-    {
-        var definitionProp = schemaType.GetProperty(
-            "Definition",
-            BindingFlags.Public | BindingFlags.Static
-        );
-
-        if (definitionProp?.GetValue(null) is SchemaDefinition defFromProp)
-        {
-            return defFromProp;
-        }
-
-        var buildMethod = schemaType.GetMethod(
-            "Build",
-            BindingFlags.Public | BindingFlags.Static,
-            Type.EmptyTypes
-        );
-
-        if (buildMethod?.Invoke(null, null) is SchemaDefinition defFromMethod)
-        {
-            return defFromMethod;
-        }
-
-        return null;
     }
 
     // ── Usage / Errors ───────────────────────────────────────────────────
@@ -511,7 +562,7 @@ public static class Program
               export    Export C# schema class to YAML file
 
             Usage:
-              DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres]
+              DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres|sqlserver]
               DataProviderMigrate export --assembly assembly.dll --type Namespace.SchemaClass --output schema.yaml
 
             Run 'DataProviderMigrate <command> --help' for command-specific options.
@@ -540,8 +591,8 @@ public static class Program
 
             Options:
               --schema, -s         Path to YAML schema definition file (required)
-              --output, -o         Path to output database file (SQLite) or connection string (Postgres)
-              --provider, -p       Database provider: sqlite or postgres (default: sqlite)
+              --output, -o         Path to output database file (SQLite) or connection string (Postgres, SQL Server)
+              --provider, -p       Database provider: sqlite, postgres or sqlserver (default: sqlite)
               --allow-destructive  Permit DROP/DISABLE operations (drift cleanup, FORCE removal,
                                    policy drops). Off by default for safety.
               --phase              Operations to apply: all (default), structural, rls.
@@ -558,34 +609,6 @@ public static class Program
               DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --allow-destructive
               DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase structural
               DataProviderMigrate migrate --schema schema.yaml --output "$PG_URL" --provider postgres --phase rls
-            """
-        );
-        return 1;
-    }
-
-    private static int ShowExportError(ExportParseResult.Failure failure)
-    {
-        Console.WriteLine($"Error: {failure.Message}\n");
-        return ShowExportUsage();
-    }
-
-    private static int ShowExportUsage()
-    {
-        Console.WriteLine(
-            """
-            Usage: DataProviderMigrate export [options]
-
-            Options:
-              --assembly, -a  Path to compiled assembly containing schema class (required)
-              --type, -t      Fully qualified type name of schema class (required)
-              --output, -o    Path to output YAML file (required)
-
-            Examples:
-              DataProviderMigrate export -a bin/Debug/net10.0/MyProject.dll -t MyNamespace.MySchema -o schema.yaml
-
-            Schema Class Requirements:
-              - Static property 'Definition' returning SchemaDefinition, OR
-              - Static method 'Build()' returning SchemaDefinition
             """
         );
         return 1;
@@ -631,7 +654,7 @@ public static class Program
                     if (i + 1 >= args.Length)
                     {
                         return new MigrateParseResult.Failure(
-                            "--provider requires an argument (sqlite or postgres)"
+                            "--provider requires an argument (sqlite, postgres or sqlserver)"
                         );
                     }
 
@@ -697,81 +720,6 @@ public static class Program
             phase
         );
     }
-
-    private static ExportParseResult ParseExportArguments(string[] args)
-    {
-        string? assemblyPath = null;
-        string? typeName = null;
-        string? outputPath = null;
-
-        for (var i = 0; i < args.Length; i++)
-        {
-            var arg = args[i];
-
-            switch (arg)
-            {
-                case "--assembly" or "-a":
-                    if (i + 1 >= args.Length)
-                    {
-                        return new ExportParseResult.Failure("--assembly requires a path argument");
-                    }
-
-                    assemblyPath = args[++i];
-                    break;
-
-                case "--type"
-                or "-t":
-                    if (i + 1 >= args.Length)
-                    {
-                        return new ExportParseResult.Failure(
-                            "--type requires a type name argument"
-                        );
-                    }
-
-                    typeName = args[++i];
-                    break;
-
-                case "--output"
-                or "-o":
-                    if (i + 1 >= args.Length)
-                    {
-                        return new ExportParseResult.Failure("--output requires a path argument");
-                    }
-
-                    outputPath = args[++i];
-                    break;
-
-                case "--help"
-                or "-h":
-                    return new ExportParseResult.HelpRequested();
-
-                default:
-                    if (arg.StartsWith('-'))
-                    {
-                        return new ExportParseResult.Failure($"Unknown option: {arg}");
-                    }
-
-                    break;
-            }
-        }
-
-        if (string.IsNullOrEmpty(assemblyPath))
-        {
-            return new ExportParseResult.Failure("--assembly is required");
-        }
-
-        if (string.IsNullOrEmpty(typeName))
-        {
-            return new ExportParseResult.Failure("--type is required");
-        }
-
-        if (string.IsNullOrEmpty(outputPath))
-        {
-            return new ExportParseResult.Failure("--output is required");
-        }
-
-        return new ExportParseResult.Success(assemblyPath, typeName, outputPath);
-    }
 }
 
 /// <summary>
@@ -795,24 +743,6 @@ public abstract record MigrateParseResult
 
     /// <summary>Help requested.</summary>
     public sealed record HelpRequested : MigrateParseResult;
-}
-
-/// <summary>
-/// Export subcommand argument parsing result.
-/// </summary>
-public abstract record ExportParseResult
-{
-    private ExportParseResult() { }
-
-    /// <summary>Successfully parsed export arguments.</summary>
-    public sealed record Success(string AssemblyPath, string TypeName, string OutputPath)
-        : ExportParseResult;
-
-    /// <summary>Parse error.</summary>
-    public sealed record Failure(string Message) : ExportParseResult;
-
-    /// <summary>Help requested.</summary>
-    public sealed record HelpRequested : ExportParseResult;
 }
 
 /// <summary>

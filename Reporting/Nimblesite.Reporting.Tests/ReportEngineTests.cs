@@ -58,16 +58,8 @@ public sealed class ReportEngineTests : IDisposable
             query: "SELECT Id, Name, Category, Price, Stock FROM products ORDER BY Name"
         );
 
-        var parameters = ImmutableDictionary<string, string>.Empty;
-
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: parameters,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk, $"Expected success but got {result.GetType()}");
@@ -105,13 +97,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -143,13 +129,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineError, $"Expected error but got {result.GetType()}");
@@ -168,13 +148,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineError, $"Expected error but got {result.GetType()}");
@@ -218,13 +192,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -259,13 +227,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -290,13 +252,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk, $"Expected success but got {result.GetType()}");
@@ -327,13 +283,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -356,13 +306,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert - only products with Price > 30: Beta Gadget (49.99), Delta Gadget (79.99)
         Assert.True(result is EngineOk);
@@ -399,13 +343,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -437,13 +375,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert - both categories (Widgets: 2, Gadgets: 2) pass having(count > 1)
         Assert.True(result is EngineOk);
@@ -484,13 +416,7 @@ public sealed class ReportEngineTests : IDisposable
         );
 
         // Act
-        var result = ReportEngine.Execute(
-            report: report,
-            parameters: ImmutableDictionary<string, string>.Empty,
-            connectionFactory: CreateTestConnection,
-            lqlTranspiler: TranspileLql,
-            logger: _logger
-        );
+        var result = ExecuteReport(report);
 
         // Assert
         Assert.True(result is EngineOk);
@@ -540,6 +466,15 @@ public sealed class ReportEngineTests : IDisposable
                 ),
             ],
             Layout: new LayoutDefinition(Columns: 12, Rows: [])
+        );
+
+    private Result<ReportExecutionResult, SqlError> ExecuteReport(ReportDefinition report) =>
+        ReportEngine.Execute(
+            report: report,
+            parameters: ImmutableDictionary<string, string>.Empty,
+            connectionFactory: CreateTestConnection,
+            lqlTranspiler: TranspileLql,
+            logger: _logger
         );
 
     private ConnResult CreateTestConnection(string connectionRef)

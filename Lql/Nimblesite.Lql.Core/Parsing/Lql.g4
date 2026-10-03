@@ -5,8 +5,18 @@ program
     ;
 
 statement
-    : letStmt
+    : withStmt
+    | letStmt
     | pipeExpr
+    ;
+
+// Common table expressions: with name as (pipeline), ... main pipeline
+withStmt
+    : WITH cteDef (',' cteDef)* pipeExpr
+    ;
+
+cteDef
+    : IDENT AS '(' pipeExpr ')'
     ;
 
 letStmt

@@ -87,9 +87,17 @@ internal static class PostgresSupportSchemaInspector
             JOIN pg_namespace n ON n.oid = p.pronamespace
             JOIN pg_language l ON l.oid = p.prolang
             WHERE n.nspname = @schema
+              -- [MIG-TRIGGER-PG]: trigger guard functions are owned by the
+              -- trigger lifecycle; reading them back would make destructive
+              -- runs try to drop them while their trigger still depends on them.
+              AND p.proname NOT LIKE @guardFunctionPattern ESCAPE '\'
             ORDER BY n.nspname, p.proname, p.oid
             """;
         command.Parameters.AddWithValue("@schema", schemaName);
+        command.Parameters.AddWithValue(
+            "@guardFunctionPattern",
+            $"%{TriggerDdlSupport.GuardFunctionSuffix.Replace("_", "\\_", StringComparison.Ordinal)}"
+        );
 
         using var reader = command.ExecuteReader();
         var functions = new List<PostgresFunctionDefinition>();

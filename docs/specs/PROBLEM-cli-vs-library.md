@@ -176,11 +176,7 @@ always sees outputs as missing and re-runs every time).
 Because the CLI emits files, the consumer has to choose: commit them to git
 (stale, churn-prone, merge-conflict magnet) or gitignore them (every fresh
 clone needs the CLI installed and Postgres running before `dotnet build` works
-at all). Both options are bad. The HealthcareSamples repo has a 300-line plan
-document
-([docs/plans/delete-generated-files-and-postgres-codegen.md](file:///Users/christianfindlay/Documents/Code/HealthcareSamples/docs/plans/delete-generated-files-and-postgres-codegen.md))
-whose entire reason for existing is to fix the consequences of this one
-architectural choice.
+at all). Both options are bad. The [ClinicalCoding repository](https://github.com/Nimblesite/ClinicalCoding) documents the consequences of this architectural choice.
 
 ### 5. The build needs a live database to compile
 
@@ -229,12 +225,12 @@ from one project to another has no way to know whether the tool exists, whether
 the command name is right, or whether a newer compatible version is on
 nuget.org.
 
-When it goes wrong, the failure mode is the one HealthcareSamples is hitting
+When it goes wrong, the failure mode is the one ClinicalCoding is hitting
 right now:
 
 ```
 ==> Linting...
-dotnet build HealthcareSamples.sln --configuration Release
+dotnet build --configuration Release
 Could not execute because the specified command or file was not found.
 * You intended to execute a .NET program, but dotnet-lql-postgres does not exist.
 
@@ -263,11 +259,11 @@ modes documented above are well-understood industry-wide.
 
 ## Symptom log: where this is currently biting
 
-- **HealthcareSamples** CI is red because `dotnet-lql-postgres` is not on
+- **ClinicalCoding** CI is red because `dotnet-lql-postgres` is not on
   nuget.org and never was. The plan that introduced the dependency on it
-  ([delete-generated-files-and-postgres-codegen.md](file:///Users/christianfindlay/Documents/Code/HealthcareSamples/docs/plans/delete-generated-files-and-postgres-codegen.md))
+  ([ClinicalCoding repository](https://github.com/Nimblesite/ClinicalCoding))
   cited a version (`0.1.8-beta`) of a package that does not exist.
-- **HealthcareSamples** has had at least four commits in a row trying to fix
+- **ClinicalCoding** has had at least four commits in a row trying to fix
   the dotnet-tools manifest (`fix tools list`, `fix`, `DataProvider version`,
   `move version to build build props`) without resolving the underlying
   "the tool isn't real" problem.
@@ -376,7 +372,7 @@ No `RemoveDir`/`MakeDir`/`Touch`/`<Compile Include="Generated/**/*.g.cs">`. No
   to the consumer's runtime — consumers can still reference Npgsql 9 (or any
   other version) for their own runtime data access. NOT ILRepack/ILMerge —
   too risky and brittle.
-- **HealthcareSamples build environment:** Postgres is already brought up
+- **ClinicalCoding build environment:** Postgres is already brought up
   before `dotnet build` in `make ci` (`docker compose up -d postgres`
   → `db-migrate` → `dotnet build`). Same flow stays. Build will fail loud
   if Postgres is down. This is the intended contract.

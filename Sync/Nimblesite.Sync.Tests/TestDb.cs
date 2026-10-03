@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Outcome;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -135,6 +136,12 @@ public sealed class TestDb : IDisposable
             "delete" => SyncOperation.Delete,
             _ => throw new ArgumentException($"Unknown operation: {op}"),
         };
+
+    internal static T AssertSuccess<T>(Result<T, SyncError> result)
+    {
+        Assert.IsType<Result<T, SyncError>.Ok<T, SyncError>>(result);
+        return ((Result<T, SyncError>.Ok<T, SyncError>)result).Value;
+    }
 
     public void Dispose()
     {

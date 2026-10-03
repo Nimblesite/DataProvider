@@ -684,7 +684,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
 
         // ASSERT 2: Table structure is EXACTLY what we defined
         // PostgreSQL: Verify table exists with correct columns
-        Assert.True(PostgresTableExists(_pgConnection, "rerunnable", "public"));
+        Assert.True(SchemaVerifier.PostgresTableExists(_pgConnection, "rerunnable", "public"));
         var pgColumns = GetPostgresColumns(_pgConnection, "rerunnable", "public");
         Assert.Equal(3, pgColumns.Count); // id, active, count - NO EXTRA COLUMNS
         Assert.Contains("id", pgColumns);
@@ -692,7 +692,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
         Assert.Contains("count", pgColumns);
 
         // SQLite: Verify table exists with correct columns
-        Assert.True(SqliteTableExists(_sqliteConnection, "rerunnable"));
+        Assert.True(SchemaVerifier.SqliteTableExists(_sqliteConnection, "rerunnable"));
         var sqliteColumns = GetSqliteColumns(_sqliteConnection, "rerunnable");
         Assert.Equal(3, sqliteColumns.Count); // id, active, count - NO EXTRA COLUMNS
         Assert.Contains("id", sqliteColumns);
@@ -1178,38 +1178,6 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
         cmd.Parameters.AddWithValue("@name", tableName);
         var result = cmd.ExecuteScalar();
         return result?.ToString() ?? "";
-    }
-
-    /// <summary>
-    /// Check if a PostgreSQL table exists.
-    /// </summary>
-    private static bool PostgresTableExists(
-        NpgsqlConnection conn,
-        string tableName,
-        string schema = "public"
-    )
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = @schema AND table_name = @table
-            )
-            """;
-        cmd.Parameters.AddWithValue("@schema", schema);
-        cmd.Parameters.AddWithValue("@table", tableName);
-        return (bool)cmd.ExecuteScalar()!;
-    }
-
-    /// <summary>
-    /// Check if a SQLite table exists.
-    /// </summary>
-    private static bool SqliteTableExists(SqliteConnection conn, string tableName)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name";
-        cmd.Parameters.AddWithValue("@name", tableName);
-        return (long)cmd.ExecuteScalar()! > 0;
     }
 
     /// <summary>

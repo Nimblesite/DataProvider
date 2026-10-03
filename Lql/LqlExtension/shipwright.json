@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "lql-language-support",
+    "displayName": "Lambda Query Language (LQL)",
+    "version": "0.0.0-dev"
+  },
+  "components": [
+    {
+      "id": "lql-lsp",
+      "kind": "lsp",
+      "language": "rust",
+      "binaryName": "lql-lsp",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"],
+      "sources": ["user-setting", "bundled"],
+      "required": true
+    }
+  ]
+}

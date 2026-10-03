@@ -34,7 +34,7 @@ public sealed class FormatAdapterTests
         var json = FormatAdapter.ToJson(result);
 
         // Assert
-        var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         Assert.Equal("test", doc.RootElement.GetProperty("reportId").GetString());
 
         // Verify executedAt is present and formatted
@@ -58,6 +58,8 @@ public sealed class FormatAdapterTests
         Assert.Equal(42, rows[0][1].GetInt32());
         Assert.Equal("Beta", rows[1][0].GetString());
         Assert.Equal(99, rows[1][1].GetInt32());
+        Assert.Single(ds.EnumerateObject());
+        Assert.Equal(3, doc.RootElement.EnumerateObject().Count());
     }
 
     [Fact]
@@ -137,5 +139,75 @@ public sealed class FormatAdapterTests
 
         // Assert
         Assert.Equal("Name,Price", csv);
+    }
+
+    [Theory]
+    [InlineData("Comma, separated", "\"Comma, separated\"")]
+    [InlineData("Said \"yes\"", "\"Said \"\"yes\"\"\"")]
+    [InlineData("First line\nSecond line", "\"First line\nSecond line\"")]
+    public void ToCsv_WithSpecialCharacters_EscapesEachField(string value, string encoded)
+    {
+        var source = new DataSourceResult(
+            ColumnNames: ["Value"],
+            Rows: [ImmutableArray.Create<object?>(value)],
+            TotalRows: 1
+        );
+
+        Assert.Equal($"Value\n{encoded}", FormatAdapter.ToCsv(source));
+    }
+
+    [Fact]
+    public void ToCsv_WithSpecialCharactersInHeadersAndRows_PreservesColumnBoundaries()
+    {
+        var source = new DataSourceResult(
+            ColumnNames: ["Patient, Name", "Note \"text\"", "Amount"],
+            Rows:
+            [
+                ImmutableArray.Create<object?>("Doe, Jane", "Said \"hello\"", 10.5),
+                ImmutableArray.Create<object?>("Smith", null, 0.0),
+            ],
+            TotalRows: 2
+        );
+
+        Assert.Equal(
+            "\"Patient, Name\",\"Note \"\"text\"\"\",Amount\n\"Doe, Jane\",\"Said \"\"hello\"\"\",10.5\nSmith,,0",
+            FormatAdapter.ToCsv(source)
+        );
+    }
+
+    [Fact]
+    public void ToJson_WithMultipleSourcesAndNullCell_PreservesStructureAndTypes()
+    {
+        var executedAt = new DateTimeOffset(2025, 3, 3, 10, 0, 0, TimeSpan.Zero);
+        var report = new ReportExecutionResult(
+            ReportId: "mixed-report",
+            ExecutedAt: executedAt,
+            DataSources: ImmutableDictionary<string, DataSourceResult>
+                .Empty.Add(
+                    "patients",
+                    new DataSourceResult(
+                        ColumnNames: ["id", "note", "count"],
+                        Rows: [ImmutableArray.Create<object?>("patient-1", null, 0)],
+                        TotalRows: 1
+                    )
+                )
+                .Add("empty", new DataSourceResult(ColumnNames: ["id"], Rows: [], TotalRows: 0))
+        );
+
+        using var document = JsonDocument.Parse(FormatAdapter.ToJson(report));
+        var root = document.RootElement;
+        Assert.Equal("mixed-report", root.GetProperty("reportId").GetString());
+        Assert.Equal(executedAt, root.GetProperty("executedAt").GetDateTimeOffset());
+        var sources = root.GetProperty("dataSources");
+        Assert.Equal(2, sources.EnumerateObject().Count());
+        var patients = sources.GetProperty("patients");
+        Assert.Equal(1, patients.GetProperty("totalRows").GetInt32());
+        Assert.Equal(3, patients.GetProperty("columnNames").GetArrayLength());
+        Assert.Equal("patient-1", patients.GetProperty("rows")[0][0].GetString());
+        Assert.Equal(JsonValueKind.Null, patients.GetProperty("rows")[0][1].ValueKind);
+        Assert.Equal(0, patients.GetProperty("rows")[0][2].GetInt32());
+        var empty = sources.GetProperty("empty");
+        Assert.Equal(0, empty.GetProperty("totalRows").GetInt32());
+        Assert.Empty(empty.GetProperty("rows").EnumerateArray());
     }
 }

@@ -70,6 +70,8 @@ public sealed class SchemaIntegrityVerifierFunctionDriftTests
             mismatches
         );
         Assert.Contains("public.current_tenant_id(text): function body drifted", mismatches);
+        Assert.Equal(5, mismatches.Length);
+        Assert.Empty(Verify(live: desired, desired: desired));
     }
 
     private static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)

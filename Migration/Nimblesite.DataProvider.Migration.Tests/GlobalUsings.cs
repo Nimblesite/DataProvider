@@ -7,6 +7,10 @@ global using Nimblesite.DataProvider.Migration.SQLite;
 global using Nimblesite.TestSupport;
 global using Npgsql;
 global using Xunit;
+global using MigrationApplyResult = Outcome.Result<
+    bool,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>;
 global using MigrationApplyResultError = Outcome.Result<
     bool,
     Nimblesite.DataProvider.Migration.Core.MigrationError

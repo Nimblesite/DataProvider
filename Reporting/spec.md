@@ -269,13 +269,34 @@ dotnet run --project Migration/DataProviderMigrate/DataProviderMigrate.csproj --
 
 For the MVP, report definitions are loaded from JSON files on disk (no database persistence needed). Future phases will add YAML-migrated schema for saved reports.
 
-## Security
+## Security [REPORT-SECURITY]
 
 - Connection strings / secrets are NEVER exposed to the client
 - Report definitions sent to client contain layout + parameter metadata only
-- API endpoints require authentication (Bearer token via Gatekeeper)
 - SQL parameters are always parameterized (no string concatenation)
 - LQL is transpiled server-side, client never sees raw SQL
+
+### Bearer Authentication [REPORT-AUTH-BEARER]
+
+All API endpoints require authentication with a Gatekeeper Bearer token.
+
+- Tokens are Gatekeeper's HS256 JWTs, validated locally (algorithm + signature + `exp`,
+  and `nbf` when present) with the
+  same base64 key Gatekeeper signs with, configured as `Jwt:SigningKey`.
+- Every `/api` request without a valid, unexpired token gets `401`. Static renderer
+  files are public; CORS preflights are answered before authentication.
+- Fail closed: with no (or a malformed) signing key, every `/api` request is rejected.
+- Malformed header/claim JSON, invalid lifetime types and tokens before `nbf` are
+  rejected without throwing from the validator.
+
+### Data Source Connections [REPORT-CONNECTIONS]
+
+`ConnectionStrings:{ref}` entries are opened with the provider they target, detected
+from connection string keywords (`Host` → PostgreSQL; `Server`, `Initial Catalog`,
+`User Id`, `Integrated Security`, `TrustServerCertificate` → SQL Server; otherwise
+SQLite). `ConnectionProviders:{ref}` (`Sqlite`, `Postgres`, `SqlServer`) overrides
+detection. LQL data sources are transpiled for their connection's provider, and the
+engine disposes each connection after its query.
 
 ## MVP Scope
 

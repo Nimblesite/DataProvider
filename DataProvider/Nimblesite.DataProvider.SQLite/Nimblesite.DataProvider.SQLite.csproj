@@ -54,6 +54,7 @@
        SqlParserContractTests which need to walk the raw parse tree. -->
   <ItemGroup>
     <InternalsVisibleTo Include="Nimblesite.DataProvider.Tests" />
+    <InternalsVisibleTo Include="DataProvider" />
   </ItemGroup>
 
   <!-- Package Content - README.md included via Directory.Build.props -->

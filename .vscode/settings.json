@@ -2,6 +2,14 @@
     "csharp.maxProjectFileCountForDiagnosticAnalysis": 10000,
     "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "fullSolution",
     "dotnet.backgroundAnalysis.compilerDiagnosticsScope": "fullSolution",
+    "files.watcherExclude": {
+        "**/bin/**": true,
+        "**/obj/**": true,
+        "**/target/**": true,
+        "**/node_modules/**": true,
+        "**/TestResults/**": true,
+        "**/.deslop/cache/**": true
+    },
     "code-runner.clearPreviousOutput": true,
     "code-runner.saveFileBeforeRun": true,
     "code-runner.runInTerminal": true,
@@ -15,5 +23,6 @@
         "titleBar.activeForeground": "#F4F7FB",
         "titleBar.inactiveBackground": "#070D1F",
         "titleBar.inactiveForeground": "#F4F7FBcc"
-    }
+    },
+    "deslop.topOffenders.splitByLanguage": true
 }

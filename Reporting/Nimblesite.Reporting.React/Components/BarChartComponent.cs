@@ -45,8 +45,8 @@ namespace Nimblesite.Reporting.React.Components
             var columnNames = Script.Get<string[]>(dataSourceResult, "columnNames");
             var rows = Script.Get<object[]>(dataSourceResult, "rows") ?? new object[0];
 
-            var xIndex = FindColumnIndex(columnNames, xField);
-            var yIndex = FindColumnIndex(columnNames, yField);
+            var xIndex = ColumnLookup.FindColumnIndex(columnNames, xField);
+            var yIndex = ColumnLookup.FindColumnIndex(columnNames, yField);
 
             var chartClassName = cssClass != null ? "report-chart " + cssClass : "report-chart";
 
@@ -185,18 +185,6 @@ namespace Nimblesite.Reporting.React.Components
                     ),
                 }
             );
-        }
-
-        private static int FindColumnIndex(string[] columnNames, string field)
-        {
-            if (columnNames == null || field == null)
-                return -1;
-            for (var i = 0; i < columnNames.Length; i++)
-            {
-                if (columnNames[i] == field)
-                    return i;
-            }
-            return -1;
         }
 
         private static string TruncateLabel(string label, int maxLen)

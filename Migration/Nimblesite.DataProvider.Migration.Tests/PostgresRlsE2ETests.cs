@@ -164,24 +164,7 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
 
     private void ApplyAndForceRls(SchemaDefinition desired, params string[] tableNames)
     {
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)
-        ).Value;
-
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.ApplySchema(_connection, desired, _logger);
 
         // Testcontainers postgres connects as a superuser with BYPASSRLS.
         // To exercise policies we need a non-bypassrls role and grant CRUD.

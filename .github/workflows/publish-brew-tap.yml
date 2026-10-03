@@ -1,0 +1,97 @@
+# Vendored from Shipwright templates/gh-actions/publish-brew-tap.yml
+# Writes Formula/<name>.rb (url/version/sha256 + --version test) to the tap repo.
+# sha256 MUST come from the build's signed SHA256SUMS, never recomputed. [SWR-SEC-CHECKSUM]
+name: publish-brew-tap
+
+on:
+  workflow_call:
+    inputs:
+      tap_repo:
+        required: true
+        type: string
+      formula_name:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      asset_url:
+        required: true
+        type: string
+      sha256:
+        required: true
+        type: string
+      binary_name:
+        required: true
+        type: string
+      homepage:
+        required: true
+        type: string
+      description:
+        required: true
+        type: string
+    secrets:
+      tap_token:
+        required: true
+
+# SWR-SEC-TOKEN-PRIVILEGE: this job checks out an EXTERNAL tap repo via tap_token
+# and pushes to it; its own GITHUB_TOKEN needs no write.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.tap_repo }}
+          token: ${{ secrets.tap_token }}
+          path: tap
+      - name: Write formula
+        shell: bash
+        working-directory: tap
+        env:
+          FORMULA_NAME: ${{ inputs.formula_name }}
+          DESCRIPTION: ${{ inputs.description }}
+          HOMEPAGE: ${{ inputs.homepage }}
+          ASSET_URL: ${{ inputs.asset_url }}
+          VERSION: ${{ inputs.version }}
+          SHA256: ${{ inputs.sha256 }}
+          BINARY_NAME: ${{ inputs.binary_name }}
+        run: |
+          set -euo pipefail
+          class_name="$(ruby -e 'puts ARGV[0].split(/[-_]/).map(&:capitalize).join' "$FORMULA_NAME")"
+          mkdir -p Formula
+          cat > "Formula/${FORMULA_NAME}.rb" <<FORMULA
+          class ${class_name} < Formula
+            desc "${DESCRIPTION}"
+            homepage "${HOMEPAGE}"
+            url "${ASSET_URL}"
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            def install
+              bin.install "${BINARY_NAME}"
+            end
+
+            test do
+              assert_match "${VERSION}", shell_output("#{bin}/${BINARY_NAME} --version")
+            end
+          end
+          FORMULA
+      - name: Commit formula
+        shell: bash
+        working-directory: tap
+        env:
+          FORMULA_NAME: ${{ inputs.formula_name }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "Formula/${FORMULA_NAME}.rb"
+          git commit -m "Update ${FORMULA_NAME} to ${VERSION}" || exit 0
+          git push

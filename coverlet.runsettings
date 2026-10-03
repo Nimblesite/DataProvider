@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
+<!-- agent-pmo:795a9c2 -->
 <RunSettings>
+  <!-- Fail-fast: stop the whole test run at the first failing test ([TEST-RULES]). -->
+  <RunConfiguration>
+    <StopOnFail>true</StopOnFail>
+  </RunConfiguration>
   <DataCollectionRunSettings>
     <DataCollectors>
       <DataCollector friendlyName="XPlat Code Coverage">

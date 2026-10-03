@@ -899,4 +899,33 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     }
 
     #endregion
+
+    [Fact]
+    public async Task Repositories_WithoutSyncSchema_ReturnDatabaseErrors()
+    {
+        using var bare = await fixture
+            .CreateDatabaseAsync("sync_repo_no_schema")
+            .ConfigureAwait(true);
+        var client = new SyncClient("origin-1", 1, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z");
+        var entry = new SyncLogEntry(
+            0,
+            "TestTable",
+            "{\"Id\":\"t1\"}",
+            SyncOperation.Insert,
+            "{\"Id\":\"t1\"}",
+            "origin-1",
+            "2025-01-01T00:00:00Z"
+        );
+
+        Assert.True(PostgresSyncClientRepository.GetAll(bare).IsError);
+        Assert.True(PostgresSyncClientRepository.GetByOrigin(bare, "origin-1").IsError);
+        Assert.True(PostgresSyncClientRepository.Upsert(bare, client).IsError);
+        Assert.True(PostgresSyncClientRepository.Delete(bare, "origin-1").IsError);
+        Assert.True(PostgresSyncClientRepository.GetMinVersion(bare).IsError);
+        Assert.True(PostgresSyncLogRepository.FetchChanges(bare, 0, 10).IsError);
+        Assert.True(PostgresSyncLogRepository.Insert(bare, entry).IsError);
+        Assert.True(PostgresSyncLogRepository.GetLastServerVersion(bare).IsError);
+        Assert.True(PostgresSyncLogRepository.GetMaxVersion(bare).IsError);
+        Assert.True(PostgresSyncLogRepository.UpdateLastServerVersion(bare, 5).IsError);
+    }
 }

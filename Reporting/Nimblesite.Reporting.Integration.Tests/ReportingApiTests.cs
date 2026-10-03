@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Xunit;
 
 namespace Nimblesite.Reporting.Integration.Tests;
 
@@ -25,7 +24,7 @@ public sealed class ReportingApiTests
     public async Task ListReports_ReturnsReportList_FromRealApi()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
         var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports");
@@ -56,7 +55,7 @@ public sealed class ReportingApiTests
     public async Task GetReport_ReturnsReportMetadata_WithoutConnectionStrings()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
         var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports/e2e-products");
@@ -95,7 +94,7 @@ public sealed class ReportingApiTests
     public async Task GetReport_NonexistentId_Returns404()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
         var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports/nonexistent");
@@ -108,7 +107,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_ReturnsRealDataFromSQLite()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -163,7 +162,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_LqlHighValueFilter_ReturnsFilteredProducts()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -214,7 +213,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_LqlCaseExpression_ReturnsPriceTiers()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -261,7 +260,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_LqlGroupByHaving_ReturnsFilteredAggregates()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -295,7 +294,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_CategorySummary_ReturnsAggregatedData()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -343,7 +342,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_Totals_ReturnsCorrectAggregates()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -384,7 +383,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_NonexistentId_Returns404()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
@@ -405,7 +404,7 @@ public sealed class ReportingApiTests
     public async Task ExecuteReport_AllDataSourcesPresent_InResponse()
     {
         // Arrange
-        using var client = new HttpClient();
+        using var client = ReportingE2EFixture.CreateApiClient();
         var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,

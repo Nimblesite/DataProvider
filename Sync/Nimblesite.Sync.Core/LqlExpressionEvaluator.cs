@@ -261,16 +261,7 @@ internal static partial class LqlExpressionEvaluator
 
         if (source.TryGetProperty(columnName, out var prop))
         {
-            return prop.ValueKind switch
-            {
-                JsonValueKind.String => prop.GetString(),
-                JsonValueKind.Number when prop.TryGetInt64(out var l) => l,
-                JsonValueKind.Number => prop.GetDouble(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null,
-                _ => prop.GetRawText(),
-            };
+            return ConvertJsonElement(prop);
         }
 
         // Try case-insensitive match
@@ -278,21 +269,27 @@ internal static partial class LqlExpressionEvaluator
         {
             if (property.Name.Equals(columnName, StringComparison.OrdinalIgnoreCase))
             {
-                return property.Value.ValueKind switch
-                {
-                    JsonValueKind.String => property.Value.GetString(),
-                    JsonValueKind.Number when property.Value.TryGetInt64(out var l) => l,
-                    JsonValueKind.Number => property.Value.GetDouble(),
-                    JsonValueKind.True => true,
-                    JsonValueKind.False => false,
-                    JsonValueKind.Null => null,
-                    _ => property.Value.GetRawText(),
-                };
+                return ConvertJsonElement(property.Value);
             }
         }
 
         return null;
     }
+
+    /// <summary>
+    /// Converts a JSON element to its CLR value.
+    /// </summary>
+    private static object? ConvertJsonElement(JsonElement element) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number when element.TryGetInt64(out var l) => l,
+            JsonValueKind.Number => element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            _ => element.GetRawText(),
+        };
 
     /// <summary>
     /// Parses function arguments, handling quoted strings and nested calls.

@@ -37,6 +37,31 @@ public static class ReportEngine
         Func<string, Result<IDbConnection, SqlError>> connectionFactory,
         Func<string, Result<string, SqlError>> lqlTranspiler,
         ILogger logger
+    ) =>
+        Execute(
+            report: report,
+            parameters: parameters,
+            connectionFactory: connectionFactory,
+            lqlTranspiler: (_, lql) => lqlTranspiler(lql),
+            logger: logger
+        );
+
+    /// <summary>
+    /// Executes all data sources in a report definition, transpiling LQL for the
+    /// provider behind each data source's connection ref.
+    /// </summary>
+    /// <param name="report">The report definition to execute.</param>
+    /// <param name="parameters">Parameter values provided by the user.</param>
+    /// <param name="connectionFactory">Factory that creates open IDbConnection from a connection ref name.</param>
+    /// <param name="lqlTranspiler">Transpiles LQL (second argument) to SQL for the connection ref (first argument).</param>
+    /// <param name="logger">Logger for diagnostics.</param>
+    /// <returns>Result containing all data source results or an error.</returns>
+    public static EngineResult Execute(
+        ReportDefinition report,
+        ImmutableDictionary<string, string> parameters,
+        Func<string, Result<IDbConnection, SqlError>> connectionFactory,
+        Func<string, string, Result<string, SqlError>> lqlTranspiler,
+        ILogger logger
     )
     {
         logger.LogInformation(
@@ -99,7 +124,7 @@ public static class ReportEngine
         DataSourceDefinition dataSource,
         ImmutableDictionary<string, string> parameters,
         Func<string, Result<IDbConnection, SqlError>> connectionFactory,
-        Func<string, Result<string, SqlError>> lqlTranspiler,
+        Func<string, string, Result<string, SqlError>> lqlTranspiler,
         ILogger logger
     )
     {
@@ -159,7 +184,7 @@ public static class ReportEngine
         DataSourceDefinition dataSource,
         ImmutableDictionary<string, string> parameters,
         Func<string, Result<IDbConnection, SqlError>> connectionFactory,
-        Func<string, Result<string, SqlError>> lqlTranspiler,
+        Func<string, string, Result<string, SqlError>> lqlTranspiler,
         ILogger logger
     )
     {
@@ -173,7 +198,7 @@ public static class ReportEngine
             return new DsError(SqlError.Create("LQL data source has no connection reference"));
         }
 
-        return lqlTranspiler(dataSource.Query) switch
+        return lqlTranspiler(dataSource.ConnectionRef, dataSource.Query) switch
         {
             TranspileError transpileErr => new DsError(transpileErr.Value),
             TranspileOk transpileOk => ExecuteTranspiledSql(
@@ -219,9 +244,11 @@ public static class ReportEngine
         ILogger logger
     )
     {
+        // The factory hands over a freshly opened connection; the engine owns it.
+        using var owned = connection;
         try
         {
-            using var command = connection.CreateCommand();
+            using var command = owned.CreateCommand();
             command.CommandText = sql;
 
             foreach (var paramName in parameterNames)

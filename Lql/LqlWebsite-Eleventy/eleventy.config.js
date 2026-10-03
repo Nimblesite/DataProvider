@@ -20,6 +20,11 @@ export default function(eleventyConfig) {
   const md = markdownIt(mdOptions).use(markdownItAnchor, mdAnchorOptions);
   eleventyConfig.setLibrary("md", md);
 
+  // Release notes carry untrusted PR titles/handles — render with raw HTML OFF.
+  // Implements [WEB-RELEASES].
+  const releaseMd = markdownIt({ html: false, linkify: true, breaks: false });
+  eleventyConfig.addFilter("releaseNotes", (body) => (body ? releaseMd.render(body) : ""));
+
   eleventyConfig.addPlugin(syntaxHighlight);
   eleventyConfig.addPlugin(pluginRss);
   eleventyConfig.addPlugin(eleventyNavigationPlugin);

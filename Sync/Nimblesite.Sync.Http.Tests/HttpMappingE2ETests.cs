@@ -154,6 +154,20 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
     /// <summary>
+    /// Seeds SQLite source + Postgres target with fresh origins and returns the User->Customer mapping.
+    /// </summary>
+    private SyncMappingConfig SetupUserToCustomerScenario()
+    {
+        var sourceOrigin = Guid.NewGuid().ToString();
+        var targetOrigin = Guid.NewGuid().ToString();
+
+        SetupSqliteSource(sourceOrigin);
+        SetupPostgresTarget(targetOrigin);
+
+        return CreateUserToCustomerMapping();
+    }
+
+    /// <summary>
     /// Merges the PK value into a payload for insert operations.
     /// PostgresChangeApplier expects PK to be in the payload.
     /// </summary>
@@ -196,6 +210,67 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             _ => element.GetRawText(),
         };
 
+    /// <summary>
+    /// Shared act step: runs the mapping engine with the class logger (Push by default).
+    /// </summary>
+    private MappingResult ApplyMapping(
+        SyncLogEntry entry,
+        SyncMappingConfig config,
+        MappingDirection direction = MappingDirection.Push
+    ) => MappingEngine.ApplyMapping(entry, config, direction, _logger);
+
+    /// <summary>
+    /// Shared arrange step: single-table Push mapping against Source -> target,
+    /// the shape used by the LQL transform tests.
+    /// </summary>
+    private static SyncMappingConfig MappingConfig(
+        string mappingId,
+        params ColumnMapping[] mappings
+    ) => MappingConfig(mappingId, "Source", "target", mappings);
+
+    /// <summary>Single-table Push mapping with explicit table names.</summary>
+    private static SyncMappingConfig MappingConfig(
+        string mappingId,
+        string sourceTable,
+        string targetTable,
+        params ColumnMapping[] mappings
+    ) =>
+        new(
+            Version: "1.0",
+            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
+            Mappings:
+            [
+                new TableMapping(
+                    Id: mappingId,
+                    SourceTable: sourceTable,
+                    TargetTable: targetTable,
+                    Direction: MappingDirection.Push,
+                    Enabled: true,
+                    PkMapping: null,
+                    ColumnMappings: mappings,
+                    ExcludedColumns: [],
+                    Filter: null,
+                    SyncTracking: new SyncTrackingConfig()
+                ),
+            ]
+        );
+
+    /// <summary>Shared LQL transform column mapping.</summary>
+    private static ColumnMapping LqlColumn(string target, string lql) =>
+        new(Source: null, Target: target, Transform: TransformType.Lql, Lql: lql);
+
+    /// <summary>Shared insert entry on the Source table (pass a different tableName to override).</summary>
+    private static SyncLogEntry SourceEntry(string payload, string tableName = "Source") =>
+        new(
+            Version: 1,
+            TableName: tableName,
+            PkValue: """{"Id":"1"}""",
+            Operation: SyncOperation.Insert,
+            Payload: payload,
+            Origin: "test",
+            Timestamp: "2024-01-01T00:00:00Z"
+        );
+
     [Fact]
     public void MappingEngine_TransformsUserToCustomer_WithLql()
     {
@@ -213,7 +288,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         var config = CreateUserToCustomerMapping();
 
         // Act - apply mapping
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -251,32 +326,11 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void MappingEngine_WithConcatTransform_CombinesColumns()
     {
         // Arrange - mapping with concat
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "name-concat",
-                    SourceTable: "Person",
-                    TargetTable: "person",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "full_name",
-                            Transform: TransformType.Lql,
-                            Lql: "concat(FirstName, ' ', LastName)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "name-concat",
+            sourceTable: "Person",
+            targetTable: "person",
+            LqlColumn("full_name", "concat(FirstName, ' ', LastName)")
         );
 
         var entry = new SyncLogEntry(
@@ -290,7 +344,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -302,32 +356,11 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void MappingEngine_WithCoalesceTransform_ReturnsFirstNonNull()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "coalesce-test",
-                    SourceTable: "Contact",
-                    TargetTable: "contact",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "phone",
-                            Transform: TransformType.Lql,
-                            Lql: "coalesce(Mobile, Home, Office)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "coalesce-test",
+            sourceTable: "Contact",
+            targetTable: "contact",
+            LqlColumn("phone", "coalesce(Mobile, Home, Office)")
         );
 
         var entry = new SyncLogEntry(
@@ -341,7 +374,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -353,32 +386,11 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void MappingEngine_WithSubstringTransform_ExtractsText()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "substring-test",
-                    SourceTable: "Product",
-                    TargetTable: "product",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "sku_prefix",
-                            Transform: TransformType.Lql,
-                            Lql: "substring(SKU, 1, 3)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "substring-test",
+            sourceTable: "Product",
+            targetTable: "product",
+            LqlColumn("sku_prefix", "substring(SKU, 1, 3)")
         );
 
         var entry = new SyncLogEntry(
@@ -392,7 +404,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -404,13 +416,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void E2E_SyncWithMapping_TransformsData_AcrossDatabases()
     {
         // Arrange - set up databases with DIFFERENT schemas
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
-
-        SetupSqliteSource(sourceOrigin);
-        SetupPostgresTarget(targetOrigin);
-
-        var config = CreateUserToCustomerMapping();
+        var config = SetupUserToCustomerScenario();
 
         // Act - insert User in SQLite source
         using (var cmd = _sqliteConn.CreateCommand())
@@ -429,12 +435,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         Assert.Single(changesList);
 
         // Apply mapping to transform the entry
-        var mappingResult = MappingEngine.ApplyMapping(
-            changesList[0],
-            config,
-            MappingDirection.Push,
-            _logger
-        );
+        var mappingResult = ApplyMapping(changesList[0], config);
         var mappedEntry = Assert.IsType<MappingSuccess>(mappingResult);
 
         // Apply mapped changes to Postgres with suppression
@@ -483,13 +484,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void E2E_MultipleRecords_AllTransformedCorrectly()
     {
         // Arrange
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
-
-        SetupSqliteSource(sourceOrigin);
-        SetupPostgresTarget(targetOrigin);
-
-        var config = CreateUserToCustomerMapping();
+        var config = SetupUserToCustomerScenario();
 
         // Insert multiple users
         var users = new[]
@@ -518,12 +513,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         PostgresSyncSession.EnableSuppression(_postgresConn);
         foreach (var change in changesList)
         {
-            var mappingResult = MappingEngine.ApplyMapping(
-                change,
-                config,
-                MappingDirection.Push,
-                _logger
-            );
+            var mappingResult = ApplyMapping(change, config);
             var mapped = Assert.IsType<MappingSuccess>(mappingResult);
 
             foreach (var entry in mapped.Entries)
@@ -584,7 +574,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -613,7 +603,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -631,46 +621,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_WithNullValue_ReturnsNull()
     {
         // Arrange - payload with null field
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "null-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "upper_name",
-                            Transform: TransformType.Lql,
-                            Lql: "upper(Name)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = MappingConfig(mappingId: "null-test", LqlColumn("upper_name", "upper(Name)"));
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":null}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":null}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - should handle null gracefully
         var success = Assert.IsType<MappingSuccess>(result);
@@ -681,46 +637,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_WithEmptyString_ReturnsEmpty()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "empty-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "upper_name",
-                            Transform: TransformType.Lql,
-                            Lql: "upper(Name)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = MappingConfig(mappingId: "empty-test", LqlColumn("upper_name", "upper(Name)"));
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":""}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":""}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -732,46 +654,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_ReplaceFunction_WorksCorrectly()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "replace-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "clean_phone",
-                            Transform: TransformType.Lql,
-                            Lql: "replace(Phone, '-', '')"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "replace-test",
+            LqlColumn("clean_phone", "replace(Phone, '-', '')")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Phone":"555-123-4567"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Phone":"555-123-4567"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -783,46 +674,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_LeftFunction_ExtractsPrefix()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "left-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "initials",
-                            Transform: TransformType.Lql,
-                            Lql: "left(Name, 2)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = MappingConfig(mappingId: "left-test", LqlColumn("initials", "left(Name, 2)"));
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"Alexander"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":"Alexander"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -834,46 +691,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_RightFunction_ExtractsSuffix()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "right-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "last_four",
-                            Transform: TransformType.Lql,
-                            Lql: "right(CardNumber, 4)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "right-test",
+            LqlColumn("last_four", "right(CardNumber, 4)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","CardNumber":"1234567890123456"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","CardNumber":"1234567890123456"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -885,46 +711,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_TrimFunction_RemovesWhitespace()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "trim-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "clean_name",
-                            Transform: TransformType.Lql,
-                            Lql: "trim(Name)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = MappingConfig(mappingId: "trim-test", LqlColumn("clean_name", "trim(Name)"));
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"  Hello World  "}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":"  Hello World  "}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -936,46 +728,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_LengthFunction_ReturnsStringLength()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "length-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "name_length",
-                            Transform: TransformType.Lql,
-                            Lql: "length(Name)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "length-test",
+            LqlColumn("name_length", "length(Name)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"Hello"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":"Hello"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -987,46 +748,20 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_NestedConcat_BuildsComplexString()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "nested-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "display",
-                            Transform: TransformType.Lql,
-                            Lql: "concat(Title, ': ', FirstName, ' ', LastName, ' (', Department, ')')"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "nested-test",
+            LqlColumn(
+                "display",
+                "concat(Title, ': ', FirstName, ' ', LastName, ' (', Department, ')')"
+            )
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Title":"Dr","FirstName":"John","LastName":"Smith","Department":"Engineering"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var entry = SourceEntry(
+            """{"Id":"1","Title":"Dr","FirstName":"John","LastName":"Smith","Department":"Engineering"}"""
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1041,46 +776,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_CoalesceWithAllNull_ReturnsEmpty()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "coalesce-null-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "phone",
-                            Transform: TransformType.Lql,
-                            Lql: "coalesce(Mobile, Home, Work)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "coalesce-null-test",
+            LqlColumn("phone", "coalesce(Mobile, Home, Work)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Mobile":"","Home":"","Work":""}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Mobile":"","Home":"","Work":""}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - coalesce returns null/empty when all values are empty
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1100,47 +804,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_DateFormatWithDifferentTimezones_PreservesUtc()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "tz-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "date_only",
-                            Transform: TransformType.Lql,
-                            Lql: "CreatedAt |> dateFormat('yyyy-MM-dd')"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "tz-test",
+            LqlColumn("date_only", "CreatedAt |> dateFormat('yyyy-MM-dd')")
         );
 
         // Test with explicit timezone offset
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","CreatedAt":"2024-12-25T23:30:00+00:00"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","CreatedAt":"2024-12-25T23:30:00+00:00"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - should preserve UTC date
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1158,18 +831,10 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             Mappings: [] // No mappings defined
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "UnknownTable",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Data":"test"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - passthrough returns identity mapping
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1188,18 +853,10 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             Mappings: [] // No mappings defined
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "UnknownTable",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Data":"test"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - strict mode skips unmapped tables
         Assert.IsType<MappingSkipped>(result);
@@ -1229,18 +886,10 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             ]
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Data":"test"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var skipped = Assert.IsType<MappingSkipped>(result);
@@ -1271,18 +920,10 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             ]
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Data":"test"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
         // Act - try to use for Push direction
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - should be skipped because direction doesn't match
         Assert.IsType<MappingSkipped>(result);
@@ -1312,19 +953,11 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             ]
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Data":"test"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
         // Act - should work for both directions
-        var pushResult = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-        var pullResult = MappingEngine.ApplyMapping(entry, config, MappingDirection.Pull, _logger);
+        var pushResult = ApplyMapping(entry, config);
+        var pullResult = ApplyMapping(entry, config, MappingDirection.Pull);
 
         // Assert
         Assert.IsType<MappingSuccess>(pushResult);
@@ -1337,46 +970,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_PipelineWithMultipleSteps_TransformsCorrectly()
     {
         // Arrange - use pipe operator to chain transforms
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "pipeline-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "clean_name",
-                            Transform: TransformType.Lql,
-                            Lql: "Name |> trim() |> upper()"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "pipeline-test",
+            LqlColumn("clean_name", "Name |> trim() |> upper()")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"  hello world  "}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":"  hello world  "}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - should trim then uppercase
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1388,42 +990,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_NumericValue_PreservesType()
     {
         // Arrange - test numeric field handling
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "numeric-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("Amount", "amount"),
-                        new ColumnMapping("Count", "count"),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "numeric-test",
+            new ColumnMapping("Amount", "amount"),
+            new ColumnMapping("Count", "count")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Amount":123.45,"Count":42}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Amount":123.45,"Count":42}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - numeric values preserved
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1436,42 +1012,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_BooleanValue_PreservesType()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "bool-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("IsActive", "is_active"),
-                        new ColumnMapping("IsVerified", "is_verified"),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "bool-test",
+            new ColumnMapping("IsActive", "is_active"),
+            new ColumnMapping("IsVerified", "is_verified")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","IsActive":true,"IsVerified":false}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","IsActive":true,"IsVerified":false}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1484,38 +1034,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_SpecialCharactersInString_EscapedCorrectly()
     {
         // Arrange - strings with special JSON characters
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "escape-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings: [new ColumnMapping("Description", "description")],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "escape-test",
+            new ColumnMapping("Description", "description")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - special chars preserved
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1531,47 +1058,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     {
         // Arrange - test with very long string
         var longString = new string('x', 10000);
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "long-string-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("Data", "data"),
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "data_length",
-                            Transform: TransformType.Lql,
-                            Lql: "length(Data)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "long-string-test",
+            new ColumnMapping("Data", "data"),
+            LqlColumn("data_length", "length(Data)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: $$$"""{"Id":"1","Data":"{{{longString}}}"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry($$$"""{"Id":"1","Data":"{{{longString}}}"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1584,47 +1080,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void LqlExpression_UnicodeCharacters_PreservedCorrectly()
     {
         // Arrange - test Unicode handling
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "unicode-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("Name", "name"),
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "name_upper",
-                            Transform: TransformType.Lql,
-                            Lql: "upper(Name)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "unicode-test",
+            new ColumnMapping("Name", "name"),
+            LqlColumn("name_upper", "upper(Name)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = SourceEntry("""{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}""");
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - Unicode preserved
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1639,57 +1104,28 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void MappingEngine_MultipleColumnMappings_AllApplied()
     {
         // Arrange - many column mappings
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "multi-col-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("Col1", "col_1"),
-                        new ColumnMapping("Col2", "col_2"),
-                        new ColumnMapping("Col3", "col_3"),
-                        new ColumnMapping("Col4", "col_4"),
-                        new ColumnMapping("Col5", "col_5"),
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "constant",
-                            Transform: TransformType.Constant,
-                            Value: "fixed"
-                        ),
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "computed",
-                            Transform: TransformType.Lql,
-                            Lql: "concat(Col1, '-', Col2)"
-                        ),
-                    ],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
+        var config = MappingConfig(
+            mappingId: "multi-col-test",
+            new ColumnMapping("Col1", "col_1"),
+            new ColumnMapping("Col2", "col_2"),
+            new ColumnMapping("Col3", "col_3"),
+            new ColumnMapping("Col4", "col_4"),
+            new ColumnMapping("Col5", "col_5"),
+            new ColumnMapping(
+                Source: null,
+                Target: "constant",
+                Transform: TransformType.Constant,
+                Value: "fixed"
+            ),
+            LqlColumn("computed", "concat(Col1, '-', Col2)")
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var entry = SourceEntry(
+            """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}"""
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - all mappings applied
         var success = Assert.IsType<MappingSuccess>(result);
@@ -1727,18 +1163,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             ]
         );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var entry = SourceEntry(
+            """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}"""
         );
 
         // Act
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
+        var result = ApplyMapping(entry, config);
 
         // Assert - excluded columns not in output
         var success = Assert.IsType<MappingSuccess>(result);

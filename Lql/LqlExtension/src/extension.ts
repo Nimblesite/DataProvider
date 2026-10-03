@@ -4,12 +4,7 @@ import * as https from "https";
 import * as http from "http";
 import { spawnSync } from "child_process";
 import * as vscode from "vscode";
-import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind,
-} from "vscode-languageclient/node";
+import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -20,24 +15,16 @@ function log(msg: string): void {
   outputChannel.appendLine(`[LQL] ${msg}`);
 }
 
+/** Map platform/arch to the vsce target name used for bundled binaries. */
+function getVsceTarget(): string | undefined {
+  const target = `${process.platform}-${process.arch}`;
+  return ["linux-x64", "darwin-x64", "darwin-arm64", "win32-x64"].includes(target) ? target : undefined;
+}
+
 /** Map platform/arch to the release asset name. */
 function getLspAssetName(): string | undefined {
-  const platform = process.platform;
-  const arch = process.arch;
-
-  if (platform === "linux" && arch === "x64") {
-    return "lql-lsp-linux-x64";
-  }
-  if (platform === "darwin" && arch === "x64") {
-    return "lql-lsp-darwin-x64";
-  }
-  if (platform === "darwin" && arch === "arm64") {
-    return "lql-lsp-darwin-arm64";
-  }
-  if (platform === "win32" && arch === "x64") {
-    return "lql-lsp-windows-x64.exe";
-  }
-  return undefined;
+  const target = getVsceTarget();
+  return target === undefined ? undefined : target === "win32-x64" ? "lql-lsp-windows-x64.exe" : `lql-lsp-${target}`;
 }
 
 /** Get the extension version from package.json to find the matching GH release. */
@@ -89,49 +76,36 @@ function getBinaryVersion(binary: string): string | undefined {
       return undefined;
     }
     const output = `${result.stdout}\n${result.stderr}`;
-    const match = /(\d+\.\d+\.\d+)/.exec(output);
-    return match === null ? undefined : match[1];
+    const versionLine = output
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("lql-lsp "));
+    return versionLine?.slice("lql-lsp ".length);
   } catch {
     return undefined;
   }
 }
 
 /**
- * Look for `lql-lsp` on the system PATH and return its location if its
- * --version matches the extension version. Used so dev / test / CI can
- * install the binary into PATH (e.g. via cargo install or copying the
- * cargo build output) and have the extension use it without downloading.
+ * Look for the target-specific `lql-lsp` bundled in the installed VSIX at
+ * bin/<vsceTarget>/lql-lsp[.exe]. Returns undefined in dev / test / CI
+ * source-checkout runs where no packaged binary was staged.
  */
-function findOnPathMatchingVersion(expectedVersion: string): string | undefined {
-  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
-  const pathEnv = process.env.PATH ?? "";
-  const sep = process.platform === "win32" ? ";" : ":";
-  for (const dir of pathEnv.split(sep)) {
-    if (dir === "") {
-      continue;
-    }
-    const candidate = path.join(dir, binaryName);
-    if (!fs.existsSync(candidate)) {
-      continue;
-    }
-    const version = getBinaryVersion(candidate);
-    if (version === expectedVersion) {
-      return candidate;
-    }
+function findPackagedBinary(context: vscode.ExtensionContext): string | undefined {
+  const target = getVsceTarget();
+  if (target === undefined) {
+    return undefined;
   }
-  return undefined;
+  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
+  const candidate = path.join(context.extensionPath, "bin", target, binaryName);
+  return fs.existsSync(candidate) ? candidate : undefined;
 }
 
 /**
  * Look for a locally-built `lql-lsp` in the Rust cargo target folder
- * adjacent to the extension install path. Used by dev / test / CI runs
- * where the binary is built but not installed onto PATH (or where the
- * test harness strips PATH from the spawned VS Code process).
+ * adjacent to the extension install path. Used by dev / test / CI runs.
  */
-function findLocalCargoBuild(
-  context: vscode.ExtensionContext,
-  expectedVersion: string,
-): string | undefined {
+function findLocalCargoBuild(context: vscode.ExtensionContext, expectedVersion: string): string | undefined {
   const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
   const extPath = context.extensionPath;
   const candidates = [
@@ -152,17 +126,14 @@ function findLocalCargoBuild(
 }
 
 /** Download the LSP binary from the GitHub release matching the extension version. */
-async function downloadLspBinary(
-  context: vscode.ExtensionContext,
-): Promise<string> {
+async function downloadLspBinary(context: vscode.ExtensionContext): Promise<string> {
   const assetName = getLspAssetName();
   if (assetName === undefined) {
     throw new Error(`Unsupported platform: ${process.platform} ${process.arch}`);
   }
 
   const binDir = path.join(context.globalStorageUri.fsPath, "bin");
-  const binaryName =
-    process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
+  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
   const binaryPath = path.join(binDir, binaryName);
 
   if (fs.existsSync(binaryPath)) {
@@ -186,15 +157,13 @@ async function downloadLspBinary(
       if (process.platform !== "win32") {
         fs.chmodSync(binaryPath, 0o755);
       }
-    },
+    }
   );
 
   return binaryPath;
 }
 
-export async function activate(
-  context: vscode.ExtensionContext,
-): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   outputChannel = vscode.window.createOutputChannel("LQL Language Server");
   log("Extension activating...");
   log(`Platform: ${process.platform} ${process.arch}`);
@@ -216,38 +185,33 @@ export async function activate(
   if (customPath !== "") {
     if (!fs.existsSync(customPath)) {
       log(`ERROR: Custom LSP path does not exist: ${customPath}`);
-      vscode.window.showErrorMessage(
-        `LQL: Custom language server path not found: ${customPath}`,
-      );
+      vscode.window.showErrorMessage(`LQL: Custom language server path not found: ${customPath}`);
       return;
     }
     serverBinary = customPath;
     log(`LSP binary (custom): ${serverBinary}`);
   } else {
-    // 1. Prefer a binary on PATH whose --version matches the extension.
-    const onPath = findOnPathMatchingVersion(expectedVersion);
-    if (onPath !== undefined) {
-      serverBinary = onPath;
-      log(`LSP binary (PATH, version ${expectedVersion}): ${serverBinary}`);
+    // 1. Prefer the target-specific binary bundled in the installed VSIX
+    // (production layout: bin/<vsceTarget>/lql-lsp[.exe]).
+    const bundled = findPackagedBinary(context);
+    if (bundled !== undefined) {
+      serverBinary = bundled;
+      log(`LSP binary (bundled for ${getVsceTarget() ?? "unknown"}): ${serverBinary}`);
     } else {
-      // 2. Fall back to a locally-built cargo target adjacent to the
-      // extension (used by dev / test / CI runs where the binary isn't
-      // on PATH inside the spawned VS Code process).
+      // 2. Use a locally built binary in source checkouts.
       const localBuild = findLocalCargoBuild(context, expectedVersion);
       if (localBuild !== undefined) {
         serverBinary = localBuild;
         log(`LSP binary (local cargo build, version ${expectedVersion}): ${serverBinary}`);
       } else {
-        // 3. Otherwise download the matching release into globalStorage.
+        // 3. Download the matching release into globalStorage.
         try {
           serverBinary = await downloadLspBinary(context);
           log(`LSP binary (downloaded): ${serverBinary}`);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           log(`ERROR: ${message}`);
-          vscode.window.showErrorMessage(
-            `LQL: Failed to download language server: ${message}`,
-          );
+          vscode.window.showErrorMessage(`LQL: Failed to download language server: ${message}`);
           return;
         }
       }
@@ -274,7 +238,7 @@ export async function activate(
   const initOptions: Record<string, unknown> = {};
   if (connectionString !== "") {
     initOptions.connectionString = connectionString;
-    log(`Database: ${connectionString}`);
+    log(`Database connection string: configured`);
   }
   if (aiProvider !== "") {
     initOptions.aiProvider = {
@@ -298,12 +262,7 @@ export async function activate(
     initializationOptions: initOptions,
   };
 
-  client = new LanguageClient(
-    "lql-language-server",
-    "LQL Language Server",
-    serverOptions,
-    clientOptions,
-  );
+  client = new LanguageClient("lql-language-server", "LQL Language Server", serverOptions, clientOptions);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("lql.formatDocument", async () => {
@@ -311,7 +270,7 @@ export async function activate(
       if (editor?.document.languageId === "lql") {
         await vscode.commands.executeCommand("editor.action.formatDocument");
       }
-    }),
+    })
   );
 
   context.subscriptions.push(
@@ -319,18 +278,18 @@ export async function activate(
       const editor = vscode.window.activeTextEditor;
       if (editor?.document.languageId === "lql") {
         void vscode.window.showInformationMessage(
-          "LQL validation triggered — check the Problems panel for diagnostics.",
+          "LQL validation triggered — check the Problems panel for diagnostics."
         );
       }
-    }),
+    })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("lql.showCompiledSql", () => {
       void vscode.window.showInformationMessage(
-        "SQL compilation requires the LQL runtime. Use the CLI or Browser app.",
+        "SQL compilation requires the LQL runtime. Use the CLI or Browser app."
       );
-    }),
+    })
   );
 
   log("Starting LSP client...");

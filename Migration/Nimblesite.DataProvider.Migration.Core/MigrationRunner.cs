@@ -13,19 +13,38 @@ public static class MigrationRunner
     /// <param name="generateDdl">Platform-specific DDL generator</param>
     /// <param name="options">Migration options</param>
     /// <param name="logger">Optional logger</param>
+    /// <param name="verifyBeforeCommit">Optional integrity check run inside the migration transaction</param>
     /// <returns>Result indicating success or failure</returns>
     public static MigrationApplyResult Apply(
         IDbConnection connection,
         IReadOnlyList<SchemaOperation> operations,
         Func<SchemaOperation, string> generateDdl,
         MigrationOptions options,
-        ILogger? logger = null
+        ILogger? logger = null,
+        Func<bool>? verifyBeforeCommit = null
     )
     {
         if (operations.Count == 0)
         {
             logger?.LogInformation("No operations to apply, schema is up to date");
             return new MigrationApplyResult.Ok<bool, MigrationError>(true);
+        }
+
+        if (
+            !options.UseTransaction
+            && !options.DryRun
+            && operations.Any(op => op is ReplaceRlsPolicyOperation)
+        )
+        {
+            return new MigrationApplyResult.Error<bool, MigrationError>(
+                MigrationError.FromMessage("Replacing an RLS policy requires a transaction")
+            );
+        }
+        if (!options.UseTransaction && !options.DryRun && verifyBeforeCommit is not null)
+        {
+            return new MigrationApplyResult.Error<bool, MigrationError>(
+                MigrationError.FromMessage("Pre-commit verification requires a transaction")
+            );
         }
 
         // Check for destructive operations
@@ -109,6 +128,14 @@ public static class MigrationRunner
                 );
             }
 
+            if (!options.DryRun && verifyBeforeCommit is not null && !verifyBeforeCommit())
+            {
+                transaction?.Rollback();
+                return new MigrationApplyResult.Error<bool, MigrationError>(
+                    MigrationError.FromMessage("Schema integrity verification failed before commit")
+                );
+            }
+
             transaction?.Commit();
             logger?.LogInformation(
                 "Migration completed: {Count} operations applied",
@@ -140,6 +167,8 @@ public static class MigrationRunner
                 or DropFunctionOperation
                 or RevokePrivilegesOperation
                 or DropRlsPolicyOperation
+                or DropTriggerOperation
                 or DisableRlsOperation
-                or DisableForceRlsOperation;
+                or DisableForceRlsOperation
+                or RebuildTableOperation { Destructive: true };
 }

@@ -32,7 +32,7 @@ public enum RlsPlatform
 /// SQL Server: <c>SESSION_CONTEXT</c>) and delegates <c>exists(pipeline)</c>
 /// subquery wrappers to the LQL pipeline transpiler.
 /// </summary>
-public static class RlsPredicateTranspiler
+public static partial class RlsPredicateTranspiler
 {
     /// <summary>
     /// Sentinel placeholder used to mark <c>current_user_id()</c> calls

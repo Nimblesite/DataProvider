@@ -354,6 +354,19 @@ impl AiCompletionProvider for SlowAiProvider {
 mod tests {
     use super::*;
 
+    fn empty_context() -> AiCompletionContext {
+        AiCompletionContext {
+            document_text: String::new(),
+            line: 0,
+            column: 0,
+            line_prefix: String::new(),
+            word_prefix: String::new(),
+            file_uri: String::new(),
+            available_tables: vec![],
+            schema_description: String::new(),
+        }
+    }
+
     // ── AiConfig::from_json ────────────────────────────────────────────
     #[test]
     fn parse_full_config() {
@@ -575,16 +588,7 @@ mod tests {
     #[tokio::test]
     async fn slow_provider_returns_after_delay() {
         let provider = SlowAiProvider { delay_ms: 10 };
-        let ctx = AiCompletionContext {
-            document_text: "".to_string(),
-            line: 0,
-            column: 0,
-            line_prefix: "".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "".to_string(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].label, "ai_slow_result");
@@ -668,16 +672,7 @@ mod tests {
     #[tokio::test]
     async fn test_provider_items_are_snippet_kind() {
         let provider = TestAiProvider;
-        let ctx = AiCompletionContext {
-            document_text: "".to_string(),
-            line: 0,
-            column: 0,
-            line_prefix: "".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "".to_string(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         for item in &items {
             assert_eq!(item.kind, CompletionKind::Snippet);
@@ -759,16 +754,7 @@ mod tests {
             enabled: true,
         };
         let provider = OllamaProvider::new(&config, "ref".to_string());
-        let ctx = AiCompletionContext {
-            document_text: String::new(),
-            line: 0,
-            column: 0,
-            line_prefix: String::new(),
-            word_prefix: String::new(),
-            file_uri: String::new(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.is_empty(), "non-JSON body must yield empty");
     }
@@ -809,16 +795,7 @@ mod tests {
             enabled: true,
         };
         let provider = OllamaProvider::new(&config, "ref".to_string());
-        let ctx = AiCompletionContext {
-            document_text: String::new(),
-            line: 0,
-            column: 0,
-            line_prefix: String::new(),
-            word_prefix: String::new(),
-            file_uri: String::new(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.is_empty());
     }
@@ -861,16 +838,7 @@ mod tests {
             enabled: true,
         };
         let provider = OllamaProvider::new(&config, "ref".to_string());
-        let ctx = AiCompletionContext {
-            document_text: String::new(),
-            line: 0,
-            column: 0,
-            line_prefix: String::new(),
-            word_prefix: String::new(),
-            file_uri: String::new(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.iter().any(|i| i.label == "foo"), "should parse foo");
     }

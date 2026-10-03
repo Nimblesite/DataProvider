@@ -50,7 +50,7 @@ namespace Nimblesite.Reporting.React.Components
                 for (var c = 0; c < columns.Length; c++)
                 {
                     var field = Script.Get<string>(columns[c], "field");
-                    var colIndex = FindColumnIndex(allColumnNames, field);
+                    var colIndex = ColumnLookup.FindColumnIndex(allColumnNames, field);
                     var cellValue = colIndex >= 0 ? Script.Write<object>("row[colIndex]") : null;
                     cells[c] = Td(
                         className: "report-table-td",
@@ -89,18 +89,6 @@ namespace Nimblesite.Reporting.React.Components
                         : Fragment(),
                 }
             );
-        }
-
-        private static int FindColumnIndex(string[] columnNames, string field)
-        {
-            if (columnNames == null || field == null)
-                return -1;
-            for (var i = 0; i < columnNames.Length; i++)
-            {
-                if (columnNames[i] == field)
-                    return i;
-            }
-            return -1;
         }
     }
 }

@@ -61,16 +61,10 @@ public sealed class PostgresSupportE2ETests(PostgresContainerFixture fixture) : 
         var ops = (
             (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
         ).Value;
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
+        PostgresLqlOnlyE2ETests.ApplyOperations(
+            connection: _connection,
+            operations: ops,
+            logger: _logger
         );
     }
 

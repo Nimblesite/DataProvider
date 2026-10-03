@@ -4,13 +4,18 @@
 
 Lambda Query Language (Lql) is a functional–pipeline–style DSL that transpiles to procedural SQL or pure SQL for popular RDBMSs.
 
-### Pipeline syntax
+### Pipeline syntax [LQL-PIPELINE-COMPOSITION]
 
 Chained operations using `|>`:
 
 ```
 table |> join(other, on = …) |> filter(…) |> select(…) |> insert(…)
 ```
+
+Each appended operation must retain the earlier operations' meaning when
+transpiled for PostgreSQL, SQLite, or SQL Server. Adding a join and filter must
+keep the selected source; adding ordering and a limit must keep that join and
+filter while applying the requested ordering and row limit.
 
 ### Constructs
 
@@ -30,6 +35,45 @@ membership in a non-empty literal list. Pipeline filter bodies, including
 `exists(table |> filter(fn(row) => ...))`, must emit SQL `IN (...)` for the
 target platform. This supports compact role-membership predicates such as
 `m.role in ('owner', 'admin')` without expanding to `OR` chains.
+
+### Common Table Expressions [LQL-CTE]
+
+`with name as (pipeline), other as (pipeline) main-pipeline` names pipelines that
+the main pipeline (and later CTEs) can use as tables. It transpiles to
+`WITH name AS (...), other AS (...) SELECT ...` on every dialect.
+
+```
+with high_value_customers as (
+    orders |> group_by(orders.user_id) |> having(fn(g) => sum(orders.total) > 10000) |> select(orders.user_id)
+)
+users |> join(high_value_customers, on = users.id = high_value_customers.user_id) |> select(users.id)
+```
+
+### Derived Tables [LQL-DERIVED-TABLE]
+
+`join((pipeline), on = ...)` joins the result of a parenthesized pipeline. The
+derived table is aliased after its base table, and outer references to that base
+table (`orders.order_count`) resolve to the derived table.
+
+### Subquery Layout [LQL-SUBQUERY-LAYOUT]
+
+Statements with CTEs or derived tables are rendered identically on SQLite,
+PostgreSQL and SQL Server, one clause per line:
+
+- Queries that join sources alias each source by the initials of its
+  underscore-separated name (`users` → `u`, `high_value_customers` → `hvc`, with a
+  numeric suffix on collision) and qualify columns with those aliases.
+- A standalone single-table body (a CTE or derived table) drops its table
+  qualifiers; EXISTS/IN bodies keep them, because they may correlate with the
+  outer query.
+- Nested bodies are indented four spaces inside `(` … `)`.
+- Several `filter` steps are ANDed, each parenthesized so an `OR` inside one
+  filter cannot bind across the `AND`.
+- Only paging differs by dialect: `LIMIT`/`OFFSET` on SQLite and PostgreSQL,
+  `TOP n` or `OFFSET … ROWS FETCH NEXT … ROWS ONLY` on SQL Server. LIMIT/OFFSET
+  inside EXISTS/IN bodies are rejected rather than dropped.
+- SQLite otherwise renders statements on one line; a WHERE holding a multi-line
+  subquery switches it to one clause per line.
 
 Futures:
 
@@ -54,10 +98,11 @@ limit(n)
 | `union(other)`       | SQL `UNION`                    |
 | `range(a,b)`         | generates a range              |
 
-### Output
+### Output [LQL-OUTPUT-DIALECTS]
 
 * Target SQL dialect chosen at transpilation (`postgres`, `mysql`, `sqlserver`, etc.)
 * Defaults to PostgreSQL if not specified.
+* Equivalent select, filter, join, grouping, ordering, and paging requests retain their meaning on PostgreSQL, SQLite, and SQL Server. A target dialect that cannot render a requested statement must return an error rather than silently dropping an operation.
 
 ### Identifier Casing
 
@@ -76,12 +121,10 @@ This guarantees portability:
 
 ### Validation Rules
 
-#### Identifier Validation
+#### Identifier Validation [LQL-IDENTIFIER-VALIDATION]
 
 - **Numeric Start**: Identifiers cannot start with numbers (e.g., `123table` is invalid)
-- **Undefined Variables**: Identifiers containing underscores that appear as pipeline bases are treated as undefined variables and result in syntax errors
-  - Invalid: `undefined_variable |> select(name)` → "Syntax error: Undefined variable"
-  - Valid: `users |> select(name)` → Simple table names without underscores are allowed
+- **Underscored Table Names**: An identifier such as `tenant_members` is a valid pipeline base. The parser cannot distinguish an unknown variable from a table name without schema metadata; any undefined-variable check requires a later semantic pass with table context.
 
 #### Error Handling
 

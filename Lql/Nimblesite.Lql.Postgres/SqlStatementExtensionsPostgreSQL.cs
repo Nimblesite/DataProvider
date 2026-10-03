@@ -17,20 +17,21 @@ public static class SqlStatementExtensionsPostgreSQL
     {
         ArgumentNullException.ThrowIfNull(statement);
 
-        if (statement.ParseError != null)
+        if (LqlStatementValidator.Validate(statement) is SqlError error)
         {
-            return new Result<string, SqlError>.Error<string, SqlError>(statement.ParseError);
-        }
-
-        if (statement.AstNode == null)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("No AST node found in statement")
-            );
+            return new Result<string, SqlError>.Error<string, SqlError>(error);
         }
 
         try
         {
+            // Implements [LQL-CTE] and [LQL-DERIVED-TABLE].
+            if (statement.AstNode is { } node && SubqueryLayout.Applies(node))
+            {
+                return new Result<string, SqlError>.Ok<string, SqlError>(
+                    SubqueryLayout.Render(node, SqlPaging.LimitOffset)
+                );
+            }
+
             if (statement.AstNode is Pipeline pipeline)
             {
                 var sql = ConvertPipelineToPostgreSQL(pipeline);
@@ -57,6 +58,25 @@ public static class SqlStatementExtensionsPostgreSQL
     {
         var context = new PostgreSqlContext();
         return PipelineProcessor.ConvertPipelineToSql(pipeline, context, ProcessColumnReferences);
+    }
+
+    /// <summary>
+    /// Converts a Nimblesite.Sql.Model.SelectStatement to PostgreSQL syntax.
+    /// Implements [DP-SQL-MODEL-DIALECTS].
+    /// </summary>
+    /// <param name="statement">The SelectStatement to convert</param>
+    /// <returns>A Result containing either PostgreSQL SQL string or a SqlError</returns>
+    public static Result<string, SqlError> ToPostgreSql(this SelectStatement statement)
+    {
+        try
+        {
+            var sql = PostgreSqlContext.ToPostgreSqlSql(statement);
+            return new Result<string, SqlError>.Ok<string, SqlError>(sql);
+        }
+        catch (Exception ex)
+        {
+            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
+        }
     }
 
     /// <summary>

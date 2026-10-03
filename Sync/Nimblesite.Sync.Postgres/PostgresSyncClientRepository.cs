@@ -27,14 +27,7 @@ public static class PostgresSyncClientRepository
 
             while (reader.Read())
             {
-                clients.Add(
-                    new SyncClient(
-                        OriginId: reader.GetString(0),
-                        LastSyncVersion: reader.GetInt64(1),
-                        LastSyncTimestamp: reader.GetString(2),
-                        CreatedAt: reader.GetString(3)
-                    )
-                );
+                clients.Add(MapClient(reader));
             }
 
             return new SyncClientListOk(clients);
@@ -72,12 +65,7 @@ public static class PostgresSyncClientRepository
                 return new SyncClientOk(null);
             }
 
-            var client = new SyncClient(
-                OriginId: reader.GetString(0),
-                LastSyncVersion: reader.GetInt64(1),
-                LastSyncTimestamp: reader.GetString(2),
-                CreatedAt: reader.GetString(3)
-            );
+            var client = MapClient(reader);
 
             return new SyncClientOk(client);
         }
@@ -171,4 +159,12 @@ public static class PostgresSyncClientRepository
             );
         }
     }
+
+    private static SyncClient MapClient(NpgsqlDataReader reader) =>
+        new(
+            OriginId: reader.GetString(0),
+            LastSyncVersion: reader.GetInt64(1),
+            LastSyncTimestamp: reader.GetString(2),
+            CreatedAt: reader.GetString(3)
+        );
 }

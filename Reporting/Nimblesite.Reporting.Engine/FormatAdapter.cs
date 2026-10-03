@@ -30,25 +30,27 @@ public static class FormatAdapter
     {
         var lines = new List<string>(capacity: result.TotalRows + 1)
         {
-            string.Join(",", result.ColumnNames),
+            string.Join(",", result.ColumnNames.Select(EscapeCsvValue)),
         };
 
         foreach (var row in result.Rows)
         {
-            lines.Add(string.Join(",", row.Select(EscapeCsvValue)));
+            lines.Add(string.Join(",", row.Select(value => EscapeCsvValue(value?.ToString()))));
         }
 
         return string.Join("\n", lines);
     }
 
-    private static string EscapeCsvValue(object? value)
+    /// <summary>
+    /// Escapes a single CSV field per RFC 4180: fields containing commas,
+    /// quotes, or newlines are wrapped in double quotes and embedded
+    /// quotes are doubled.
+    /// </summary>
+    /// <param name="value">The raw field value.</param>
+    /// <returns>The escaped CSV field.</returns>
+    private static string EscapeCsvValue(string? value)
     {
-        if (value is null)
-        {
-            return "";
-        }
-
-        var str = value.ToString() ?? "";
+        var str = value ?? "";
         if (
             str.Contains(',', StringComparison.Ordinal)
             || str.Contains('"', StringComparison.Ordinal)

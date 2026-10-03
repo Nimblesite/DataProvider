@@ -34,28 +34,16 @@ public static class DbTransact
     /// <param name="cn">The database connection. It will be opened if not already open.</param>
     /// <param name="body">The asynchronous delegate to execute within the transaction.</param>
     /// <returns>A task that completes when the transactional operation finishes.</returns>
-    public static async Task Transact(this DbConnection cn, Func<IDbTransaction, Task> body)
+    public static Task Transact(this DbConnection cn, Func<IDbTransaction, Task> body)
     {
         ArgumentNullException.ThrowIfNull(cn);
         ArgumentNullException.ThrowIfNull(body);
 
-        if (cn.State != ConnectionState.Open)
-            await cn.OpenAsync().ConfigureAwait(false);
-
-#pragma warning disable CA2007
-        await using var tx = await cn.BeginTransactionAsync().ConfigureAwait(false);
-#pragma warning restore CA2007
-
-        try
+        return cn.Transact(async tx =>
         {
             await body(tx).ConfigureAwait(false);
-            await tx.CommitAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-            await tx.RollbackAsync().ConfigureAwait(false);
-            throw;
-        }
+            return true;
+        });
     }
 
     /// <summary>

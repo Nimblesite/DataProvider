@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-// Tests [RLS-MSSQL] SQL Server package absence guard from docs/specs/rls-spec.md.
+// Tests [RLS-MSSQL] fail-closed guard until native SQL Server RLS is implemented.
 
 /// <summary>
 /// CLI tests for unsupported SQL Server RLS migration attempts.
@@ -25,7 +25,12 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
                 comparisonType: StringComparison.Ordinal
             );
             Assert.Contains(
-                expectedSubstring: "Nimblesite.DataProvider.Migration.SqlServer package does not exist",
+                expectedSubstring: "Native SQL Server RLS migrations are not yet supported",
+                actualString: result.Output,
+                comparisonType: StringComparison.Ordinal
+            );
+            Assert.DoesNotContain(
+                expectedSubstring: "package does not exist",
                 actualString: result.Output,
                 comparisonType: StringComparison.Ordinal
             );
@@ -36,32 +41,12 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
         }
     }
 
-    private static (int ExitCode, string Output) RunMigrate(string schemaPath)
-    {
-        var originalOut = Console.Out;
-        using var output = new StringWriter(CultureInfo.InvariantCulture);
-        Console.SetOut(output);
-        try
-        {
-            var exitCode = DataProviderMigrate.Program.Main(
-                args:
-                [
-                    "migrate",
-                    "--schema",
-                    schemaPath,
-                    "--provider",
-                    "sqlserver",
-                    "--output",
-                    "unused",
-                ]
-            );
-            return (exitCode, output.ToString());
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
-    }
+    private static (int ExitCode, string Output) RunMigrate(string schemaPath) =>
+        MigrationCliConsole.Migrate(
+            schemaPath: schemaPath,
+            provider: "sqlserver",
+            output: "unused"
+        );
 
     private static string WriteTempSchemaFile(string contents)
     {

@@ -2,43 +2,43 @@
   "default_threshold": 90,
   "projects": {
     "DataProvider/Nimblesite.DataProvider.Core": {
-      "threshold": 89,
+      "threshold": 90,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.Sql.Model]*,[Nimblesite.Lql.SQLite]*"
     },
     "DataProvider/Nimblesite.DataProvider.Example": {
-      "threshold": 36,
+      "threshold": 37,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.DataProvider.Example]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Lql/Nimblesite.Lql.Core": {
-      "threshold": 71,
+      "threshold": 74,
       "include": "[Nimblesite.Lql.Core]*,[Nimblesite.Lql.Postgres]*,[Nimblesite.Lql.SqlServer]*,[Nimblesite.Lql.SQLite]*"
     },
     "Lql/Nimblesite.Lql.TypeProvider.FSharp": {
-      "threshold": 39,
+      "threshold": 47,
       "include": "[Nimblesite.Lql.TypeProvider.FSharp]*,[Nimblesite.Lql.Core]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Migration/Nimblesite.DataProvider.Migration.Core": {
-      "threshold": 86,
+      "threshold": 87,
       "include": "[Nimblesite.DataProvider.Migration.Core]*,[Nimblesite.DataProvider.Migration.SQLite]*,[Nimblesite.DataProvider.Migration.Postgres]*"
     },
     "Sync/Nimblesite.Sync.Core": {
-      "threshold": 64,
+      "threshold": 65,
       "include": "[Nimblesite.Sync.Core]*"
     },
     "Sync/Nimblesite.Sync.SQLite": {
-      "threshold": 34,
+      "threshold": 40,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Postgres": {
-      "threshold": 24,
+      "threshold": 26,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Integration": {
-      "threshold": 9,
+      "threshold": 10,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Sync/Nimblesite.Sync.Http": {
-      "threshold": 33,
+      "threshold": 36,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Reporting/Nimblesite.Reporting": {
@@ -46,14 +46,14 @@
       "include": "[Nimblesite.Reporting.Engine]*"
     },
     "Reporting/Nimblesite.Reporting.Integration": {
-      "threshold": 40,
+      "threshold": 76,
       "include": "[Nimblesite.Reporting.Engine]*,[Nimblesite.Reporting.Api]*"
     },
     "Lql/lql-lsp-rust": {
-      "threshold": 95
+      "threshold": 98
     },
     "Lql/LqlExtension": {
-      "threshold": 44
+      "threshold": 54
     }
   }
 }

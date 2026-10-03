@@ -1,0 +1,36 @@
+# agent-pmo:795a9c2
+# Deslop duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP]
+# Single source of truth for this repo's duplication budget.
+# Docs: https://deslop.live/docs/for-ai/
+[defaults]
+# Generated ANTLR outputs cannot be deduplicated by hand. Excluding them before
+# analysis also avoids comparing millions of generated parser subtrees.
+exclude = [
+  # Reporting is outside the requested duplication audit scope.
+  "Reporting/**",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLLexer.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParser.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseListener.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserListener.cs",
+  "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteLexer.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParser.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserBaseListener.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserBaseVisitor.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserListener.cs",
+  "DataProvider/Nimblesite.DataProvider.SQLite/Parsing/SQLiteParserVisitor.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlBaseListener.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlBaseVisitor.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlLexer.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlListener.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlParser.cs",
+  "Lql/Nimblesite.Lql.Core/Parsing/LqlVisitor.cs",
+  "Lql/lql-lsp-rust/crates/lql-parser/src/generated/**",
+]
+
+[threshold]
+# Initial adoption ceiling measured with Deslop 0.36.0; main was 44.20213%.
+# Written justification and reproduction: docs/specs/ci-spec.md [CI-DESLOP-BASELINE].
+# Keep all findings visible. Subsequent changes may only ratchet this DOWN.
+max_duplication_percent = 39.44

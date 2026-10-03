@@ -57,6 +57,15 @@ This specification does **not** cover:
 - SQL Server (can leverage native Change Tracking)
 - PostgreSQL (can leverage logical replication)
 
+#### [SYNC-HTTP-PROVIDERS] Current HTTP implementation
+
+The shipped replica providers and HTTP sync operations support SQLite and PostgreSQL.
+SQL Server remains a target platform; no SQL Server sync replica provider is implemented.
+HTTP requests for that provider currently return `ProblemDetails` with status 500 and
+`Unknown database type: sqlserver`, before opening or modifying the target database.
+Provider regression tests must verify this rejection and an unchanged catalog. The
+SQLite and PostgreSQL cases must continue verifying real reads and applied changes.
+
 ---
 
 ## 2. Goals & Non-Goals

@@ -23,54 +23,27 @@ public static class DbTransactionExtensions
         string sql,
         IEnumerable<IDataParameter>? parameters = null,
         Func<IDataReader, T>? mapper = null
-    )
-    {
-        if (transaction?.Connection == null)
-            return new Result<IReadOnlyList<T>, SqlError>.Error<IReadOnlyList<T>, SqlError>(
-                SqlError.Create("Transaction or connection is null")
-            );
-
-        if (string.IsNullOrWhiteSpace(sql))
-            return new Result<IReadOnlyList<T>, SqlError>.Error<IReadOnlyList<T>, SqlError>(
-                SqlError.Create("SQL is null or empty")
-            );
-
-        try
-        {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
-
-            if (parameters != null)
+    ) =>
+        RunCommand<IReadOnlyList<T>>(
+            transaction: transaction,
+            sql: sql,
+            parameters: parameters,
+            operation: command =>
             {
-                foreach (var parameter in parameters)
+                var results = new List<T>();
+                using var reader = command.ExecuteReader();
+
+                while (reader.Read())
                 {
-                    command.Parameters.Add(parameter);
+                    if (mapper != null)
+                    {
+                        results.Add(mapper(reader));
+                    }
                 }
+
+                return results.AsReadOnly();
             }
-
-            var results = new List<T>();
-            using var reader = command.ExecuteReader();
-
-            while (reader.Read())
-            {
-                if (mapper != null)
-                {
-                    results.Add(mapper(reader));
-                }
-            }
-
-            return new Result<IReadOnlyList<T>, SqlError>.Ok<IReadOnlyList<T>, SqlError>(
-                results.AsReadOnly()
-            );
-        }
-        catch (Exception ex)
-        {
-            return new Result<IReadOnlyList<T>, SqlError>.Error<IReadOnlyList<T>, SqlError>(
-                SqlError.FromException(ex)
-            );
-        }
-    }
+        );
 
     /// <summary>
     /// Execute a non-query command within a transaction
@@ -83,40 +56,13 @@ public static class DbTransactionExtensions
         this IDbTransaction transaction,
         string sql,
         IEnumerable<IDataParameter>? parameters = null
-    )
-    {
-        if (transaction?.Connection == null)
-            return new Result<int, SqlError>.Error<int, SqlError>(
-                SqlError.Create("Transaction or connection is null")
-            );
-
-        if (string.IsNullOrWhiteSpace(sql))
-            return new Result<int, SqlError>.Error<int, SqlError>(
-                SqlError.Create("SQL is null or empty")
-            );
-
-        try
-        {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
-
-            if (parameters != null)
-            {
-                foreach (var parameter in parameters)
-                {
-                    command.Parameters.Add(parameter);
-                }
-            }
-
-            var rowsAffected = command.ExecuteNonQuery();
-            return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);
-        }
-        catch (Exception ex)
-        {
-            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));
-        }
-    }
+    ) =>
+        RunCommand(
+            transaction: transaction,
+            sql: sql,
+            parameters: parameters,
+            operation: command => command.ExecuteNonQuery()
+        );
 
     /// <summary>
     /// Execute a scalar command within a transaction
@@ -130,38 +76,87 @@ public static class DbTransactionExtensions
         this IDbTransaction transaction,
         string sql,
         IEnumerable<IDataParameter>? parameters = null
-    )
+    ) =>
+        RunCommand<T?>(
+            transaction: transaction,
+            sql: sql,
+            parameters: parameters,
+            operation: command => command.ExecuteScalar() is T value ? value : default
+        );
+
+    /// <summary>
+    /// Validate the transaction, its bound connection, and the SQL text
+    /// </summary>
+    private static SqlError? Validate(IDbTransaction transaction, string sql)
     {
         if (transaction?.Connection == null)
-            return new Result<T?, SqlError>.Error<T?, SqlError>(
-                SqlError.Create("Transaction or connection is null")
-            );
+            return SqlError.Create("Transaction or connection is null");
 
         if (string.IsNullOrWhiteSpace(sql))
-            return new Result<T?, SqlError>.Error<T?, SqlError>(
-                SqlError.Create("SQL is null or empty")
-            );
+            return SqlError.Create("SQL is null or empty");
+
+        return null;
+    }
+
+    /// <summary>
+    /// Create a transaction-bound command, run the operation, and convert failures to SqlError
+    /// </summary>
+    private static Result<TResult, SqlError> RunCommand<TResult>(
+        IDbTransaction transaction,
+        string sql,
+        IEnumerable<IDataParameter>? parameters,
+        Func<IDbCommand, TResult> operation
+    )
+    {
+        if (Validate(transaction: transaction, sql: sql) is { } guardError)
+            return new Result<TResult, SqlError>.Error<TResult, SqlError>(guardError);
 
         try
         {
-            using var command = transaction.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
+            if (transaction.Connection is not { } connection)
+                return new Result<TResult, SqlError>.Error<TResult, SqlError>(
+                    SqlError.Create("Transaction or connection is null")
+                );
 
-            if (parameters != null)
-            {
-                foreach (var parameter in parameters)
-                {
-                    command.Parameters.Add(parameter);
-                }
-            }
+            using var command = CreateCommand(
+                connection: connection,
+                transaction: transaction,
+                sql: sql,
+                parameters: parameters
+            );
 
-            var result = command.ExecuteScalar();
-            return new Result<T?, SqlError>.Ok<T?, SqlError>(result is T value ? value : default);
+            return new Result<TResult, SqlError>.Ok<TResult, SqlError>(operation(command));
         }
         catch (Exception ex)
         {
-            return new Result<T?, SqlError>.Error<T?, SqlError>(SqlError.FromException(ex));
+            return new Result<TResult, SqlError>.Error<TResult, SqlError>(
+                SqlError.FromException(ex)
+            );
         }
+    }
+
+    /// <summary>
+    /// Create a command bound to the transaction, with SQL text and optional parameters
+    /// </summary>
+    private static IDbCommand CreateCommand(
+        IDbConnection connection,
+        IDbTransaction transaction,
+        string sql,
+        IEnumerable<IDataParameter>? parameters
+    )
+    {
+        var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+
+        if (parameters != null)
+        {
+            foreach (var parameter in parameters)
+            {
+                command.Parameters.Add(parameter);
+            }
+        }
+
+        return command;
     }
 }

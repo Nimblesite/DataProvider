@@ -111,7 +111,7 @@ public static class PostgresChangeApplier
         var i = 0;
         foreach (var kvp in payload)
         {
-            cmd.Parameters.AddWithValue($"@p{i}", GetJsonValue(kvp.Value));
+            AddValue(cmd, $"@p{i}", GetJsonValue(kvp.Value));
             i++;
         }
 
@@ -137,15 +137,13 @@ public static class PostgresChangeApplier
             return new BoolSyncError(new SyncErrorDatabase("Invalid payload format"));
         }
 
-        var pkJson = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.PkValue);
-        if (pkJson is null || pkJson.Count == 0)
+        var pkParts = TryParsePk(entry, out var pkError);
+        if (pkParts is not (var pkColumn, var pkColumnLower, var pkValue))
         {
-            return new BoolSyncError(new SyncErrorDatabase("Invalid pk_value format"));
+            return pkError is { } err
+                ? err
+                : new BoolSyncError(new SyncErrorDatabase("Invalid pk_value format"));
         }
-
-        var pkColumn = pkJson.Keys.First();
-        var pkColumnLower = pkColumn.ToLowerInvariant();
-        var pkValue = GetJsonValue(pkJson[pkColumn]);
 
         var setClauses = new List<string>();
         var paramIndex = 0;
@@ -157,7 +155,7 @@ public static class PostgresChangeApplier
             if (!kvp.Key.Equals(pkColumn, StringComparison.OrdinalIgnoreCase))
             {
                 setClauses.Add($"{kvp.Key.ToLowerInvariant()} = @p{paramIndex}");
-                cmd.Parameters.AddWithValue($"@p{paramIndex}", GetJsonValue(kvp.Value));
+                AddValue(cmd, $"@p{paramIndex}", GetJsonValue(kvp.Value));
                 paramIndex++;
             }
         }
@@ -171,7 +169,7 @@ public static class PostgresChangeApplier
         var tableName = entry.TableName.ToLowerInvariant();
         cmd.CommandText =
             $"UPDATE {tableName} SET {string.Join(", ", setClauses)} WHERE {pkColumnLower} = @pkValue";
-        cmd.Parameters.AddWithValue("@pkValue", pkValue);
+        AddValue(cmd, "@pkValue", pkValue);
 
         var affected = cmd.ExecuteNonQuery();
         if (affected == 0)
@@ -190,25 +188,52 @@ public static class PostgresChangeApplier
         ILogger logger
     )
     {
-        var pkJson = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.PkValue);
-        if (pkJson is null || pkJson.Count == 0)
+        var pkParts = TryParsePk(entry, out var pkError);
+        if (pkParts is not (_, var pkColumnLower, var pkValue))
         {
-            return new BoolSyncError(new SyncErrorDatabase("Invalid pk_value format"));
+            return pkError is { } err
+                ? err
+                : new BoolSyncError(new SyncErrorDatabase("Invalid pk_value format"));
         }
 
-        var pkColumn = pkJson.Keys.First();
-        var pkColumnLower = pkColumn.ToLowerInvariant();
-        var pkValue = GetJsonValue(pkJson[pkColumn]);
         var tableName = entry.TableName.ToLowerInvariant();
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"DELETE FROM {tableName} WHERE {pkColumnLower} = @pkValue";
-        cmd.Parameters.AddWithValue("@pkValue", pkValue);
+        AddValue(cmd, "@pkValue", pkValue);
 
         cmd.ExecuteNonQuery();
         logger.LogDebug("POSTGRES APPLY: Delete successful for {Table}", entry.TableName);
         return new BoolSyncOk(true);
     }
+
+    // Shared PK-JSON parse+validate prologue for ApplyUpdate/ApplyDelete.
+    private static (string PkColumn, string PkColumnLower, object PkValue)? TryParsePk(
+        SyncLogEntry entry,
+        out BoolSyncResult? error
+    )
+    {
+        var pkJson = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.PkValue);
+        if (pkJson is null || pkJson.Count == 0)
+        {
+            error = new BoolSyncError(new SyncErrorDatabase("Invalid pk_value format"));
+            return null;
+        }
+
+        var pkColumn = pkJson.Keys.First();
+        error = null;
+        return (pkColumn, pkColumn.ToLowerInvariant(), GetJsonValue(pkJson[pkColumn]));
+    }
+
+    // Sync payloads carry uuid, timestamp and similar values as JSON strings. Sending
+    // strings untyped lets PostgreSQL convert them to each target column's type instead
+    // of rejecting text for a uuid column (42804).
+    private static void AddValue(NpgsqlCommand cmd, string name, object value) =>
+        cmd.Parameters.Add(
+            value is string
+                ? new NpgsqlParameter(name, NpgsqlTypes.NpgsqlDbType.Unknown) { Value = value }
+                : new NpgsqlParameter(name, value)
+        );
 
     private static object GetJsonValue(JsonElement element) =>
         element.ValueKind switch

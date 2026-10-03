@@ -21,8 +21,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
     <PackageReference Include="Npgsql" Version="9.0.2" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -34,6 +36,7 @@
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Postgres/Nimblesite.Sync.Postgres.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Http/Nimblesite.Sync.Http.csproj" />
+    <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,13 +9,20 @@ namespace Nimblesite.DataProvider.Migration.Core;
 /// </summary>
 public static class SchemaSerializer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new PortableTypeJsonConverter() },
-    };
+    // Implements [MIG-AOT-JSON]: serialize through the source-generated
+    // JsonTypeInfo so the call carries no reflection (IL2026/IL3050). The
+    // PortableType converter is attached to the generated context's options;
+    // the typed JsonTypeInfo overloads — not the generic Serialize<T>(options)
+    // overloads — are what keep the path AOT/trim clean.
+    private static readonly SchemaJsonContext Context = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Converters = { new PortableTypeJsonConverter() },
+        }
+    );
 
     /// <summary>
     /// Serialize a schema definition to JSON string.
@@ -23,7 +30,7 @@ public static class SchemaSerializer
     /// <param name="schema">Schema to serialize.</param>
     /// <returns>JSON representation of the schema.</returns>
     public static string ToJson(SchemaDefinition schema) =>
-        JsonSerializer.Serialize(schema, JsonOptions);
+        JsonSerializer.Serialize(schema, Context.SchemaDefinition);
 
     /// <summary>
     /// Deserialize a schema definition from JSON string.
@@ -31,7 +38,7 @@ public static class SchemaSerializer
     /// <param name="json">JSON string.</param>
     /// <returns>Deserialized schema definition.</returns>
     public static SchemaDefinition FromJson(string json) =>
-        JsonSerializer.Deserialize<SchemaDefinition>(json, JsonOptions)
+        JsonSerializer.Deserialize(json, Context.SchemaDefinition)
         ?? throw new JsonException("Failed to deserialize schema");
 
     /// <summary>

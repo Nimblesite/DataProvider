@@ -97,33 +97,22 @@ public static class FileDialogService
         string suggestedFileName
     )
     {
-        try
+        var dialog = new FilePickerSaveOptions
         {
-            var dialog = new FilePickerSaveOptions
-            {
-                Title = "Save File As",
-                SuggestedFileName = suggestedFileName,
-                FileTypeChoices =
-                [
-                    new FilePickerFileType("LQL Files") { Patterns = ["*.lql"] },
-                    new FilePickerFileType("SQL Files") { Patterns = ["*.sql"] },
-                ],
-            };
+            Title = "Save File As",
+            SuggestedFileName = suggestedFileName,
+            FileTypeChoices =
+            [
+                new FilePickerFileType("LQL Files") { Patterns = ["*.lql"] },
+                new FilePickerFileType("SQL Files") { Patterns = ["*.sql"] },
+            ],
+        };
 
-            var file = await storageProvider.SaveFilePickerAsync(dialog);
-            if (file != null)
-            {
-                return new Result<string, string>.Ok<string, string>(file.Path.LocalPath);
-            }
-
-            return new Result<string, string>.Error<string, string>("No file selected");
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, string>.Error<string, string>(
-                $"Error saving file: {ex.Message}"
-            );
-        }
+        return await RunSavePickerAsync(
+            storageProvider: storageProvider,
+            dialog: dialog,
+            errorContext: "Error saving file"
+        );
     }
 
     /// <summary>
@@ -135,29 +124,18 @@ public static class FileDialogService
         IStorageProvider storageProvider
     )
     {
-        try
+        var dialog = new FilePickerSaveOptions
         {
-            var dialog = new FilePickerSaveOptions
-            {
-                Title = "Export CSV",
-                SuggestedFileName = "export.csv",
-                FileTypeChoices = [new FilePickerFileType("CSV Files") { Patterns = ["*.csv"] }],
-            };
+            Title = "Export CSV",
+            SuggestedFileName = "export.csv",
+            FileTypeChoices = [new FilePickerFileType("CSV Files") { Patterns = ["*.csv"] }],
+        };
 
-            var file = await storageProvider.SaveFilePickerAsync(dialog);
-            if (file != null)
-            {
-                return new Result<string, string>.Ok<string, string>(file.Path.LocalPath);
-            }
-
-            return new Result<string, string>.Error<string, string>("No file selected");
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, string>.Error<string, string>(
-                $"Error selecting export file: {ex.Message}"
-            );
-        }
+        return await RunSavePickerAsync(
+            storageProvider: storageProvider,
+            dialog: dialog,
+            errorContext: "Error selecting export file"
+        );
     }
 
     /// <summary>
@@ -169,27 +147,37 @@ public static class FileDialogService
         IStorageProvider storageProvider
     )
     {
+        var dialog = new FilePickerSaveOptions
+        {
+            Title = "Export JSON",
+            SuggestedFileName = "export.json",
+            FileTypeChoices = [new FilePickerFileType("JSON Files") { Patterns = ["*.json"] }],
+        };
+
+        return await RunSavePickerAsync(
+            storageProvider: storageProvider,
+            dialog: dialog,
+            errorContext: "Error selecting export file"
+        );
+    }
+
+    private static async Task<Result<string, string>> RunSavePickerAsync(
+        IStorageProvider storageProvider,
+        FilePickerSaveOptions dialog,
+        string errorContext
+    )
+    {
         try
         {
-            var dialog = new FilePickerSaveOptions
-            {
-                Title = "Export JSON",
-                SuggestedFileName = "export.json",
-                FileTypeChoices = [new FilePickerFileType("JSON Files") { Patterns = ["*.json"] }],
-            };
-
             var file = await storageProvider.SaveFilePickerAsync(dialog);
-            if (file != null)
-            {
-                return new Result<string, string>.Ok<string, string>(file.Path.LocalPath);
-            }
-
-            return new Result<string, string>.Error<string, string>("No file selected");
+            return file != null
+                ? new Result<string, string>.Ok<string, string>(file.Path.LocalPath)
+                : new Result<string, string>.Error<string, string>("No file selected");
         }
         catch (Exception ex)
         {
             return new Result<string, string>.Error<string, string>(
-                $"Error selecting export file: {ex.Message}"
+                $"{errorContext}: {ex.Message}"
             );
         }
     }

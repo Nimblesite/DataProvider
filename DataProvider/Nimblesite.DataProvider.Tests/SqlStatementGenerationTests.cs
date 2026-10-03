@@ -1,12 +1,56 @@
+using System.Reflection;
+using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
+using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 
 public sealed class SqlStatementGenerationTests
 {
-    [Fact]
-    public void ToSQLite_SimpleSelectFromSingleTable_GeneratesExpectedSql()
+    // Implements [DP-SQL-MODEL-DIALECTS]. A missing provider renderer fails this same test.
+    private static void AssertDialect(
+        SelectStatement statement,
+        string provider,
+        params string[] fragments
+    )
+    {
+        // Identifier quoting is provider syntax; PostgresSqlModelIdentifierTests pins it.
+        var sql = RenderForProvider(statement, provider)
+            .Replace("\"", "", StringComparison.Ordinal);
+        Assert.NotEmpty(sql);
+        foreach (var fragment in fragments)
+        {
+            Assert.Contains(fragment, sql, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    internal static string RenderForProvider(SelectStatement statement, string provider) =>
+        Assert.IsType<StringOk>(FindRenderer(provider).Invoke(null, [statement])).Value;
+
+    private static MethodInfo FindRenderer(string provider)
+    {
+        var (extensionType, methodName) = provider switch
+        {
+            "sqlite" => (typeof(SqlStatementExtensionsSQLite), "ToSQLite"),
+            "postgres" => (typeof(SqlStatementExtensionsPostgreSQL), "ToPostgreSql"),
+            "sqlserver" => (typeof(SqlStatementExtensionsSqlServer), "ToSqlServer"),
+            _ => (typeof(SqlStatementExtensionsSQLite), "UnknownProvider"),
+        };
+        return Assert.Single(
+            extensionType.GetMethods(),
+            method =>
+                method.Name == methodName
+                && method.GetParameters() is [{ ParameterType: var inputType }]
+                && inputType == typeof(SelectStatement)
+        );
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_SimpleSelectFromSingleTable_GeneratesExpectedSql(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Id")
@@ -19,10 +63,14 @@ public sealed class SqlStatementGenerationTests
         Assert.IsType<StringOk>(result);
         var sql = ((StringOk)result).Value;
         Assert.Equal("SELECT Id, Name FROM Users", sql);
+        AssertDialect(stmt, provider, "SELECT", "Id", "Name", "FROM Users");
     }
 
-    [Fact]
-    public void ToSQLite_SelectAllWildcard_WhenNoColumnsSelected_GeneratesStar()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_SelectAllWildcard_WhenNoColumnsSelected_GeneratesStar(string provider)
     {
         var stmt = new SelectStatementBuilder().AddTable("Users").Build();
 
@@ -30,10 +78,14 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(result);
         Assert.Equal("SELECT * FROM Users", success.Value);
+        AssertDialect(stmt, provider, "SELECT *", "FROM Users");
     }
 
-    [Fact]
-    public void ToSQLite_WithWhereComparison_FormatsCondition()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithWhereComparison_FormatsCondition(string provider)
     {
         var where = WhereCondition.Comparison(
             ColumnInfo.Named("Age"),
@@ -48,10 +100,14 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(stmt.ToSQLite());
         Assert.Equal("SELECT Id FROM Users WHERE Age > 18", success.Value);
+        AssertDialect(stmt, provider, "SELECT Id", "FROM Users", "WHERE", "Age > 18");
     }
 
-    [Fact]
-    public void ToSQLite_WithWhereLogicalOperators_FormatsSequence()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithWhereLogicalOperators_FormatsSequence(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Id")
@@ -75,10 +131,14 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(stmt.ToSQLite());
         Assert.Equal("SELECT Id FROM Users WHERE Age >= 18 AND Country = 'AU'", success.Value);
+        AssertDialect(stmt, provider, "WHERE", "Age >= 18", "AND", "Country = 'AU'");
     }
 
-    [Fact]
-    public void ToSQLite_WithParenthesesInWhere_FormatsParens()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithParenthesesInWhere_FormatsParens(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Id")
@@ -111,10 +171,14 @@ public sealed class SqlStatementGenerationTests
             "SELECT Id FROM Users WHERE ( Age >= 18 AND Age < 65 ) AND Active = 1",
             success.Value
         );
+        AssertDialect(stmt, provider, "WHERE", "Age >= 18", "Age < 65", "AND Active = 1");
     }
 
-    [Fact]
-    public void ToSQLite_WithJoin_OutputsInnerJoin()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithJoin_OutputsInnerJoin(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Users.Id")
@@ -130,10 +194,14 @@ public sealed class SqlStatementGenerationTests
             "SELECT Users.Id, Orders.Total FROM Users INNER JOIN Orders ON Users.Id = Orders.UserId",
             success.Value
         );
+        AssertDialect(stmt, provider, "FROM Users", "INNER JOIN Orders", "ON", "UserId");
     }
 
-    [Fact]
-    public void ToSQLite_WithGroupByAndHaving_OutputsClauses()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithGroupByAndHaving_OutputsClauses(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Country")
@@ -148,10 +216,14 @@ public sealed class SqlStatementGenerationTests
             "SELECT Country, COUNT(*) AS Total FROM Users GROUP BY Country HAVING COUNT(*) > 10",
             success.Value
         );
+        AssertDialect(stmt, provider, "COUNT(*)", "GROUP BY Country", "HAVING", "> 10");
     }
 
-    [Fact]
-    public void ToSQLite_WithOrderBy_OutputsOrderBy()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithOrderBy_OutputsOrderBy(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn("Id")
@@ -162,10 +234,14 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(stmt.ToSQLite());
         Assert.Equal("SELECT Id FROM Users ORDER BY Name ASC, Id DESC", success.Value);
+        AssertDialect(stmt, provider, "ORDER BY", "Name ASC", "Id DESC");
     }
 
-    [Fact]
-    public void ToSQLite_WithDistinctAndPaging_OutputsDistinctLimitOffset()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithDistinctAndPaging_OutputsDistinctLimitOffset(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .WithDistinct(true)
@@ -177,10 +253,14 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(stmt.ToSQLite());
         Assert.Equal("SELECT DISTINCT Name FROM Users LIMIT 5 OFFSET 10", success.Value);
+        AssertDialect(stmt, provider, "SELECT DISTINCT", "Name", "5", "10");
     }
 
-    [Fact]
-    public void ToSQLite_WithWildcardAndAlias_FormatsCorrectly()
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    public void AllDialects_WithWildcardAndAlias_FormatsCorrectly(string provider)
     {
         var stmt = new SelectStatementBuilder()
             .AddSelectColumn(ColumnInfo.Wildcard("u"))
@@ -189,5 +269,6 @@ public sealed class SqlStatementGenerationTests
 
         var success = Assert.IsType<StringOk>(stmt.ToSQLite());
         Assert.Equal("SELECT u.* FROM Users", success.Value);
+        AssertDialect(stmt, provider, "SELECT", "u.*", "FROM Users");
     }
 }

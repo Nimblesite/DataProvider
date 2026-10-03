@@ -95,7 +95,12 @@ public static class SchemaIntegrityVerifier
             }
             VerifyColumn(
                 actual: actualColumn,
-                expected: expectedColumn,
+                expected: PrimaryKeyNullability.UsesPlatformDefault(expected, expectedColumn)
+                    ? expectedColumn with
+                    {
+                        IsNullable = actualColumn.IsNullable,
+                    }
+                    : expectedColumn,
                 path: $"{TablePath(table: expected)}.{expectedColumn.Name}",
                 isSqlite: IsSqliteSchema(actual.Schema),
                 mismatches: mismatches
@@ -219,6 +224,11 @@ public static class SchemaIntegrityVerifier
         AddIf(
             !SameIdentifier(actual.ReferencedTable, expected.ReferencedTable),
             $"{tablePath}: foreign key {name} referenced table drifted",
+            mismatches
+        );
+        AddIf(
+            !SameSchema(actual.ReferencedSchema, expected.ReferencedSchema),
+            $"{tablePath}: foreign key {name} referenced schema drifted",
             mismatches
         );
         AddIf(
@@ -403,7 +413,27 @@ public static class SchemaIntegrityVerifier
                 mismatches.Add(
                     $"{TablePath(table: expected)}: missing row-level security policy {expectedPolicy.Name}"
                 );
+                continue;
             }
+            if (IsSqliteSchema(actual.Schema))
+            {
+                continue;
+            }
+            AddIf(
+                !RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} USING predicate drifted",
+                mismatches
+            );
+            AddIf(
+                !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
+                mismatches
+            );
+            AddIf(
+                !RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
+                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} scope drifted",
+                mismatches
+            );
         }
     }
 
@@ -680,7 +710,8 @@ public static class SchemaIntegrityVerifier
     private static bool IsDefaultSchema(string schema) =>
         string.IsNullOrWhiteSpace(schema)
         || SameIdentifier(actual: schema, expected: "main")
-        || SameIdentifier(actual: schema, expected: "public");
+        || SameIdentifier(actual: schema, expected: "public")
+        || SameIdentifier(actual: schema, expected: "dbo");
 
     private static bool IsSqliteSchema(string schema) =>
         SameIdentifier(actual: schema, expected: "main");
@@ -716,7 +747,9 @@ public static class SchemaIntegrityVerifier
         var builder = new StringBuilder();
         AppendNormalizedSql(value: value, builder: builder);
         var normalized = builder.ToString().Trim().TrimEnd(';').Trim();
-        return StripTrailingTypeCast(normalized);
+        return SqlExpressionText.StripOuterParens(
+            StripTrailingTypeCast(SqlExpressionText.StripOuterParens(normalized))
+        );
     }
 
     // Implements [MIG-VERIFY-DEFAULTS-AND-GRANTS] (#59 Bug 1):

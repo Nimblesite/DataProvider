@@ -18,12 +18,25 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
 
         try
         {
-            Apply(connection, Calculate(Inspect(connection), SchemaWithUniqueConstraint()));
-            var upgrade = Calculate(Inspect(connection), SchemaWithoutUniqueConstraint(), true);
+            PostgresTestDb.Apply(
+                connection,
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    SchemaWithUniqueConstraint(),
+                    Logger
+                ),
+                Logger
+            );
+            var upgrade = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                SchemaWithoutUniqueConstraint(),
+                Logger,
+                allowDestructive: true
+            );
 
             Assert.Contains(upgrade, IsConstraintBackedIndexDrop);
 
-            Apply(connection, upgrade, MigrationOptions.Destructive);
+            PostgresTestDb.Apply(connection, upgrade, Logger, MigrationOptions.Destructive);
 
             Assert.False(ConstraintExists(connection));
             Assert.False(IndexExists(connection));
@@ -47,10 +60,25 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
         {
             var desired = SchemaWithUniqueConstraint();
 
-            Apply(connection, Calculate(Inspect(connection), desired));
+            PostgresTestDb.Apply(
+                connection,
+                PostgresTestDb.Calculate(
+                    PostgresTestDb.Inspect(connection, Logger),
+                    desired,
+                    Logger
+                ),
+                Logger
+            );
 
-            var inspected = Inspect(connection).Tables.Single(t => t.Name == TableName);
-            var converged = Calculate(Inspect(connection), desired, true);
+            var inspected = PostgresTestDb
+                .Inspect(connection, Logger)
+                .Tables.Single(t => t.Name == TableName);
+            var converged = PostgresTestDb.Calculate(
+                PostgresTestDb.Inspect(connection, Logger),
+                desired,
+                Logger,
+                allowDestructive: true
+            );
 
             Assert.Contains(
                 inspected.UniqueConstraints,
@@ -64,7 +92,7 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
                 operation => operation is AddUniqueConstraintOperation
             );
 
-            Apply(connection, converged, MigrationOptions.Destructive);
+            PostgresTestDb.Apply(connection, converged, Logger, MigrationOptions.Destructive);
 
             Assert.True(ConstraintExists(connection));
             Assert.True(IndexExists(connection));
@@ -100,52 +128,6 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
                         .Column("key_hash", PortableTypes.VarChar(255), c => c.NotNull())
             )
             .Build();
-
-    private static SchemaDefinition Inspect(NpgsqlConnection connection)
-    {
-        var result = PostgresSchemaInspector.Inspect(connection, SchemaName, Logger);
-        if (result is SchemaResultOk ok)
-        {
-            return ok.Value;
-        }
-
-        Assert.Fail("Expected PostgreSQL schema inspection to succeed.");
-        return Schema.Define("failed").Build();
-    }
-
-    private static IReadOnlyList<SchemaOperation> Calculate(
-        SchemaDefinition current,
-        SchemaDefinition desired,
-        bool allowDestructive = false
-    )
-    {
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive, Logger);
-        if (result is OperationsResultOk ok)
-        {
-            return ok.Value;
-        }
-
-        Assert.Fail("Expected PostgreSQL schema diff to succeed.");
-        return [];
-    }
-
-    private static void Apply(
-        NpgsqlConnection connection,
-        IReadOnlyList<SchemaOperation> operations,
-        MigrationOptions? options = null
-    )
-    {
-        var result = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            options ?? MigrationOptions.Default,
-            Logger
-        );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
-    }
 
     private static bool IsConstraintBackedIndexDrop(SchemaOperation operation) =>
         operation

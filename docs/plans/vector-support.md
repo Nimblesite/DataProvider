@@ -6,7 +6,7 @@
 
 ## Why
 
-Consumers doing semantic search (HealthcareSamples ICD10 / MedEmbed-Small embeddings, any RAG app) need a single `float[]` C# type driving the same YAML column across Postgres production, on-device SQLite replicas, and SQL Server enterprise. Storing as `text` + query-time casts is unacceptable.
+Applications using semantic search need a single `float[]` C# type driving the same YAML column across Postgres production, on-device SQLite replicas, and SQL Server enterprise. Storing as `text` + query-time casts is unacceptable.
 
 ## Backends & hosting
 
@@ -97,7 +97,7 @@ Consumers doing semantic search (HealthcareSamples ICD10 / MedEmbed-Small embedd
 9. **`dataprovider-ci-prep`**: failing tests first (CLAUDE.md process), then implementation validation, then `make ci`. Bump `PostgresContainerFixture` to `pgvector/pgvector:pg16`.
 10. **`dataprovider-ci-prep`** (last): version bump to `0.9.0-beta` across every csproj + `Directory.Build.props`. Final `make ci` run.
 11. **Owner**: `git tag v0.9.0-beta` → `release.yml` triggers and publishes all packages.
-12. **HealthcareSamples**: pin to 0.9.0-beta, convert `text` embedding columns to `Vector(384)`, rewrite their LQL to use `cosine_distance` (pending 0.10.0-beta — in the meantime they emit raw similarity SQL via LQL passthrough).
+12. **[ClinicalCoding](https://github.com/Nimblesite/ClinicalCoding)**: pin to 0.9.0-beta, convert `text` embedding columns to `Vector(384)`, rewrite their LQL to use `cosine_distance` (pending 0.10.0-beta — in the meantime they emit raw similarity SQL via LQL passthrough).
 
 ## File inventory (exact, by owner)
 
@@ -148,6 +148,6 @@ If the cross-backend vector work cannot go green in 0.9.0-beta:
 1. `git revert` the vector commits.
 2. Ship 0.9.0-beta as a pure `Lql`-rename + BUG-fixes release (no vector).
 3. Push vector to 0.10.0-beta.
-4. HealthcareSamples continues with text+cast until 0.10.0-beta.
+4. ClinicalCoding continues with text+cast until 0.10.0-beta.
 
 **No partial vector rollout.** Either all three backends work or none ship. A half-vector 0.9.0-beta that works on Postgres but not SQLite violates the owner rule.

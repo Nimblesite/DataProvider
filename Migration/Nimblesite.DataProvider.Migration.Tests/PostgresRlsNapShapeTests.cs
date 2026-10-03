@@ -38,7 +38,7 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     /// </summary>
     private static void BootstrapNapPrelude(NpgsqlConnection conn)
     {
-        Exec(
+        PostgresTestDb.Exec(
             conn,
             """
             DO $$ BEGIN
@@ -132,29 +132,17 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
 
     private void ApplyAndGrant(SchemaDefinition desired)
     {
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)
-        ).Value;
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
+        PostgresLqlOnlyE2ETests.ApplySchema(
+            connection: _connection,
+            desired: desired,
+            logger: _logger
         );
 
         // Grant CRUD on each table to the app roles (NAP would do this in its
         // own bootstrap; we replicate it here to make the test runnable).
         foreach (var t in desired.Tables)
         {
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 $"GRANT USAGE ON SCHEMA public TO nap_app_user, nap_app_admin; "
                     + $"GRANT SELECT,INSERT,UPDATE,DELETE ON \"public\".\"{t.Name}\" TO nap_app_user, nap_app_admin"
@@ -170,9 +158,17 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         Guid? user
     )
     {
-        Exec(conn, tx, $"SET LOCAL ROLE {role}");
-        Exec(conn, tx, $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'");
-        Exec(conn, tx, $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'");
+        PostgresTestDb.Exec(conn, tx, $"SET LOCAL ROLE {role}");
+        PostgresTestDb.Exec(
+            conn,
+            tx,
+            $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'"
+        );
+        PostgresTestDb.Exec(
+            conn,
+            tx,
+            $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'"
+        );
     }
 
     [Fact]
@@ -213,7 +209,7 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "nap_app_user", tenantA, userA);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{configA}', '{tenantA}', 'a')"
@@ -226,7 +222,7 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "nap_app_user", tenantB, userB);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{configB}', '{tenantB}', 'b')"
@@ -263,12 +259,12 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         using (var tx = _connection.BeginTransaction())
         {
             SetSession(_connection, tx, "nap_app_admin", null, null);
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantA}', 'admin1')"
             );
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantB}', 'admin2')"
@@ -518,7 +514,7 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
             var tenant = tenants[i % tenants.Count];
             using var tx = _connection.BeginTransaction();
             SetSession(_connection, tx, "nap_app_user", tenant, Guid.NewGuid());
-            Exec(
+            PostgresTestDb.Exec(
                 _connection,
                 tx,
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenant}', 'row{i}')"
@@ -537,20 +533,5 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
             var seen = (long)sel.ExecuteScalar()!;
             Assert.Equal(inserted[tenant], (int)seen);
         }
-    }
-
-    private static void Exec(NpgsqlConnection conn, string sql)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void Exec(NpgsqlConnection conn, NpgsqlTransaction tx, string sql)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
     }
 }

@@ -31,6 +31,23 @@ public sealed class SqliteMigrationTests
         }
     }
 
+    private static void SeedSchema(
+        SqliteConnection connection,
+        SchemaDefinition schema,
+        ILogger logger
+    )
+    {
+        var current = ((SchemaResultOk)SqliteSchemaInspector.Inspect(connection, logger)).Value;
+        var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: logger)).Value;
+        _ = MigrationRunner.Apply(
+            connection,
+            ops,
+            SqliteDdlGenerator.Generate,
+            MigrationOptions.Default,
+            logger
+        );
+    }
+
     [Fact]
     public void CreateDatabaseFromScratch_SingleTable_Success()
     {
@@ -182,19 +199,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Apply v1
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // Define v2 with new columns
             var v2 = Schema
@@ -260,19 +265,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Apply v1
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // v2 adds a new table
             var v2 = Schema
@@ -341,19 +334,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Apply v1
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // v2 adds an index
             var v2 = Schema
@@ -541,19 +522,7 @@ public sealed class SqliteMigrationTests
                 .Table("Products", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
                 .Build();
 
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // v2 removes Products table
             var v2 = Schema
@@ -598,19 +567,7 @@ public sealed class SqliteMigrationTests
                 .Table("Products", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
                 .Build();
 
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             var v2 = Schema
                 .Define("Test")
@@ -674,19 +631,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Create schema
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, schema, _logger);
 
             // Act - Inspect and compare
             var inspected = (
@@ -960,19 +905,7 @@ public sealed class SqliteMigrationTests
                 )
                 .Build();
 
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, schema, _logger);
 
             // Act - Insert first venue
             using var insertCmd = connection.CreateCommand();
@@ -1179,19 +1112,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Apply v1
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // v2 changes to expression index (different name since it's semantically different)
             var v2 = Schema
@@ -1263,19 +1184,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Apply v1
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var v1Ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-            ).Value;
-            _ = MigrationRunner.Apply(
-                connection,
-                v1Ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            SeedSchema(connection, v1, _logger);
 
             // v2 changes back to simple column index (different name)
             var v2 = Schema

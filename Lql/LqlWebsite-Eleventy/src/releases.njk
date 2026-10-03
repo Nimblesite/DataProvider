@@ -1,0 +1,46 @@
+---
+layout: layouts/base.njk
+title: "Releases — LQL"
+description: "Every release of the Lambda Query Language toolkit with full notes, generated at build time from the GitHub Releases."
+permalink: /releases/
+---
+
+{#
+  agent-pmo:795a9c2
+  /releases/ page. Implements [WEB-RELEASES].
+  Renders the build-time `release` data (src/_data/release.js).
+  Notes are rendered with the `releaseNotes` filter (markdown-it, html:false).
+#}
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-content">
+      <h1>Releases</h1>
+      <p class="subtitle">Every release of the LQL toolkit with full notes — generated at build time from the GitHub Releases.</p>
+      <p><a href="{{ release.releasesUrl }}" rel="noopener">View all releases on GitHub &#8599;</a></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    {% if release.available and release.items.length %}
+    {% for item in release.items %}
+    <article id="{{ item.tag }}">
+      <h2><a href="{{ item.url }}" rel="noopener">{{ item.title }}</a> <code>{{ item.tag }}</code></h2>
+      <p>
+        {% if item.publishedDate %}<time datetime="{{ item.publishedAt }}">{{ item.publishedDate }}</time>{% endif %}
+        {% if item.prerelease %}&middot; Prerelease{% endif %}
+      </p>
+      {% if item.body %}
+      {{ item.body | releaseNotes | safe }}
+      {% else %}
+      <p><a href="{{ item.url }}" rel="noopener">Read the notes on GitHub</a></p>
+      {% endif %}
+    </article>
+    {% endfor %}
+    {% else %}
+    <p>Releases will appear here once the first version ships. <a href="{{ release.releasesUrl }}" rel="noopener">View all releases on GitHub</a></p>
+    {% endif %}
+  </div>
+</section>

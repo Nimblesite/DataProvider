@@ -11,11 +11,18 @@ public partial class LqlFileBasedTests
     [InlineData("window_function", "PostgreSql")]
     [InlineData("window_function", "SqlServer")]
     [InlineData("window_function", "SQLite")]
-    // TODO: Enable when parser supports these features:
-    // [InlineData("subquery_nested", "PostgreSql")] - Parenthesized pipeline expressions not yet supported
-    // [InlineData("cte_with", "PostgreSql")] - WITH clauses not yet supported
-    // [InlineData("exists_subquery", "PostgreSql")] - EXISTS subqueries not yet supported
-    // [InlineData("in_subquery", "PostgreSql")] - IN subqueries not yet supported
+    [InlineData("subquery_nested", "PostgreSql")]
+    [InlineData("subquery_nested", "SqlServer")]
+    [InlineData("subquery_nested", "SQLite")]
+    [InlineData("cte_with", "PostgreSql")]
+    [InlineData("cte_with", "SqlServer")]
+    [InlineData("cte_with", "SQLite")]
+    [InlineData("exists_subquery", "PostgreSql")]
+    [InlineData("exists_subquery", "SqlServer")]
+    [InlineData("exists_subquery", "SQLite")]
+    [InlineData("in_subquery", "PostgreSql")]
+    [InlineData("in_subquery", "SqlServer")]
+    [InlineData("in_subquery", "SQLite")]
     public void AdvancedQueries_FileBasedTest_ShouldTransformCorrectly(
         string testCaseName,
         string dialect

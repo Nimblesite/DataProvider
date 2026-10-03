@@ -123,6 +123,26 @@ public static partial class DataAccessGenerator
     }
 
     /// <summary>
+    /// Appends portable AddParameter binding lines for the given columns.
+    /// Nullable columns coalesce to DBNull.Value; non-nullable bind directly.
+    /// </summary>
+    private static void AppendParameterBindings(
+        StringBuilder sb,
+        IReadOnlyList<DatabaseColumn> columns
+    )
+    {
+        foreach (var column in columns)
+        {
+            var escaped = EscapeReservedKeyword(column.Name);
+            var value = column.IsNullable ? $"{escaped} ?? (object)DBNull.Value" : escaped;
+            sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"                AddParameter(command, \"@{column.Name}\", {value});"
+            );
+        }
+    }
+
+    /// <summary>
     /// Generates a data access extension method for querying
     /// </summary>
     /// <param name="className">Extension class name</param>
@@ -352,72 +372,24 @@ public static partial class DataAccessGenerator
         );
         sb.AppendLine("    {");
 
-        // Generate INSERT SQL (no last_insert_rowid - all PKs are UUIDs)
-        // All identifiers are lowercase - no quoting needed for cross-platform compatibility
-        var columnNames = string.Join(", ", insertableColumns.Select(c => c.Name));
+        // Generate INSERT SQL (no last_insert_rowid - all PKs are UUIDs). Identifiers are
+        // double-quoted so the statement matches case-preserved names on every platform.
+        var columnNames = string.Join(
+            ", ",
+            insertableColumns.Select(c => QuotedIdentifier(c.Name))
+        );
         var parameterNames = string.Join(", ", insertableColumns.Select(c => $"@{c.Name}"));
 
         sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"        const string sql = \"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\";"
+            $"        const string sql = \"INSERT INTO {QuotedIdentifier(table.Name)} ({columnNames}) VALUES ({parameterNames})\";"
         );
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            using (var command = new {commandType}(sql, ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("            {");
+        AppendTransactionConnectionGuard(sb);
+        AppendTransactionCommandOpen(sb);
 
         // Add parameters
-        foreach (var column in insertableColumns)
-        {
-            var paramName = EscapeReservedKeyword(column.Name);
-            if (column.IsNullable)
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {paramName} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {paramName});"
-                );
-            }
-        }
-
-        sb.AppendLine();
-        sb.AppendLine(
-            "                var rowsAffected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "                return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
-        sb.AppendLine("        catch (Exception ex)");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Insert failed\", ex));"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
+        AppendParameterBindings(sb, insertableColumns);
+        AppendNonQueryTail(sb, failure: "Insert failed", connectionType: connectionType);
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
@@ -587,74 +559,26 @@ public static partial class DataAccessGenerator
         );
         sb.AppendLine("    {");
 
-        // Generate UPDATE SQL - all identifiers lowercase, no quoting needed
-        var setClause = string.Join(", ", updateableColumns.Select(c => $"{c.Name} = @{c.Name}"));
+        // Generate UPDATE SQL with double-quoted identifiers (see the INSERT generator)
+        var setClause = string.Join(
+            ", ",
+            updateableColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
+        );
         var whereClause = string.Join(
             " AND ",
-            primaryKeyColumns.Select(c => $"{c.Name} = @{c.Name}")
+            primaryKeyColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
         );
 
         sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"        const string sql = \"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\";"
+            $"        const string sql = \"UPDATE {QuotedIdentifier(table.Name)} SET {setClause} WHERE {whereClause}\";"
         );
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            using (var command = new {commandType}(sql, ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("            {");
+        AppendTransactionConnectionGuard(sb);
+        AppendTransactionCommandOpen(sb);
 
         // Add parameters (nullable types use null-coalescing to DBNull.Value)
-        foreach (var column in allColumns)
-        {
-            var escaped = EscapeReservedKeyword(column.Name);
-            if (column.IsNullable)
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {escaped} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"                command.Parameters.AddWithValue(\"@{column.Name}\", {escaped});"
-                );
-            }
-        }
-
-        sb.AppendLine();
-        sb.AppendLine(
-            "                var rowsAffected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "                return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
-        sb.AppendLine("        catch (Exception ex)");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Update failed\", ex));"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
+        AppendParameterBindings(sb, allColumns);
+        AppendNonQueryTail(sb, failure: "Update failed", connectionType: connectionType);
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
@@ -773,12 +697,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        if (batch.Count == 0)");
         sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
+        AppendTransactionConnectionGuard(sb);
 
         // Build the SQL with placeholders - all identifiers lowercase, no quoting
         var columnNames = string.Join(", ", insertableColumns.Select(c => c.Name));
@@ -815,33 +734,7 @@ public static partial class DataAccessGenerator
             );
         }
         sb.AppendLine("        }");
-        sb.AppendLine();
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
-        );
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        using (var command = new {commandType}(sql.ToString(), ({connectionType})transaction.Connection!, ({transactionType})transaction))"
-        );
-        sb.AppendLine("        {");
-        sb.AppendLine("            for (int i = 0; i < parameters.Count; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine(
-            "                command.Parameters.AddWithValue(\"@p\" + i, parameters[i] ?? (object)DBNull.Value);"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine(
-            "            var rowsAffected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
-        );
-        sb.AppendLine("        }");
+        AppendBatchCommandExecute(sb, connectionType: connectionType);
         sb.AppendLine("    }");
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
@@ -968,12 +861,7 @@ public static partial class DataAccessGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        if (batch.Count == 0)");
         sb.AppendLine("            return new Result<int, SqlError>.Ok<int, SqlError>(0);");
-        sb.AppendLine();
-        sb.AppendLine("        if (transaction.Connection is null)");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
-        );
-        sb.AppendLine();
+        AppendTransactionConnectionGuard(sb);
 
         // Build the SQL with placeholders - database-specific upsert syntax
         // All identifiers lowercase, no quoting needed for cross-platform compatibility
@@ -1042,15 +930,135 @@ public static partial class DataAccessGenerator
                 $"        sql.Append(\" ON CONFLICT ({pkColumnNames}) DO UPDATE SET {updateSet}\");"
             );
         }
+        AppendBatchCommandExecute(sb, connectionType: connectionType);
+        sb.AppendLine("    }");
 
+        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
+    }
+
+    /// <summary>
+    /// Emits the generated guard that rejects transactions without a live connection.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    private static void AppendTransactionConnectionGuard(StringBuilder sb)
+    {
         sb.AppendLine();
-
-        var commandType = connectionType.Replace("Connection", "Command", StringComparison.Ordinal);
-        var transactionType = connectionType.Replace(
-            "Connection",
-            "Transaction",
-            StringComparison.Ordinal
+        sb.AppendLine("        if (transaction.Connection is null)");
+        sb.AppendLine(
+            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction has no connection\"));"
         );
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Emits the generated try-block opening and a transaction-scoped command created by
+    /// the transaction's own connection, so the code runs on any ADO.NET provider.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    private static void AppendTransactionCommandOpen(StringBuilder sb)
+    {
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine("            using (var command = transaction.Connection.CreateCommand())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                command.Transaction = transaction;");
+        sb.AppendLine("                command.CommandText = sql;");
+    }
+
+    /// <summary>
+    /// Emits the non-query execution, the Result mapping, and the method's closing, including
+    /// the portable AddParameter local function the bindings call.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    /// <param name="failure">Error message wrapped around a thrown exception.</param>
+    /// <param name="connectionType">Connection type the schema was read with (documented only).</param>
+    private static void AppendNonQueryTail(StringBuilder sb, string failure, string connectionType)
+    {
+        sb.AppendLine();
+        AppendNonQueryExecute(sb, indent: "                ");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (Exception ex)");
+        sb.AppendLine("        {");
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"{failure}\", ex));"
+        );
+        sb.AppendLine("        }");
+        AppendAddParameterFunction(sb, connectionType: connectionType);
+        sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Emits the rows-affected execution, async when the provider's command supports it.
+    /// </summary>
+    private static void AppendNonQueryExecute(StringBuilder sb, string indent)
+    {
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{indent}var rowsAffected = command is System.Data.Common.DbCommand dbCommand"
+        );
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{indent}    ? await dbCommand.ExecuteNonQueryAsync().ConfigureAwait(false)"
+        );
+        sb.AppendLine(CultureInfo.InvariantCulture, $"{indent}    : command.ExecuteNonQuery();");
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{indent}return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
+        );
+    }
+
+    /// <summary>
+    /// Emits the provider-neutral parameter binder used by generated table operations.
+    /// </summary>
+    private static void AppendAddParameterFunction(StringBuilder sb, string connectionType)
+    {
+        sb.AppendLine();
+        sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"        // Portable ADO.NET binding; the schema was read through {connectionType}."
+        );
+        sb.AppendLine(
+            "        static void AddParameter(IDbCommand command, string name, object value)"
+        );
+        sb.AppendLine("        {");
+        sb.AppendLine("            var parameter = command.CreateParameter();");
+        sb.AppendLine("            parameter.ParameterName = name;");
+        sb.AppendLine("            parameter.Value = value;");
+        sb.AppendLine("            command.Parameters.Add(parameter);");
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// Double-quotes an identifier (SQL standard) for a generated C# string literal.
+    /// </summary>
+    private static string QuotedIdentifier(string name) =>
+        $"\\\"{name.Replace("\"", "\\\"\\\"", StringComparison.Ordinal)}\\\"";
+
+    /// <summary>
+    /// Derives the platform command and transaction type names from a connection type.
+    /// </summary>
+    /// <param name="connectionType">Database connection type (e.g., SqliteConnection).</param>
+    /// <returns>The matching command and transaction type names.</returns>
+    private static (string CommandType, string TransactionType) DeriveTransactionTypes(
+        string connectionType
+    ) =>
+        (
+            connectionType.Replace("Connection", "Command", StringComparison.Ordinal),
+            connectionType.Replace("Connection", "Transaction", StringComparison.Ordinal)
+        );
+
+    /// <summary>
+    /// Emits the generated batch execution tail: transaction-scoped command creation,
+    /// positional parameter binding, and non-query execution.
+    /// </summary>
+    /// <param name="sb">Builder receiving the generated code.</param>
+    /// <param name="connectionType">Database connection type (e.g., SqliteConnection).</param>
+    private static void AppendBatchCommandExecute(StringBuilder sb, string connectionType)
+    {
+        sb.AppendLine();
+        var (commandType, transactionType) = DeriveTransactionTypes(connectionType);
         sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"        using (var command = new {commandType}(sql.ToString(), ({connectionType})transaction.Connection!, ({transactionType})transaction))"
@@ -1070,9 +1078,6 @@ public static partial class DataAccessGenerator
             "            return new Result<int, SqlError>.Ok<int, SqlError>(rowsAffected);"
         );
         sb.AppendLine("        }");
-        sb.AppendLine("    }");
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
 
     /// <summary>

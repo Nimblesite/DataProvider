@@ -3,7 +3,7 @@ name: upgrade-packages
 description: Upgrade all dependencies/packages to their latest versions for the detected language(s). Use when the user says "upgrade packages", "update dependencies", "bump versions", "update packages", or "upgrade deps".
 argument-hint: "[--check-only] [--major] [package-name]"
 ---
-<!-- agent-pmo:74cf183 -->
+<!-- agent-pmo:795a9c2 -->
 
 # Upgrade Packages
 

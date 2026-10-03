@@ -529,7 +529,7 @@ public static class SchemaVerifier
     // HELPER METHODS
     // =========================================================================
 
-    private static bool PostgresTableExists(NpgsqlConnection conn, string tableName, string schema)
+    internal static bool PostgresTableExists(NpgsqlConnection conn, string tableName, string schema)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -584,7 +584,7 @@ public static class SchemaVerifier
         return columns;
     }
 
-    private static bool SqliteTableExists(SqliteConnection conn, string tableName)
+    internal static bool SqliteTableExists(SqliteConnection conn, string tableName)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name";

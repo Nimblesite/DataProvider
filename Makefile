@@ -1,17 +1,23 @@
-# agent-pmo:74cf183
-# =============================================================================
+# agent-pmo:795a9c2
 # Standard Makefile — Nimblesite.DataProvider.Core
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # All targets are language-agnostic. Add language-specific helpers below.
-# =============================================================================
 
-.PHONY: build test lint fmt clean ci setup check coverage vsix help
+.PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix clinical help
 
-# -----------------------------------------------------------------------------
+# Bound build resources so compiler/analyzer work cannot exhaust the editor host.
+export DOTNET_PROCESSOR_COUNT ?= 2
+export DOTNET_GCHeapHardLimit ?= 0x80000000
+export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER = 1
+export CARGO_BUILD_JOBS ?= 2
+DOTNET_BUILD_FLAGS = --disable-build-servers -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+
+# Installed VS Code extension id (publisher.name from Lql/LqlExtension/package.json)
+VSIX_EXT_ID = lql-team.lql-language-support
+
 # OS Detection — portable commands for Linux, macOS, and Windows
 # On Windows, run via GNU Make with PowerShell (e.g., make from Git Bash or
 # choco install make). The $(OS) variable is set to "Windows_NT" automatically.
-# -----------------------------------------------------------------------------
 ifeq ($(OS),Windows_NT)
   SHELL := powershell.exe
   .SHELLFLAGS := -NoProfile -Command
@@ -24,6 +30,17 @@ else
   SHELL := /bin/bash
   RM = rm -rf
   MKDIR = mkdir -p
+  ifeq ($(shell uname -s),Darwin)
+    # Implements [CI-TIMEOUT]: macOS native FSEvents can stall test-host startup.
+    # Polling preserves configuration change notifications without that native wait.
+    export DOTNET_USE_POLLING_FILE_WATCHER ?= 1
+    # Keep debug information in object files; dsymutil also scans ancestors.
+    export RUSTFLAGS := $(RUSTFLAGS) -Csplit-debuginfo=unpacked
+    ifneq ($(wildcard $(HOME)/.colima/default/docker.sock),)
+      # Testcontainers Rust needs the explicit socket when Colima is installed.
+      _test_rust: export DOCKER_HOST ?= unix://$(HOME)/.colima/default/docker.sock
+    endif
+  endif
 endif
 
 # All .NET test projects (one per line for readability)
@@ -41,14 +58,12 @@ DOTNET_TEST_PROJECTS = \
   Reporting/Nimblesite.Reporting.Tests \
   Reporting/Nimblesite.Reporting.Integration.Tests
 
-# =============================================================================
 # Standard Targets
 #
 # Portfolio-wide uniform interface — these 7 targets exist in every repo and
 # their names never change. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
 # Do NOT add extra public targets here — put them in the Repo-Specific
 # Targets section below.
-# =============================================================================
 
 ## build: Compile/assemble all artifacts
 build:
@@ -59,6 +74,9 @@ build:
 ##       See REPO-STANDARDS-SPEC [TEST-RULES].
 test:
 	@echo "==> Testing..."
+	python3 tools/test-version-stamp.py
+	npm ci --prefix Website --ignore-scripts --no-audit --no-fund
+	python3 Website/scripts/test-api-docs.py
 	$(MAKE) _test
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
@@ -85,14 +103,10 @@ setup:
 	$(MAKE) _setup
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
-# =============================================================================
-# -----------------------------------------------------------------------------
 # Repo-Specific Targets (NOT part of the portfolio standard 7)
 #
 # Add helpers unique to this repo below. They MUST NOT shadow any of the 7
 # standard targets above. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
-# -----------------------------------------------------------------------------
-# =============================================================================
 
 ## check: lint + test (pre-commit shortcut)
 check: lint test
@@ -102,14 +116,36 @@ coverage:
 	@echo "==> Coverage report..."
 	$(MAKE) _coverage
 
+## aot: Native AOT publish of the DataProviderMigrate CLI + native smoke test ([MIG-AOT-CI])
+aot:
+	@echo "==> Native AOT publish + smoke test (DataProviderMigrate)..."
+	$(MAKE) _aot_dotnet
+
 ## vsix: Build Rust LSP (release), compile & package the VS Code extension (.vsix), and install it
 vsix:
 	@echo "==> Building and packaging VSIX..."
 	bash Lql/lql-lsp-rust/build-vsix.sh
 
-# =============================================================================
+## clinical: Build + test ClinicalCoding (../ClinicalCoding) against this checkout via a local
+##           NuGet feed ([CI-CLINICAL-LOCAL]). Override CLINICAL_DIR / CLINICAL_TARGETS as needed.
+clinical:
+	bash tools/clinical-local.sh
+
+## rebuild-install-vsix: Full clean cycle — uninstall, clean, rebuild, package, install ([MAKE-IDE-EXT])
+rebuild-install-vsix: _vsix_uninstall _vsix_clean vsix
+
+# Uninstall the currently-installed LQL extension (ignore if absent).
+_vsix_uninstall:
+	@echo "==> Uninstalling $(VSIX_EXT_ID) (if present)..."
+	-code --uninstall-extension $(VSIX_EXT_ID)
+
+# Remove the previously packaged .vsix and the compiled extension output.
+_vsix_clean:
+	@echo "==> Cleaning packaged VSIX + extension build output..."
+	$(RM) Lql/LqlExtension/out
+	-$(RM) Lql/LqlExtension/*.vsix
+
 # LANGUAGE-SPECIFIC IMPLEMENTATIONS
-# =============================================================================
 
 _build: _build_dotnet _build_rust _build_ts
 
@@ -128,9 +164,7 @@ _coverage: _coverage_dotnet
 
 _setup: _setup_dotnet _setup_ts
 
-# =============================================================================
 # COVERAGE ENFORCEMENT (shared shell logic)
-# =============================================================================
 # Each test target collects coverage, compares against coverage-thresholds.json,
 # fails hard if below, and ratchets up if above.
 #
@@ -139,11 +173,10 @@ _setup: _setup_dotnet _setup_ts
 #
 # The SRC_KEY mapping converts test project paths -> source project keys.
 # CI calls these same make targets — no duplication.
-# =============================================================================
 
 # --- C#/.NET ---
 _build_dotnet:
-	dotnet build DataProvider.sln --configuration Release
+	dotnet build DataProvider.sln --configuration Release $(DOTNET_BUILD_FLAGS)
 
 _test_dotnet:
 	@for test_proj in $(DOTNET_TEST_PROJECTS); do \
@@ -171,14 +204,14 @@ _test_dotnet:
 	  echo "============================================================"; \
 	  rm -rf "$$test_proj/TestResults"; \
 	  if [ -n "$$INCLUDE" ]; then \
-	    dotnet test "$$test_proj" --configuration Release \
+    dotnet test "$$test_proj" --configuration Release $(DOTNET_BUILD_FLAGS) \
 	      --settings coverlet.runsettings \
 	      --collect:"XPlat Code Coverage" \
 	      --results-directory "$$test_proj/TestResults" \
 	      --verbosity normal \
 	      -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="$$INCLUDE"; \
 	  else \
-	    dotnet test "$$test_proj" --configuration Release \
+    dotnet test "$$test_proj" --configuration Release $(DOTNET_BUILD_FLAGS) \
 	      --settings coverlet.runsettings \
 	      --collect:"XPlat Code Coverage" \
 	      --results-directory "$$test_proj/TestResults" \
@@ -219,7 +252,7 @@ _test_dotnet:
 	echo "==> All .NET test projects passed coverage thresholds."
 
 _lint_dotnet:
-	dotnet build DataProvider.sln --configuration Release
+	dotnet build DataProvider.sln --configuration Release $(DOTNET_BUILD_FLAGS)
 	dotnet csharpier check .
 
 _fmt_dotnet:
@@ -253,17 +286,52 @@ _setup_dotnet:
 	dotnet restore
 	dotnet tool restore
 
+# Native AOT publish of the migration CLI, then run the published native binary
+# as a black-box smoke test against a throwaway SQLite database. Implements
+# [MIG-AOT-CI]. RID auto-detects per platform; override with `make aot RID=...`.
+AOT_PROJ := Migration/DataProviderMigrate/DataProviderMigrate.csproj
+ifeq ($(OS),Windows_NT)
+RID ?= win-x64
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate.exe
+else ifeq ($(shell uname -s),Darwin)
+ifeq ($(shell uname -m),arm64)
+RID ?= osx-arm64
+else
+RID ?= osx-x64
+endif
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+else
+RID ?= linux-x64
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+endif
+
+_aot_dotnet:
+	@echo "==> Publishing Native AOT ($(RID))..."
+	dotnet publish $(AOT_PROJ) -c Release -r $(RID) -p:PublishAot=true --self-contained $(DOTNET_BUILD_FLAGS)
+	@echo "==> Native smoke test: migrate example schema to SQLite..."
+	$(AOT_EXE) migrate --schema Migration/DataProviderMigrate/example-schema.yaml \
+	  --output $(AOT_SMOKE_DB) --provider sqlite
+	@echo "==> Native AOT smoke test passed."
+
+# Throwaway SQLite path for the smoke test (TMPDIR-aware, cleaned each run).
+ifeq ($(OS),Windows_NT)
+AOT_SMOKE_DB := $(TEMP)\dataprovider_aot_smoke.db
+else
+AOT_SMOKE_DB := $(shell printf '%s' "$${TMPDIR:-/tmp}")dataprovider_aot_smoke.db
+endif
+
 # --- RUST (LQL LSP) ---
 _build_rust:
 	cd Lql/lql-lsp-rust && cargo build --release
 
+# Implements [CI-RUST-COVERAGE]: use the same instrumentation on every platform.
 _test_rust:
 	@THRESHOLD=$$(jq -r '.projects["Lql/lql-lsp-rust"].threshold // .default_threshold' coverage-thresholds.json); \
 	echo ""; \
 	echo "============================================================"; \
 	echo "==> Testing Lql/lql-lsp-rust (threshold: $$THRESHOLD%)"; \
 	echo "============================================================"; \
-	cd Lql/lql-lsp-rust && cargo tarpaulin --workspace --skip-clean \
+	cd Lql/lql-lsp-rust && cargo tarpaulin --engine llvm --workspace --skip-clean \
 	  --exclude-files 'crates/lql-parser/src/generated/*' \
 	  --exclude-files 'crates/lql-lsp/tests/*' \
 	  2>&1 | tee /tmp/_dp_tarpaulin_out.txt; \
@@ -376,9 +444,7 @@ _clean_ts:
 _setup_ts:
 	cd Lql/LqlExtension && npm install --no-audit --no-fund
 
-# =============================================================================
 # HELP
-# =============================================================================
 help:
 	@echo "Standard targets (portfolio-wide):"
 	@echo "  build          - Compile/assemble all artifacts"
@@ -393,3 +459,4 @@ help:
 	@echo "  check          - lint + test (pre-commit shortcut)"
 	@echo "  coverage       - Generate and open HTML coverage report"
 	@echo "  vsix           - Build LSP + compile & package VS Code extension (.vsix)"
+	@echo "  clinical       - Test ../ClinicalCoding against this checkout (local NuGet feed)"

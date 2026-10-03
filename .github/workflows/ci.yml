@@ -1,18 +1,30 @@
+# agent-pmo:795a9c2
 name: CI
 
 on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+
+# Implements [SWR-SEC-TOKEN-PRIVILEGE]: build/test jobs only need repository reads.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  # Projects target a mix of net9.0, net10.0 and netstandard2.1, so both SDKs
+  # are installed everywhere .NET builds (see the setup-dotnet steps below).
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Implements [CI-TIMEOUT]: bound compiler memory and concurrency in direct dotnet steps.
+  DOTNET_PROCESSOR_COUNT: 2
+  DOTNET_GCHeapHardLimit: '0x80000000'
+  DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
+  CARGO_BUILD_JOBS: 2
 
 jobs:
   # Track 1: Format Check All -> Lint All -> DataProvider Tests
@@ -23,10 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (9 + 10)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -36,7 +50,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -69,6 +83,15 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: Test release version stamper
+        run: python3 tools/test-version-stamp.py
+
+      - name: Install website dependencies
+        run: npm ci --prefix Website --ignore-scripts --no-audit --no-fund
+
+      - name: Test documentation generator
+        run: python3 Website/scripts/test-api-docs.py
 
       - name: Build CLI tools (needed by F# Type Provider MSBuild targets)
         run: |
@@ -115,13 +138,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (9 + 10)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
@@ -214,7 +241,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -258,11 +285,20 @@ jobs:
       - name: Verify lql-lsp --version
         run: |
           ./Lql/lql-lsp-rust/target/release/lql-lsp --version
-          # Confirm the printed version matches the VSIX package.json version
-          BIN_VERSION=$(./Lql/lql-lsp-rust/target/release/lql-lsp --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          # Compare full versions, including prerelease suffixes. The committed
+          # placeholder is 0.0.0-dev on both sides until release stamping.
+          BIN_OUTPUT=$(./Lql/lql-lsp-rust/target/release/lql-lsp --version)
+          case "$BIN_OUTPUT" in
+            "lql-lsp "*) BIN_VERSION="${BIN_OUTPUT#* }" ;;
+            *) echo "ERROR: unexpected lql-lsp --version output: $BIN_OUTPUT"; exit 1 ;;
+          esac
           VSIX_VERSION=$(jq -r '.version' Lql/LqlExtension/package.json)
           echo "Binary version: $BIN_VERSION"
           echo "VSIX version:   $VSIX_VERSION"
+          if [ -z "$BIN_VERSION" ] || [ -z "$VSIX_VERSION" ]; then
+            echo "ERROR: binary or VSIX version is empty"
+            exit 1
+          fi
           if [ "$BIN_VERSION" != "$VSIX_VERSION" ]; then
             echo "ERROR: lql-lsp --version ($BIN_VERSION) does not match VSIX version ($VSIX_VERSION)"
             exit 1
@@ -280,3 +316,84 @@ jobs:
 
       - name: Package VSIX (dry run)
         run: cd Lql/LqlExtension && npm run compile && npx vsce package --no-git-tag-version --no-update-package-json
+
+  # Duplication gate — Deslop ([CI-DESLOP]). Reads the threshold from .deslop.toml
+  # and exits 3 (failing the build) when measured duplication exceeds it. Owns the
+  # "duplicated code" concern; never hardcode the threshold here.
+  deslop:
+    name: Duplication (Deslop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DESLOP_VERSION: '0.36.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deslop
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deslop-bin"
+          curl -fsSL \
+            "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/deslop-bin" --strip-components=1 \
+              "deslop-${DESLOP_VERSION}-linux-x64/deslop"
+          echo "$RUNNER_TEMP/deslop-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/deslop-bin/deslop" --version
+      - name: Check duplication (reads .deslop.toml)
+        run: deslop .
+      - name: Upload Deslop report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deslop-report
+          path: .deslop/deslop-report.*
+          include-hidden-files: true
+
+  # Vulnerable-dependency gate ([GITHUB-DEP-REVIEW]). Fails a PR that introduces a
+  # dependency with a known High+ advisory. Owns the "vulnerable deps" concern
+  # (CodeQL owns vulnerable code; make lint owns style). No overlap.
+  security:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # Aggregating gate. This is the SINGLE required status check for branch
+  # protection ([GITHUB-PROTECTION]): it passes only when every real job above
+  # passed, giving a stable check name regardless of how the matrix evolves.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - lint-and-dataprovider
+      - build-and-test
+      - extension-tests
+      - deslop
+      - security
+    steps:
+      - name: Verify all required jobs succeeded
+        run: |
+          set -euo pipefail
+          # `security` is skipped on non-PR events; treat skipped as acceptable,
+          # any failure/cancellation as fatal.
+          results='${{ toJSON(needs) }}'
+          echo "$results"
+          fail=0
+          for job in lint-and-dataprovider build-and-test extension-tests deslop security; do
+            result=$(echo "$results" | jq -r --arg j "$job" '.[$j].result')
+            if [ "$job" = "security" ] && [ "$result" = "skipped" ]; then
+              continue
+            fi
+            if [ "$result" != "success" ]; then
+              echo "::error::Required job '$job' did not succeed (result: $result)"
+              fail=1
+            fi
+          done
+          exit $fail

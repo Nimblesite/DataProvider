@@ -283,32 +283,12 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
         );
     }
 
-    private (int ExitCode, string Output) RunMigrate(string schemaPath)
-    {
-        var originalOut = Console.Out;
-        using var output = new StringWriter(CultureInfo.InvariantCulture);
-        Console.SetOut(output);
-        try
-        {
-            var exitCode = DataProviderMigrate.Program.Main(
-                args:
-                [
-                    "migrate",
-                    "--schema",
-                    schemaPath,
-                    "--provider",
-                    "postgres",
-                    "--output",
-                    _connectionString,
-                ]
-            );
-            return (exitCode, output.ToString());
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
-    }
+    private (int ExitCode, string Output) RunMigrate(string schemaPath) =>
+        MigrationCliConsole.Migrate(
+            schemaPath: schemaPath,
+            provider: "postgres",
+            output: _connectionString
+        );
 
     private static string WriteTempSchemaFile(string contents)
     {

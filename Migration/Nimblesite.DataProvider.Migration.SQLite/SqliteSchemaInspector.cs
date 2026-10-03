@@ -254,6 +254,7 @@ public static class SqliteSchemaInspector
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
                     RowLevelSecurity = SqliteRlsSchemaInspector.Inspect(connection, tableName),
+                    Triggers = SqliteTriggerSchemaInspector.Inspect(connection, tableName),
                 }
             );
         }
@@ -279,6 +280,7 @@ public static class SqliteSchemaInspector
             "REAL" => new DoubleType(),
             "TEXT" => new TextType(),
             "BLOB" => new BlobType(),
+            "BOOLEAN" => new BooleanType(),
             _ when upper.Contains("INT", StringComparison.Ordinal) => new BigIntType(),
             _ when upper.Contains("CHAR", StringComparison.Ordinal) => new TextType(),
             _ when upper.Contains("TEXT", StringComparison.Ordinal) => new TextType(),

@@ -77,14 +77,7 @@ public static class SelectStatementLinqExtensions
         this SelectStatementBuilder builder,
         string columnName,
         object value
-    ) =>
-        builder.AddWhereCondition(
-            WhereCondition.Comparison(
-                ColumnInfo.Named(columnName),
-                ComparisonOperator.Eq,
-                FormatValue(value)
-            )
-        );
+    ) => builder.Where(columnName: columnName, @operator: ComparisonOperator.Eq, value: value);
 
     /// <summary>
     /// Adds a WHERE condition with a comparison operator
@@ -96,7 +89,11 @@ public static class SelectStatementLinqExtensions
         object value
     ) =>
         builder.AddWhereCondition(
-            WhereCondition.Comparison(ColumnInfo.Named(columnName), @operator, FormatValue(value))
+            WhereCondition.Comparison(
+                ColumnInfo.Named(columnName),
+                @operator,
+                SelectStatementVisitor.FormatValue(value, formatProvider: null)
+            )
         );
 
     /// <summary>
@@ -107,15 +104,11 @@ public static class SelectStatementLinqExtensions
         string columnName,
         object value
     ) =>
-        builder
-            .AddWhereCondition(WhereCondition.And())
-            .AddWhereCondition(
-                WhereCondition.Comparison(
-                    ColumnInfo.Named(columnName),
-                    ComparisonOperator.Eq,
-                    FormatValue(value)
-                )
-            );
+        builder.AddChainedEquality(
+            connector: WhereCondition.And(),
+            columnName: columnName,
+            value: value
+        );
 
     /// <summary>
     /// Adds an OR condition
@@ -125,15 +118,11 @@ public static class SelectStatementLinqExtensions
         string columnName,
         object value
     ) =>
-        builder
-            .AddWhereCondition(WhereCondition.Or())
-            .AddWhereCondition(
-                WhereCondition.Comparison(
-                    ColumnInfo.Named(columnName),
-                    ComparisonOperator.Eq,
-                    FormatValue(value)
-                )
-            );
+        builder.AddChainedEquality(
+            connector: WhereCondition.Or(),
+            columnName: columnName,
+            value: value
+        );
 
     /// <summary>
     /// Adds an INNER JOIN
@@ -145,22 +134,15 @@ public static class SelectStatementLinqExtensions
         string rightColumn,
         string? leftTableAlias = null,
         string? rightTableAlias = null
-    )
-    {
-        var leftRef = leftTableAlias != null ? $"{leftTableAlias}.{leftColumn}" : leftColumn;
-        var rightRef = rightTableAlias != null ? $"{rightTableAlias}.{rightColumn}" : rightColumn;
-        var condition = $"{leftRef} = {rightRef}";
-
-        // Add the right table to the tables collection
-        builder.AddTable(rightTable, rightTableAlias);
-
-        return builder.AddJoin(
-            leftTableAlias ?? builder.GetFirstTableName(),
-            rightTable,
-            condition,
-            "INNER"
+    ) =>
+        builder.AddEquiJoin(
+            rightTable: rightTable,
+            leftColumn: leftColumn,
+            rightColumn: rightColumn,
+            leftTableAlias: leftTableAlias,
+            rightTableAlias: rightTableAlias,
+            joinType: "INNER"
         );
-    }
 
     /// <summary>
     /// Adds a LEFT JOIN
@@ -172,22 +154,15 @@ public static class SelectStatementLinqExtensions
         string rightColumn,
         string? leftTableAlias = null,
         string? rightTableAlias = null
-    )
-    {
-        var leftRef = leftTableAlias != null ? $"{leftTableAlias}.{leftColumn}" : leftColumn;
-        var rightRef = rightTableAlias != null ? $"{rightTableAlias}.{rightColumn}" : rightColumn;
-        var condition = $"{leftRef} = {rightRef}";
-
-        // Add the right table to the tables collection
-        builder.AddTable(rightTable, rightTableAlias);
-
-        return builder.AddJoin(
-            leftTableAlias ?? builder.GetFirstTableName(),
-            rightTable,
-            condition,
-            "LEFT"
+    ) =>
+        builder.AddEquiJoin(
+            rightTable: rightTable,
+            leftColumn: leftColumn,
+            rightColumn: rightColumn,
+            leftTableAlias: leftTableAlias,
+            rightTableAlias: rightTableAlias,
+            joinType: "LEFT"
         );
-    }
 
     /// <summary>
     /// Adds ORDER BY ascending
@@ -258,6 +233,63 @@ public static class SelectStatementLinqExtensions
 
     // Helper methods
 
+    /// <summary>
+    /// Adds an equi-join of the given type (INNER or LEFT).
+    /// </summary>
+    private static SelectStatementBuilder AddEquiJoin(
+        this SelectStatementBuilder builder,
+        string rightTable,
+        string leftColumn,
+        string rightColumn,
+        string? leftTableAlias,
+        string? rightTableAlias,
+        string joinType
+    )
+    {
+        var leftRef = leftTableAlias != null ? $"{leftTableAlias}.{leftColumn}" : leftColumn;
+        var rightRef = rightTableAlias != null ? $"{rightTableAlias}.{rightColumn}" : rightColumn;
+        var condition = $"{leftRef} = {rightRef}";
+
+        // Add the right table to the tables collection
+        builder.AddTable(rightTable, rightTableAlias);
+
+        return builder.AddJoin(
+            leftTableAlias ?? builder.GetFirstTableName(),
+            rightTable,
+            condition,
+            joinType
+        );
+    }
+
+    /// <summary>
+    /// Adds a connector (AND/OR) followed by an equality comparison.
+    /// </summary>
+    private static SelectStatementBuilder AddChainedEquality(
+        this SelectStatementBuilder builder,
+        WhereCondition connector,
+        string columnName,
+        object value
+    ) =>
+        builder
+            .AddWhereCondition(connector)
+            .AddWhereCondition(
+                WhereCondition.Comparison(
+                    ColumnInfo.Named(columnName),
+                    ComparisonOperator.Eq,
+                    SelectStatementVisitor.FormatValue(value, formatProvider: null)
+                )
+            );
+
+    /// <summary>
+    /// Wraps an expression in parentheses and adds its conditions.
+    /// </summary>
+    private static void ProcessInParens(Expression expr, List<WhereCondition> conditions)
+    {
+        conditions.Add(WhereCondition.OpenParen());
+        ProcessExpression(expr, conditions);
+        conditions.Add(WhereCondition.CloseParen());
+    }
+
     private static string GetFirstTableName(this SelectStatementBuilder _) =>
         // Since we can't access private fields, we'll need to track this separately
         // or modify the builder to expose this information
@@ -327,13 +359,9 @@ public static class SelectStatementLinqExtensions
                 break;
 
             case ExpressionType.OrElse:
-                conditions.Add(WhereCondition.OpenParen());
-                ProcessExpression(binary.Left, conditions);
-                conditions.Add(WhereCondition.CloseParen());
+                ProcessInParens(binary.Left, conditions);
                 conditions.Add(WhereCondition.Or());
-                conditions.Add(WhereCondition.OpenParen());
-                ProcessExpression(binary.Right, conditions);
-                conditions.Add(WhereCondition.CloseParen());
+                ProcessInParens(binary.Right, conditions);
                 break;
 
             case ExpressionType.Equal:
@@ -352,23 +380,17 @@ public static class SelectStatementLinqExtensions
         List<WhereCondition> conditions
     )
     {
-        var columnName = ExtractColumnName(binary.Left);
-        var value = ExtractValue(binary.Right);
-        var op = binary.NodeType switch
-        {
-            ExpressionType.Equal => ComparisonOperator.Eq,
-            ExpressionType.NotEqual => ComparisonOperator.NotEq,
-            ExpressionType.LessThan => ComparisonOperator.LessThan,
-            ExpressionType.LessThanOrEqual => ComparisonOperator.LessOrEq,
-            ExpressionType.GreaterThan => ComparisonOperator.GreaterThan,
-            ExpressionType.GreaterThanOrEqual => ComparisonOperator.GreaterOrEq,
-            _ => ComparisonOperator.Eq,
-        };
+        var columnName = SelectStatementVisitor.ExtractColumnName(binary.Left);
+        var value = SelectStatementVisitor.ExtractValue(binary.Right);
 
         if (columnName != null && value != null)
         {
             conditions.Add(
-                WhereCondition.Comparison(ColumnInfo.Named(columnName), op, FormatValue(value))
+                WhereCondition.Comparison(
+                    ColumnInfo.Named(columnName),
+                    SelectStatementVisitor.ComparisonOperatorFor(binary.NodeType),
+                    SelectStatementVisitor.FormatValue(value, formatProvider: null)
+                )
             );
         }
     }
@@ -381,8 +403,8 @@ public static class SelectStatementLinqExtensions
         // Handle common string methods
         if (method.Method.Name == "Contains" && method.Object != null)
         {
-            var columnName = ExtractColumnName(method.Object);
-            var value = ExtractValue(method.Arguments[0]);
+            var columnName = SelectStatementVisitor.ExtractColumnName(method.Object);
+            var value = SelectStatementVisitor.ExtractValue(method.Arguments[0]);
             if (columnName != null && value != null)
             {
                 conditions.Add(
@@ -396,8 +418,8 @@ public static class SelectStatementLinqExtensions
         }
         else if (method.Method.Name == "StartsWith" && method.Object != null)
         {
-            var columnName = ExtractColumnName(method.Object);
-            var value = ExtractValue(method.Arguments[0]);
+            var columnName = SelectStatementVisitor.ExtractColumnName(method.Object);
+            var value = SelectStatementVisitor.ExtractValue(method.Arguments[0]);
             if (columnName != null && value != null)
             {
                 conditions.Add(
@@ -410,42 +432,4 @@ public static class SelectStatementLinqExtensions
             }
         }
     }
-
-    private static string? ExtractColumnName(Expression expr) =>
-        expr switch
-        {
-            MemberExpression member => member.Member.Name,
-            UnaryExpression unary => ExtractColumnName(unary.Operand),
-            _ => null,
-        };
-
-    private static object? ExtractValue(Expression expr)
-    {
-        try
-        {
-            var lambda = Expression.Lambda(expr);
-            var compiled = lambda.Compile();
-            return compiled.DynamicInvoke();
-        }
-        catch (InvalidOperationException)
-        {
-            // Expected - expression cannot be evaluated at compile time
-            return default;
-        }
-        catch (ArgumentException)
-        {
-            // Expected - invalid expression structure
-            return default;
-        }
-    }
-
-    private static string FormatValue(object? value) =>
-        value switch
-        {
-            null => "NULL",
-            string s => $"'{s.Replace("'", "''", StringComparison.Ordinal)}'",
-            bool b => b ? "1" : "0",
-            DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
-            _ => value.ToString() ?? "NULL",
-        };
 }
