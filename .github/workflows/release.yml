@@ -7,6 +7,12 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to preflight without publishing (for example 0.10.0-beta)
+        required: true
+        type: string
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
@@ -33,6 +39,7 @@ jobs:
     environment: release
     permissions:
       contents: read
+      id-token: write
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
@@ -40,12 +47,14 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-      - name: Derive version from tag
+      - name: Derive release version
         id: v
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version || github.ref_name }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
@@ -54,13 +63,22 @@ jobs:
           fi
       - name: Stamp version into runner working tree (never committed)
         shell: bash
-        run: python3 tools/shipwright-version-stamp.py --tag "${GITHUB_REF_NAME}" --root .
+        run: python3 tools/shipwright-version-stamp.py --tag "v${{ steps.v.outputs.version }}" --root .
       - name: Validate Shipwright manifests
         shell: bash
         run: |
           set -euo pipefail
           python3 tools/validate-manifest.py shipwright.json
           python3 tools/validate-manifest.py Lql/LqlExtension/shipwright.json
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 22
+      - name: Verify Marketplace publishing credentials
+        uses: ./.github/actions/marketplace-auth
+        with:
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
 
   # Implements [CI-RELEASE-GATE]: run the same CI on the tagged SHA before publishing.
   ci-gate:
@@ -82,6 +100,10 @@ jobs:
 
   # ── NuGet packages ────────────────────────────────────────────────────────
   publish-nuget:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
+      needs.codeql-gate.result == 'success'
     needs: [prepare, ci-gate, codeql-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -128,6 +150,10 @@ jobs:
 
   # ── Per-platform binaries → GitHub Release ────────────────────────────────
   release-binaries:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
+      needs.codeql-gate.result == 'success'
     needs: [prepare, ci-gate, codeql-gate]
     uses: ./.github/workflows/release-binary-multiplatform.yml
     with:
@@ -140,6 +166,10 @@ jobs:
 
   # ── Per-platform .NET Native AOT migration CLI → GitHub Release [MIG-AOT-CI] ─
   release-dotnet-binaries:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
+      needs.codeql-gate.result == 'success'
     needs: [prepare, ci-gate, codeql-gate]
     uses: ./.github/workflows/release-dotnet-aot-multiplatform.yml
     with:
@@ -179,7 +209,9 @@ jobs:
   # ── Homebrew tap ──────────────────────────────────────────────────────────
   publish-brew:
     needs: [prepare, checksums]
-    if: needs.prepare.outputs.prerelease == 'false'
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-brew-tap.yml
     with:
       tap_repo: Nimblesite/homebrew-lql
@@ -196,7 +228,9 @@ jobs:
   # ── Scoop bucket ──────────────────────────────────────────────────────────
   publish-scoop:
     needs: [prepare, checksums]
-    if: needs.prepare.outputs.prerelease == 'false'
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-scoop-bucket.yml
     with:
       bucket_repo: Nimblesite/scoop-lql
@@ -239,7 +273,9 @@ jobs:
   # ── Homebrew tap (migration CLI) ──────────────────────────────────────────
   publish-brew-migrate:
     needs: [prepare, dotnet-checksums]
-    if: needs.prepare.outputs.prerelease == 'false'
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.dotnet-checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-brew-tap.yml
     with:
       tap_repo: Nimblesite/homebrew-lql
@@ -256,7 +292,9 @@ jobs:
   # ── Scoop bucket (migration CLI) ──────────────────────────────────────────
   publish-scoop-migrate:
     needs: [prepare, dotnet-checksums]
-    if: needs.prepare.outputs.prerelease == 'false'
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.dotnet-checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-scoop-bucket.yml
     with:
       bucket_repo: Nimblesite/scoop-lql
@@ -270,8 +308,12 @@ jobs:
     secrets:
       bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
 
-  # ── Per-platform VSIX → VS Code Marketplace (Entra OIDC, no PAT) ───────────
+  # ── Per-platform VSIX → VS Code Marketplace ───────────────────────────────
   publish-vsix:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
+      needs.codeql-gate.result == 'success' && needs.release-binaries.result == 'success'
     needs: [prepare, ci-gate, codeql-gate, release-binaries]
     uses: ./.github/workflows/publish-vsix-per-platform.yml
     with:
@@ -281,6 +323,7 @@ jobs:
     secrets:
       azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
       azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+      marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
     permissions:
       contents: read
       id-token: write
@@ -288,6 +331,9 @@ jobs:
 
   # ── Documentation sites (both deploy on release) ──────────────────────────
   deploy-lql-website:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.publish-nuget.result == 'success'
     needs: [prepare, publish-nuget]
     uses: ./.github/workflows/deploy-lql-website.yml
     with:
@@ -298,6 +344,9 @@ jobs:
       id-token: write
 
   deploy-website:
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+      needs.publish-nuget.result == 'success' && needs.deploy-lql-website.result == 'success'
     needs: [prepare, publish-nuget, deploy-lql-website]
     uses: ./.github/workflows/deploy-pages.yml
     with:

@@ -9,7 +9,8 @@ and NEVER commits the result.
 Carriers stamped:
   - Directory.Build.props                         <Version> (XML, ElementTree)
   - Lql/lql-lsp-rust/Cargo.toml                   [workspace.package].version (TOML, table-aware walk)
-  - Lql/LqlExtension/package.json                 version (JSON)
+  - Lql/lql-lsp-rust/Cargo.lock                   workspace package versions only (TOML)
+  - Lql/LqlExtension/package.json                 numeric version for Marketplace (JSON)
   - package.json                                  version (JSON, only if present)
   - shipwright.json                               product.version + every expectedVersion (JSON)
   - Lql/LqlExtension/shipwright.json              product.version + every expectedVersion (JSON)
@@ -64,36 +65,49 @@ def stamp_msbuild(path: Path, version: str, dry_run: bool) -> list[str]:
     return changed
 
 
-def stamp_cargo_workspace(path: Path, version: str, dry_run: bool) -> list[str]:
-    """Rewrite [workspace.package].version with a table-aware line walk.
+def stamp_toml_versions(path: Path, version: str, dry_run: bool, table: str, targets: set[int]) -> list[str]:
+    """Preserve TOML text outside selected version keys. [SWR-VERSION-BUILD-STAMPING]"""
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    active_table: str | None = None
+    table_index = -1
+    changed: list[str] = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            active_table = stripped
+            table_index += int(active_table == table)
+        if active_table == table and table_index in targets and stripped.partition("=")[0].strip() == "version":
+            eol = "\r\n" if line.endswith("\r\n") else "\n"
+            lines[index] = f'version = "{version}"{eol}'
+            changed.append(f"{path}: {table}[{table_index}].version -> {version}")
+    if changed and not dry_run:
+        path.write_text("".join(lines), encoding="utf-8")
+    return changed
 
-    tomllib (structured read) validates the file and confirms the key exists;
-    the write is a single targeted line replacement guarded by the active table,
-    never a regex over the document.
-    """
+
+def stamp_cargo_lock(path: Path, version: str, dry_run: bool) -> list[str]:
+    """Update workspace entries without resolving dependencies. [SWR-VERSION-BUILD-STAMPING]"""
+    lock = path.parent / "Cargo.lock"
+    if not lock.exists():
+        return []
+    workspace = tomllib.loads(path.read_text(encoding="utf-8"))["workspace"]
+    packages = (
+        tomllib.loads((path.parent / member / "Cargo.toml").read_text(encoding="utf-8"))["package"]
+        for member in workspace["members"]
+    )
+    names = {package["name"] for package in packages if package.get("version") == {"workspace": True}}
+    entries = tomllib.loads(lock.read_text(encoding="utf-8"))["package"]
+    targets = {index for index, package in enumerate(entries) if package["name"] in names and "source" not in package}
+    return stamp_toml_versions(path=lock, version=version, dry_run=dry_run, table="[[package]]", targets=targets)
+
+
+def stamp_cargo_workspace(path: Path, version: str, dry_run: bool) -> list[str]:
+    """Stamp the manifest and its locked workspace entries. [SWR-VERSION-BUILD-STAMPING]"""
     parsed = tomllib.loads(path.read_text(encoding="utf-8"))
     if "version" not in parsed.get("workspace", {}).get("package", {}):
         return []
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    out: list[str] = []
-    active_table: str | None = None
-    changed: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            active_table = stripped[1:-1].strip()
-            out.append(line)
-            continue
-        key = stripped.split("=", 1)[0].strip() if "=" in stripped else ""
-        if active_table == "workspace.package" and key == "version" and not changed:
-            eol = "\r\n" if line.endswith("\r\n") else "\n"
-            out.append(f'version = "{version}"{eol}')
-            changed.append(f"{path}: [workspace.package].version -> {version}")
-            continue
-        out.append(line)
-    if changed and not dry_run:
-        path.write_text("".join(out), encoding="utf-8")
-    return changed
+    changed = stamp_toml_versions(path=path, version=version, dry_run=dry_run, table="[workspace.package]", targets={0})
+    return changed + stamp_cargo_lock(path=path, version=version, dry_run=dry_run)
 
 
 def main() -> int:
@@ -120,7 +134,10 @@ def main() -> int:
     for path, kind in carriers:
         if not path.exists():
             continue
-        all_changes.extend(handlers[kind](path, version, args.dry_run))
+        # Marketplace represents prereleases through --pre-release, not a suffix.
+        # Implements [SWR-VSIX-PACKAGE]; binary expectedVersion retains the full tag.
+        carrier_version = version.partition("-")[0] if path == root / "Lql/LqlExtension/package.json" else version
+        all_changes.extend(handlers[kind](path=path, version=carrier_version, dry_run=args.dry_run))
 
     mode = "DRY-RUN (no files changed)" if args.dry_run else "STAMPED"
     print(f"shipwright-version-stamp {mode}: tag={args.tag} version={version} root={root}")

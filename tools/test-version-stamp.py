@@ -29,7 +29,8 @@ def assert_versions(root: Path, version: str) -> None:
                 for c in data["components"] if "expectedVersion" in c
             )
         else:
-            assert data["version"] == version
+            expected = version.partition("-")[0] if name == "Lql/LqlExtension/package.json" else version
+            assert data["version"] == expected
 
 
 def run_stamp(root: Path, version: str, dry_run: bool = False) -> None:
@@ -59,5 +60,25 @@ def test_release_carriers() -> None:
         assert {name: (ROOT / name).read_bytes() for name in CARRIERS} == original
 
 
+def test_release_preserves_locked_cargo_dependencies() -> None:
+    """Release stamping remains buildable with --locked. [SWR-VERSION-BUILD-STAMPING]"""
+    cargo_root = Path("Lql/lql-lsp-rust")
+    original = tomllib.loads((ROOT / cargo_root / "Cargo.lock").read_text())["package"]
+    registry = [package for package in original if "source" in package]
+    with tempfile.TemporaryDirectory(prefix="version-lock-ci-") as directory:
+        root = Path(directory)
+        shutil.copytree(src=ROOT / cargo_root, dst=root / cargo_root, ignore=shutil.ignore_patterns("target"))
+        for version in ("1.2.3", "1.2.4-beta.5"):
+            run_stamp(root=root, version=version)
+            packages = tomllib.loads((root / cargo_root / "Cargo.lock").read_text())["package"]
+            assert [package for package in packages if "source" in package] == registry
+            assert {package["version"] for package in packages if "source" not in package} == {version}
+            subprocess.run(
+                args=["cargo", "metadata", "--locked", "--offline", "--format-version", "1"],
+                cwd=root / cargo_root, check=True, timeout=30, stdout=subprocess.DEVNULL,
+            )
+
+
 if __name__ == "__main__":
     test_release_carriers()
+    test_release_preserves_locked_cargo_dependencies()
