@@ -85,7 +85,7 @@ jobs:
         run: make lint
 
       - name: Test release version stamper
-        run: python3 tools/test-version-stamp.py
+        run: make _test_version_stamp
 
       - name: Install website dependencies
         run: npm ci --prefix Website --ignore-scripts --no-audit --no-fund

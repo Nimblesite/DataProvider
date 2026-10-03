@@ -1,0 +1,54 @@
+# Implements [SWR-VSIX-PUBLISH-AUTH]: one authentication path for preflight and publishing.
+name: Verify Marketplace authentication
+description: Prefer Entra OIDC when configured, otherwise use the configured Marketplace PAT.
+inputs:
+  azure_client_id:
+    description: Entra workload identity client ID
+    required: false
+  azure_tenant_id:
+    description: Entra tenant ID
+    required: false
+  marketplace_pat:
+    description: Existing Marketplace publishing token
+    required: false
+outputs:
+  flags:
+    description: Nonsecret authentication flag for vsce
+    value: ${{ steps.auth.outputs.flags }}
+runs:
+  using: composite
+  steps:
+    - name: Azure login (OIDC)
+      if: inputs.azure_client_id != '' && inputs.azure_tenant_id != ''
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+      with:
+        client-id: ${{ inputs.azure_client_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
+        allow-no-subscriptions: true
+    - name: Select publishing credentials
+      id: auth
+      shell: bash
+      env:
+        CLIENT_ID: ${{ inputs.azure_client_id }}
+        TENANT_ID: ${{ inputs.azure_tenant_id }}
+        MARKETPLACE_PAT: ${{ inputs.marketplace_pat }}
+      run: |
+        set -euo pipefail
+        if [ -n "$CLIENT_ID" ] && [ -n "$TENANT_ID" ]; then
+          echo 'flags=--azure-credential' >> "$GITHUB_OUTPUT"
+        elif [ -n "$MARKETPLACE_PAT" ]; then
+          printf 'VSCE_PAT=%s\n' "$MARKETPLACE_PAT" >> "$GITHUB_ENV"
+          echo 'flags=' >> "$GITHUB_OUTPUT"
+        else
+          echo '::error::Marketplace publishing credentials are not configured.' >&2
+          exit 1
+        fi
+    - name: Verify publisher access without publishing
+      shell: bash
+      env:
+        AUTH_FLAGS: ${{ steps.auth.outputs.flags }}
+      run: |
+        set -euo pipefail
+        publisher="$(node -p "require('./Lql/LqlExtension/package.json').publisher")"
+        read -r -a auth_args <<< "$AUTH_FLAGS"
+        npx --yes @vscode/vsce@4.0.0 verify-pat "$publisher" "${auth_args[@]}"

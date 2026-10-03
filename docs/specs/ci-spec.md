@@ -8,6 +8,39 @@ workflows check out the tagged SHA. The CI aggregate requires success from
 every build, test, lint, and duplication job; only dependency review may be
 skipped for non-PR events. CI also runs `tools/test-version-stamp.py`, which
 checks stable and prerelease stamping and dry-run immutability.
+It also verifies that locked Cargo workspace packages receive the tag version
+without changing registry dependencies, and that `cargo metadata --locked`
+accepts the stamped lockfile. Make and CI share one test target that fetches
+the complete locked dependency graph before offline metadata verification,
+including dependencies for other platforms. Native AOT builds stamp their checkout before
+publishing so the migration CLI carries the release version.
+Native CLI archives include the complete publish output, including SQLite's
+native runtime library. Each platform extracts its archive and runs the existing
+migration smoke test from the extracted directory before uploading artifacts.
+
+### Marketplace Version Carrier [SWR-VSIX-PACKAGE]
+
+VS Code Marketplace accepts only numeric `major.minor.patch` extension versions.
+The VSIX package manifest therefore uses the numeric portion of a prerelease
+tag; the publish workflow sets `--pre-release` to select the prerelease channel.
+Native binaries and Shipwright `expectedVersion` retain the complete tag version,
+including its suffix. The stamper tests verify both representations, preserving
+every version assertion and dry-run immutability check.
+
+### Publishing Preflight [CI-RELEASE-PREFLIGHT]
+
+Manual Release runs take a version and verify manifests, publishing credentials,
+CI, and the CodeQL security gate on the selected commit. Publishing jobs require
+a tag push, so manual preflight cannot upload packages or release assets.
+
+### Marketplace Authentication [SWR-VSIX-PUBLISH-AUTH]
+
+Preflight and VSIX publishing share one composite action. It prefers Entra OIDC
+when both identity IDs are configured; otherwise it uses the existing
+`VSCODE_MARKETPLACE_PAT` secret. It verifies publisher access before publishing,
+fails when credentials are missing or invalid, and never falls back after an
+OIDC login failure. The supported Azure credential option is passed directly to
+the pinned VSCE CLI. Retrying publication skips already published packages.
 
 ## Rust Coverage Instrumentation [CI-RUST-COVERAGE]
 

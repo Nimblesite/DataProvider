@@ -1,7 +1,4 @@
 # agent-pmo:795a9c2
-# Standard Makefile — Nimblesite.DataProvider.Core
-# Cross-platform: Linux, macOS, Windows (via GNU Make)
-# All targets are language-agnostic. Add language-specific helpers below.
 
 .PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix clinical help
 
@@ -58,12 +55,7 @@ DOTNET_TEST_PROJECTS = \
   Reporting/Nimblesite.Reporting.Tests \
   Reporting/Nimblesite.Reporting.Integration.Tests
 
-# Standard Targets
-#
-# Portfolio-wide uniform interface — these 7 targets exist in every repo and
-# their names never change. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
-# Do NOT add extra public targets here — put them in the Repo-Specific
-# Targets section below.
+# Standard targets implement REPO-STANDARDS-SPEC [MAKE-TARGETS].
 
 ## build: Compile/assemble all artifacts
 build:
@@ -74,7 +66,7 @@ build:
 ##       See REPO-STANDARDS-SPEC [TEST-RULES].
 test:
 	@echo "==> Testing..."
-	python3 tools/test-version-stamp.py
+	$(MAKE) _test_version_stamp
 	npm ci --prefix Website --ignore-scripts --no-audit --no-fund
 	python3 Website/scripts/test-api-docs.py
 	$(MAKE) _test
@@ -103,10 +95,7 @@ setup:
 	$(MAKE) _setup
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
-# Repo-Specific Targets (NOT part of the portfolio standard 7)
-#
-# Add helpers unique to this repo below. They MUST NOT shadow any of the 7
-# standard targets above. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
+# Repo-specific targets extend [MAKE-TARGETS].
 
 ## check: lint + test (pre-commit shortcut)
 check: lint test
@@ -145,6 +134,12 @@ _vsix_clean:
 	$(RM) Lql/LqlExtension/out
 	-$(RM) Lql/LqlExtension/*.vsix
 
+# Implements [SWR-VERSION-BUILD-STAMPING]: offline metadata needs every target dependency.
+.PHONY: _test_version_stamp
+_test_version_stamp:
+	cargo fetch --locked --manifest-path Lql/lql-lsp-rust/Cargo.toml
+	python3 tools/test-version-stamp.py
+
 # LANGUAGE-SPECIFIC IMPLEMENTATIONS
 
 _build: _build_dotnet _build_rust _build_ts
@@ -164,15 +159,7 @@ _coverage: _coverage_dotnet
 
 _setup: _setup_dotnet _setup_ts
 
-# COVERAGE ENFORCEMENT (shared shell logic)
-# Each test target collects coverage, compares against coverage-thresholds.json,
-# fails hard if below, and ratchets up if above.
-#
-# coverage-thresholds.json keys are SOURCE project paths, e.g.:
-#   "DataProvider/Nimblesite.DataProvider.Core": { "threshold": 88, "include": "..." }
-#
-# The SRC_KEY mapping converts test project paths -> source project keys.
-# CI calls these same make targets — no duplication.
+# Coverage maps test projects to source keys, enforces thresholds, and ratchets upward.
 
 # --- C#/.NET ---
 _build_dotnet:

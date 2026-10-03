@@ -63,6 +63,9 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "10.0.x"
+      - name: Stamp version from tag
+        shell: bash
+        run: python3 tools/shipwright-version-stamp.py --tag "v${{ inputs.version }}" --root .
       # Native AOT needs the platform C toolchain; ubuntu/macos runners ship it,
       # Windows runners ship MSVC. Linux additionally needs clang + zlib headers.
       - name: Install Linux AOT toolchain
@@ -88,17 +91,6 @@ jobs:
           test -f "$path"
           echo "path=$path" >> "$GITHUB_OUTPUT"
           echo "exe=$exe" >> "$GITHUB_OUTPUT"
-      - name: Native smoke test (migrate example schema → SQLite)
-        shell: bash
-        env:
-          DATAPROVIDERMIGRATE_AOT_BIN: ${{ steps.bin.outputs.path }}
-        run: |
-          set -euo pipefail
-          db="${RUNNER_TEMP}/aot_smoke.db"
-          "${DATAPROVIDERMIGRATE_AOT_BIN}" migrate \
-            --schema Migration/DataProviderMigrate/example-schema.yaml \
-            --output "$db" --provider sqlite
-          test -f "$db"
       - name: Package archive
         id: pkg
         shell: bash
@@ -107,14 +99,44 @@ jobs:
           stage="${{ inputs.binary_name }}-${{ inputs.version }}-${{ matrix.platform }}"
           mkdir -p "${GITHUB_WORKSPACE}/dist"
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "${GITHUB_WORKSPACE}/dist/${stage}.zip" "${{ steps.bin.outputs.path }}" >/dev/null
+            cd aot-out
+            7z a "${GITHUB_WORKSPACE}/dist/${stage}.zip" . >/dev/null
             echo "archive=dist/${stage}.zip" >> "$GITHUB_OUTPUT"
           else
             tar -czf "${GITHUB_WORKSPACE}/dist/${stage}.tar.gz" \
-              -C "$(dirname "${{ steps.bin.outputs.path }}")" \
-              "$(basename "${{ steps.bin.outputs.path }}")"
+              -C aot-out .
             echo "archive=dist/${stage}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
+      - name: Extract distributed archive
+        id: unpack
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.pkg.outputs.archive }}
+          EXE: ${{ steps.bin.outputs.exe }}
+          BINARY_NAME: ${{ inputs.binary_name }}
+        run: |
+          set -euo pipefail
+          dest="${RUNNER_TEMP}/aot-packaged"
+          mkdir -p "$dest"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z x "$ARCHIVE" "-o${dest}" >/dev/null
+          else
+            tar -xzf "$ARCHIVE" -C "$dest"
+          fi
+          path="${dest}/${BINARY_NAME}${EXE}"
+          test -f "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - name: Packaged native smoke test (migrate example schema → SQLite)
+        shell: bash
+        env:
+          DATAPROVIDERMIGRATE_AOT_BIN: ${{ steps.unpack.outputs.path }}
+        run: |
+          set -euo pipefail
+          db="${RUNNER_TEMP}/aot_smoke.db"
+          "${DATAPROVIDERMIGRATE_AOT_BIN}" migrate \
+            --schema Migration/DataProviderMigrate/example-schema.yaml \
+            --output "$db" --provider sqlite
+          test -f "$db"
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@f08f31f53bbe4451c46f9c5d8a8ff4cbb2c5ed27 # v0.21.0
         with:
