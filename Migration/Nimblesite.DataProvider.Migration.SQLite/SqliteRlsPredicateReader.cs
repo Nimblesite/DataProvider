@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using SqlParser;
 using SqlParser.Ast;
 using SqlParser.Dialects;
+using SqlParser.Tokens;
 
 namespace Nimblesite.DataProvider.Migration.SQLite;
 
@@ -8,7 +10,7 @@ namespace Nimblesite.DataProvider.Migration.SQLite;
 // WHERE clause and trigger-body predicate are read back with the official
 // SQL parser (SqlParserCS, SQLiteDialect) so an existing policy's USING /
 // WITH CHECK predicate can be compared against the desired one. The trigger
-// body is located with a quote-aware keyword scan because SqlParserCS 0.6.5
+// body is located with the same parser's tokenizer because SqlParserCS 0.6.5
 // cannot parse CREATE TRIGGER statements as a whole.
 
 internal static class SqliteRlsPredicateReader
@@ -16,9 +18,9 @@ internal static class SqliteRlsPredicateReader
     /// <summary>
     /// Read the WHERE predicate of the table's <c>{tableName}_secure</c> view.
     /// Returns null when the view does not exist or its predicate could not be
-    /// extracted; <paramref name="exists"/> distinguishes the two cases.
+    /// extracted; the returned Exists value distinguishes the two cases.
     /// </summary>
-    public static (bool Exists, string? Predicate) ReadSecureView(
+    public static (bool Exists, string? Predicate, string? PolicyName) ReadSecureView(
         SqliteConnection connection,
         string tableName
     )
@@ -26,8 +28,9 @@ internal static class SqliteRlsPredicateReader
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = @name";
         command.Parameters.AddWithValue("@name", $"{tableName}_secure");
-        var sql = command.ExecuteScalar() as string;
-        return sql is null ? (false, null) : (true, ViewPredicate(sql));
+        return command.ExecuteScalar() is string sql
+            ? (true, ViewPredicate(sql), SqliteRlsViewMetadata.ReadPolicyName(sql: sql))
+            : (false, null, null);
     }
 
     /// <summary>
@@ -77,11 +80,9 @@ internal static class SqliteRlsPredicateReader
 
     // The generated body is `SELECT RAISE(ABORT, ...) WHERE NOT (<predicate>)`.
     private static string? GuardedPredicate(Expression? selection) =>
-        selection switch
-        {
-            Expression.UnaryOp { Op: UnaryOperator.Not } not => Unwrap(not.Expression),
-            _ => null,
-        };
+        selection is Expression.UnaryOp { Op: UnaryOperator.Not } not
+            ? Unwrap(not.Expression)
+            : null;
 
     private static string? Unwrap(Expression expression)
     {
@@ -90,27 +91,39 @@ internal static class SqliteRlsPredicateReader
     }
 
     private static Expression StripRowAlias(Expression expression) =>
-        expression switch
-        {
-            Expression.CompoundIdentifier c when c.Idents.Count > 1 && IsRowAlias(c.Idents[0]) =>
-                c with
-                {
-                    Idents = [.. c.Idents.Skip(1)],
-                },
-            Expression.BinaryOp binary => binary with
+        expression is Expression.CompoundIdentifier c
+        && c.Idents.Count > 1
+        && IsRowAlias(c.Idents[0])
+            ? c with
+            {
+                Idents = [.. c.Idents.Skip(1)],
+            }
+        : expression is Expression.BinaryOp binary
+            ? binary with
             {
                 Left = StripRowAlias(binary.Left),
                 Right = StripRowAlias(binary.Right),
-            },
-            Expression.UnaryOp unary => unary with { Expression = StripRowAlias(unary.Expression) },
-            Expression.Nested nested => StripRowAlias(nested.Expression),
-            Expression.IsNull check => check with { Expression = StripRowAlias(check.Expression) },
-            Expression.IsNotNull check => check with
+            }
+        : expression is Expression.UnaryOp unary
+            ? unary with
+            {
+                Expression = StripRowAlias(unary.Expression),
+            }
+        : expression is Expression.Nested nested ? StripRowAlias(nested.Expression)
+        : StripNullChecks(expression);
+
+    private static Expression StripNullChecks(Expression expression) =>
+        expression is Expression.IsNull check
+            ? check with
             {
                 Expression = StripRowAlias(check.Expression),
-            },
-            _ => expression,
-        };
+            }
+        : expression is Expression.IsNotNull nonNull
+            ? nonNull with
+            {
+                Expression = StripRowAlias(nonNull.Expression),
+            }
+        : expression;
 
     // Only the generated unquoted NEW./OLD. aliases are removed; a column
     // literally named "new" is always bracket-quoted and therefore kept.
@@ -118,80 +131,42 @@ internal static class SqliteRlsPredicateReader
         ident.QuoteStyle is null && ident.Value is "NEW" or "OLD";
 
     /// <summary>
-    /// Return the trigger body between the first top-level BEGIN and the last
-    /// top-level END. The scan skips string literals and bracket identifiers
-    /// so policy names or columns containing BEGIN/END cannot confuse it.
+    /// Return the trigger body using SQL keyword tokens and their source locations.
     /// </summary>
     private static string? SliceTriggerBody(string triggerSql)
     {
-        var markers = KeywordMarkers(triggerSql);
-        return markers is { } range
-            ? triggerSql[(range.Begin + "BEGIN".Length)..range.End].Trim().TrimEnd(';')
+        try
+        {
+            var words = new Tokenizer(unescape: false)
+                .Tokenize(sql: triggerSql, dialect: new SQLiteDialect())
+                .OfType<Word>()
+                .ToImmutableArray();
+            return SliceBody(sql: triggerSql, words: words);
+        }
+        catch (TokenizeException)
+        {
+            return null;
+        }
+    }
+
+    private static string? SliceBody(string sql, ImmutableArray<Word> words)
+    {
+        var begin = words.FirstOrDefault(word => word.Keyword == Keyword.BEGIN);
+        var end = words.LastOrDefault(word => word.Keyword == Keyword.END);
+        return begin is { } first && end is { } last
+            ? sql[
+                (SourceOffset(sql: sql, location: first.Location) + 5)..SourceOffset(
+                    sql: sql,
+                    location: last.Location
+                )
+            ]
+                .Trim()
+                .TrimEnd(';')
             : null;
     }
 
-    private static (int Begin, int End)? KeywordMarkers(string sql)
-    {
-        int? begin = null;
-        var end = -1;
-        for (var i = 0; i < sql.Length; i++)
-        {
-            if (AtStringStart(sql, i))
-            {
-                i = EndOfString(sql, i);
-            }
-            else if (AtBracketStart(sql, i))
-            {
-                i = EndOfBracket(sql, i);
-            }
-            else if (IsKeyword(sql, i, "BEGIN"))
-            {
-                begin ??= i;
-            }
-            else if (IsKeyword(sql, i, "END"))
-            {
-                end = i;
-            }
-        }
-        return begin is { } start && end > start ? (start, end) : null;
-    }
-
-    private static bool AtStringStart(string sql, int index) => sql[index] == '\'';
-
-    private static bool AtBracketStart(string sql, int index) => sql[index] == '[';
-
-    private static int EndOfString(string sql, int start)
-    {
-        for (var i = start + 1; i < sql.Length; i++)
-        {
-            if (sql[i] == '\'' && (i + 1 >= sql.Length || sql[i + 1] != '\''))
-            {
-                return i;
-            }
-            i += sql[i] == '\'' ? 1 : 0;
-        }
-        return sql.Length - 1;
-    }
-
-    private static int EndOfBracket(string sql, int start)
-    {
-        for (var i = start + 1; i < sql.Length; i++)
-        {
-            if (sql[i] == ']' && (i + 1 >= sql.Length || sql[i + 1] != ']'))
-            {
-                return i;
-            }
-            i += sql[i] == ']' ? 1 : 0;
-        }
-        return sql.Length - 1;
-    }
-
-    private static bool IsKeyword(string sql, int index, string keyword) =>
-        index + keyword.Length <= sql.Length
-        && sql.StartsWith(keyword, index, StringComparison.OrdinalIgnoreCase)
-        && !IsIdentChar(sql, index - 1)
-        && !IsIdentChar(sql, index + keyword.Length);
-
-    private static bool IsIdentChar(string sql, int index) =>
-        index >= 0 && index < sql.Length && (char.IsLetterOrDigit(sql[index]) || sql[index] == '_');
+    private static int SourceOffset(string sql, Location location) =>
+        sql.Split('\n').Take(Convert.ToInt32(location.Line) - 1).Sum(line => line.Length + 1)
+        + Convert.ToInt32(location.Column)
+        - 1;
 }

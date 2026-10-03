@@ -7,7 +7,10 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// </summary>
 public sealed class SchemaDiffRlsTests
 {
-    private static SchemaDefinition WithRls(RlsPolicySetDefinition? rls) =>
+    private static SchemaDefinition WithRls(
+        RlsPolicySetDefinition? rls,
+        string schema = "public"
+    ) =>
         new()
         {
             Name = "t",
@@ -15,7 +18,7 @@ public sealed class SchemaDiffRlsTests
             [
                 new TableDefinition
                 {
-                    Schema = "public",
+                    Schema = schema,
                     Name = "Documents",
                     Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
                     PrimaryKey = new PrimaryKeyDefinition { Columns = ["Id"] },
@@ -23,6 +26,26 @@ public sealed class SchemaDiffRlsTests
                 },
             ],
         };
+
+    // Implements [RLS-DIFF]: unknown live predicates must not bypass security reconciliation.
+    [Fact]
+    public void Diff_SqliteUnreadablePolicy_DoesNotSilentlyPreserveUnknownPredicates()
+    {
+        var policy = new RlsPolicyDefinition { Name = "owner" };
+        var denied = policy with { UsingSql = "false", WithCheckSql = "false" };
+        var current = WithRls(
+            rls: new RlsPolicySetDefinition { Policies = [policy] },
+            schema: "main"
+        );
+        var desired = WithRls(
+            rls: new RlsPolicySetDefinition { Policies = [denied] },
+            schema: "main"
+        );
+        var ops = Assert
+            .IsType<OperationsResultOk>(SchemaDiff.Calculate(current: current, desired: desired))
+            .Value;
+        Assert.IsType<ReplaceRlsPolicyOperation>(Assert.Single(ops));
+    }
 
     [Fact]
     public void Diff_NewTableWithRls_EmitsCreateTableThenEnableThenPolicy()

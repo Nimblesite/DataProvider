@@ -383,6 +383,19 @@ an `AlterRlsPolicyOperation` even when the policy name is unchanged. Schema
 integrity verification also reports predicate drift. Re-inspecting and
 reapplying a converged policy produces no operation.
 
+On SQLite, read `USING` from the secure view and `WITH CHECK` from the managed
+triggers using the SQLite SQL parser and tokenizer. SQL comments and quoted
+identifiers must not interfere with readback. Include the secure view's SELECT
+operation when reconstructing an ALL policy so an unchanged rerun is a no-op.
+If stored predicates cannot be read, reconcile the policy with its desired
+definition; an unknown predicate must never be treated as verified equality.
+
+The secure view must also be inspected when no RLS trigger exists. Generated
+views retain their policy name in a hex-encoded SQL comment, read with the SQL
+tokenizer, so SELECT-only policies can converge by name and predicate. Legacy
+views without this metadata are replaced transactionally with the declared
+policy instead of preserving the old predicate through `IF NOT EXISTS`.
+
 `SchemaDiff.Calculate` gains RLS diff logic comparing `TableDefinition.RowLevelSecurity` between current and desired schemas:
 
 - Table exists in desired with RLS enabled but not in current -> emit `EnableRlsOperation` then `CreateRlsPolicyOperation` for each policy

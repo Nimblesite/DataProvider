@@ -1,14 +1,23 @@
 {
     "version": "2.0.0",
+    "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+            "DOTNET_PROCESSOR_COUNT": "2",
+            "DOTNET_GCHeapHardLimit": "0x80000000",
+            "DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER": "1",
+            "CARGO_BUILD_JOBS": "2"
+        }
+    },
     "tasks": [
         // ═══════════════════════════════════════════════════════════════
         // .NET BUILD
         // ═══════════════════════════════════════════════════════════════
         {
             "label": "Build: Solution",
-            "command": "dotnet",
+            "command": "make",
             "type": "process",
-            "args": ["build", "${workspaceFolder}/DataProvider.sln", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary;ForceNoAlign"],
+            "args": ["build"],
             "problemMatcher": "$msCompile",
             "group": {
                 "kind": "build",
@@ -19,7 +28,7 @@
             "label": "Build: Publish Solution",
             "command": "dotnet",
             "type": "process",
-            "args": ["publish", "${workspaceFolder}/DataProvider.sln", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary;ForceNoAlign"],
+            "args": ["publish", "${workspaceFolder}/DataProvider.sln", "--disable-build-servers", "-m:1", "-p:BuildInParallel=false", "-p:UseSharedCompilation=false", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary;ForceNoAlign"],
             "problemMatcher": "$msCompile"
         },
         {
@@ -136,7 +145,7 @@
         {
             "label": "Test: All",
             "type": "shell",
-            "command": "dotnet test ${workspaceFolder}/DataProvider.sln",
+            "command": "make test",
             "problemMatcher": "$msCompile",
             "group": {
                 "kind": "test",

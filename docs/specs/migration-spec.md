@@ -828,6 +828,13 @@ the same migration. A later run must repair a partially migrated database in
 which the column exists but the key does not. A matching existing key must not
 be duplicated.
 
+#### Native PostgreSQL Test Server [MIG-TEST-NATIVE-POSTGRES]
+
+The shared PostgreSQL test fixture accepts `DATAPROVIDER_POSTGRES_TEST_CONNECTION`
+for an isolated native test server. Tests still create a fresh database per case.
+The fixture disposes containers that it owns and leaves an externally supplied
+server running. Without the variable, the existing container fixture is used.
+
 ### 8.3 Diff Algorithm
 
 ```

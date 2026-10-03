@@ -14,29 +14,48 @@ internal static class SqliteRlsSchemaInspector
             tableName,
             $"rls_%_{tableName}"
         );
-        if (triggers.Count == 0)
-        {
-            return null;
-        }
-
         var secureView = SqliteRlsPredicateReader.ReadSecureView(connection, tableName);
         var policies = triggers
-            .Select(trigger =>
-                (
-                    Trigger: trigger,
-                    Parsed: SqliteTriggerNames.Parse(
-                        trigger.Name,
-                        "rls_",
-                        tableName,
-                        SqliteTriggerNames.DmlEventTokens
-                    )
+            .SelectMany(trigger =>
+                SqliteTriggerNames.Parse(
+                    trigger.Name,
+                    "rls_",
+                    tableName,
+                    SqliteTriggerNames.DmlEventTokens
+                )
+                    is { } parsed
+                    ? new[] { (Trigger: trigger, Parsed: parsed) }
+                    : []
+            )
+            .GroupBy(item => item.Parsed.BaseName, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+                ToPolicy(
+                    group.Key,
+                    group,
+                    secureView.PolicyName is null || secureView.PolicyName == group.Key
+                        ? secureView
+                        : (false, null, null)
                 )
             )
-            .Where(item => item.Parsed is not null)
-            .GroupBy(item => item.Parsed!.BaseName, StringComparer.OrdinalIgnoreCase)
-            .Select(group => ToPolicy(group.Key, group, secureView))
             .OrderBy(policy => policy.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        if (
+            secureView.Exists
+            && !policies.Any(policy =>
+                policy.Operations.Contains(RlsOperation.Select)
+                || policy.Operations.Contains(RlsOperation.All)
+            )
+        )
+        {
+            policies.Add(
+                ToPolicy(
+                    name: secureView.PolicyName ?? $"{tableName}_secure",
+                    group: [],
+                    secureView: secureView
+                )
+            );
+        }
 
         return policies.Count == 0 ? null : new RlsPolicySetDefinition { Policies = policies };
     }
@@ -44,13 +63,14 @@ internal static class SqliteRlsSchemaInspector
     private static RlsPolicyDefinition ToPolicy(
         string name,
         IEnumerable<(ManagedTriggerDefinition Trigger, ParsedTriggerName Parsed)> group,
-        (bool Exists, string? Predicate) secureView
+        (bool Exists, string? Predicate, string? PolicyName) secureView
     )
     {
         var members = group.ToList();
         var (usingSql, withCheckSql) = ExtractPredicates(members, secureView);
         var operations = members
             .Select(member => ToOperation(member.Parsed.EventToken))
+            .Concat(secureView.Exists ? [RlsOperation.Select] : [])
             .Distinct()
             .OrderBy(operation => (int)operation)
             .ToList();
@@ -66,10 +86,10 @@ internal static class SqliteRlsSchemaInspector
     // A generated ALL policy materialises as the secure view plus insert,
     // update, and delete triggers. Predicates are attached only when every
     // managed object parsed; with any unreadable object they stay null, which
-    // SchemaDiff treats as "cannot verify" rather than drift.
+    // SchemaDiff treats as unverified drift and reconciles the policy.
     private static (string? Using, string? WithCheck) ExtractPredicates(
         List<(ManagedTriggerDefinition Trigger, ParsedTriggerName Parsed)> members,
-        (bool Exists, string? Predicate) secureView
+        (bool Exists, string? Predicate, string? PolicyName) secureView
     )
     {
         string? usingSql = null;

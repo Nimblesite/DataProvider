@@ -20,15 +20,27 @@ namespace Nimblesite.TestSupport;
 /// </summary>
 public sealed class PostgresContainerFixture : IAsyncLifetime
 {
-    private PostgreSqlContainer _container = null!;
-    private string _adminConnectionString = null!;
+    private PostgreSqlContainer? _container;
+    private string _adminConnectionString = string.Empty;
     private long _databaseCounter;
+
+    // Isolate fixture instances and repeated runs against a persistent native server.
+    private readonly string _databaseRunId = Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>
     /// Starts the shared container. Called once per collection fixture lifetime.
     /// </summary>
     public async Task InitializeAsync()
     {
+        // Implements [MIG-TEST-NATIVE-POSTGRES]: use an isolated native server when configured.
+        if (
+            Environment.GetEnvironmentVariable("DATAPROVIDER_POSTGRES_TEST_CONNECTION") is
+            { Length: > 0 } configured
+        )
+        {
+            _adminConnectionString = configured;
+            return;
+        }
         // pgvector/pgvector:pg16 is a drop-in superset of postgres:16 that
         // ships with the pgvector extension preinstalled. Required for any
         // test that needs vector columns (VectorType). Non-vector tests are
@@ -49,7 +61,10 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     /// </summary>
     public async Task DisposeAsync()
     {
-        await _container.DisposeAsync().ConfigureAwait(false);
+        if (_container is { } container)
+        {
+            await container.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -138,8 +153,10 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     private string NextDatabaseName(string namePrefix)
     {
         var counter = Interlocked.Increment(ref _databaseCounter);
-        return SanitizeDbName(
-            string.Create(CultureInfo.InvariantCulture, $"{namePrefix}_{counter:D5}")
+        var prefix = SanitizeDbName(namePrefix);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{prefix[..Math.Min(prefix.Length, 30)]}_{_databaseRunId}_{counter:D5}"
         );
     }
 

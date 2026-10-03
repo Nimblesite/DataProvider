@@ -136,7 +136,11 @@ public abstract partial record Result<TSuccess, TFailure> { private Result() { }
 Always include these in `Directory.Build.props`:
 - `Microsoft.CodeAnalysis.NetAnalyzers` — .NET analyzers
 - `Outcome` — Result types for Railway Oriented Programming
-- `Exhaustion` — Exhaustive pattern matching analyzer
+
+Do not include or enable `Exhaustion`: its recursive AST analysis can exhaust
+compiler memory ([upstream issue #146](https://github.com/MelbourneDeveloper/RestClient.Net/issues/146)).
+Keep the .NET analyzers and warnings enabled. Use `make` for bounded build/test
+execution; direct commands must also limit the .NET GC heap and build concurrency.
 
 ### Rust
 

@@ -1,5 +1,7 @@
 module Nimblesite.Lql.Core.TypeProvider.RuntimeTranspilerTests
 
+open System
+open System.IO
 open Xunit
 open Nimblesite.Lql.Core
 open Nimblesite.Lql.SQLite
@@ -264,6 +266,22 @@ type RuntimeDistinctAndPredicateTests() =
             transpile
                 "users |> filter(fn(row) => (row.users.age < 18 or row.users.age > 65) and row.users.active = 1) |> select(users.id)"
         )
+
+// Implements [LQL-CTE], [LQL-DERIVED-TABLE], and [LQL-SUBQUERY-LAYOUT]
+// through the F# runtime path, sharing the canonical query/SQL fixtures.
+[<Collection("TypeProvider")>]
+type RuntimeSubqueryTests() =
+
+    [<Theory>]
+    [<InlineData("cte_with")>]
+    [<InlineData("exists_subquery")>]
+    [<InlineData("in_subquery")>]
+    [<InlineData("subquery_nested")>]
+    member _.``Runtime: subqueries match the shared SQLite golden SQL``(name: string) =
+        let path extension =
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", name + extension)
+        let expected = File.ReadAllText(path ".sql").Trim()
+        Assert.Equal(expected, File.ReadAllText(path ".lql") |> transpile)
 
 [<Collection("TypeProvider")>]
 type RuntimeParseErrorTests() =

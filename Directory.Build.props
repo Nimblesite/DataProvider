@@ -27,6 +27,10 @@
     <WarningLevel>9999</WarningLevel>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <!-- Bound direct/IDE builds as well as make. Exhaustion is excluded because of
+         https://github.com/MelbourneDeveloper/RestClient.Net/issues/146. -->
+    <BuildInParallel>false</BuildInParallel>
+    <UseSharedCompilation>false</UseSharedCompilation>
     <AnalysisMode>All</AnalysisMode>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CodeAnalysis.ruleset</CodeAnalysisRuleSet>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -66,12 +70,6 @@
       Version="1.0.0"
       Condition="!$(TargetFramework.StartsWith('netstandard'))"
     />
-
-    <!-- Exhaustive pattern matching analyzer -->
-    <PackageReference Include="Exhaustion" Version="1.0.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <!-- Code Analysis packages only for non-test projects -->

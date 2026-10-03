@@ -1,20 +1,23 @@
 # agent-pmo:795a9c2
-# =============================================================================
 # Standard Makefile — Nimblesite.DataProvider.Core
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # All targets are language-agnostic. Add language-specific helpers below.
-# =============================================================================
 
 .PHONY: build test lint fmt clean ci setup check coverage vsix rebuild-install-vsix clinical help
+
+# Bound build resources so compiler/analyzer work cannot exhaust the editor host.
+export DOTNET_PROCESSOR_COUNT ?= 2
+export DOTNET_GCHeapHardLimit ?= 0x80000000
+export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER = 1
+export CARGO_BUILD_JOBS ?= 2
+DOTNET_BUILD_FLAGS = --disable-build-servers -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
 
 # Installed VS Code extension id (publisher.name from Lql/LqlExtension/package.json)
 VSIX_EXT_ID = lql-team.lql-language-support
 
-# -----------------------------------------------------------------------------
 # OS Detection — portable commands for Linux, macOS, and Windows
 # On Windows, run via GNU Make with PowerShell (e.g., make from Git Bash or
 # choco install make). The $(OS) variable is set to "Windows_NT" automatically.
-# -----------------------------------------------------------------------------
 ifeq ($(OS),Windows_NT)
   SHELL := powershell.exe
   .SHELLFLAGS := -NoProfile -Command
@@ -44,14 +47,12 @@ DOTNET_TEST_PROJECTS = \
   Reporting/Nimblesite.Reporting.Tests \
   Reporting/Nimblesite.Reporting.Integration.Tests
 
-# =============================================================================
 # Standard Targets
 #
 # Portfolio-wide uniform interface — these 7 targets exist in every repo and
 # their names never change. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
 # Do NOT add extra public targets here — put them in the Repo-Specific
 # Targets section below.
-# =============================================================================
 
 ## build: Compile/assemble all artifacts
 build:
@@ -88,14 +89,10 @@ setup:
 	$(MAKE) _setup
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
-# =============================================================================
-# -----------------------------------------------------------------------------
 # Repo-Specific Targets (NOT part of the portfolio standard 7)
 #
 # Add helpers unique to this repo below. They MUST NOT shadow any of the 7
 # standard targets above. See REPO-STANDARDS-SPEC [MAKE-TARGETS].
-# -----------------------------------------------------------------------------
-# =============================================================================
 
 ## check: lint + test (pre-commit shortcut)
 check: lint test
@@ -134,9 +131,7 @@ _vsix_clean:
 	$(RM) Lql/LqlExtension/out
 	-$(RM) Lql/LqlExtension/*.vsix
 
-# =============================================================================
 # LANGUAGE-SPECIFIC IMPLEMENTATIONS
-# =============================================================================
 
 _build: _build_dotnet _build_rust _build_ts
 
@@ -155,9 +150,7 @@ _coverage: _coverage_dotnet
 
 _setup: _setup_dotnet _setup_ts
 
-# =============================================================================
 # COVERAGE ENFORCEMENT (shared shell logic)
-# =============================================================================
 # Each test target collects coverage, compares against coverage-thresholds.json,
 # fails hard if below, and ratchets up if above.
 #
@@ -166,11 +159,10 @@ _setup: _setup_dotnet _setup_ts
 #
 # The SRC_KEY mapping converts test project paths -> source project keys.
 # CI calls these same make targets — no duplication.
-# =============================================================================
 
 # --- C#/.NET ---
 _build_dotnet:
-	dotnet build DataProvider.sln --configuration Release
+	dotnet build DataProvider.sln --configuration Release $(DOTNET_BUILD_FLAGS)
 
 _test_dotnet:
 	@for test_proj in $(DOTNET_TEST_PROJECTS); do \
@@ -198,14 +190,14 @@ _test_dotnet:
 	  echo "============================================================"; \
 	  rm -rf "$$test_proj/TestResults"; \
 	  if [ -n "$$INCLUDE" ]; then \
-	    dotnet test "$$test_proj" --configuration Release \
+    dotnet test "$$test_proj" --configuration Release $(DOTNET_BUILD_FLAGS) \
 	      --settings coverlet.runsettings \
 	      --collect:"XPlat Code Coverage" \
 	      --results-directory "$$test_proj/TestResults" \
 	      --verbosity normal \
 	      -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="$$INCLUDE"; \
 	  else \
-	    dotnet test "$$test_proj" --configuration Release \
+    dotnet test "$$test_proj" --configuration Release $(DOTNET_BUILD_FLAGS) \
 	      --settings coverlet.runsettings \
 	      --collect:"XPlat Code Coverage" \
 	      --results-directory "$$test_proj/TestResults" \
@@ -246,7 +238,7 @@ _test_dotnet:
 	echo "==> All .NET test projects passed coverage thresholds."
 
 _lint_dotnet:
-	dotnet build DataProvider.sln --configuration Release
+	dotnet build DataProvider.sln --configuration Release $(DOTNET_BUILD_FLAGS)
 	dotnet csharpier check .
 
 _fmt_dotnet:
@@ -301,7 +293,7 @@ endif
 
 _aot_dotnet:
 	@echo "==> Publishing Native AOT ($(RID))..."
-	dotnet publish $(AOT_PROJ) -c Release -r $(RID) -p:PublishAot=true --self-contained
+	dotnet publish $(AOT_PROJ) -c Release -r $(RID) -p:PublishAot=true --self-contained $(DOTNET_BUILD_FLAGS)
 	@echo "==> Native smoke test: migrate example schema to SQLite..."
 	$(AOT_EXE) migrate --schema Migration/DataProviderMigrate/example-schema.yaml \
 	  --output $(AOT_SMOKE_DB) --provider sqlite
@@ -437,9 +429,7 @@ _clean_ts:
 _setup_ts:
 	cd Lql/LqlExtension && npm install --no-audit --no-fund
 
-# =============================================================================
 # HELP
-# =============================================================================
 help:
 	@echo "Standard targets (portfolio-wide):"
 	@echo "  build          - Compile/assemble all artifacts"

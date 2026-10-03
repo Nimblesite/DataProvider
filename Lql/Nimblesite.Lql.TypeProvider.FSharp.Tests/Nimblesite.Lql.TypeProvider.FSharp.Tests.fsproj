@@ -55,6 +55,14 @@
     <Content Include="typeprovider-test-schema.yaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="../Nimblesite.Lql.Tests/TestData/Lql/cte_with.lql;../Nimblesite.Lql.Tests/TestData/Lql/exists_subquery.lql;../Nimblesite.Lql.Tests/TestData/Lql/in_subquery.lql;../Nimblesite.Lql.Tests/TestData/Lql/subquery_nested.lql">
+      <Link>TestData/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="../Nimblesite.Lql.Tests/TestData/ExpectedSql/SQLite/cte_with.sql;../Nimblesite.Lql.Tests/TestData/ExpectedSql/SQLite/exists_subquery.sql;../Nimblesite.Lql.Tests/TestData/ExpectedSql/SQLite/in_subquery.sql;../Nimblesite.Lql.Tests/TestData/ExpectedSql/SQLite/subquery_nested.sql">
+      <Link>TestData/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <!-- Create database from YAML using DataProviderMigrate before build -->

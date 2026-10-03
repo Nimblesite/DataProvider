@@ -125,6 +125,97 @@ public sealed class SqliteRlsMigrationTests
         });
     }
 
+    // Implements [RLS-DIFF]: inspection must make an unchanged ALL policy a no-op.
+    [Fact]
+    public void Sqlite_AllPolicy_RerunHasNoPolicyOperations()
+    {
+        SqliteTestDb.WithDb(test: connection =>
+        {
+            var desired = DocumentsSchema(policy: OwnerPolicy(ops: [RlsOperation.All]));
+            SqliteTestDb.ApplySchema(connection: connection, schema: desired);
+            var operations = Assert
+                .IsType<OperationsResultOk>(
+                    SchemaDiff.Calculate(
+                        current: SqliteTestDb.Inspect(connection: connection),
+                        desired: desired
+                    )
+                )
+                .Value;
+            Assert.Empty(operations);
+        });
+    }
+
+    // Implements [RLS-DIFF]: SELECT-only policies must replace stale secure-view predicates.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Sqlite_SelectPolicy_ChangedUsingPredicateBlocksPreviouslyVisibleRows(
+        bool legacyView
+    )
+    {
+        SqliteTestDb.WithDb(test: connection =>
+        {
+            var policy = OwnerPolicy(ops: [RlsOperation.Select]) with { WithCheckLql = null };
+            SqliteTestDb.ApplySchema(
+                connection: connection,
+                schema: DocumentsSchema(policy: policy)
+            );
+            if (legacyView)
+            {
+                SqliteTestDb.Execute(
+                    connection: connection,
+                    sql: LegacySelectViewDdl(policy: policy)
+                );
+            }
+            SqliteTestDb.SetUser(connection: connection, userId: "user-a");
+            InsertDocument(connection: connection, id: "doc-a", ownerId: "user-a");
+            Assert.Equal(
+                expected: 1,
+                actual: SqliteTestDb.CountRows(
+                    connection: connection,
+                    tableName: "Documents_secure"
+                )
+            );
+
+            var desired = DocumentsSchema(policy: policy with { UsingLql = "false" });
+            SqliteTestDb.ApplySchema(connection: connection, schema: desired);
+
+            Assert.Equal(
+                expected: 0,
+                actual: SqliteTestDb.CountRows(
+                    connection: connection,
+                    tableName: "Documents_secure"
+                )
+            );
+            Assert.Empty(
+                Assert
+                    .IsType<OperationsResultOk>(
+                        SchemaDiff.Calculate(
+                            current: SqliteTestDb.Inspect(connection: connection),
+                            desired: desired
+                        )
+                    )
+                    .Value
+            );
+        });
+    }
+
+    // Implements [RLS-DIFF]: SQL comments cannot hide a stored policy predicate.
+    [Fact]
+    public void Sqlite_TriggerPredicate_IgnoresKeywordsInsideComments()
+    {
+        var predicate = SqliteRlsPredicateReader.TriggerPredicate(
+            triggerSql: """
+            CREATE TRIGGER [rls_insert_owner_Documents] -- BEGIN
+            BEFORE INSERT ON [Documents]
+            BEGIN
+              SELECT RAISE(ABORT, 'RLS') WHERE NOT (NEW.[OwnerId] = 'allowed');
+            END -- END
+            """
+        );
+        Assert.Equal(expected: "[OwnerId] = 'allowed'", actual: predicate);
+    }
+
     [Fact]
     public void Sqlite_RestrictivePolicy_EmitsWarning()
     {
@@ -164,6 +255,21 @@ public sealed class SqliteRlsMigrationTests
 
     private static SchemaDefinition DocumentsSchema(RlsPolicyDefinition policy) =>
         new() { Name = "sqlite", Tables = [DocumentsTable(policy)] };
+
+    private static string LegacySelectViewDdl(RlsPolicyDefinition policy) =>
+        SqliteDdlGenerator
+            .Generate(
+                operation: new CreateRlsPolicyOperation(
+                    Schema: "main",
+                    TableName: "Documents",
+                    Policy: policy
+                )
+            )
+            .Replace(
+                oldValue: SqliteRlsViewMetadata.Encode(policyName: policy.Name),
+                newValue: string.Empty,
+                comparisonType: StringComparison.Ordinal
+            );
 
     private static TableDefinition DocumentsTable(RlsPolicyDefinition policy) =>
         new()

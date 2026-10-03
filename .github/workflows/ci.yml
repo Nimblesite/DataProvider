@@ -15,6 +15,11 @@ env:
   # are installed everywhere .NET builds (see the setup-dotnet steps below).
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Implements [CI-TIMEOUT]: bound compiler memory and concurrency in direct dotnet steps.
+  DOTNET_PROCESSOR_COUNT: 2
+  DOTNET_GCHeapHardLimit: '0x80000000'
+  DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
+  CARGO_BUILD_JOBS: 2
 
 jobs:
   # Track 1: Format Check All -> Lint All -> DataProvider Tests

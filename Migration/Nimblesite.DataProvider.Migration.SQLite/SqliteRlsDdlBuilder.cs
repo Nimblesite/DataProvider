@@ -25,7 +25,7 @@ internal static class SqliteRlsDdlBuilder
     public static string GenerateReplacePolicy(ReplaceRlsPolicyOperation op) =>
         string.Join(
             ";\n",
-            DropObjects(op.PolicyName, op.TableName).Append(PolicyDdl(op.Policy, op.TableName))
+            DropObjects(op.Policy.Name, op.TableName).Append(PolicyDdl(op.Policy, op.TableName))
         );
 
     public static string GenerateDropPolicy(DropRlsPolicyOperation op) =>
@@ -115,7 +115,8 @@ internal static class SqliteRlsDdlBuilder
         {
             var predicate = Translate(policy.UsingLql!, policy.Name);
             ddl.Add(
-                $"CREATE VIEW IF NOT EXISTS [{tableName}_secure] AS SELECT * FROM [{tableName}] WHERE {predicate}"
+                $"DROP VIEW IF EXISTS [{tableName}_secure];\n"
+                    + $"CREATE VIEW [{tableName}_secure] AS SELECT {SqliteRlsViewMetadata.Encode(policyName: policy.Name)} * FROM [{tableName}] WHERE {predicate}"
             );
         }
     }
