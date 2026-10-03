@@ -10,7 +10,7 @@ public static class SqliteMigrationApplier
 {
     /// <summary>
     /// Plan table rebuilds, then apply the operations. Foreign keys are turned off
-    /// while rebuilding and the rebuilt tables are checked afterwards.
+    /// while rebuilding and foreign keys are checked before committing.
     /// </summary>
     public static MigrationApplyResult Apply(
         SqliteConnection connection,
@@ -36,7 +36,7 @@ public static class SqliteMigrationApplier
                     options,
                     logger
                 )
-                : ApplyWithoutForeignKeys(connection, planned, rebuilt, options, logger);
+                : ApplyWithoutForeignKeys(connection, planned, options, logger);
         }
         catch (Exception ex)
         {
@@ -50,7 +50,6 @@ public static class SqliteMigrationApplier
     private static MigrationApplyResult ApplyWithoutForeignKeys(
         SqliteConnection connection,
         IReadOnlyList<SchemaOperation> planned,
-        List<string> rebuilt,
         MigrationOptions options,
         ILogger? logger
     )
@@ -59,34 +58,31 @@ public static class SqliteMigrationApplier
         Execute(connection, "PRAGMA foreign_keys = OFF");
         try
         {
-            var result = MigrationRunner.Apply(
+            return MigrationRunner.Apply(
                 connection,
                 planned,
                 SqliteDdlGenerator.Generate,
                 options,
-                logger
+                logger,
+                verifyBeforeCommit: () => ForeignKeysValid(connection, logger)
             );
-            var violations = rebuilt
-                .Where(t =>
-                    Scalar(
-                        connection,
-                        $"PRAGMA foreign_key_check('{t.Replace("'", "''", StringComparison.Ordinal)}')"
-                    )
-                        is not null
-                )
-                .ToList();
-            return result is MigrationApplyResult.Ok<bool, MigrationError> && violations.Count > 0
-                ? new MigrationApplyResult.Error<bool, MigrationError>(
-                    MigrationError.FromMessage(
-                        $"SQLite table rebuild left foreign key violations in: {string.Join(", ", violations)}"
-                    )
-                )
-                : result;
         }
         finally
         {
             Execute(connection, enabled ? "PRAGMA foreign_keys = ON" : "PRAGMA foreign_keys = OFF");
         }
+    }
+
+    // Implements [MIG-SQLITE-REBUILD]: also check referencing tables that were
+    // not rebuilt, while the migration transaction can still roll back.
+    private static bool ForeignKeysValid(SqliteConnection connection, ILogger? logger)
+    {
+        if (Scalar(connection, "PRAGMA foreign_key_check") is null)
+        {
+            return true;
+        }
+        logger?.LogError("SQLite foreign key validation failed before commit");
+        return false;
     }
 
     internal static IReadOnlyList<SchemaOperation> Plan(
@@ -145,7 +141,12 @@ public static class SqliteMigrationApplier
         var kept = live.Value.Columns.Where(c =>
             !target.Columns.Any(t => Same(t.Name, c.Name)) && !dropped.Any(d => Same(d, c.Name))
         );
-        var shape = target with { Name = live.Value.Name, Columns = [.. target.Columns, .. kept] };
+        var shape = target with
+        {
+            Name = live.Value.Name,
+            Columns = [.. target.Columns, .. kept],
+            ForeignKeys = ForeignKeysAfterChanges(live.Value, onTable),
+        };
         return new RebuildTableOperation(
             Table: shape,
             CopyColumns:
@@ -158,6 +159,29 @@ public static class SqliteMigrationApplier
             Destructive: onTable.Any(op => op is DropColumnOperation or DropForeignKeyOperation)
         );
     }
+
+    // Implements [MIG-SQLITE-REBUILD]: rebuilding must not introduce drops that
+    // were excluded by the additive diff or destructive-operation gate.
+    private static IReadOnlyList<ForeignKeyDefinition> ForeignKeysAfterChanges(
+        TableDefinition live,
+        IReadOnlyList<SchemaOperation> operations
+    ) =>
+        [
+            .. live.ForeignKeys.Where(fk =>
+                !operations
+                    .OfType<DropForeignKeyOperation>()
+                    .Any(drop => fk.Name is { } name && Same(name, drop.ConstraintName))
+                && !operations
+                    .OfType<AddForeignKeyOperation>()
+                    .Any(add =>
+                        SchemaDiff.ForeignKeyRelationshipsMatch(
+                            current: fk,
+                            desired: add.ForeignKey
+                        )
+                    )
+            ),
+            .. operations.OfType<AddForeignKeyOperation>().Select(add => add.ForeignKey),
+        ];
 
     // Indexes declared on the target are recreated from the definition; every
     // other index and trigger on the table is replayed from sqlite_master.

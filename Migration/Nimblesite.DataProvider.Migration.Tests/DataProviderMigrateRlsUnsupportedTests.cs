@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-// Tests [RLS-MSSQL] SQL Server package absence guard from docs/specs/rls-spec.md.
+// Tests [RLS-MSSQL] fail-closed guard until native SQL Server RLS is implemented.
 
 /// <summary>
 /// CLI tests for unsupported SQL Server RLS migration attempts.
@@ -25,7 +25,12 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
                 comparisonType: StringComparison.Ordinal
             );
             Assert.Contains(
-                expectedSubstring: "Nimblesite.DataProvider.Migration.SqlServer package does not exist",
+                expectedSubstring: "Native SQL Server RLS migrations are not yet supported",
+                actualString: result.Output,
+                comparisonType: StringComparison.Ordinal
+            );
+            Assert.DoesNotContain(
+                expectedSubstring: "package does not exist",
                 actualString: result.Output,
                 comparisonType: StringComparison.Ordinal
             );

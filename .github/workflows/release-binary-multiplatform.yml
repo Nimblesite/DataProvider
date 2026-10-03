@@ -29,6 +29,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Implements [CI-TIMEOUT]: bound native release compilation.
+  CARGO_BUILD_JOBS: 2
+
 jobs:
   build:
     strategy:

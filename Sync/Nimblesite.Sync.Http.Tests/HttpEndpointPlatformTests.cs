@@ -29,7 +29,8 @@ public sealed record HttpEndpointPlatformTests
     [InlineData("sqlite")]
     [InlineData("postgres")]
     [InlineData("sqlserver")]
-    public async Task FreshDatabase_HttpStateAndPullAreEmpty(string provider)
+    // Implements [SYNC-HTTP-PROVIDERS].
+    public async Task HttpStateAndPull_MatchProviderSupport(string provider)
     {
         var target = await CreateTargetAsync(provider).ConfigureAwait(true);
         try
@@ -38,6 +39,17 @@ public sealed record HttpEndpointPlatformTests
             var query =
                 $"dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}";
             using var state = await client.GetAsync($"/sync/state?{query}").ConfigureAwait(true);
+            if (provider == "sqlserver")
+            {
+                await AssertUnsupportedProviderAsync(state, target.ConnectionString)
+                    .ConfigureAwait(true);
+                using var rejectedPull = await client
+                    .GetAsync($"/sync/changes?fromVersion=0&batchSize=10&{query}")
+                    .ConfigureAwait(true);
+                await AssertUnsupportedProviderAsync(rejectedPull, target.ConnectionString)
+                    .ConfigureAwait(true);
+                return;
+            }
             Assert.Equal(HttpStatusCode.OK, state.StatusCode);
             Assert.Equal("application/json", state.Content.Headers.ContentType?.MediaType);
             using var stateJson = JsonDocument.Parse(
@@ -68,7 +80,8 @@ public sealed record HttpEndpointPlatformTests
     [InlineData("sqlite")]
     [InlineData("postgres")]
     [InlineData("sqlserver")]
-    public async Task PushOneChange_InsertsExactlyOnePerson(string provider)
+    // Implements [SYNC-HTTP-PROVIDERS].
+    public async Task HttpPush_AppliesSupportedProviderOrRejectsWithoutMutation(string provider)
     {
         var target = await CreateTargetAsync(provider).ConfigureAwait(true);
         try
@@ -102,6 +115,12 @@ public sealed record HttpEndpointPlatformTests
                 $"/sync/changes?dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}",
                 content
             );
+            if (provider == "sqlserver")
+            {
+                await AssertUnsupportedProviderAsync(response, target.ConnectionString)
+                    .ConfigureAwait(true);
+                return;
+            }
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
             await AssertPersonAsync(provider, target.ConnectionString, id).ConfigureAwait(true);
@@ -113,6 +132,34 @@ public sealed record HttpEndpointPlatformTests
                 File.Delete(target.FilePath);
             }
         }
+    }
+
+    private static async Task AssertUnsupportedProviderAsync(
+        HttpResponseMessage response,
+        string connectionString
+    )
+    {
+        // Current API contract uses ProblemDetails/500 for unsupported providers.
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var problem = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync().ConfigureAwait(false)
+        );
+        Assert.Equal(500, problem.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal(
+            "Unknown database type: sqlserver",
+            problem.RootElement.GetProperty("detail").GetString()
+        );
+        AssertSqlServerCatalogIsEmpty(connectionString);
+    }
+
+    private static void AssertSqlServerCatalogIsEmpty(string connectionString)
+    {
+        using var connection = new SqlConnection(connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0";
+        Assert.Equal(0, Assert.IsType<int>(command.ExecuteScalar()));
     }
 
     private static async Task AssertPersonAsync(string provider, string connectionString, Guid id)
@@ -151,6 +198,7 @@ public sealed record HttpEndpointPlatformTests
             var connectionString = await _sqlServer
                 .CreateDatabaseConnectionStringAsync()
                 .ConfigureAwait(false);
+            AssertSqlServerCatalogIsEmpty(connectionString);
             return new HttpTarget(connectionString, FilePath: null);
         }
         Assert.Equal("sqlite", provider);

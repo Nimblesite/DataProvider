@@ -27,8 +27,7 @@
     <WarningLevel>9999</WarningLevel>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <!-- Bound direct/IDE builds as well as make. Exhaustion is excluded because of
-         https://github.com/MelbourneDeveloper/RestClient.Net/issues/146. -->
+    <!-- Bound direct/IDE builds as well as make. -->
     <BuildInParallel>false</BuildInParallel>
     <UseSharedCompilation>false</UseSharedCompilation>
     <AnalysisMode>All</AnalysisMode>
@@ -56,6 +55,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+
+    <!-- 1.0.1 bounds recursive analysis (RestClient.Net issue #146). -->
+    <PackageReference Include="Exhaustion" Version="1.0.1" PrivateAssets="all" />
 
     <!-- SqlParserCS for SQL parsing (not compatible with netstandard) -->
     <PackageReference

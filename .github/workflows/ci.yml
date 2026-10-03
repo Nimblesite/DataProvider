@@ -45,7 +45,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -225,7 +225,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -309,7 +309,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DESLOP_VERSION: '0.14.0'
+      DESLOP_VERSION: '0.36.0'
     steps:
       - uses: actions/checkout@v4
       - name: Install Deslop
@@ -329,7 +329,8 @@ jobs:
         if: always()
         with:
           name: deslop-report
-          path: deslop-report.*
+          path: .deslop/deslop-report.*
+          include-hidden-files: true
 
   # Vulnerable-dependency gate ([GITHUB-DEP-REVIEW]). Fails a PR that introduces a
   # dependency with a known High+ advisory. Owns the "vulnerable deps" concern

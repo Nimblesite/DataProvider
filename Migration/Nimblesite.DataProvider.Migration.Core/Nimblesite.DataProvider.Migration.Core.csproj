@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Implements [RLS-DIFF]: SQLite readback reuses the internal predicate comparer. -->
+    <InternalsVisibleTo Include="Nimblesite.DataProvider.Migration.SQLite" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
     <!-- Implements [MIG-AOT-YAML]: only the low-level parser/emitter event API is
          used (AOT-safe). The reflection-based Serializer/Deserializer builders are

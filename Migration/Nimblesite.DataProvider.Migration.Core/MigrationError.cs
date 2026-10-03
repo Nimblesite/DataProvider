@@ -50,14 +50,11 @@ public sealed record MigrationError(string Message, Exception? InnerException = 
         new($"MIG-E-RLS-LQL-TRANSPILE: policy '{policyName}': {detail}");
 
     /// <summary>
-    /// <c>MIG-E-RLS-MSSQL-UNSUPPORTED</c> — SQL Server RLS attempted before
-    /// <c>Nimblesite.DataProvider.Migration.SqlServer</c> ships.
+    /// <c>MIG-E-RLS-MSSQL-UNSUPPORTED</c> — native SQL Server RLS migrations
+    /// are not implemented by the SQL Server migration package.
     /// </summary>
     public static MigrationError RlsMssqlUnsupported() =>
-        new(
-            "MIG-E-RLS-MSSQL-UNSUPPORTED: SQL Server RLS is not yet implemented. "
-                + "Nimblesite.DataProvider.Migration.SqlServer package does not exist."
-        );
+        new("MIG-E-RLS-MSSQL-UNSUPPORTED: Native SQL Server RLS migrations are not yet supported.");
 
     /// <summary>
     /// <c>MIG-E-RLS-RAW-SQL-UNSUPPORTED-ON-PLATFORM</c> — raw-SQL escape hatch

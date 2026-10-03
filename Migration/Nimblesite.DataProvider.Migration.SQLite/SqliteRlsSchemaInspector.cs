@@ -85,39 +85,43 @@ internal static class SqliteRlsSchemaInspector
 
     // A generated ALL policy materialises as the secure view plus insert,
     // update, and delete triggers. Predicates are attached only when every
-    // managed object parsed; with any unreadable object they stay null, which
-    // SchemaDiff treats as unverified drift and reconciles the policy.
+    // managed object parsed consistently; unreadable or conflicting predicates
+    // stay null, which SchemaDiff treats as unverified drift and reconciles.
     private static (string? Using, string? WithCheck) ExtractPredicates(
         List<(ManagedTriggerDefinition Trigger, ParsedTriggerName Parsed)> members,
         (bool Exists, string? Predicate, string? PolicyName) secureView
     )
     {
-        string? usingSql = null;
-        string? withCheckSql = null;
-        foreach (var member in members)
-        {
-            if (SqliteRlsPredicateReader.TriggerPredicate(member.Trigger.Sql) is not { } predicate)
-            {
-                return (null, null);
-            }
-            if (member.Parsed.EventToken == "delete")
-            {
-                usingSql = predicate;
-            }
-            else
-            {
-                withCheckSql = predicate;
-            }
-        }
-        if (secureView.Exists)
-        {
-            if (secureView.Predicate is not { } viewPredicate)
-            {
-                return (null, null);
-            }
-            usingSql = viewPredicate;
-        }
-        return (usingSql, withCheckSql);
+        var predicates = members
+            .Select(member =>
+                (
+                    Using: member.Parsed.EventToken == "delete",
+                    Sql: SqliteRlsPredicateReader.TriggerPredicate(triggerSql: member.Trigger.Sql)
+                )
+            )
+            .Concat(secureView.Exists ? [(Using: true, Sql: secureView.Predicate)] : [])
+            .ToArray();
+        var clauses = predicates.ToLookup(predicate => predicate.Using, predicate => predicate.Sql);
+        var usingSql = clauses[true].ToArray();
+        var withCheckSql = clauses[false].ToArray();
+        return
+            predicates.Any(predicate => predicate.Sql is null)
+            || usingSql.Any(sql =>
+                !RlsPolicyPredicates.SameSql(
+                    left: usingSql[0],
+                    right: sql,
+                    platform: RlsPlatform.Sqlite
+                )
+            )
+            || withCheckSql.Any(sql =>
+                !RlsPolicyPredicates.SameSql(
+                    left: withCheckSql[0],
+                    right: sql,
+                    platform: RlsPlatform.Sqlite
+                )
+            )
+            ? (null, null)
+            : (usingSql.FirstOrDefault(), withCheckSql.FirstOrDefault());
     }
 
     private static bool CoversAllOperations(List<RlsOperation> operations) =>

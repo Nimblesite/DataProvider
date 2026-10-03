@@ -26,11 +26,11 @@
       "include": "[Nimblesite.Sync.Core]*"
     },
     "Sync/Nimblesite.Sync.SQLite": {
-      "threshold": 34,
+      "threshold": 40,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Postgres": {
-      "threshold": 25,
+      "threshold": 26,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Integration": {
@@ -38,7 +38,7 @@
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Sync/Nimblesite.Sync.Http": {
-      "threshold": 34,
+      "threshold": 36,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Reporting/Nimblesite.Reporting": {
@@ -46,14 +46,14 @@
       "include": "[Nimblesite.Reporting.Engine]*"
     },
     "Reporting/Nimblesite.Reporting.Integration": {
-      "threshold": 40,
+      "threshold": 76,
       "include": "[Nimblesite.Reporting.Engine]*,[Nimblesite.Reporting.Api]*"
     },
     "Lql/lql-lsp-rust": {
-      "threshold": 97
+      "threshold": 98
     },
     "Lql/LqlExtension": {
-      "threshold": 49
+      "threshold": 50
     }
   }
 }

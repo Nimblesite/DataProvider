@@ -64,7 +64,7 @@ public static class GatekeeperBearerAuth
                 Encoding.ASCII.GetBytes(Sign(parts[0], parts[1], signingKey)),
                 Encoding.ASCII.GetBytes(parts[2])
             )
-            && ExpiresAfter(payload: parts[1], now: now);
+            && HasValidClaims(header: parts[0], payload: parts[1], now: now);
     }
 
     private static string Sign(string header, string payload, ImmutableArray<byte> signingKey) =>
@@ -72,18 +72,37 @@ public static class GatekeeperBearerAuth
             HMACSHA256.HashData(signingKey.AsSpan(), Encoding.UTF8.GetBytes($"{header}.{payload}"))
         );
 
-    private static bool ExpiresAfter(string payload, DateTimeOffset now)
+    private static bool HasValidClaims(string header, string payload, DateTimeOffset now)
     {
         try
         {
-            using var document = JsonDocument.Parse(Base64Url.DecodeFromChars(payload));
-            return document.RootElement.TryGetProperty("exp", out var exp)
-                && exp.TryGetInt64(out var seconds)
-                && seconds > now.ToUnixTimeSeconds();
+            using var jose = JsonDocument.Parse(Base64Url.DecodeFromChars(header));
+            using var claims = JsonDocument.Parse(Base64Url.DecodeFromChars(payload));
+            return HasHs256Algorithm(jose.RootElement)
+                && HasValidLifetime(claims.RootElement, now.ToUnixTimeSeconds());
         }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {
             return false;
         }
     }
+
+    private static bool HasHs256Algorithm(JsonElement header) =>
+        header.ValueKind == JsonValueKind.Object
+        && header.TryGetProperty("alg", out var algorithm)
+        && algorithm.ValueKind == JsonValueKind.String
+        && algorithm.GetString() == "HS256";
+
+    private static bool HasValidLifetime(JsonElement claims, long now) =>
+        claims.ValueKind == JsonValueKind.Object
+        && claims.TryGetProperty("exp", out var expiry)
+        && expiry.ValueKind == JsonValueKind.Number
+        && expiry.TryGetInt64(out var expiresAt)
+        && expiresAt > now
+        && (
+            !claims.TryGetProperty("nbf", out var notBefore)
+            || notBefore.ValueKind == JsonValueKind.Number
+                && notBefore.TryGetInt64(out var startsAt)
+                && startsAt <= now
+        );
 }

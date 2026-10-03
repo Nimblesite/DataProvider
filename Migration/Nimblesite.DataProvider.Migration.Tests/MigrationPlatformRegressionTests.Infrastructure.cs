@@ -73,6 +73,26 @@ public sealed partial record MigrationPlatformRegressionTests
         bool allowDestructive = false
     )
     {
+        var result = RunMigrate(target, desired, allowDestructive);
+        Assert.True(result.ExitCode == 0, $"{target.Provider} migration failed: {result.Output}");
+        Assert.DoesNotContain(
+            "SCHEMA INTEGRITY CHECK FAILED",
+            result.Output,
+            StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(
+            "MIG-E-RLS-MSSQL-UNSUPPORTED",
+            result.Output,
+            StringComparison.Ordinal
+        );
+    }
+
+    private static (int ExitCode, string Output) RunMigrate(
+        MigrationTarget target,
+        SchemaDefinition desired,
+        bool allowDestructive
+    )
+    {
         var path = Path.GetTempFileName();
         try
         {
@@ -80,21 +100,7 @@ public sealed partial record MigrationPlatformRegressionTests
                 path,
                 SchemaYamlSerializer.ToYaml(WithSchema(desired, target.Schema))
             );
-            var result = RunMigrate(target, path, allowDestructive);
-            Assert.True(
-                result.ExitCode == 0,
-                $"{target.Provider} migration failed: {result.Output}"
-            );
-            Assert.DoesNotContain(
-                "SCHEMA INTEGRITY CHECK FAILED",
-                result.Output,
-                StringComparison.Ordinal
-            );
-            Assert.DoesNotContain(
-                "MIG-E-RLS-MSSQL-UNSUPPORTED",
-                result.Output,
-                StringComparison.Ordinal
-            );
+            return RunMigrate(target, path, allowDestructive);
         }
         finally
         {

@@ -29,6 +29,8 @@ permissions:
   contents: read
 
 env:
+  # Implements [CI-TIMEOUT]: bound compilation in each packaging matrix job.
+  CARGO_BUILD_JOBS: 2
   EXT_DIR: Lql/LqlExtension
   RUST_DIR: Lql/lql-lsp-rust
   BINARY_NAME: lql-lsp

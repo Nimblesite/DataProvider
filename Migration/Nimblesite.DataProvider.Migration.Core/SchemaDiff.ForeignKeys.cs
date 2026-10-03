@@ -13,12 +13,20 @@ public static partial class SchemaDiff
             || string.IsNullOrWhiteSpace(current.Name)
             || string.Equals(current.Name, desired.Name, StringComparison.OrdinalIgnoreCase)
         )
-        && current.Columns.SequenceEqual(desired.Columns, StringComparer.OrdinalIgnoreCase)
         && string.Equals(
             current.ReferencedSchema,
             desired.ReferencedSchema,
             StringComparison.OrdinalIgnoreCase
         )
+        && ForeignKeyRelationshipsMatch(current: current, desired: desired);
+
+    // SQLite catalog names and schema aliases cannot identify constraints.
+    // Reuse the relationship comparison when planning a SQLite table rebuild.
+    internal static bool ForeignKeyRelationshipsMatch(
+        ForeignKeyDefinition current,
+        ForeignKeyDefinition desired
+    ) =>
+        current.Columns.SequenceEqual(desired.Columns, StringComparer.OrdinalIgnoreCase)
         && string.Equals(
             current.ReferencedTable,
             desired.ReferencedTable,

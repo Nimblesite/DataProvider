@@ -14,6 +14,16 @@ namespace Nimblesite.DataProvider.Migration.Core;
 // from the RLS triggers/secure view by SqliteRlsSchemaInspector (issue #98).
 internal static class RlsPolicyPredicates
 {
+    internal static bool SameSql(string? left, string? right, RlsPlatform platform) =>
+        Same(
+            currentSql: left,
+            currentLql: null,
+            desiredSql: right,
+            desiredLql: null,
+            policyName: string.Empty,
+            platform: platform
+        );
+
     internal static bool SameUsing(
         RlsPolicyDefinition current,
         RlsPolicyDefinition desired,

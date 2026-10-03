@@ -30,6 +30,17 @@ else
   SHELL := /bin/bash
   RM = rm -rf
   MKDIR = mkdir -p
+  ifeq ($(shell uname -s),Darwin)
+    # Implements [CI-TIMEOUT]: macOS native FSEvents can stall test-host startup.
+    # Polling preserves configuration change notifications without that native wait.
+    export DOTNET_USE_POLLING_FILE_WATCHER ?= 1
+    # Keep debug information in object files; dsymutil also scans ancestors.
+    export RUSTFLAGS := $(RUSTFLAGS) -Csplit-debuginfo=unpacked
+    ifneq ($(wildcard $(HOME)/.colima/default/docker.sock),)
+      # Testcontainers Rust needs the explicit socket when Colima is installed.
+      _test_rust: export DOCKER_HOST ?= unix://$(HOME)/.colima/default/docker.sock
+    endif
+  endif
 endif
 
 # All .NET test projects (one per line for readability)
@@ -63,6 +74,7 @@ build:
 ##       See REPO-STANDARDS-SPEC [TEST-RULES].
 test:
 	@echo "==> Testing..."
+	python3 tools/test-version-stamp.py
 	$(MAKE) _test
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.

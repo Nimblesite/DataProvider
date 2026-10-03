@@ -79,7 +79,8 @@ public static class ReportingConnections
 
     /// <summary>
     /// Detects the provider from connection string keywords, parsed with the ADO.NET
-    /// connection string parser: <c>Host</c> is PostgreSQL, SQL Server keywords are SQL
+    /// connection string parser: PostgreSQL-specific keywords take precedence over
+    /// the shared <c>Server</c> alias; SQL Server keywords are SQL
     /// Server, anything else is a SQLite data source.
     /// </summary>
     /// <param name="connectionString">The connection string to inspect.</param>
@@ -87,7 +88,11 @@ public static class ReportingConnections
     public static DatabaseProvider DetectProvider(string connectionString)
     {
         var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-        return builder.ContainsKey("Host") ? DatabaseProvider.Postgres
+        return builder.ContainsKey("Host")
+            || builder.ContainsKey("Username")
+            || builder.ContainsKey("User Name")
+            || builder.ContainsKey("Port")
+                ? DatabaseProvider.Postgres
             : SqlServerKeywords.Any(builder.ContainsKey) ? DatabaseProvider.SqlServer
             : DatabaseProvider.Sqlite;
     }

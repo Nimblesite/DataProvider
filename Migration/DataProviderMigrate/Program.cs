@@ -86,8 +86,11 @@ public static partial class Program
 
     private static int ExecuteMigration(MigrateParseResult.Success args)
     {
-        var outputDescription = args.Provider.Equals("postgres", StringComparison.OrdinalIgnoreCase)
-            ? "<PostgreSQL connection>"
+        // Implements [MIG-CLI-COMMANDS]: connection descriptions must not expose credentials.
+        var outputDescription =
+            args.Provider.Equals("postgres", StringComparison.OrdinalIgnoreCase)
+                ? "<PostgreSQL connection>"
+            : IsSqlServerProvider(provider: args.Provider) ? "<SQL Server connection>"
             : args.OutputPath;
         Console.WriteLine(
             $"""
@@ -119,8 +122,8 @@ public static partial class Program
 
         if (IsSqlServerProvider(args.Provider) && SchemaContainsRls(schema))
         {
-            // Implements [RLS-MSSQL]. The SQL Server migration package does
-            // not exist yet, so RLS targeting SQL Server must fail closed.
+            // Implements [RLS-MSSQL]. Native SQL Server RLS migrations are
+            // not implemented, so RLS targeting SQL Server must fail closed.
             Console.WriteLine(MigrationError.RlsMssqlUnsupported().Message);
             return 1;
         }

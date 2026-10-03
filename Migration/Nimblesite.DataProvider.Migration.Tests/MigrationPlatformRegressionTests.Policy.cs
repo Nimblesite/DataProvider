@@ -4,6 +4,63 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed partial record MigrationPlatformRegressionTests
 {
+    private static void AssertUnsupportedPolicyMigration(
+        MigrationTarget target,
+        bool usingAllowed,
+        bool checkAllowed
+    )
+    {
+        var original = PolicySchema(usingAllowed: true, checkAllowed: true);
+        Migrate(
+            target,
+            original with
+            {
+                Tables = original
+                    .Tables.Select(table => table with { RowLevelSecurity = null })
+                    .ToArray(),
+            }
+        );
+        var before = SqlServerSchemaSnapshot(target);
+        AssertUnsupportedPolicy(target, original, before);
+        AssertUnsupportedPolicy(target, PolicySchema(usingAllowed, checkAllowed), before);
+        AssertUnsupportedPolicy(target, original, before);
+    }
+
+    private static void AssertUnsupportedPolicy(
+        MigrationTarget target,
+        SchemaDefinition desired,
+        string before
+    )
+    {
+        var result = RunMigrate(target, desired, allowDestructive: true);
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("MIG-E-RLS-MSSQL-UNSUPPORTED", result.Output, StringComparison.Ordinal);
+        Assert.Equal(before, SqlServerSchemaSnapshot(target));
+        using var command = target.Connection.CreateCommand();
+        command.CommandText =
+            "SELECT (SELECT COUNT(*) FROM sys.security_policies) + (SELECT COUNT(*) FROM sys.objects WHERE type = 'IF')";
+        Assert.Equal(
+            0,
+            Convert.ToInt32(
+                command.ExecuteScalar(),
+                System.Globalization.CultureInfo.InvariantCulture
+            )
+        );
+    }
+
+    private static string SqlServerSchemaSnapshot(MigrationTarget target) =>
+        SchemaYamlSerializer.ToYaml(
+            Assert
+                .IsType<SchemaResultOk>(
+                    Nimblesite.DataProvider.Migration.SqlServer.SqlServerSchemaInspector.Inspect(
+                        connection: Assert.IsType<Microsoft.Data.SqlClient.SqlConnection>(
+                            target.Connection
+                        )
+                    )
+                )
+                .Value
+        );
+
     private static PolicySnapshot ReadPolicy(MigrationTarget target) =>
         target.Provider switch
         {

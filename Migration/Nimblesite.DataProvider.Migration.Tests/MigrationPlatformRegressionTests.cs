@@ -300,7 +300,8 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.False(ColumnIsNullable(target, "audit_events", "tenant_id"));
     }
 
-    // Implements [RLS-DIFF]. Regression: #98. Same-name USING and WITH CHECK changes are independent.
+    // Implements [RLS-DIFF] and [RLS-MSSQL]. Regression: #98. Supported providers
+    // reconcile each predicate; unsupported SQL Server RLS must fail closed.
     [Theory]
     [InlineData("sqlite", false, true)]
     [InlineData("postgres", false, true)]
@@ -311,7 +312,7 @@ public sealed partial record MigrationPlatformRegressionTests
     [InlineData("sqlite", false, false)]
     [InlineData("postgres", false, false)]
     [InlineData("sqlserver", false, false)]
-    public async Task DestructiveMigration_ReplacesChangedPolicyPredicate(
+    public async Task RlsMigration_ReconcilesSupportedPredicatesAndRejectsUnsupportedProvider(
         string provider,
         bool usingAllowed,
         bool checkAllowed
@@ -319,7 +320,17 @@ public sealed partial record MigrationPlatformRegressionTests
     {
         await WithTargetAsync(
                 provider,
-                target => AssertPolicyMigration(target, usingAllowed, checkAllowed)
+                target =>
+                {
+                    if (provider == "sqlserver")
+                    {
+                        AssertUnsupportedPolicyMigration(target, usingAllowed, checkAllowed);
+                    }
+                    else
+                    {
+                        AssertPolicyMigration(target, usingAllowed, checkAllowed);
+                    }
+                }
             )
             .ConfigureAwait(true);
     }

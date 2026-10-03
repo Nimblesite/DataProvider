@@ -27,6 +27,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Implements [CI-TIMEOUT]: reusable workflows require their own build limits.
+  DOTNET_PROCESSOR_COUNT: 2
+  DOTNET_GCHeapHardLimit: '0x80000000'
+  DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER: 1
+
 jobs:
   build:
     strategy:

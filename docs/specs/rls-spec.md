@@ -260,7 +260,7 @@ Operation order is schema-safe: roles first, table DDL second, support functions
 
 ## 8. SQL Server Implementation [RLS-MSSQL]
 
-> **Status:** SQL Server package (`Nimblesite.DataProvider.Migration.SqlServer`) does not exist yet. This section defines the contract; implementation is deferred until that package ships. Any `CreateRlsPolicyOperation` targeting SQL Server before the package exists MUST emit `MIG-E-RLS-MSSQL-UNSUPPORTED`.
+> **Status:** The SQL Server migration package supports table and constraint migrations. Native RLS migration and inspection are not implemented. This section defines the deferred native RLS contract. Any RLS schema targeting SQL Server MUST emit `MIG-E-RLS-MSSQL-UNSUPPORTED` before changing the database until native RLS support is implemented.
 
 SQL Server RLS uses a two-step approach:
 1. An inline table-valued function (iTVF) as a filter or block predicate
@@ -416,7 +416,7 @@ Schema inspectors (`PostgresSchemaInspector`, `SqliteSchemaInspector`) must be e
 | `MIG-E-RLS-EMPTY-CHECK` | Policy has INSERT/UPDATE operations but no `WithCheckLql` |
 | `MIG-E-RLS-LQL-PARSE` | `UsingLql` / `WithCheckLql` failed LQL parse |
 | `MIG-E-RLS-LQL-TRANSPILE` | LQL transpilation to platform SQL failed |
-| `MIG-E-RLS-MSSQL-UNSUPPORTED` | SQL Server RLS attempted before `SqlServer` package ships |
+| `MIG-E-RLS-MSSQL-UNSUPPORTED` | SQL Server RLS attempted before native RLS migration support is implemented |
 | `MIG-W-RLS-SQLITE-SELECT-VIEW` | Informational: SELECT policy enforced via `_secure` view, not triggers |
 | `MIG-W-RLS-SQLITE-RESTRICTIVE-APPROX` | RESTRICTIVE policy approximated as AND condition in SQLite triggers |
 

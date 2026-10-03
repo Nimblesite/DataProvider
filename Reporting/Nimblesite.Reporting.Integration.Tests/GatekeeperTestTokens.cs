@@ -22,11 +22,23 @@ public static class GatekeeperTestTokens
     /// </summary>
     public static string Create()
     {
-        var header = Encode("""{"alg":"HS256","typ":"JWT"}""");
         var expires = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
-        var payload = Encode(
+        return Create(
             $$"""{"sub":"reporting-e2e","jti":"{{Guid.NewGuid():N}}","roles":[],"exp":{{expires}}}"""
         );
+    }
+
+    /// <summary>Signs explicit JSON for authentication boundary tests.</summary>
+    /// <param name="claims">The JWT claims, including deliberately malformed test values.</param>
+    /// <param name="headerJson">The JOSE header to sign.</param>
+    /// <returns>A token independently signed with the test host key.</returns>
+    public static string Create(
+        string claims,
+        string headerJson = """{"alg":"HS256","typ":"JWT"}"""
+    )
+    {
+        var header = Encode(headerJson);
+        var payload = Encode(claims);
         using var hmac = new HMACSHA256(Convert.FromBase64String(SigningKey));
         var signature = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{header}.{payload}"));
         return $"{header}.{payload}.{Base64Url(signature)}";
