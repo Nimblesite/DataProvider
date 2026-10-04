@@ -97,17 +97,17 @@ jobs:
             echo "archive=dist/${stage}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
       - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@f08f31f53bbe4451c46f9c5d8a8ff4cbb2c5ed27 # v0.21.0
+        uses: anchore/sbom-action@a930d0ac434e3182448fe678398ba5713717112a # v0.21.0
         with:
           file: ${{ steps.pkg.outputs.archive }}
           format: cyclonedx-json
           output-file: ${{ steps.pkg.outputs.archive }}.cdx.json
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc20 # v3.0.0
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
       - name: Attest SBOM
-        uses: actions/attest-sbom@bd218ad7dbf483c81a22dde9694703a90f723a0d # v3.0.0
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3.0.0
         with:
           subject-path: ${{ github.workspace }}/${{ steps.pkg.outputs.archive }}
           sbom-path: ${{ steps.pkg.outputs.archive }}.cdx.json
