@@ -3,7 +3,7 @@
 ## Release CI Gate [CI-RELEASE-GATE]
 
 Tag releases call the same reusable CI workflow used by pull requests and the
-CodeQL workflow before publishing packages, binaries, or VSIX files. Both
+CodeQL workflow before publishing packages or binaries. Both
 workflows check out the tagged SHA. The CI aggregate requires success from
 every build, test, lint, and duplication job; only dependency review may be
 skipped for non-PR events. CI also runs `tools/test-version-stamp.py`, which
@@ -29,13 +29,16 @@ every version assertion and dry-run immutability check.
 
 ### Publishing Preflight [CI-RELEASE-PREFLIGHT]
 
-Manual Release runs take a version and verify manifests, publishing credentials,
+Manual Release runs take a version and verify manifests,
 CI, and the CodeQL security gate on the selected commit. Publishing jobs require
 a tag push, so manual preflight cannot upload packages or release assets.
 
 ### Marketplace Authentication [SWR-VSIX-PUBLISH-AUTH]
 
-Preflight and VSIX publishing share one composite action. It prefers Entra OIDC
+Marketplace publication and its credential preflight are commented out in the
+Release workflow at the user's request. NuGet releases require no Marketplace
+credentials. The retained VSIX publishing workflow uses one composite action,
+which prefers Entra OIDC
 when both identity IDs are configured; otherwise it uses the existing
 `VSCODE_MARKETPLACE_PAT` secret. It verifies publisher access before publishing,
 fails when credentials are missing or invalid, and never falls back after an

@@ -2,7 +2,7 @@
 # Tag-triggered release. Stamps the tag version into the runner working tree only
 # (NO commit/push/tag bump after the tag exists — [SWR-VERSION-BUILD-STAMPING]),
 # runs the CI + CodeQL hard gate, then publishes NuGet packages, per-platform binaries
-# (GitHub Release), per-platform VSIX (Marketplace), Homebrew + Scoop, and deploys
+# (GitHub Release), Homebrew + Scoop, and deploys
 # both documentation sites. [SWR-REL-WORKFLOW] [SWR-REL-GITHUB]
 name: Release
 
@@ -39,7 +39,6 @@ jobs:
     environment: release
     permissions:
       contents: read
-      id-token: write
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
@@ -73,12 +72,13 @@ jobs:
       - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 22
-      - name: Verify Marketplace publishing credentials
-        uses: ./.github/actions/marketplace-auth
-        with:
-          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+      # Marketplace publishing is disabled at the user's request. [SWR-VSIX-PUBLISH-AUTH]
+      # - name: Verify Marketplace publishing credentials
+      #   uses: ./.github/actions/marketplace-auth
+      #   with:
+      #     azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+      #     marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
 
   # Implements [CI-RELEASE-GATE]: run the same CI on the tagged SHA before publishing.
   ci-gate:
@@ -309,25 +309,26 @@ jobs:
       bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
 
   # ── Per-platform VSIX → VS Code Marketplace ───────────────────────────────
-  publish-vsix:
-    if: >-
-      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
-      needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
-      needs.codeql-gate.result == 'success' && needs.release-binaries.result == 'success'
-    needs: [prepare, ci-gate, codeql-gate, release-binaries]
-    uses: ./.github/workflows/publish-vsix-per-platform.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      pre_release: ${{ needs.prepare.outputs.prerelease == 'true' }}
-      marketplace_environment: release
-    secrets:
-      azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-      azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-      marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
+  # Disabled at the user's request. [SWR-VSIX-PUBLISH-AUTH]
+  # publish-vsix:
+  #   if: >-
+  #     github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
+  #     needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
+  #     needs.codeql-gate.result == 'success' && needs.release-binaries.result == 'success'
+  #   needs: [prepare, ci-gate, codeql-gate, release-binaries]
+  #   uses: ./.github/workflows/publish-vsix-per-platform.yml
+  #   with:
+  #     version: ${{ needs.prepare.outputs.version }}
+  #     pre_release: ${{ needs.prepare.outputs.prerelease == 'true' }}
+  #     marketplace_environment: release
+  #   secrets:
+  #     azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+  #     azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  #     marketplace_pat: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+  #   permissions:
+  #     contents: read
+  #     id-token: write
+  #     attestations: write
 
   # ── Documentation sites (both deploy on release) ──────────────────────────
   deploy-lql-website:
