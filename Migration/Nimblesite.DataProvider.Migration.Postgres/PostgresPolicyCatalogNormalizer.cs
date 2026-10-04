@@ -5,6 +5,13 @@ using PredicateOk = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
 >.Ok<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
+using SchemaOk = Outcome.Result<
+    Nimblesite.DataProvider.Migration.Core.SchemaDefinition,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>.Ok<
+    Nimblesite.DataProvider.Migration.Core.SchemaDefinition,
+    Nimblesite.DataProvider.Migration.Core.MigrationError
+>;
 
 namespace Nimblesite.DataProvider.Migration.Postgres;
 
@@ -15,6 +22,20 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// </summary>
 public static class PostgresPolicyCatalogNormalizer
 {
+    /// <summary>
+    /// Inspect the live schema with policy predicates in the same view context
+    /// used for desired predicates. Implements [RLS-DIFF] and issue #119.
+    /// PostgreSQL 15 qualifies view columns differently from pg_policies;
+    /// normalizing both preserves correlated references and subquery shadowing.
+    /// </summary>
+    public static SchemaResult Inspect(NpgsqlConnection connection)
+    {
+        var result = PostgresSchemaInspector.Inspect(connection: connection, schemaName: "public");
+        return result is SchemaOk ok
+            ? Normalize(connection: connection, live: ok.Value, desired: ok.Value)
+            : result;
+    }
+
     /// <summary>Canonicalize policies on tables that already exist.</summary>
     public static SchemaResult Normalize(
         NpgsqlConnection connection,
