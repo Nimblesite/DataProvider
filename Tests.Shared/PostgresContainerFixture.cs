@@ -30,7 +30,10 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     /// <summary>
     /// Starts the shared container. Called once per collection fixture lifetime.
     /// </summary>
-    public async Task InitializeAsync()
+    public Task InitializeAsync() => InitializeAsync(image: "pgvector/pgvector:pg16");
+
+    /// <summary>Starts the shared fixture using the specified PostgreSQL image.</summary>
+    public async Task InitializeAsync(string image)
     {
         // Implements [MIG-TEST-NATIVE-POSTGRES]: use an isolated native server when configured.
         if (
@@ -46,7 +49,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
         // test that needs vector columns (VectorType). Non-vector tests are
         // unaffected.
         _container = new PostgreSqlBuilder()
-            .WithImage("pgvector/pgvector:pg16")
+            .WithImage(image)
             .WithDatabase("postgres")
             .WithUsername("test")
             .WithPassword("test")

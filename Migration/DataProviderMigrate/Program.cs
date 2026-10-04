@@ -218,7 +218,7 @@ public static partial class Program
                 schema,
                 allowDestructive,
                 phase,
-                () => PostgresSchemaInspector.Inspect(connection, "public"),
+                () => PostgresPolicyCatalogNormalizer.Inspect(connection: connection),
                 ops =>
                     MigrationRunner.Apply(
                         connection,
@@ -229,7 +229,8 @@ public static partial class Program
                             VerifySchemaIntegrity(
                                 schema,
                                 phase,
-                                () => PostgresSchemaInspector.Inspect(connection, "public"),
+                                () =>
+                                    PostgresPolicyCatalogNormalizer.Inspect(connection: connection),
                                 (live, target) =>
                                     PostgresPolicyCatalogNormalizer.Normalize(
                                         connection,
