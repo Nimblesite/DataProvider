@@ -7,31 +7,8 @@ public sealed class SqliteMigrationTests
 {
     private readonly ILogger _logger = NullLogger.Instance;
 
-    private static (SqliteConnection Connection, string DbPath) CreateTestDb()
-    {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"sqlitemigration_{Guid.NewGuid()}.db");
-        var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
-        return (connection, dbPath);
-    }
-
-    private static void CleanupTestDb(SqliteConnection connection, string dbPath)
-    {
-        connection.Close();
-        connection.Dispose();
-        if (File.Exists(dbPath))
-        {
-            try
-            {
-                File.Delete(dbPath);
-            }
-            catch
-            { /* File may be locked */
-            }
-        }
-    }
-
-    private static void SeedSchema(
+    // Implements [MIG-TEST-SQLITE-SEED].
+    private static MigrationApplyResult SeedSchema(
         SqliteConnection connection,
         SchemaDefinition schema,
         ILogger logger
@@ -39,21 +16,15 @@ public sealed class SqliteMigrationTests
     {
         var current = ((SchemaResultOk)SqliteSchemaInspector.Inspect(connection, logger)).Value;
         var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: logger)).Value;
-        _ = MigrationRunner.Apply(
-            connection,
-            ops,
-            SqliteDdlGenerator.Generate,
-            MigrationOptions.Default,
-            logger
-        );
+        return SqliteTestDb.TryApply(connection: connection, operations: ops, logger: logger);
     }
 
     [Fact]
     public void CreateDatabaseFromScratch_SingleTable_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -80,12 +51,10 @@ public sealed class SqliteMigrationTests
 
             var ops = ((OperationsResultOk)operations).Value;
 
-            var result = MigrationRunner.Apply(
-                connection,
-                ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: ops,
+                logger: _logger
             );
 
             // Assert
@@ -98,19 +67,15 @@ public sealed class SqliteMigrationTests
             Assert.Single(inspectedSchema.Tables);
             Assert.Equal("Users", inspectedSchema.Tables[0].Name);
             Assert.Equal(3, inspectedSchema.Tables[0].Columns.Count);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             // Enable foreign keys
             using (var cmd = connection.CreateCommand())
@@ -143,21 +108,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -173,19 +124,15 @@ public sealed class SqliteMigrationTests
             var ordersTable = inspected.Tables.First(t => t.Name == "Orders");
             Assert.Single(ordersTable.ForeignKeys);
             Assert.Equal("Users", ordersTable.ForeignKeys[0].ReferencedTable);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void UpgradeExistingDatabase_AddColumn_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             // Create initial schema
             var v1 = Schema
@@ -227,12 +174,10 @@ public sealed class SqliteMigrationTests
             Assert.Equal(2, upgradeOps.Count);
             Assert.All(upgradeOps, op => Assert.IsType<AddColumnOperation>(op));
 
-            var result = MigrationRunner.Apply(
-                connection,
-                upgradeOps,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: upgradeOps,
+                logger: _logger
             );
 
             // Assert
@@ -245,19 +190,15 @@ public sealed class SqliteMigrationTests
             Assert.Equal(4, users.Columns.Count);
             Assert.Contains(users.Columns, c => c.Name == "Name");
             Assert.Contains(users.Columns, c => c.Name == "CreatedAt");
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void UpgradeExistingDatabase_AddTable_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var v1 = Schema
                 .Define("Test")
@@ -293,12 +234,10 @@ public sealed class SqliteMigrationTests
             Assert.Single(upgradeOps);
             Assert.IsType<CreateTableOperation>(upgradeOps[0]);
 
-            var result = MigrationRunner.Apply(
-                connection,
-                upgradeOps,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: upgradeOps,
+                logger: _logger
             );
 
             // Assert
@@ -309,19 +248,15 @@ public sealed class SqliteMigrationTests
             ).Value;
             Assert.Equal(2, finalSchema.Tables.Count);
             Assert.Contains(finalSchema.Tables, t => t.Name == "Products");
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void UpgradeExistingDatabase_AddIndex_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var v1 = Schema
                 .Define("Test")
@@ -360,12 +295,10 @@ public sealed class SqliteMigrationTests
             Assert.Single(upgradeOps);
             Assert.IsType<CreateIndexOperation>(upgradeOps[0]);
 
-            var result = MigrationRunner.Apply(
-                connection,
-                upgradeOps,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: upgradeOps,
+                logger: _logger
             );
 
             // Assert
@@ -378,19 +311,15 @@ public sealed class SqliteMigrationTests
             Assert.Single(users.Indexes);
             Assert.Equal("idx_users_email", users.Indexes[0].Name);
             Assert.True(users.Indexes[0].IsUnique);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void Migration_IsIdempotent_NoErrorOnRerun()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -414,12 +343,10 @@ public sealed class SqliteMigrationTests
                     (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
                 ).Value;
 
-                var result = MigrationRunner.Apply(
-                    connection,
-                    operations,
-                    SqliteDdlGenerator.Generate,
-                    MigrationOptions.Default,
-                    _logger
+                var result = SqliteTestDb.TryApply(
+                    connection: connection,
+                    operations: operations,
+                    logger: _logger
                 );
 
                 Assert.True(result is MigrationApplyResultOk);
@@ -430,19 +357,15 @@ public sealed class SqliteMigrationTests
                     Assert.Empty(operations);
                 }
             }
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void CreateTable_AllPortableTypes_Success()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -478,20 +401,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -501,19 +411,15 @@ public sealed class SqliteMigrationTests
             ).Value;
             var table = inspected.Tables.Single();
             Assert.Equal(25, table.Columns.Count);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void Destructive_DropTable_BlockedByDefault()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             // Create initial schema with 2 tables
             var v1 = Schema
@@ -547,19 +453,15 @@ public sealed class SqliteMigrationTests
 
             // Assert - No drop operations should be generated
             Assert.Empty(operations);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void Destructive_DropTable_AllowedWithOption()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var v1 = Schema
                 .Define("Test")
@@ -588,12 +490,11 @@ public sealed class SqliteMigrationTests
             Assert.Single(operations);
             Assert.IsType<DropTableOperation>(operations[0]);
 
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Destructive,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: operations,
+                logger: _logger,
+                options: MigrationOptions.Destructive
             );
 
             // Assert
@@ -604,19 +505,15 @@ public sealed class SqliteMigrationTests
             ).Value;
             Assert.Single(finalSchema.Tables);
             Assert.DoesNotContain(finalSchema.Tables, t => t.Name == "Products");
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void SchemaInspector_RoundTrip_Matches()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -645,19 +542,15 @@ public sealed class SqliteMigrationTests
 
             // Assert
             Assert.Empty(diff);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void DestructiveOperation_BlockedByDefault_ReturnsUsefulError()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             // Create table first
             using var cmd = connection.CreateCommand();
@@ -667,12 +560,10 @@ public sealed class SqliteMigrationTests
             var dropOperation = new DropTableOperation("main", "ToBeDropped");
 
             // Act - try to apply destructive operation with default options
-            var result = MigrationRunner.Apply(
-                connection,
-                [dropOperation],
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default, // AllowDestructive = false
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: [dropOperation],
+                logger: _logger
             );
 
             // Assert - should fail with useful error message
@@ -680,19 +571,15 @@ public sealed class SqliteMigrationTests
             var error = ((MigrationApplyResultError)result).Value;
             Assert.Contains("Destructive", error.Message);
             Assert.Contains("DropTableOperation", error.Message);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void InvalidSql_ReturnsUsefulError()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             // Create a custom operation that generates invalid SQL
             var badTable = new TableDefinition
@@ -705,48 +592,42 @@ public sealed class SqliteMigrationTests
             var createOp = new CreateTableOperation(badTable);
 
             // Act
-            var result = MigrationRunner.Apply(
-                connection,
-                [createOp],
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: [createOp],
+                logger: _logger
             );
 
             // Assert - should fail (invalid SQL) but not crash
             // Note: SQLite may accept this - adjust test if needed
             Assert.NotNull(result);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void SchemaCapture_ExistingDatabase_ReturnsCompleteSchema()
     {
         // Arrange - Create database with raw SQL (simulate existing DB)
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                CREATE TABLE customers (
-                    id TEXT PRIMARY KEY,
-                    email TEXT NOT NULL,
-                    name TEXT,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE UNIQUE INDEX idx_customers_email ON customers(email);
-                CREATE TABLE orders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    customer_id TEXT NOT NULL,
-                    total REAL,
-                    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
-                );
-                CREATE INDEX idx_orders_customer ON orders(customer_id);
-                """;
+            CREATE TABLE customers (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                name TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE UNIQUE INDEX idx_customers_email ON customers(email);
+            CREATE TABLE orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id TEXT NOT NULL,
+                total REAL,
+                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+            );
+            CREATE INDEX idx_orders_customer ON orders(customer_id);
+            """;
             cmd.ExecuteNonQuery();
 
             // Act - CAPTURE the existing schema
@@ -774,30 +655,26 @@ public sealed class SqliteMigrationTests
             Assert.Equal(ForeignKeyAction.Cascade, orders.ForeignKeys[0].OnDelete);
             Assert.Single(orders.Indexes);
             Assert.Equal("idx_orders_customer", orders.Indexes[0].Name);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void SchemaCapture_SerializesToJson_RoundTrip()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                CREATE TABLE products (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    price REAL,
-                    active INTEGER DEFAULT 1
-                );
-                CREATE INDEX idx_products_name ON products(name);
-                """;
+            CREATE TABLE products (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                active INTEGER DEFAULT 1
+            );
+            CREATE INDEX idx_products_name ON products(name);
+            """;
             cmd.ExecuteNonQuery();
 
             // Act - Capture and serialize to JSON
@@ -820,11 +697,7 @@ public sealed class SqliteMigrationTests
             Assert.Equal("products", restored.Tables[0].Name);
             Assert.Equal(4, restored.Tables[0].Columns.Count);
             Assert.Single(restored.Tables[0].Indexes);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     // =============================================================================
@@ -835,8 +708,8 @@ public sealed class SqliteMigrationTests
     public void ExpressionIndex_CreateWithLowerFunction_Success()
     {
         // Arrange - Create table with expression index for case-insensitive uniqueness
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -850,20 +723,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert - Migration succeeded
             Assert.True(
@@ -880,19 +740,15 @@ public sealed class SqliteMigrationTests
             Assert.NotNull(indexDef);
             Assert.Contains("UNIQUE", indexDef);
             Assert.Contains("lower", indexDef);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void ExpressionIndex_EnforcesCaseInsensitiveUniqueness()
     {
         // Arrange - Create table with expression index
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -921,19 +777,15 @@ public sealed class SqliteMigrationTests
             // Assert - Should throw unique constraint violation
             var ex = Assert.Throws<SqliteException>(() => duplicateCmd.ExecuteNonQuery());
             Assert.Contains("UNIQUE", ex.Message);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void ExpressionIndex_MultiExpression_CompositeIndexSuccess()
     {
         // Arrange - Create table with multi-expression index
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -958,20 +810,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(
@@ -989,19 +828,15 @@ public sealed class SqliteMigrationTests
             Assert.Contains("UNIQUE", indexDef);
             Assert.Contains("lower", indexDef);
             Assert.Contains("SuburbId", indexDef);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void ExpressionIndex_Idempotent_NoErrorOnRerun()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1025,12 +860,10 @@ public sealed class SqliteMigrationTests
                     (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
                 ).Value;
 
-                var result = MigrationRunner.Apply(
-                    connection,
-                    operations,
-                    SqliteDdlGenerator.Generate,
-                    MigrationOptions.Default,
-                    _logger
+                var result = SqliteTestDb.TryApply(
+                    connection: connection,
+                    operations: operations,
+                    logger: _logger
                 );
 
                 Assert.True(
@@ -1044,28 +877,24 @@ public sealed class SqliteMigrationTests
                     Assert.Empty(operations);
                 }
             }
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void ExpressionIndex_SchemaInspector_DetectsExpressionIndex()
     {
         // Arrange - Create expression index via raw SQL
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                CREATE TABLE artists (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL
-                );
-                CREATE UNIQUE INDEX uq_artists_name ON artists(lower(name));
-                """;
+            CREATE TABLE artists (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX uq_artists_name ON artists(lower(name));
+            """;
             cmd.ExecuteNonQuery();
 
             // Act - Inspect schema
@@ -1082,11 +911,7 @@ public sealed class SqliteMigrationTests
             Assert.True(index.IsUnique);
             Assert.NotEmpty(index.Expressions);
             Assert.Contains("lower(name)", index.Expressions);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     // =============================================================================
@@ -1097,8 +922,8 @@ public sealed class SqliteMigrationTests
     public void UpgradeIndex_ColumnToExpression_RequiresDropAndCreate()
     {
         // Arrange - Create table with regular column index
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var v1 = Schema
                 .Define("Test")
@@ -1141,12 +966,11 @@ public sealed class SqliteMigrationTests
             Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
 
             // Apply the upgrade
-            var result = MigrationRunner.Apply(
-                connection,
-                upgradeOps,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Destructive,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: upgradeOps,
+                logger: _logger,
+                options: MigrationOptions.Destructive
             );
 
             Assert.True(result is MigrationApplyResultOk);
@@ -1158,19 +982,15 @@ public sealed class SqliteMigrationTests
             var indexDef = cmd.ExecuteScalar() as string;
             Assert.NotNull(indexDef);
             Assert.Contains("lower", indexDef);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate()
     {
         // Arrange - Create table with expression index
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var v1 = Schema
                 .Define("Test")
@@ -1212,12 +1032,11 @@ public sealed class SqliteMigrationTests
             Assert.Contains(upgradeOps, op => op is DropIndexOperation);
             Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
 
-            var result = MigrationRunner.Apply(
-                connection,
-                upgradeOps,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Destructive,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: upgradeOps,
+                logger: _logger,
+                options: MigrationOptions.Destructive
             );
 
             Assert.True(result is MigrationApplyResultOk);
@@ -1229,11 +1048,7 @@ public sealed class SqliteMigrationTests
             var indexDef = cmd.ExecuteScalar() as string;
             Assert.NotNull(indexDef);
             Assert.DoesNotContain("lower", indexDef);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     // =============================================================================
@@ -1244,8 +1059,8 @@ public sealed class SqliteMigrationTests
     public void LqlDefault_NowFunction_TranslatesToCurrentTimestamp()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1262,19 +1077,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1296,19 +1099,15 @@ public sealed class SqliteMigrationTests
             var createdAt = selectCmd.ExecuteScalar() as string;
             Assert.NotNull(createdAt);
             Assert.NotEmpty(createdAt);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_BooleanTrue_TranslatesTo1()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1330,19 +1129,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1366,19 +1153,15 @@ public sealed class SqliteMigrationTests
             Assert.True(reader.Read());
             Assert.Equal(1, reader.GetInt64(0)); // is_active = true = 1
             Assert.Equal(0, reader.GetInt64(1)); // is_deleted = false = 0
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_NumericValues_PassThrough()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1401,19 +1184,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1430,19 +1201,15 @@ public sealed class SqliteMigrationTests
             Assert.Equal(0, reader.GetInt64(0));
             Assert.Equal(100, reader.GetInt64(1));
             Assert.Equal(1.5, reader.GetDouble(2), 2);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_StringLiteral_PassThrough()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1464,19 +1231,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1492,19 +1247,15 @@ public sealed class SqliteMigrationTests
             Assert.True(reader.Read());
             Assert.Equal("pending", reader.GetString(0));
             Assert.Equal("uncategorized", reader.GetString(1));
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_GenUuid_GeneratesValidUuidFormat()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1521,19 +1272,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1563,19 +1302,15 @@ public sealed class SqliteMigrationTests
             // All UUIDs should be unique
             Assert.Equal(3, uuids.Count);
             Assert.Equal(3, uuids.Distinct().Count());
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_CurrentDate_ReturnsDateOnly()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1592,19 +1327,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1619,19 +1342,15 @@ public sealed class SqliteMigrationTests
             var logDate = selectCmd.ExecuteScalar() as string;
             Assert.NotNull(logDate);
             Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", logDate); // YYYY-MM-DD format
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     [Fact]
     public void LqlDefault_MixedDefaults_AllWorkTogether()
     {
         // Arrange - A complex table with multiple LQL defaults
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Test")
@@ -1663,19 +1382,7 @@ public sealed class SqliteMigrationTests
                 .Build();
 
             // Act
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert
             Assert.True(result is MigrationApplyResultOk);
@@ -1702,11 +1409,7 @@ public sealed class SqliteMigrationTests
             Assert.Equal(1, quantity); // Numeric default
             Assert.Equal(0, isUrgent); // Boolean false = 0
             Assert.NotEmpty(createdAt); // Timestamp generated
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1721,8 +1424,8 @@ public sealed class SqliteMigrationTests
     public void CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully()
     {
         // Arrange
-        var (connection, dbPath) = CreateTestDb();
-        try
+        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        SqliteTestDb.WithDb(test: connection =>
         {
             var schema = Schema
                 .Define("Embeddings")
@@ -1735,21 +1438,7 @@ public sealed class SqliteMigrationTests
                 )
                 .Build();
 
-            var emptySchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var ops = (
-                (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-            ).Value;
-
-            // Act
-            var result = MigrationRunner.Apply(
-                connection,
-                ops,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert — migration succeeded
             Assert.True(
@@ -1800,10 +1489,6 @@ public sealed class SqliteMigrationTests
                 // 384 floats × 4 bytes = 1536 bytes
                 Assert.Equal(1536L, r.GetInt64(1));
             }
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        });
     }
 }

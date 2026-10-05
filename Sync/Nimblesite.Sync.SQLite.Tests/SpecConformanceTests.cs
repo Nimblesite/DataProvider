@@ -338,8 +338,8 @@ public sealed partial class SpecConformanceTests : IDisposable
         );
 
         // Assert
-        Assert.IsType<StringSyncOk>(triggersResult);
-        var triggers = ((StringSyncOk)triggersResult).Value;
+
+        var triggers = (Assert.IsType<StringSyncOk>(triggersResult)).Value;
         Assert.Contains("strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", triggers);
     }
 
@@ -414,13 +414,13 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Act: Fetch first batch of 3
         var result1 = SyncLogRepository.FetchChanges(_db, 0, 3);
-        Assert.IsType<SyncLogListOk>(result1);
-        var batch1 = ((SyncLogListOk)result1).Value;
+
+        var batch1 = (Assert.IsType<SyncLogListOk>(result1)).Value;
 
         // Act: Fetch next batch from where we left off
         var result2 = SyncLogRepository.FetchChanges(_db, batch1[^1].Version, 3);
-        Assert.IsType<SyncLogListOk>(result2);
-        var batch2 = ((SyncLogListOk)result2).Value;
+
+        var batch2 = (Assert.IsType<SyncLogListOk>(result2)).Value;
 
         // Assert
         Assert.Equal(3, batch1.Count);
@@ -596,8 +596,8 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Act
         var result = TriggerGenerator.GetTableColumns(_db, "CompositePkTable");
-        Assert.IsType<ColumnInfoListOk>(result);
-        var columns = ((ColumnInfoListOk)result).Value;
+
+        var columns = (Assert.IsType<ColumnInfoListOk>(result)).Value;
 
         // Assert: Multiple PK columns detected
         var pkColumns = columns.Where(c => c.IsPrimaryKey).ToList();

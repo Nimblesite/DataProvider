@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Xunit;
+using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -191,8 +192,8 @@ public sealed class EndToEndSyncTests : IDisposable
         );
 
         // Assert: No error, but nothing applied
-        Assert.IsType<BatchApplyResultOk>(result);
-        var applyResult = ((BatchApplyResultOk)result).Value;
+
+        var applyResult = (Assert.IsType<BatchApplyResultOk>(result)).Value;
         Assert.Equal(0, applyResult.AppliedCount);
         Assert.Null(GetPerson(_targetDb, "p1"));
     }
@@ -256,20 +257,14 @@ public sealed class EndToEndSyncTests : IDisposable
     {
         using var cmd = db.CreateCommand();
         cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private static void UpdatePerson(SqliteConnection db, string id, string name, string email)
     {
         using var cmd = db.CreateCommand();
         cmd.CommandText = "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private static void DeletePerson(SqliteConnection db, string id)

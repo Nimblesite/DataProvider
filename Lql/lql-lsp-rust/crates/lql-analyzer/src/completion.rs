@@ -341,6 +341,7 @@ fn lambda_completions(prefix: &str) -> Vec<CompletionItem> {
 mod tests {
     use super::*;
     use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
+    use crate::test_support::make_col;
 
     fn empty_ctx() -> CompletionContext {
         CompletionContext {
@@ -353,13 +354,9 @@ mod tests {
         }
     }
 
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
+    // Implements [LQL-COMPLETION-TEST-LABELS].
+    fn completion_labels(items: Vec<CompletionItem>) -> Vec<String> {
+        items.into_iter().map(|item| item.label).collect()
     }
 
     fn sample_schema() -> SchemaCache {
@@ -392,10 +389,10 @@ mod tests {
         let scope = ScopeMap::new();
         let items = get_completions(&empty_ctx(), &scope, None);
         assert!(!items.is_empty());
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"let"));
-        assert!(labels.contains(&"count"));
-        assert!(labels.contains(&"concat"));
+        let labels = completion_labels(items);
+        assert!(labels.contains(&"let".to_string()));
+        assert!(labels.contains(&"count".to_string()));
+        assert!(labels.contains(&"concat".to_string()));
     }
 
     #[test]
@@ -403,19 +400,18 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
         let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"select"));
-        assert!(labels.contains(&"filter"));
-        assert!(labels.contains(&"join"));
-        assert!(labels.contains(&"left_join"));
-        assert!(labels.contains(&"group_by"));
-        assert!(labels.contains(&"order_by"));
-        assert!(labels.contains(&"having"));
-        assert!(labels.contains(&"limit"));
-        assert!(labels.contains(&"offset"));
-        assert!(labels.contains(&"union"));
-        assert!(labels.contains(&"insert"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"select".to_string()));
+        assert!(labels.contains(&"filter".to_string()));
+        assert!(labels.contains(&"join".to_string()));
+        assert!(labels.contains(&"left_join".to_string()));
+        assert!(labels.contains(&"group_by".to_string()));
+        assert!(labels.contains(&"order_by".to_string()));
+        assert!(labels.contains(&"having".to_string()));
+        assert!(labels.contains(&"limit".to_string()));
+        assert!(labels.contains(&"offset".to_string()));
+        assert!(labels.contains(&"union".to_string()));
+        assert!(labels.contains(&"insert".to_string()));
     }
 
     #[test]
@@ -423,25 +419,23 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.in_lambda = true;
         let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"and"));
-        assert!(labels.contains(&"or"));
-        assert!(labels.contains(&"not"));
-        assert!(labels.contains(&"is"));
-        assert!(labels.contains(&"in"));
-        assert!(labels.contains(&"like"));
-        assert!(labels.contains(&"exists"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"and".to_string()));
+        assert!(labels.contains(&"or".to_string()));
+        assert!(labels.contains(&"not".to_string()));
+        assert!(labels.contains(&"is".to_string()));
+        assert!(labels.contains(&"in".to_string()));
+        assert!(labels.contains(&"like".to_string()));
+        assert!(labels.contains(&"exists".to_string()));
     }
 
     #[test]
     fn test_not_in_lambda_excludes_logical_ops() {
         let ctx = empty_ctx();
         let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(!labels.contains(&"and"));
-        assert!(!labels.contains(&"or"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(!labels.contains(&"and".to_string()));
+        assert!(!labels.contains(&"or".to_string()));
     }
 
     // ── prefix filtering ──
@@ -480,12 +474,12 @@ mod tests {
         let schema = sample_schema();
         let scope = ScopeMap::new();
         let items = get_completions(&ctx, &scope, Some(&schema));
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"id"));
-        assert!(labels.contains(&"name"));
-        assert!(labels.contains(&"email"));
+        let labels = completion_labels(items);
+        assert!(labels.contains(&"id".to_string()));
+        assert!(labels.contains(&"name".to_string()));
+        assert!(labels.contains(&"email".to_string()));
         // Should ONLY return columns when qualifier matches
-        assert!(!labels.contains(&"select"));
+        assert!(!labels.contains(&"select".to_string()));
     }
 
     #[test]
@@ -547,9 +541,8 @@ mod tests {
         let ctx = empty_ctx();
         let mut scope = ScopeMap::new();
         scope.add_binding("my_query".to_string(), 0, 0);
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"my_query"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"my_query".to_string()));
     }
 
     #[test]
@@ -557,9 +550,8 @@ mod tests {
         let ctx = empty_ctx();
         let mut scope = ScopeMap::new();
         scope.add_table("my_table".to_string());
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"my_table"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"my_table".to_string()));
     }
 
     #[test]
@@ -603,9 +595,8 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
         let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        let unique: std::collections::HashSet<&&str> = labels.iter().collect();
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        let unique: std::collections::HashSet<&String> = labels.iter().collect();
         assert_eq!(labels.len(), unique.len(), "Duplicate completions found");
     }
 
@@ -629,11 +620,10 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.word_prefix = "co".to_string();
         let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"count"));
-        assert!(labels.contains(&"coalesce"));
-        assert!(labels.contains(&"concat"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"count".to_string()));
+        assert!(labels.contains(&"coalesce".to_string()));
+        assert!(labels.contains(&"concat".to_string()));
     }
 
     // ── many columns ──

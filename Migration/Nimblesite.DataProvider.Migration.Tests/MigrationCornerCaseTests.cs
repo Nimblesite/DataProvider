@@ -746,12 +746,10 @@ public sealed class MigrationCornerCaseTests
             Assert.Equal(4, operations.Count(op => op is AddColumnOperation));
             Assert.Equal(2, operations.Count(op => op is CreateIndexOperation));
 
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: operations,
+                logger: _logger
             );
 
             Assert.True(result is MigrationApplyResultOk);
@@ -815,12 +813,10 @@ public sealed class MigrationCornerCaseTests
             Assert.Single(operations);
             Assert.IsType<CreateIndexOperation>(operations[0]);
 
-            var result = MigrationRunner.Apply(
-                connection,
-                operations,
-                SqliteDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
+            var result = SqliteTestDb.TryApply(
+                connection: connection,
+                operations: operations,
+                logger: _logger
             );
 
             Assert.True(result is MigrationApplyResultOk);
@@ -885,12 +881,10 @@ public sealed class MigrationCornerCaseTests
             (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
         ).Value;
 
-        return MigrationRunner.Apply(
-            connection,
-            operations,
-            SqliteDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        return SqliteTestDb.TryApply(
+            connection: connection,
+            operations: operations,
+            logger: _logger
         );
     }
 

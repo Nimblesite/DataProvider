@@ -144,8 +144,7 @@ public sealed class ChangeApplierTests : IDisposable
             Logger
         ); // Always FK violation
 
-        Assert.IsType<BatchApplyResultError>(result);
-        var failure = (BatchApplyResultError)result;
+        var failure = Assert.IsType<BatchApplyResultError>(result);
         Assert.IsType<SyncErrorDeferredChangeFailed>(failure.Value);
     }
 

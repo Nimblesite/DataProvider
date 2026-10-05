@@ -9,6 +9,8 @@ using SchemaIntegrityOk = Outcome.Result<
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
+// Implements [MIG-TEST-DIFF-SHARED].
+
 // Implements [MIG-EXISTING-DATABASE-UPGRADE] and [RLS-DIFF].
 [Collection(PostgresTestSuite.Name)]
 public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixture)
@@ -49,7 +51,9 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         Migrate(connection, ForeignKeySchema(hasReferenceColumn: false));
         var desired = ForeignKeySchema(hasReferenceColumn: true);
         var addedColumn = Assert.Single(
-            Diff(Inspect(connection), desired).OfType<AddColumnOperation>()
+            SchemaDiffAssertions
+                .Diff(current: Inspect(connection), desired: desired)
+                .OfType<AddColumnOperation>()
         );
         Apply(connection, [addedColumn]);
 
@@ -66,7 +70,7 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         using var connection = fixture.CreateDatabase("policy_upgrade");
         Migrate(connection, PolicySchema("IS NOT NULL"));
         var desired = PolicySchema("IS NULL");
-        var upgrade = Diff(Inspect(connection), desired);
+        var upgrade = SchemaDiffAssertions.Diff(current: Inspect(connection), desired: desired);
 
         Assert.NotEmpty(upgrade);
         Assert.Contains(VerifyMismatches(connection, desired), m => m.Contains("policy"));
@@ -85,7 +89,11 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         using var connection = fixture.CreateDatabase("foreign_key_cleanup");
         Migrate(connection, CleanupSchema(includeObsolete: true));
         var desired = CleanupSchema(includeObsolete: false);
-        var cleanup = Diff(Inspect(connection), desired, destructive: true);
+        var cleanup = SchemaDiffAssertions.Diff(
+            current: Inspect(connection),
+            desired: desired,
+            destructive: true
+        );
 
         var drop = Assert.Single(cleanup.OfType<DropForeignKeyOperation>());
         Assert.Equal("FK_children_obsolete_id", drop.ConstraintName);
@@ -245,24 +253,17 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
             )
             .Value;
 
-    private static IReadOnlyList<SchemaOperation> Diff(
-        SchemaDefinition current,
-        SchemaDefinition desired,
-        bool destructive = false
-    ) =>
-        Assert
-            .IsType<OperationsResultOk>(
-                SchemaDiff.Calculate(current, desired, allowDestructive: destructive)
-            )
-            .Value;
-
     private static IReadOnlyList<SchemaOperation> Migrate(
         NpgsqlConnection connection,
         SchemaDefinition desired,
         bool destructive = false
     )
     {
-        var operations = Diff(Inspect(connection), desired, destructive);
+        var operations = SchemaDiffAssertions.Diff(
+            current: Inspect(connection),
+            desired: desired,
+            destructive: destructive
+        );
         Apply(connection, operations, destructive);
         return operations;
     }

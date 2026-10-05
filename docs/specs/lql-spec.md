@@ -104,6 +104,14 @@ limit(n)
 * Defaults to PostgreSQL if not specified.
 * Equivalent select, filter, join, grouping, ordering, and paging requests retain their meaning on PostgreSQL, SQLite, and SQL Server. A target dialect that cannot render a requested statement must return an error rather than silently dropping an operation.
 
+### Shared Rendering [LQL-RENDER-SHARED]
+
+The three dialect extension APIs share internal statement validation, subquery
+dispatch, identifier fallback, and conversion of rendering exceptions to SQL
+errors. Dialect delegates retain pipeline rendering, paging, and PostgreSQL's
+bare-identifier formatting. Existing null-argument behavior and public method
+signatures remain unchanged. SQL-model rendering uses the same error boundary.
+
 ### Identifier Casing
 
 All identifiers (table names, column names) are **case-insensitive** and transpile to **lowercase** in generated SQL. This is a fundamental design rule that ensures LQL works identically across all database platforms.
@@ -131,3 +139,32 @@ This guarantees portability:
 The parser performs semantic validation during the parsing phase:
 - Identifiers starting with digits trigger "Syntax error: Identifier cannot start with a number"
 - Undefined variables (identifiers with underscores used as pipeline bases) trigger "Syntax error: Undefined variable"
+
+### Shared portable function mappings [LQL-FUNCTION-MAPPING-SHARED]
+
+All dialect providers reuse mappings for count, sum, average, minimum, maximum,
+coalesce, uppercase and lowercase. PostgreSQL and SQL Server additionally share
+standard substring, EXISTS and window-function mappings. Providers retain their
+exact supported-function sets and their existing date, length and SQLite substring
+handlers; unknown functions retain the existing fallback behavior.
+
+### Shared error-test execution [LQL-ERROR-TEST-EXECUTION]
+
+Named parser-error tests share parsing and error-type/message assertions. Every
+input and expected message remains unchanged, including the original ordinal
+comparison. Syntax cases retain non-null source positions; malformed syntax,
+invalid characters, and formatted errors retain their line/column bounds checks.
+The identifier-validation theory still checks both accepted table names against
+all three SQL dialects.
+
+### Shared completion-test labels [LQL-COMPLETION-TEST-LABELS]
+
+Completion tests collect labels through one helper while retaining every context, scope, keyword assertion, ordering check, and duplicate-label check. The helper keeps labels in a vector so repeated labels remain observable.
+
+### Shared context ordering [LQL-CONTEXT-ORDERING-SHARED]
+
+PostgreSQL, SQLite, and SQL Server contexts append ordering items through one internal Core helper. Public method signatures and XML documentation remain intact. Columns and directions retain their original order and values, and existing dialect integration tests cover each public path.
+
+### Shared analyzer column fixture [LQL-TEST-COLUMN-FIXTURE]
+
+Rust completion, hover and schema tests reuse one test-only column constructor, preserving all names, SQL types, nullability and primary-key flags at their original call sites.

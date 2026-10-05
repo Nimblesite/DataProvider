@@ -95,10 +95,18 @@ public sealed class TestDb : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    public IReadOnlyList<SyncLogEntry> FetchChanges(long fromVersion, int limit)
+    public IReadOnlyList<SyncLogEntry> FetchChanges(long fromVersion, int limit) =>
+        FetchChanges(db: Connection, fromVersion: fromVersion, limit: limit);
+
+    // Implements [SYNC-TEST-LOG-READER].
+    internal static IReadOnlyList<SyncLogEntry> FetchChanges(
+        SqliteConnection db,
+        long fromVersion,
+        int limit
+    )
     {
         var entries = new List<SyncLogEntry>();
-        using var cmd = Connection.CreateCommand();
+        using var cmd = db.CreateCommand();
         cmd.CommandText = """
             SELECT version, table_name, pk_value, operation, payload, origin, timestamp
             FROM _sync_log

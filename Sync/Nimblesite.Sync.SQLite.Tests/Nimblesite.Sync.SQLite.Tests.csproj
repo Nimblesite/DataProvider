@@ -23,7 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../Migration/Nimblesite.DataProvider.Migration.SQLite/Nimblesite.DataProvider.Migration.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/PersonCommandParameters.cs" Link="Shared/PersonCommandParameters.cs" />
   </ItemGroup>
 </Project>

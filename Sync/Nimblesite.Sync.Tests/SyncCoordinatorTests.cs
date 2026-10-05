@@ -48,8 +48,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PullFromServer(fromVersion: lastVersion, batch: new BatchConfig(100));
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (Assert.IsType<PullResultOk>(result)).Value;
         Assert.Equal(0, pull.ChangesApplied);
         Assert.Equal(0, pull.FromVersion);
         Assert.Equal(0, pull.ToVersion);
@@ -64,8 +63,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (Assert.IsType<PullResultOk>(result)).Value;
         Assert.Equal(2, pull.ChangesApplied);
         Assert.Equal(0, pull.FromVersion);
         Assert.True(pull.ToVersion > 0);
@@ -92,8 +90,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (Assert.IsType<PullResultOk>(result)).Value;
         // Only 1 change applied (Alice), p2 skipped because it's from own origin
         Assert.Equal(1, pull.ChangesApplied);
         Assert.Equal("Alice", GetPersonName(_clientDb, "p1"));
@@ -111,8 +108,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(10)); // Small batches
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (Assert.IsType<PullResultOk>(result)).Value;
         Assert.Equal(25, pull.ChangesApplied);
 
         // Verify all records
@@ -131,8 +127,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100, 3)); // Allow retries
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (Assert.IsType<PullResultOk>(result)).Value;
         Assert.Equal(2, pull.ChangesApplied);
 
         Assert.Equal("Parent One", GetParentName(_clientDb, "parent1"));
@@ -155,8 +150,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
-        Assert.IsType<PullResultError>(result);
-        var error = ((PullResultError)result).Value;
+        var error = (Assert.IsType<PullResultError>(result)).Value;
         Assert.IsType<SyncErrorDatabase>(error);
     }
 
@@ -209,8 +203,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     {
         var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
 
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
+        var push = (Assert.IsType<PushResultOk>(result)).Value;
         Assert.Equal(0, push.ChangesPushed);
     }
 
@@ -222,8 +215,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
 
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
+        var push = (Assert.IsType<PushResultOk>(result)).Value;
         Assert.Equal(2, push.ChangesPushed);
 
         Assert.Equal("Charlie", GetPersonName(_serverDb, "p1"));
@@ -240,8 +232,7 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(10));
 
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
+        var push = (Assert.IsType<PushResultOk>(result)).Value;
         Assert.Equal(30, push.ChangesPushed);
     }
 
@@ -291,8 +282,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
-        Assert.IsType<SyncResultOk>(result);
-        var sync = ((SyncResultOk)result).Value;
+        var sync = (Assert.IsType<SyncResultOk>(result)).Value;
         Assert.Equal(1, sync.Pull.ChangesApplied);
         Assert.Equal(1, sync.Push.ChangesPushed);
 
@@ -533,35 +523,9 @@ public sealed class SyncCoordinatorTests : IDisposable
     {
         try
         {
-            var entries = new List<SyncLogEntry>();
-            using var cmd = db.CreateCommand();
-            cmd.CommandText = """
-                SELECT version, table_name, pk_value, operation, payload, origin, timestamp
-                FROM _sync_log
-                WHERE version > $fromVersion
-                ORDER BY version ASC
-                LIMIT $limit
-                """;
-            cmd.Parameters.AddWithValue("$fromVersion", fromVersion);
-            cmd.Parameters.AddWithValue("$limit", limit);
-
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                entries.Add(
-                    new SyncLogEntry(
-                        reader.GetInt64(0),
-                        reader.GetString(1),
-                        reader.GetString(2),
-                        ParseOperation(reader.GetString(3)),
-                        reader.IsDBNull(4) ? null : reader.GetString(4),
-                        reader.GetString(5),
-                        reader.GetString(6)
-                    )
-                );
-            }
-
-            return new SyncLogListOk(entries);
+            return new SyncLogListOk(
+                TestDb.FetchChanges(db: db, fromVersion: fromVersion, limit: limit)
+            );
         }
         catch (SqliteException ex)
         {
@@ -758,15 +722,6 @@ public sealed class SyncCoordinatorTests : IDisposable
         cmd.Parameters.AddWithValue("$v", version.ToString(CultureInfo.InvariantCulture));
         cmd.ExecuteNonQuery();
     }
-
-    private static SyncOperation ParseOperation(string op) =>
-        op switch
-        {
-            "insert" => SyncOperation.Insert,
-            "update" => SyncOperation.Update,
-            "delete" => SyncOperation.Delete,
-            _ => throw new ArgumentException($"Unknown operation: {op}"),
-        };
 
     public void Dispose()
     {

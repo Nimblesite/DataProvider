@@ -3,7 +3,7 @@ using Outcome;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed class CodeGenerationExtendedE2ETests
+public sealed partial class CodeGenerationExtendedE2ETests
 {
     private static readonly IReadOnlyList<DatabaseColumn> OrderColumns =
     [

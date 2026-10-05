@@ -1129,9 +1129,58 @@ CREATE UNIQUE INDEX idx_users_email ON Users(Email);
 
 ---
 
+## Shared SQLite Test Lifetime [MIG-TEST-SQLITE-LIFETIME]
+
+Migration integration tests reuse `SqliteTestDb.WithDb` for a fresh temporary
+file database, connection disposal, and cleanup. Each test retains its own
+schema, migration steps, and assertions inside the callback. Cleanup failures
+remain visible; no test-local helper swallows file-deletion failures. Dispose
+the connection before deleting the file, including when the callback fails.
+
+## Shared PostgreSQL Test Runner [MIG-TEST-POSTGRES-RUNNER]
+
+PostgreSQL integration tests use `PostgresTestDb.TryApply` to bind the PostgreSQL
+DDL generator once while preserving each call's options, connection, and logger.
+The helper returns the original runner result without asserting success, so
+tests retain their independent success, failure, idempotency, and catalog checks.
+
 ## References
 
 - [SQLite CREATE TABLE](https://sqlite.org/lang_createtable.html)
 - [PostgreSQL CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html)
 - [SQL Server CREATE TABLE](https://docs.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql)
 - [Prisma Migrate](https://www.prisma.io/docs/orm/prisma-migrate)
+
+### Shared migration test runners [MIG-TEST-RUNNER-SHARED]
+
+Migration tests bind SQLite and PostgreSQL DDL through their canonical test helpers.
+Delegation preserves each call's connection, operation list, options, and logger.
+TryApply returns the original result without asserting success so intentional
+failure cases retain their assertions. Generic runner and verification-callback
+coverage continues to call MigrationRunner directly.
+
+### Shared diff success assertions [MIG-TEST-DIFF-SHARED]
+
+Migration tests reuse one diff executor and successful-result assertion. Each case
+retains its current and desired schemas, additive/destructive option, logger, and
+operation assertions. The successful Outcome case is sealed, so the shared exact
+type assertion preserves the former `result is OperationsResultOk` checks.
+Destructive-cleanup cases remain individually runnable in a partial fixture.
+
+### Shared users schema fixture [MIG-TEST-USER-FIXTURE]
+
+Schema-diff tests extend the existing users fixture to share the UUID primary key, optional email column, and optional email index. An email index includes its email column. Schema names, public schema/table names, types, nullability, index defaults, destructive flags, and every operation assertion remain unchanged.
+
+### Shared YAML roundtrip table selection [MIG-TEST-YAML-ROUNDTRIP]
+
+Schema YAML tests share serialization, deserialization, and selecting the first restored table. All original schema definitions, index/check assertions, and defaults remain explicit in their cases. Tests that inspect YAML text retain their separate serialization step.
+
+### Shared table existence assertions [MIG-TEST-TABLE-ASSERTIONS]
+
+Migration integration cases share the same four named table existence assertions, preserving each original check and migration scenario.
+
+### Shared SQLite inspect-diff-apply pipeline [MIG-TEST-SQLITE-SEED]
+
+SQLite migration cases reuse the existing seed helper and inspect its returned migration result. Cases that inspect intermediate operations keep their local pipelines. Existing result assertions, schema declarations and logger arguments are preserved.
+
+The shared users fixture also supplies the optional obsolete `old_field` column for both additive and destructive cleanup cases, preserving their distinct migration flags and assertions. Implements [MIG-TEST-USER-FIXTURE].

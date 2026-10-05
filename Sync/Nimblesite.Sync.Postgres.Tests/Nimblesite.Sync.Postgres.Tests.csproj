@@ -40,4 +40,7 @@
       Link="Shared\PostgresCollection.cs"
     />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/PersonCommandParameters.cs" Link="Shared/PersonCommandParameters.cs" />
+  </ItemGroup>
 </Project>

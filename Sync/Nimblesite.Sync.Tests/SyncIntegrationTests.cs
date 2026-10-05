@@ -407,52 +407,6 @@ public sealed class SyncIntegrationTests : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    private static IReadOnlyList<SyncLogEntry> FetchChanges(
-        SqliteConnection db,
-        long fromVersion,
-        int limit
-    )
-    {
-        var entries = new List<SyncLogEntry>();
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = """
-            SELECT version, table_name, pk_value, operation, payload, origin, timestamp
-            FROM _sync_log
-            WHERE version > $fromVersion
-            ORDER BY version ASC
-            LIMIT $limit
-            """;
-        cmd.Parameters.AddWithValue("$fromVersion", fromVersion);
-        cmd.Parameters.AddWithValue("$limit", limit);
-
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            entries.Add(
-                new SyncLogEntry(
-                    reader.GetInt64(0),
-                    reader.GetString(1),
-                    reader.GetString(2),
-                    ParseOperation(reader.GetString(3)),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.GetString(5),
-                    reader.GetString(6)
-                )
-            );
-        }
-
-        return entries;
-    }
-
-    private static SyncOperation ParseOperation(string op) =>
-        op switch
-        {
-            "insert" => SyncOperation.Insert,
-            "update" => SyncOperation.Update,
-            "delete" => SyncOperation.Delete,
-            _ => throw new ArgumentException($"Unknown operation: {op}"),
-        };
-
     private int PullChanges(
         SqliteConnection source,
         SqliteConnection target,
@@ -477,7 +431,10 @@ public sealed class SyncIntegrationTests : IDisposable
             var result = BatchManager.ProcessAllBatches(
                 lastVersion,
                 new BatchConfig(batchSize),
-                (from, limit) => new SyncLogListOk(FetchChanges(source, from, limit)),
+                (from, limit) =>
+                    new SyncLogListOk(
+                        TestDb.FetchChanges(db: source, fromVersion: from, limit: limit)
+                    ),
                 batch =>
                 {
                     var applyResult = ChangeApplier.ApplyBatch(

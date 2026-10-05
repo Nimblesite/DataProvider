@@ -55,13 +55,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
 
         var ops = ((OperationsResultOk)operations).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: ops);
 
         // Assert
         Assert.True(
@@ -112,13 +106,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert
         Assert.True(
@@ -154,13 +142,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // Define v2 with new columns
         var v2 = Schema
@@ -187,13 +169,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Equal(2, upgradeOps.Count);
         Assert.All(upgradeOps, op => Assert.IsType<AddColumnOperation>(op));
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            upgradeOps,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: upgradeOps);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -222,13 +198,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 adds a new table
         var v2 = Schema
@@ -261,13 +231,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Single(upgradeOps);
         Assert.IsType<CreateTableOperation>(upgradeOps[0]);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            upgradeOps,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: upgradeOps);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -296,13 +260,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 adds an index
         var v2 = Schema
@@ -328,13 +286,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Single(upgradeOps);
         Assert.IsType<CreateIndexOperation>(upgradeOps[0]);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            upgradeOps,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: upgradeOps);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -368,13 +320,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
                 (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
             ).Value;
 
-            var result = MigrationRunner.Apply(
-                _connection,
-                operations,
-                PostgresDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = Apply(operations: operations);
 
             Assert.True(result is MigrationApplyResultOk);
 
@@ -411,13 +357,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -466,13 +406,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(
             result is MigrationApplyResultOk,
@@ -505,13 +439,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert - Migration succeeded
         Assert.True(
@@ -558,13 +486,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: operations);
 
         // Act - Insert first venue
         using var insertCmd = _connection.CreateCommand();
@@ -623,13 +545,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert
         Assert.True(
@@ -693,13 +609,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: operations);
 
         // Create two regions
         using var regionCmd = _connection.CreateCommand();
@@ -760,13 +670,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
                 (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
             ).Value;
 
-            var result = MigrationRunner.Apply(
-                _connection,
-                operations,
-                PostgresDdlGenerator.Generate,
-                MigrationOptions.Default,
-                _logger
-            );
+            var result = Apply(operations: operations);
 
             // Both runs should succeed - IF NOT EXISTS handles already-existing index
             Assert.True(
@@ -811,13 +715,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 changes to expression index (different name since semantically different)
         var v2 = Schema
@@ -845,13 +743,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
 
         // Apply the upgrade
-        var result = MigrationRunner.Apply(
-            _connection,
-            upgradeOps,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Destructive,
-            _logger
-        );
+        var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
 
         Assert.True(
             result is MigrationApplyResultOk,
@@ -890,13 +782,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 changes back to simple column index (different name)
         var v2 = Schema
@@ -923,13 +809,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Contains(upgradeOps, op => op is DropIndexOperation);
         Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            upgradeOps,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Destructive,
-            _logger
-        );
+        var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
 
         Assert.True(
             result is MigrationApplyResultOk,
@@ -971,13 +851,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 wants to change to expression index with SAME name
         // This is a semantic change - case-sensitive to case-insensitive
@@ -1023,13 +897,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         var v1Ops = (
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
         ).Value;
-        _ = MigrationRunner.Apply(
-            _connection,
-            v1Ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        _ = Apply(operations: v1Ops);
 
         // v2 removes dropme table
         var v2 = Schema
@@ -1052,13 +920,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         Assert.Single(operations);
         Assert.IsType<DropTableOperation>(operations[0]);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Destructive,
-            _logger
-        );
+        var result = Apply(operations: operations, options: MigrationOptions.Destructive);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -1097,13 +959,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1144,13 +1000,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1210,13 +1060,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1262,13 +1106,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1318,13 +1156,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1386,13 +1218,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
             (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
         ).Value;
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -1463,13 +1289,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         ).Value;
 
         // Act
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert — migration succeeded
         Assert.True(
@@ -1555,13 +1375,7 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         ).Value;
 
         // Act
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
-        );
+        var result = Apply(operations: operations);
 
         // Assert
         Assert.True(
@@ -1587,6 +1401,18 @@ public sealed class PostgresMigrationTests(PostgresContainerFixture fixture) : I
         command.Parameters.AddWithValue("@gender", gender);
         command.ExecuteNonQuery();
     }
+
+    // Implements [MIG-TEST-POSTGRES-RUNNER].
+    private MigrationApplyResult Apply(
+        IReadOnlyList<SchemaOperation> operations,
+        MigrationOptions? options = null
+    ) =>
+        PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: operations,
+            logger: _logger,
+            options: options
+        );
 
     private SchemaDefinition InspectPublic() =>
         ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)).Value;

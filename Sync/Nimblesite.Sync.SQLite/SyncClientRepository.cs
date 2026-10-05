@@ -2,6 +2,8 @@ using Microsoft.Data.Sqlite;
 
 namespace Nimblesite.Sync.SQLite;
 
+// Implements [SYNC-SCALAR-READ-SHARED].
+
 /// <summary>
 /// Repository for managing sync clients in SQLite.
 /// Implements spec Section 13 (Tombstone Retention) client tracking.
@@ -13,7 +15,11 @@ public static class SyncClientRepository
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>List of sync clients or database error.</returns>
-    public static SyncClientListResult GetAll(SqliteConnection connection)
+    public static SyncClientListResult GetAll(SqliteConnection connection) =>
+        GetAll(connection: connection, failurePrefix: "Failed to get sync clients");
+
+    // Implements [SYNC-CLIENT-API-SHARED].
+    internal static SyncClientListResult GetAll(SqliteConnection connection, string failurePrefix)
     {
         try
         {
@@ -29,23 +35,14 @@ public static class SyncClientRepository
 
             while (reader.Read())
             {
-                clients.Add(
-                    new SyncClient(
-                        OriginId: reader.GetString(0),
-                        LastSyncVersion: reader.GetInt64(1),
-                        LastSyncTimestamp: reader.GetString(2),
-                        CreatedAt: reader.GetString(3)
-                    )
-                );
+                clients.Add(ReadClient(reader: reader));
             }
 
             return new SyncClientListOk(clients);
         }
         catch (SqliteException ex)
         {
-            return new SyncClientListError(
-                new SyncErrorDatabase($"Failed to get sync clients: {ex.Message}")
-            );
+            return new SyncClientListError(new SyncErrorDatabase($"{failurePrefix}: {ex.Message}"));
         }
     }
 
@@ -74,12 +71,7 @@ public static class SyncClientRepository
                 return new SyncClientOk(null);
             }
 
-            var client = new SyncClient(
-                OriginId: reader.GetString(0),
-                LastSyncVersion: reader.GetInt64(1),
-                LastSyncTimestamp: reader.GetString(2),
-                CreatedAt: reader.GetString(3)
-            );
+            var client = ReadClient(reader: reader);
 
             return new SyncClientOk(client);
         }
@@ -98,7 +90,18 @@ public static class SyncClientRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="client">Client to upsert.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Upsert(SqliteConnection connection, SyncClient client)
+    public static BoolSyncResult Upsert(SqliteConnection connection, SyncClient client) =>
+        Upsert(
+            connection: connection,
+            client: client,
+            failurePrefix: "Failed to upsert sync client"
+        );
+
+    internal static BoolSyncResult Upsert(
+        SqliteConnection connection,
+        SyncClient client,
+        string failurePrefix
+    )
     {
         try
         {
@@ -120,9 +123,7 @@ public static class SyncClientRepository
         }
         catch (SqliteException ex)
         {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to upsert sync client: {ex.Message}")
-            );
+            return new BoolSyncError(new SyncErrorDatabase($"{failurePrefix}: {ex.Message}"));
         }
     }
 
@@ -156,25 +157,13 @@ public static class SyncClientRepository
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Minimum version or 0 if no clients, or database error.</returns>
-    public static LongSyncResult GetMinVersion(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT MIN(last_sync_version) FROM _sync_clients";
-
-            var result = cmd.ExecuteScalar();
-            var version = result is long v ? v : 0;
-
-            return new LongSyncOk(version);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get minimum sync version: {ex.Message}")
-            );
-        }
-    }
+    public static LongSyncResult GetMinVersion(SqliteConnection connection) =>
+        SqliteCommandExecution.ReadInt64OrZero(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "SELECT MIN(last_sync_version) FROM _sync_clients",
+            failurePrefix: "Failed to get minimum sync version"
+        );
 
     /// <summary>
     /// Deletes multiple sync clients by origin IDs.
@@ -186,6 +175,17 @@ public static class SyncClientRepository
     public static IntSyncResult DeleteMultiple(
         SqliteConnection connection,
         IEnumerable<string> originIds
+    ) =>
+        DeleteMultiple(
+            connection: connection,
+            originIds: originIds,
+            failurePrefix: "Failed to delete sync clients"
+        );
+
+    internal static IntSyncResult DeleteMultiple(
+        SqliteConnection connection,
+        IEnumerable<string> originIds,
+        string failurePrefix
     )
     {
         try
@@ -203,9 +203,15 @@ public static class SyncClientRepository
         }
         catch (SqliteException ex)
         {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete sync clients: {ex.Message}")
-            );
+            return new IntSyncError(new SyncErrorDatabase($"{failurePrefix}: {ex.Message}"));
         }
     }
+
+    private static SyncClient ReadClient(SqliteDataReader reader) =>
+        new(
+            OriginId: reader.GetString(0),
+            LastSyncVersion: reader.GetInt64(1),
+            LastSyncTimestamp: reader.GetString(2),
+            CreatedAt: reader.GetString(3)
+        );
 }

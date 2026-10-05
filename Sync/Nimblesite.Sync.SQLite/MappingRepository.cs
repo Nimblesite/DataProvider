@@ -1,7 +1,10 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using static Nimblesite.Sync.SQLite.SqliteCommandExecution;
 
 namespace Nimblesite.Sync.SQLite;
+
+// Implements [SYNC-SCALAR-READ-SHARED].
 
 /// <summary>
 /// SQLite repository for sync mapping state and record hashes.
@@ -9,35 +12,6 @@ namespace Nimblesite.Sync.SQLite;
 /// </summary>
 public static class MappingRepository
 {
-    /// <summary>
-    /// Creates, configures, and executes a command, converting SqliteException
-    /// into the supplied error result. Shared by all repository operations.
-    /// </summary>
-    private static TResult Execute<TResult>(
-        SqliteConnection connection,
-        Action<SqliteCommand> setSql,
-        (string Name, object Value)[] parameters,
-        Func<SqliteCommand, TResult> execute,
-        Func<string, TResult> onError
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            setSql(cmd);
-            foreach (var (name, value) in parameters)
-            {
-                cmd.Parameters.AddWithValue(name, value);
-            }
-
-            return execute(cmd);
-        }
-        catch (SqliteException ex)
-        {
-            return onError(ex.Message);
-        }
-    }
-
     /// <summary>
     /// Maps the current reader row to a MappingStateEntry.
     /// </summary>

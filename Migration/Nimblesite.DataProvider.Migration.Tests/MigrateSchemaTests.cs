@@ -117,10 +117,7 @@ public sealed class MigrateSchemaTests(PostgresContainerFixture fixture) : IAsyn
         Assert.Contains("venues", tablesCreated);
 
         // Verify tables exist in database
-        Assert.True(TableExists("countries"));
-        Assert.True(TableExists("regions"));
-        Assert.True(TableExists("suburbs"));
-        Assert.True(TableExists("venues"));
+        AssertTestTablesExist();
     }
 
     [Fact]
@@ -190,10 +187,7 @@ public sealed class MigrateSchemaTests(PostgresContainerFixture fixture) : IAsyn
         Assert.Empty(result.Errors);
 
         // All tables should now exist
-        Assert.True(TableExists("countries"));
-        Assert.True(TableExists("regions"));
-        Assert.True(TableExists("suburbs"));
-        Assert.True(TableExists("venues"));
+        AssertTestTablesExist();
     }
 
     [Fact]
@@ -338,10 +332,7 @@ public sealed class MigrateSchemaTests(PostgresContainerFixture fixture) : IAsyn
         // Assert
         Assert.True(result.Success);
         Assert.Equal(4, result.TablesCreated);
-        Assert.True(TableExists("countries"));
-        Assert.True(TableExists("regions"));
-        Assert.True(TableExists("suburbs"));
-        Assert.True(TableExists("venues"));
+        AssertTestTablesExist();
     }
 
     [Fact]
@@ -371,6 +362,15 @@ public sealed class MigrateSchemaTests(PostgresContainerFixture fixture) : IAsyn
         Assert.True(result.Success);
         Assert.Equal(0, result.TablesCreated);
         Assert.Empty(result.Errors);
+    }
+
+    // Implements [MIG-TEST-TABLE-ASSERTIONS].
+    private void AssertTestTablesExist()
+    {
+        Assert.True(TableExists("countries"));
+        Assert.True(TableExists("regions"));
+        Assert.True(TableExists("suburbs"));
+        Assert.True(TableExists("venues"));
     }
 
     private bool TableExists(string tableName)

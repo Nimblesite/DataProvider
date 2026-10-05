@@ -10,13 +10,14 @@ internal static class SqliteTestDb
 {
     private static readonly ILogger Logger = NullLogger.Instance;
 
+    // Implements [MIG-TEST-SQLITE-LIFETIME].
     public static void WithDb(Action<SqliteConnection> test)
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"sqlitemig_{Guid.NewGuid()}.db");
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
-        connection.Open();
         try
         {
+            using var connection = new SqliteConnection($"Data Source={dbPath}");
+            connection.Open();
             test(connection);
         }
         finally
@@ -58,12 +59,11 @@ internal static class SqliteTestDb
                 SchemaDiff.Calculate(current, schema, allowDestructive, logger: Logger)
             )
             .Value;
-        return MigrationRunner.Apply(
-            connection,
-            ops,
-            SqliteDdlGenerator.Generate,
-            allowDestructive ? MigrationOptions.Destructive : MigrationOptions.Default,
-            Logger
+        return SqliteTestDb.TryApply(
+            connection: connection,
+            operations: ops,
+            logger: Logger,
+            options: allowDestructive ? MigrationOptions.Destructive : MigrationOptions.Default
         );
     }
 
@@ -73,16 +73,30 @@ internal static class SqliteTestDb
         MigrationOptions? options = null
     )
     {
-        var result = MigrationRunner.Apply(
-            connection,
-            ops,
-            SqliteDdlGenerator.Generate,
-            options ?? MigrationOptions.Default,
-            Logger
+        var result = SqliteTestDb.TryApply(
+            connection: connection,
+            operations: ops,
+            logger: Logger,
+            options: options ?? MigrationOptions.Default
         );
         var error = result is MigrationApplyResultError failure ? failure.Value.Message : null;
         Assert.True(result is MigrationApplyResultOk, $"Migration failed: {error}");
     }
+
+    // Implements [MIG-TEST-RUNNER-SHARED].
+    internal static MigrationApplyResult TryApply(
+        SqliteConnection connection,
+        IReadOnlyList<SchemaOperation> operations,
+        ILogger logger,
+        MigrationOptions? options = null
+    ) =>
+        MigrationRunner.Apply(
+            connection: connection,
+            operations: operations,
+            generateDdl: SqliteDdlGenerator.Generate,
+            options: options ?? MigrationOptions.Default,
+            logger: logger
+        );
 
     public static void SetUser(SqliteConnection connection, string userId)
     {

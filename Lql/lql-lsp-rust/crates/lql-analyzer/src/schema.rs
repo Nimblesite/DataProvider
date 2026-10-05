@@ -128,15 +128,7 @@ impl ColumnInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
-    }
+    use crate::test_support::make_col;
 
     fn make_table(name: &str, schema: &str, cols: Vec<ColumnInfo>) -> TableInfo {
         TableInfo {

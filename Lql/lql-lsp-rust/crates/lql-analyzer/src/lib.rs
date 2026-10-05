@@ -13,4 +13,7 @@ pub use scope::{build_scope, ScopeMap};
 pub use symbols::{extract_symbols, DocumentSymbol, SymbolKind};
 
 #[cfg(test)]
+mod test_support;
+
+#[cfg(test)]
 mod tests;

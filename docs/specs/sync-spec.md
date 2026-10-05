@@ -1021,3 +1021,65 @@ CREATE TABLE _sync_clients (
 - [RFC 4122 - UUID](https://tools.ietf.org/html/rfc4122)
 - [RFC 8785 - JSON Canonicalization](https://tools.ietf.org/html/rfc8785)
 - [Dotmim.Sync Documentation](https://dotmimsync.readthedocs.io/)
+
+### Shared SQLite client operations [SYNC-CLIENT-API-SHARED]
+
+SQLite connection extensions and SyncClientRepository share client listing, upsert,
+and multiple-delete execution. Both public APIs preserve their existing database-error
+message prefixes, version ordering, affected-row counts, and created-at semantics.
+A missing client table produces a SyncErrorDatabase through every client API.
+
+### Shared expression test execution [SYNC-EXPRESSION-TEST-CASES]
+
+Named expression and corner-case tests retain their exact JSON inputs, LQL
+expressions, and expected values. A shared helper owns JSON parsing, expression
+evaluation, and equality assertion. Each named case still executes independently.
+
+### Shared mapping test data [SYNC-MAPPING-TEST-DATA]
+
+Mapping, expression, and corner-case tests share their mapping configuration and
+insert-log defaults. The mapping factory reuses `TableMapping.Identity`; each
+scenario retains its explicit direction, primary-key mapping, exclusions, enabled
+state, and multi-target configuration. Test inputs and assertions remain unchanged.
+
+### Shared mapping integration setup [SYNC-MAPPING-E2E-SETUP]
+
+Tests with the default User-to-Customer mapping create their source connection and mapping config through one fixture method. Each connection remains disposed by the calling test; custom mappings keep their explicit configuration.
+
+The mapping integration fixture shares execution of push mappings and the
+success-result assertion. Default User-to-customer column renames are defined
+once; explicit transforms, exclusions and the empty mapping case remain explicit.
+All 14 database scenarios and their assertions remain, separated into mapping and
+edge-case partial files while sharing the original database lifecycle.
+
+### Shared scalar reads [SYNC-SCALAR-READ-SHARED]
+
+SQLite log aggregates, oldest-log lookup and minimum-client-version lookup share
+the existing mapping repository command executor. Their SQL statements and error
+message prefixes remain unchanged. An Int64 scalar is returned as-is; null,
+DBNull and other scalar types retain the previous zero fallback. Only
+SqliteException is converted to SyncErrorDatabase, and commands are disposed on
+both success and failure. Readers with different conversion rules remain separate.
+
+### [SYNC-MAPPING-TRANSFORM-FIXTURE] Shared user transform fixture
+
+The named LQL transformation tests share their identical User-to-Customer mapping
+setup and successful-result assertion. Each case retains its column transforms,
+input payload, and all positive and negative payload assertions. The fixture keeps
+the strict configuration, insert metadata, primary key, and push direction unchanged.
+
+### Shared person command parameters [SYNC-TEST-PERSON-PARAMETERS]
+
+Cross-database and SQLite sync tests share binding the id, name, and email parameters and executing the command. Each test retains its original SQL and connection, including insert versus update statements and provider-specific table casing. Parameters are created by the command's provider and retain their string values.
+
+### Reuse typed test result assertions [TEST-TYPED-RESULT]
+
+Tests use the value returned by their existing xUnit type assertion instead of checking the same result and then casting it separately. Each assertion retains its original type, arguments, and call count. Every test case and all following value checks remain unchanged. This applies to shared testing practice across DataProvider and Sync.
+
+### Shared subscription roundtrip [SYNC-TEST-SUBSCRIPTION-ROUNDTRIP]
+
+SQLite extension cases share insertion, retrieval and success/single-row checks while retaining the record, query and expiry inputs and their separate assertions.
+
+### Shared sync log test reader [SYNC-TEST-LOG-READER]
+
+The test database owns the common parameterized sync-log query, row mapping and operation parser. Coordinator and integration fixtures reuse it, preserving ordered pagination, null payloads and the coordinator SQLite error result.

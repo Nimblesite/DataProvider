@@ -24,12 +24,11 @@ internal static class PostgresTestDb
             )
             .Value;
 
-        var apply = MigrationRunner.Apply(
-            connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            allowDestructive ? MigrationOptions.Destructive : MigrationOptions.Default,
-            logger
+        var apply = PostgresTestDb.TryApply(
+            connection: connection,
+            operations: ops,
+            logger: logger,
+            options: allowDestructive ? MigrationOptions.Destructive : MigrationOptions.Default
         );
         var error = apply is MigrationApplyResultError failure ? failure.Value.Message : null;
         Assert.True(apply is MigrationApplyResultOk, $"Migration failed: {error}");
@@ -91,15 +90,29 @@ internal static class PostgresTestDb
         MigrationOptions? options = null
     )
     {
-        var result = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            options ?? MigrationOptions.Default,
-            logger
+        var result = TryApply(
+            connection: connection,
+            operations: operations,
+            logger: logger,
+            options: options
         );
         var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
 
         Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
     }
+
+    // Implements [MIG-TEST-POSTGRES-RUNNER].
+    internal static MigrationApplyResult TryApply(
+        NpgsqlConnection connection,
+        IReadOnlyList<SchemaOperation> operations,
+        ILogger logger,
+        MigrationOptions? options = null
+    ) =>
+        MigrationRunner.Apply(
+            connection: connection,
+            operations: operations,
+            generateDdl: PostgresDdlGenerator.Generate,
+            options: options ?? MigrationOptions.Default,
+            logger: logger
+        );
 }

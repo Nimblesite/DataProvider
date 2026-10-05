@@ -141,8 +141,7 @@ public sealed class ConflictResolverTests
 
         var result = ConflictResolver.ResolveCustom(local, remote, (l, r) => new SyncLogEntryOk(l));
 
-        Assert.IsType<ConflictResolutionOk>(result);
-        var success = (ConflictResolutionOk)result;
+        var success = Assert.IsType<ConflictResolutionOk>(result);
         Assert.Equal(local, success.Value.Winner);
     }
 
@@ -159,8 +158,7 @@ public sealed class ConflictResolverTests
             (l, r) => new SyncLogEntryError(error)
         );
 
-        Assert.IsType<ConflictResolutionError>(result);
-        var failure = (ConflictResolutionError)result;
+        var failure = Assert.IsType<ConflictResolutionError>(result);
         Assert.Equal(error, failure.Value);
     }
 }

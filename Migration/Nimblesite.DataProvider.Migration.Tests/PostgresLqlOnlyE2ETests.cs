@@ -110,12 +110,10 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         ILogger logger
     )
     {
-        var apply = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            logger
+        var apply = PostgresTestDb.TryApply(
+            connection: connection,
+            operations: operations,
+            logger: logger
         );
         Assert.True(
             apply is MigrationApplyResultOk,
@@ -764,12 +762,11 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
                 SchemaDiff.Calculate(current, depleted, allowDestructive: true, logger: _logger)
         ).Value;
 
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Destructive,
-            _logger
+        var apply = PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: ops,
+            logger: _logger,
+            options: MigrationOptions.Destructive
         );
         Assert.True(apply is MigrationApplyResultOk);
 

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 using Xunit;
+using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -51,8 +52,8 @@ public sealed class SpecComplianceTests : IDisposable
     {
         // Spec S5.4: Origin ID MUST be 36 characters (standard UUID format)
         var result = SyncSchema.GetOriginId(_db);
-        Assert.IsType<StringSyncOk>(result);
-        var originId = ((StringSyncOk)result).Value;
+
+        var originId = (Assert.IsType<StringSyncOk>(result)).Value;
         Assert.Equal(36, originId.Length);
         Assert.True(Guid.TryParse(originId, out _));
     }
@@ -360,8 +361,8 @@ public sealed class SpecComplianceTests : IDisposable
 
         // GetById
         var getResult = SubscriptionRepository.GetById(_db, sub.SubscriptionId);
-        Assert.IsType<SubscriptionOk>(getResult);
-        var retrieved = ((SubscriptionOk)getResult).Value;
+
+        var retrieved = (Assert.IsType<SubscriptionOk>(getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(sub.TableName, retrieved!.TableName);
 
@@ -404,8 +405,7 @@ public sealed class SpecComplianceTests : IDisposable
             NullLogger.Instance
         );
 
-        Assert.IsType<BatchApplyResultOk>(result);
-        var applied = ((BatchApplyResultOk)result).Value;
+        var applied = (Assert.IsType<BatchApplyResultOk>(result)).Value;
         Assert.Equal(0, applied.AppliedCount); // Should skip own changes
     }
 
@@ -445,8 +445,7 @@ public sealed class SpecComplianceTests : IDisposable
             NullLogger.Instance
         );
 
-        Assert.IsType<SyncBatchOk>(batch);
-        var batchData = ((SyncBatchOk)batch).Value;
+        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
         Assert.Equal(10, batchData.Changes.Count);
         Assert.True(batchData.HasMore);
     }
@@ -464,8 +463,7 @@ public sealed class SpecComplianceTests : IDisposable
             NullLogger.Instance
         );
 
-        Assert.IsType<SyncBatchOk>(batch);
-        var batchData = ((SyncBatchOk)batch).Value;
+        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
         Assert.Single(batchData.Changes);
         Assert.False(batchData.HasMore);
     }
@@ -534,8 +532,8 @@ public sealed class SpecComplianceTests : IDisposable
 
         // GetByOrigin
         var getResult = SyncClientRepository.GetByOrigin(_db, client.OriginId);
-        Assert.IsType<SyncClientOk>(getResult);
-        var retrieved = ((SyncClientOk)getResult).Value;
+
+        var retrieved = (Assert.IsType<SyncClientOk>(getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(100, retrieved!.LastSyncVersion);
 
@@ -713,8 +711,7 @@ public sealed class SpecComplianceTests : IDisposable
             NullLogger.Instance
         );
 
-        Assert.IsType<SyncBatchOk>(batch);
-        var batchData = ((SyncBatchOk)batch).Value;
+        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
         Assert.NotNull(batchData.Hash);
 
         // Verify the hash matches
@@ -913,20 +910,14 @@ public sealed class SpecComplianceTests : IDisposable
     {
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private void UpdatePerson(string id, string name, string email)
     {
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private void DeletePerson(string id)

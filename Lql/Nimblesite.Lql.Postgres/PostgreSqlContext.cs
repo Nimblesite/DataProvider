@@ -129,13 +129,8 @@ public sealed class PostgreSqlContext : ISqlContext
     /// Adds ORDER BY items
     /// </summary>
     /// <param name="orderItems">The order items (column, direction)</param>
-    public void AddOrderBy(IEnumerable<(string Column, string Direction)> orderItems)
-    {
-        foreach (var (column, direction) in orderItems)
-        {
-            _builder.AddOrderBy(column, direction);
-        }
-    }
+    public void AddOrderBy(IEnumerable<(string Column, string Direction)> orderItems) =>
+        StatementBuilderOperations.AddOrderBy(builder: _builder, orderItems: orderItems);
 
     /// <summary>
     /// Adds a HAVING condition

@@ -256,11 +256,7 @@ public sealed class SchemaYamlSerializerTests
             .Build();
 
         // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
+        var table = RoundtripFirstTable(schema: schema);
         Assert.Single(table.Indexes);
 
         var index = table.Indexes[0];
@@ -285,11 +281,7 @@ public sealed class SchemaYamlSerializerTests
             .Build();
 
         // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
+        var table = RoundtripFirstTable(schema: schema);
         Assert.Single(table.Indexes);
 
         var index = table.Indexes[0];
@@ -320,11 +312,7 @@ public sealed class SchemaYamlSerializerTests
             .Build();
 
         // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
+        var table = RoundtripFirstTable(schema: schema);
 
         var priceCol = table.Columns.First(c => c.Name == "Price");
         Assert.Equal("Price >= 0", priceCol.CheckConstraint);
@@ -352,11 +340,7 @@ public sealed class SchemaYamlSerializerTests
             .Build();
 
         // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
+        var table = RoundtripFirstTable(schema: schema);
         Assert.Single(table.UniqueConstraints);
 
         var uc = table.UniqueConstraints[0];
@@ -719,4 +703,8 @@ public sealed class SchemaYamlSerializerTests
         // Assert - SQLite has no native vector; must fall back to BLOB
         Assert.Contains("[Embedding] BLOB NOT NULL", ddl, StringComparison.Ordinal);
     }
+
+    // Implements [MIG-TEST-YAML-ROUNDTRIP].
+    private static TableDefinition RoundtripFirstTable(SchemaDefinition schema) =>
+        SchemaYamlSerializer.FromYaml(yaml: SchemaYamlSerializer.ToYaml(schema: schema)).Tables[0];
 }

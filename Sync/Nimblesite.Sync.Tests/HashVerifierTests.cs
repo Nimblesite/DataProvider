@@ -151,8 +151,7 @@ public sealed class HashVerifierTests
     {
         var result = HashVerifier.VerifyHash("abc123", "xyz789");
 
-        Assert.IsType<BoolSyncError>(result);
-        var failure = (BoolSyncError)result;
+        var failure = Assert.IsType<BoolSyncError>(result);
         Assert.IsType<SyncErrorHashMismatch>(failure.Value);
     }
 

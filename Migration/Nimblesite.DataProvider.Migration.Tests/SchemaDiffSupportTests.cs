@@ -1,15 +1,17 @@
 namespace Nimblesite.DataProvider.Migration.Tests;
 
+// Implements [MIG-TEST-DIFF-SHARED].
+
 public sealed class SchemaDiffSupportTests
 {
     [Fact]
     public void Calculate_DeclarativeSupportObjects_OrdersBeforeRlsPolicy()
     {
         var desired = SupportSchema();
-        var result = SchemaDiff.Calculate(Schema.Define("current").Build(), desired);
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(
+            current: Schema.Define("current").Build(),
+            desired: desired
+        );
         Assert.Equal(
             [
                 typeof(CreateOrAlterRoleOperation),

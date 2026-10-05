@@ -108,12 +108,10 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
         Assert.Single(operations);
         Assert.IsType<AddColumnOperation>(operations[0]);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        var result = PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: operations,
+            logger: _logger
         );
 
         Assert.True(result is MigrationApplyResultOk);
@@ -726,12 +724,10 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
         // Should have: 2 AddColumn, 2 CreateIndex, 1 CreateTable
         Assert.Equal(5, operations.Count);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        var result = PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: operations,
+            logger: _logger
         );
 
         Assert.True(result is MigrationApplyResultOk);
@@ -751,12 +747,10 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
             (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
         ).Value;
 
-        return MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        return PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: operations,
+            logger: _logger
         );
     }
 

@@ -28,12 +28,10 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         );
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
-        var result = MigrationRunner.Apply(
-            migrateConnection,
-            NapAuthGrants(schema, owner, appUser, appAdmin),
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            NullLogger.Instance
+        var result = PostgresTestDb.TryApply(
+            connection: migrateConnection,
+            operations: NapAuthGrants(schema, owner, appUser, appAdmin),
+            logger: NullLogger.Instance
         );
 
         Assert.True(result is MigrationApplyResultOk);
@@ -58,8 +56,9 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         );
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
-        var result = MigrationRunner.Apply(
-            migrateConnection,
+        var result = PostgresTestDb.TryApply(
+            connection: migrateConnection,
+            operations:
             [
                 new GrantPrivilegesOperation(
                     new PostgresGrantDefinition
@@ -72,9 +71,7 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
                     }
                 ),
             ],
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            NullLogger.Instance
+            logger: NullLogger.Instance
         );
 
         Assert.True(result is MigrationApplyResultError);

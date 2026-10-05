@@ -32,8 +32,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
 
-        Assert.IsType<SyncLogListOk>(result);
-        var list = ((SyncLogListOk)result).Value;
+        var list = (Assert.IsType<SyncLogListOk>(result)).Value;
         Assert.Empty(list);
     }
 
@@ -54,8 +53,8 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         Assert.IsType<BoolSyncOk>(insertResult);
 
         var fetchResult = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
-        Assert.IsType<SyncLogListOk>(fetchResult);
-        var list = ((SyncLogListOk)fetchResult).Value;
+
+        var list = (Assert.IsType<SyncLogListOk>(fetchResult)).Value;
         Assert.Single(list);
         Assert.Equal("TestTable", list[0].TableName);
         Assert.Equal("{\"Id\":\"t1\"}", list[0].PkValue);
@@ -124,8 +123,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncLogRepository.GetMaxVersion(_conn);
 
-        Assert.IsType<LongSyncOk>(result);
-        var max = ((LongSyncOk)result).Value;
+        var max = (Assert.IsType<LongSyncOk>(result)).Value;
         Assert.Equal(0, max);
     }
 
@@ -157,8 +155,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncLogRepository.GetLastServerVersion(_conn);
 
-        Assert.IsType<LongSyncOk>(result);
-        var version = ((LongSyncOk)result).Value;
+        var version = (Assert.IsType<LongSyncOk>(result)).Value;
         Assert.Equal(0, version);
     }
 
@@ -169,8 +166,8 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         Assert.IsType<BoolSyncOk>(updateResult);
 
         var getResult = PostgresSyncLogRepository.GetLastServerVersion(_conn);
-        Assert.IsType<LongSyncOk>(getResult);
-        var version = ((LongSyncOk)getResult).Value;
+
+        var version = (Assert.IsType<LongSyncOk>(getResult)).Value;
         Assert.Equal(42, version);
     }
 
@@ -224,8 +221,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncClientRepository.GetAll(_conn);
 
-        Assert.IsType<SyncClientListOk>(result);
-        var list = ((SyncClientListOk)result).Value;
+        var list = (Assert.IsType<SyncClientListOk>(result)).Value;
         Assert.Empty(list);
     }
 
@@ -243,8 +239,8 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         Assert.IsType<BoolSyncOk>(upsertResult);
 
         var getResult = PostgresSyncClientRepository.GetAll(_conn);
-        Assert.IsType<SyncClientListOk>(getResult);
-        var list = ((SyncClientListOk)getResult).Value;
+
+        var list = (Assert.IsType<SyncClientListOk>(getResult)).Value;
         Assert.Single(list);
         Assert.Equal("client-001", list[0].OriginId);
         Assert.Equal(10, list[0].LastSyncVersion);
@@ -255,8 +251,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncClientRepository.GetByOrigin(_conn, "nonexistent");
 
-        Assert.IsType<SyncClientOk>(result);
-        var client = ((SyncClientOk)result).Value;
+        var client = (Assert.IsType<SyncClientOk>(result)).Value;
         Assert.Null(client);
     }
 
@@ -272,8 +267,8 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         PostgresSyncClientRepository.Upsert(_conn, client);
 
         var result = PostgresSyncClientRepository.GetByOrigin(_conn, "client-002");
-        Assert.IsType<SyncClientOk>(result);
-        var found = ((SyncClientOk)result).Value;
+
+        var found = (Assert.IsType<SyncClientOk>(result)).Value;
         Assert.NotNull(found);
         Assert.Equal("client-002", found.OriginId);
         Assert.Equal(20, found.LastSyncVersion);
@@ -334,8 +329,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     {
         var result = PostgresSyncClientRepository.GetMinVersion(_conn);
 
-        Assert.IsType<LongSyncOk>(result);
-        var min = ((LongSyncOk)result).Value;
+        var min = (Assert.IsType<LongSyncOk>(result)).Value;
         Assert.Equal(0, min);
     }
 
@@ -707,8 +701,8 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         );
 
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
-        var success = ((BoolSyncOk)result).Value;
+
+        var success = (Assert.IsType<BoolSyncOk>(result)).Value;
         Assert.False(success); // FK violation returns false for deferral
     }
 

@@ -269,11 +269,9 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
         var operations = (
             (OperationsResultOk)SchemaDiff.Calculate(current: current, desired: schema)
         ).Value;
-        var result = MigrationRunner.Apply(
+        var result = PostgresTestDb.TryApply(
             connection: _connection,
             operations: operations,
-            generateDdl: PostgresDdlGenerator.Generate,
-            options: MigrationOptions.Default,
             logger: _logger
         );
 

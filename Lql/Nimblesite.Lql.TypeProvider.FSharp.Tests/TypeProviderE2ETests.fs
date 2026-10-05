@@ -230,6 +230,20 @@ type TypeProviderArithmeticTests() =
 [<Collection("TypeProvider")>]
 type TypeProviderE2EExecutionTests() =
 
+    // Implements [LQL-FUNCTION-MAPPING-SHARED].
+    [<Theory>]
+    [<InlineData("upper", "'alice'", "ALICE")>]
+    [<InlineData("lower", "'ALICE'", "alice")>]
+    member _.``Shared function mappings execute correctly in SQLite``
+        (functionName: string, argument: string, expected: string) =
+        use connection = TestFixtures.openTestDatabase()
+        let expression =
+            Nimblesite.Lql.SQLite.SQLiteFunctionMappingLocal.Instance.TranspileFunction(
+                functionName = functionName, arguments = [| argument |])
+        let rows = TestFixtures.executeQuery connection $"SELECT {expression} AS value"
+        let row = Assert.Single(rows)
+        Assert.Equal(expected, Assert.IsType<string>(row["value"]))
+
     [<Fact>]
     member _.``Execute simple select against real SQLite database``() =
         use conn = TestFixtures.createTestDatabase()

@@ -1,5 +1,7 @@
 namespace Nimblesite.DataProvider.Migration.Tests;
 
+// Implements [MIG-TEST-DIFF-SHARED].
+
 /// <summary>
 /// Implements [MIG-UNIQUE-CONSTRAINT-DIFF] (#55): adding a
 /// <c>uniqueConstraints</c> entry to an existing table must produce an
@@ -70,15 +72,12 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: current,
             desired: desired,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.Contains(
             ops,
             op =>
@@ -112,15 +111,12 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: converged,
             desired: converged,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.DoesNotContain(ops, op => op is AddUniqueConstraintOperation);
     }
 }

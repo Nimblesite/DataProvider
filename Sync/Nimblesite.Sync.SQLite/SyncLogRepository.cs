@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 
 namespace Nimblesite.Sync.SQLite;
 
+// Implements [SYNC-SCALAR-READ-SHARED].
+
 /// <summary>
 /// Static methods for sync log operations.
 /// FP-style - no instance state, pure functions.
@@ -118,22 +120,12 @@ public static class SyncLogRepository
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Max version or 0 if no entries.</returns>
-    public static LongSyncResult GetMaxVersion(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT MAX(version) FROM _sync_log";
-            var result = cmd.ExecuteScalar();
-            return new LongSyncOk(result is long v ? v : 0);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get max version: {ex.Message}")
-            );
-        }
-    }
+    public static LongSyncResult GetMaxVersion(SqliteConnection connection) =>
+        SqliteCommandExecution.ReadInt64OrZero(
+            connection: connection,
+            setSql: command => command.CommandText = "SELECT MAX(version) FROM _sync_log",
+            failurePrefix: "Failed to get max version"
+        );
 
     /// <summary>
     /// Gets the minimum version in the sync log.
@@ -141,44 +133,24 @@ public static class SyncLogRepository
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Min version or 0 if no entries.</returns>
-    public static LongSyncResult GetMinVersion(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT MIN(version) FROM _sync_log";
-            var result = cmd.ExecuteScalar();
-            return new LongSyncOk(result is long v ? v : 0);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get min version: {ex.Message}")
-            );
-        }
-    }
+    public static LongSyncResult GetMinVersion(SqliteConnection connection) =>
+        SqliteCommandExecution.ReadInt64OrZero(
+            connection: connection,
+            setSql: command => command.CommandText = "SELECT MIN(version) FROM _sync_log",
+            failurePrefix: "Failed to get min version"
+        );
 
     /// <summary>
     /// Gets total count of entries in the sync log.
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Count or database error.</returns>
-    public static LongSyncResult GetEntryCount(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT COUNT(*) FROM _sync_log";
-            var result = cmd.ExecuteScalar();
-            return new LongSyncOk(result is long v ? v : 0);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get entry count: {ex.Message}")
-            );
-        }
-    }
+    public static LongSyncResult GetEntryCount(SqliteConnection connection) =>
+        SqliteCommandExecution.ReadInt64OrZero(
+            connection: connection,
+            setSql: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log",
+            failurePrefix: "Failed to get entry count"
+        );
 
     private static SyncOperation ParseOperation(string operation) =>
         operation.ToLowerInvariant() switch

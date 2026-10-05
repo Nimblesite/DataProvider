@@ -242,3 +242,11 @@ Auto-imported by NuGet from `build/DataProvider.targets`. Consumer never sees th
 | RISK-NATIVE-RID | Live-db only: new RID = add native asset to package + republish. Mitigated by [TEST-NATIVE] running the full RID matrix in CI. Schema-doc mode loads no native driver. |
 | RISK-DETERMINISM | Live-db: dev/CI may diverge if schemas diverge. Mitigated by [CON-MIG-FIRST]. Schema-doc: deterministic by file hash per [CONSUMER-DETERMINISM]. |
 | RISK-FORK-COST | One `dotnet DataProvider.dll` fork per build. Cold start ≈ 100 ms. < 2 % of a typical build. `--watch` eliminates fork cost entirely for IDE edit cycles. |
+
+### Default source-file validation [DP-CODEGEN-SOURCE-VALIDATION]
+
+The default configuration source generator returns a SQL error for a blank namespace or when both generated-code inputs are blank. Contract tests exercise the configured public delegate with real SQLite metadata effects and no mocks.
+
+### PostgreSQL null parameter emission [DP-CODEGEN-POSTGRES-NULL-PARAMETER]
+
+Generated PostgreSQL query methods bind null parameters with an explicit Npgsql type inferred from matching result-column metadata, retaining `DBNull.Value` and a typed PostgreSQL command.

@@ -266,8 +266,8 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
 
         // Assert
         var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        Assert.IsType<SyncLogListOk>(changes);
-        var list = ((SyncLogListOk)changes).Value;
+
+        var list = (Assert.IsType<SyncLogListOk>(changes)).Value;
         Assert.Single(list);
         Assert.Equal("Person", list[0].TableName);
         Assert.Equal(SyncOperation.Insert, list[0].Operation);

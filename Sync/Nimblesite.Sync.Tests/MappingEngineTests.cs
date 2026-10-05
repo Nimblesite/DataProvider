@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Nimblesite.Sync.Tests;
 
+// Implements [SYNC-MAPPING-TEST-DATA].
+
 /// <summary>
 /// Tests for MappingEngine - data transformation during sync.
 /// Covers spec Section 7 - Data Mapping.
@@ -10,18 +12,16 @@ public sealed class MappingEngineTests
 {
     private readonly NullLogger<MappingEngineTests> _logger = new();
 
-    #region FindMapping Tests
-
     [Fact]
     public void FindMapping_ExactMatch_ReturnsMapping()
     {
-        var mapping = CreateTestMapping(
-            "user-to-customer",
-            "User",
-            "Customer",
-            MappingDirection.Push
+        var mapping = MappingTestData.Mapping(
+            id: "user-to-customer",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Push
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
 
@@ -32,8 +32,13 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPush()
     {
-        var mapping = CreateTestMapping("user-both", "User", "Customer", MappingDirection.Both);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mapping = MappingTestData.Mapping(
+            id: "user-both",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Both
+        );
+        var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
 
@@ -44,8 +49,13 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPull()
     {
-        var mapping = CreateTestMapping("user-both", "User", "Customer", MappingDirection.Both);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mapping = MappingTestData.Mapping(
+            id: "user-both",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Both
+        );
+        var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Pull);
 
@@ -55,8 +65,13 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_WrongDirection_ReturnsNull()
     {
-        var mapping = CreateTestMapping("user-push", "User", "Customer", MappingDirection.Push);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mapping = MappingTestData.Mapping(
+            id: "user-push",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Push
+        );
+        var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Pull);
 
@@ -66,28 +81,28 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_UnmappedTable_ReturnsNull()
     {
-        var mapping = CreateTestMapping(
-            "order-mapping",
-            "Order",
-            "OrderSummary",
-            MappingDirection.Push
+        var mapping = MappingTestData.Mapping(
+            id: "order-mapping",
+            sourceTable: "Order",
+            targetTable: "OrderSummary",
+            direction: MappingDirection.Push
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
 
         Assert.Null(found);
     }
 
-    #endregion
-
-    #region ApplyMapping Tests - Passthrough
-
     [Fact]
     public void ApplyMapping_PassthroughMode_NoMapping_ReturnsIdentity()
     {
         var config = SyncMappingConfig.Passthrough;
-        var entry = CreateEntry("Person", """{"Id":"p1"}""", """{"Id":"p1","Name":"Alice"}""");
+        var entry = MappingTestData.Entry(
+            table: "Person",
+            pk: """{"Id":"p1"}""",
+            payload: """{"Id":"p1","Name":"Alice"}"""
+        );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -101,7 +116,11 @@ public sealed class MappingEngineTests
     public void ApplyMapping_StrictMode_NoMapping_ReturnsSkipped()
     {
         var config = SyncMappingConfig.Empty;
-        var entry = CreateEntry("Person", """{"Id":"p1"}""", """{"Id":"p1","Name":"Alice"}""");
+        var entry = MappingTestData.Entry(
+            table: "Person",
+            pk: """{"Id":"p1"}""",
+            payload: """{"Id":"p1","Name":"Alice"}"""
+        );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -109,21 +128,21 @@ public sealed class MappingEngineTests
         Assert.Contains("Person", skipped.Reason);
     }
 
-    #endregion
-
-    #region ApplyMapping Tests - Single Target
-
     [Fact]
     public void ApplyMapping_SingleTarget_RenamesTable()
     {
-        var mapping = CreateTestMapping(
-            "user-to-customer",
-            "User",
-            "Customer",
-            MappingDirection.Push
+        var mapping = MappingTestData.Mapping(
+            id: "user-to-customer",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Push
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1","Name":"Alice"}""");
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1","Name":"Alice"}"""
+        );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -135,20 +154,20 @@ public sealed class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_MapsPrimaryKey()
     {
-        var mapping = new TableMapping(
-            Id: "user-mapping",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "CustomerId"),
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
+        var mapping = MappingTestData.Mapping(
+            id: "user-mapping",
+            sourceTable: "User",
+            targetTable: "Customer"
+        ) with
+        {
+            PkMapping = new PkMapping("Id", "CustomerId"),
+        };
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1","Name":"Alice"}"""
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1","Name":"Alice"}""");
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -166,23 +185,17 @@ public sealed class MappingEngineTests
             new("EmailAddress", "Email"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-mapping",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
+        var mapping = MappingTestData.Mapping(
+            id: "user-mapping",
+            sourceTable: "User",
+            targetTable: "Customer",
+            columnMappings: columnMappings
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry(
-            "User",
-            """{"Id":"u1"}""",
-            """{"Id":"u1","FullName":"Alice","EmailAddress":"alice@test.com"}"""
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1","FullName":"Alice","EmailAddress":"alice@test.com"}"""
         );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
@@ -203,20 +216,18 @@ public sealed class MappingEngineTests
             new(null, "Source", TransformType.Constant, "mobile-app"),
         };
 
-        var mapping = new TableMapping(
-            Id: "user-mapping",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: columnMappings,
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
+        var mapping = MappingTestData.Mapping(
+            id: "user-mapping",
+            sourceTable: "User",
+            targetTable: "Customer",
+            columnMappings: columnMappings
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1","Name":"Alice"}""");
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1","Name":"Alice"}"""
+        );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -228,23 +239,19 @@ public sealed class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_ExcludesColumns()
     {
-        var mapping = new TableMapping(
-            Id: "user-mapping",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: ["PasswordHash", "SecurityStamp"],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry(
-            "User",
-            """{"Id":"u1"}""",
-            """{"Id":"u1","Name":"Alice","PasswordHash":"secret","SecurityStamp":"xyz"}"""
+        var mapping = MappingTestData.Mapping(
+            id: "user-mapping",
+            sourceTable: "User",
+            targetTable: "Customer"
+        ) with
+        {
+            ExcludedColumns = ["PasswordHash", "SecurityStamp"],
+        };
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1","Name":"Alice","PasswordHash":"secret","SecurityStamp":"xyz"}"""
         );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
@@ -258,30 +265,26 @@ public sealed class MappingEngineTests
     [Fact]
     public void ApplyMapping_DisabledMapping_ReturnsSkipped()
     {
-        var mapping = new TableMapping(
-            Id: "disabled-mapping",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: false,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
+        var mapping = MappingTestData.Mapping(
+            id: "disabled-mapping",
+            sourceTable: "User",
+            targetTable: "Customer"
+        ) with
+        {
+            Enabled = false,
+        };
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "User",
+            pk: """{"Id":"u1"}""",
+            payload: """{"Id":"u1"}"""
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry("User", """{"Id":"u1"}""", """{"Id":"u1"}""");
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
         var skipped = Assert.IsType<MappingSkipped>(result);
         Assert.Contains("disabled", skipped.Reason);
     }
-
-    #endregion
-
-    #region ApplyMapping Tests - Multi-Target
 
     [Fact]
     public void ApplyMapping_MultiTarget_ProducesMultipleEntries()
@@ -301,25 +304,20 @@ public sealed class MappingEngineTests
             ),
         };
 
-        var mapping = new TableMapping(
-            Id: "order-split",
-            SourceTable: "Order",
-            TargetTable: null,
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig(),
-            IsMultiTarget: true,
-            Targets: targets
-        );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry(
-            "Order",
-            """{"Id":"o1"}""",
-            """{"Id":"o1","Total":99.99,"CustomerId":"c1"}"""
+        var mapping = MappingTestData.Mapping(
+            id: "order-split",
+            sourceTable: "Order",
+            targetTable: null
+        ) with
+        {
+            IsMultiTarget = true,
+            Targets = targets,
+        };
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "Order",
+            pk: """{"Id":"o1"}""",
+            payload: """{"Id":"o1","Total":99.99,"CustomerId":"c1"}"""
         );
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
@@ -342,22 +340,21 @@ public sealed class MappingEngineTests
             ),
         };
 
-        var mapping = new TableMapping(
-            Id: "order-split",
-            SourceTable: "Order",
-            TargetTable: null,
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig(),
-            IsMultiTarget: true,
-            Targets: targets
+        var mapping = MappingTestData.Mapping(
+            id: "order-split",
+            sourceTable: "Order",
+            targetTable: null
+        ) with
+        {
+            IsMultiTarget = true,
+            Targets = targets,
+        };
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var entry = MappingTestData.Entry(
+            table: "Order",
+            pk: """{"Id":"o1"}""",
+            payload: """{"Id":"o1","Total":99.99}"""
         );
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
-        var entry = CreateEntry("Order", """{"Id":"o1"}""", """{"Id":"o1","Total":99.99}""");
 
         var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
 
@@ -369,10 +366,6 @@ public sealed class MappingEngineTests
         Assert.Contains("EventType", audit.MappedPayload);
         Assert.Contains("created", audit.MappedPayload);
     }
-
-    #endregion
-
-    #region MapPrimaryKey Tests
 
     [Fact]
     public void MapPrimaryKey_NullMapping_ReturnsSamePk()
@@ -408,15 +401,16 @@ public sealed class MappingEngineTests
         Assert.Equal(pk, result);
     }
 
-    #endregion
-
-    #region Delete Operation Tests
-
     [Fact]
     public void ApplyMapping_DeleteOperation_NullPayload_Succeeds()
     {
-        var mapping = CreateTestMapping("user-mapping", "User", "Customer", MappingDirection.Push);
-        var config = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
+        var mapping = MappingTestData.Mapping(
+            id: "user-mapping",
+            sourceTable: "User",
+            targetTable: "Customer",
+            direction: MappingDirection.Push
+        );
+        var config = MappingTestData.Strict(mappings: [mapping]);
         var entry = new SyncLogEntry(
             Version: 1,
             TableName: "User",
@@ -432,40 +426,4 @@ public sealed class MappingEngineTests
         var success = Assert.IsType<MappingSuccess>(result);
         Assert.Null(success.Entries[0].MappedPayload);
     }
-
-    #endregion
-
-    #region Helper Methods
-
-    private static TableMapping CreateTestMapping(
-        string id,
-        string sourceTable,
-        string targetTable,
-        MappingDirection direction
-    ) =>
-        new(
-            Id: id,
-            SourceTable: sourceTable,
-            TargetTable: targetTable,
-            Direction: direction,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
-
-    private static SyncLogEntry CreateEntry(string table, string pk, string? payload) =>
-        new(
-            Version: 1,
-            TableName: table,
-            PkValue: pk,
-            Operation: SyncOperation.Insert,
-            Payload: payload,
-            Origin: "test-origin",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
-
-    #endregion
 }

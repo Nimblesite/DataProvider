@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -8,24 +7,8 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests all extension methods on SqliteConnection for sync operations.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class SqliteExtensionIntegrationTests : IDisposable
+public sealed partial class SqliteExtensionIntegrationTests : IDisposable
 {
-    private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"sqliteextensionintegrationtests_{Guid.NewGuid()}.db"
-    );
-    private readonly string _originId = Guid.NewGuid().ToString();
-    private const string Timestamp = "2025-01-01T00:00:00.000Z";
-
-    public SqliteExtensionIntegrationTests()
-    {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
-    }
-
     #region Subscription Extension Methods
 
     [Fact]
@@ -358,104 +341,6 @@ public sealed class SqliteExtensionIntegrationTests : IDisposable
 
     #endregion
 
-    #region Client Tracking Extension Methods
-
-    [Fact]
-    public void GetAllSyncClients_EmptyDatabase_ReturnsEmptyList()
-    {
-        // Act
-        var result = _db.GetAllSyncClients();
-
-        // Assert
-        Assert.True(result is SyncClientListOk);
-        Assert.Empty(((SyncClientListOk)result).Value);
-    }
-
-    [Fact]
-    public void UpsertSyncClient_NewClient_Inserts()
-    {
-        // Arrange
-        var client = new SyncClient(
-            OriginId: "client-1",
-            LastSyncVersion: 100,
-            LastSyncTimestamp: Timestamp,
-            CreatedAt: Timestamp
-        );
-
-        // Act
-        var result = _db.UpsertSyncClient(client);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        var allClients = _db.GetAllSyncClients();
-        Assert.Single(((SyncClientListOk)allClients).Value);
-    }
-
-    [Fact]
-    public void UpsertSyncClient_ExistingClient_Updates()
-    {
-        // Arrange
-        var client1 = new SyncClient("client-1", 100, Timestamp, Timestamp);
-        _db.UpsertSyncClient(client1);
-
-        var client2 = new SyncClient("client-1", 200, "2025-02-01T00:00:00Z", Timestamp);
-
-        // Act
-        var result = _db.UpsertSyncClient(client2);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        var allClients = _db.GetAllSyncClients();
-        var clients = ((SyncClientListOk)allClients).Value;
-        Assert.Single(clients);
-        Assert.Equal(200, clients[0].LastSyncVersion);
-    }
-
-    [Fact]
-    public void GetAllSyncClients_MultipleClients_ReturnsOrderedByVersion()
-    {
-        // Arrange
-        _db.UpsertSyncClient(new SyncClient("client-a", 300, Timestamp, Timestamp));
-        _db.UpsertSyncClient(new SyncClient("client-b", 100, Timestamp, Timestamp));
-        _db.UpsertSyncClient(new SyncClient("client-c", 200, Timestamp, Timestamp));
-
-        // Act
-        var result = _db.GetAllSyncClients();
-
-        // Assert
-        Assert.True(result is SyncClientListOk);
-        var clients = ((SyncClientListOk)result).Value;
-        Assert.Equal(3, clients.Count);
-        Assert.Equal("client-b", clients[0].OriginId); // Lowest version first
-        Assert.Equal("client-c", clients[1].OriginId);
-        Assert.Equal("client-a", clients[2].OriginId);
-    }
-
-    [Fact]
-    public void DeleteStaleSyncClients_RemovesSpecifiedClients()
-    {
-        // Arrange
-        _db.UpsertSyncClient(new SyncClient("client-1", 100, Timestamp, Timestamp));
-        _db.UpsertSyncClient(new SyncClient("client-2", 200, Timestamp, Timestamp));
-        _db.UpsertSyncClient(new SyncClient("client-3", 300, Timestamp, Timestamp));
-
-        // Act
-        var result = _db.DeleteStaleSyncClients(["client-1", "client-2"]);
-
-        // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(2, ((IntSyncOk)result).Value);
-
-        var remaining = _db.GetAllSyncClients();
-        var clients = ((SyncClientListOk)remaining).Value;
-        Assert.Single(clients);
-        Assert.Equal("client-3", clients[0].OriginId);
-    }
-
-    #endregion
-
     #region Subscription Type Parsing
 
     [Fact]
@@ -471,15 +356,7 @@ public sealed class SqliteExtensionIntegrationTests : IDisposable
             Timestamp,
             null
         );
-        _db.InsertSubscription(subscription);
-
-        // Act
-        var result = _db.GetAllSubscriptions();
-
-        // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subs = ((SubscriptionListOk)result).Value;
-        Assert.Single(subs);
+        var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(SubscriptionType.Record, subs[0].Type);
     }
 
@@ -496,15 +373,7 @@ public sealed class SqliteExtensionIntegrationTests : IDisposable
             Timestamp,
             null
         );
-        _db.InsertSubscription(subscription);
-
-        // Act
-        var result = _db.GetAllSubscriptions();
-
-        // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subs = ((SubscriptionListOk)result).Value;
-        Assert.Single(subs);
+        var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(SubscriptionType.Query, subs[0].Type);
     }
 
@@ -522,33 +391,22 @@ public sealed class SqliteExtensionIntegrationTests : IDisposable
             Timestamp,
             expiresAt
         );
-        _db.InsertSubscription(subscription);
-
-        // Act
-        var result = _db.GetAllSubscriptions();
-
-        // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subs = ((SubscriptionListOk)result).Value;
-        Assert.Single(subs);
+        var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(expiresAt, subs[0].ExpiresAt);
     }
 
     #endregion
 
-    public void Dispose()
+    // Implements [SYNC-TEST-SUBSCRIPTION-ROUNDTRIP].
+    private IReadOnlyList<SyncSubscription> InsertAndRetrieveSubscription(
+        SyncSubscription subscription
+    )
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        _db.InsertSubscription(subscription);
+        var result = _db.GetAllSubscriptions();
+        Assert.True(result is SubscriptionListOk);
+        var subs = Assert.IsType<SubscriptionListOk>(result).Value;
+        Assert.Single(subs);
+        return subs;
     }
 }

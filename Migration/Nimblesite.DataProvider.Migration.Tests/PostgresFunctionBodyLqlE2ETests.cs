@@ -52,12 +52,10 @@ public sealed class PostgresFunctionBodyLqlE2ETests(PostgresContainerFixture fix
         var ops = (
             (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
         ).Value;
-        var apply = MigrationRunner.Apply(
-            _connection,
-            ops,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        var apply = PostgresTestDb.TryApply(
+            connection: _connection,
+            operations: ops,
+            logger: _logger
         );
         var failure = apply is MigrationApplyResultError error ? error.Value.Message : "unknown";
 

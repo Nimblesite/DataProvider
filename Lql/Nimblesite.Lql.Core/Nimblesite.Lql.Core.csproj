@@ -14,4 +14,11 @@
   <ItemGroup>
     <ProjectReference Include="../../Other/Nimblesite.Sql.Model/Nimblesite.Sql.Model.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Implements [LQL-RENDER-SHARED]: keep the shared renderer internal. -->
+    <InternalsVisibleTo Include="Nimblesite.Lql.Postgres" />
+    <InternalsVisibleTo Include="Nimblesite.Lql.SQLite" />
+    <InternalsVisibleTo Include="Nimblesite.Lql.SqlServer" />
+  </ItemGroup>
 </Project>

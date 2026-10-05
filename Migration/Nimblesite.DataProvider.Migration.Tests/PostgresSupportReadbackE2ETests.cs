@@ -45,12 +45,10 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
         var current = Inspect(connection);
         var operations = Diff(current, desired);
 
-        var apply = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        var apply = PostgresTestDb.TryApply(
+            connection: connection,
+            operations: operations,
+            logger: _logger
         );
 
         Assert.True(

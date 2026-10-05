@@ -60,8 +60,7 @@ public sealed class SqlStatementGenerationTests
 
         var result = stmt.ToSQLite();
 
-        Assert.IsType<StringOk>(result);
-        var sql = ((StringOk)result).Value;
+        var sql = (Assert.IsType<StringOk>(result)).Value;
         Assert.Equal("SELECT Id, Name FROM Users", sql);
         AssertDialect(stmt, provider, "SELECT", "Id", "Name", "FROM Users");
     }

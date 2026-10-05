@@ -1,5 +1,7 @@
 namespace Nimblesite.DataProvider.Migration.Tests;
 
+// Implements [MIG-TEST-DIFF-SHARED].
+
 /// <summary>
 /// Implements [MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT] (#57): when a
 /// declared CHECK constraint changes its expression — same name, different
@@ -52,15 +54,12 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: current,
             desired: desired,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.Contains(
             ops,
             op =>
@@ -117,15 +116,12 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: current,
             desired: desired,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.Contains(ops, op => op is DropCheckConstraintOperation);
         Assert.Contains(
             ops,
@@ -157,15 +153,12 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: schema,
             desired: schema,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.DoesNotContain(ops, op => op is DropCheckConstraintOperation);
         Assert.DoesNotContain(ops, op => op is AddCheckConstraintOperation);
     }

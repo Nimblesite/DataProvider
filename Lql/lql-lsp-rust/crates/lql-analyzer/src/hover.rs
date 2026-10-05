@@ -311,16 +311,8 @@ const HOVER_DATABASE: &[(&str, &str, &str, Option<&str>)] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
-
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
-    }
+    use crate::schema::{SchemaCache, TableInfo};
+    use crate::test_support::make_col;
 
     fn sample_schema() -> SchemaCache {
         SchemaCache::from_tables(vec![TableInfo {

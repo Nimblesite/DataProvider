@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.Postgres.Tests;
 
@@ -342,8 +343,8 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
         while (true)
         {
             var result = SyncLogRepository.FetchChanges(_sqliteConn, lastVersion, batchSize + 1);
-            Assert.IsType<SyncLogListOk>(result);
-            var changes = ((SyncLogListOk)result).Value;
+
+            var changes = (Assert.IsType<SyncLogListOk>(result)).Value;
 
             if (changes.Count == 0)
                 break;
@@ -397,8 +398,7 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
             Logger
         );
 
-        Assert.IsType<BatchApplyResultOk>(result);
-        var applied = ((BatchApplyResultOk)result).Value;
+        var applied = (Assert.IsType<BatchApplyResultOk>(result)).Value;
         Assert.Equal(0, applied.AppliedCount); // Should be skipped due to echo
         // Echo-skipped entries don't count as deferred, they just aren't applied
     }
@@ -451,8 +451,8 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
 
         // Get client
         var getResult = PostgresSyncClientRepository.GetByOrigin(_pgConn, _sqliteOrigin);
-        Assert.IsType<SyncClientOk>(getResult);
-        var retrieved = ((SyncClientOk)getResult).Value;
+
+        var retrieved = (Assert.IsType<SyncClientOk>(getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(100, retrieved!.LastSyncVersion);
 
@@ -470,20 +470,14 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO person (id, name, email) VALUES (@id, @name, @email)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private static void InsertPerson(SqliteConnection conn, string id, string name, string email)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@email", email);
-        cmd.ExecuteNonQuery();
+        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
     private static void UpdatePerson(NpgsqlConnection conn, string id, string name)
