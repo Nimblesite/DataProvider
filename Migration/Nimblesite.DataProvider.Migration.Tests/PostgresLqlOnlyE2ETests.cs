@@ -400,9 +400,12 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         ApplyAndGrant(schema, "asymmetric");
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT qual, with_check FROM pg_policies WHERE tablename='asymmetric'";
-        using var r = cmd.ExecuteReader();
-        Assert.True(r.Read());
+        using var r = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command =>
+                command.CommandText =
+                    "SELECT qual, with_check FROM pg_policies WHERE tablename='asymmetric'"
+        );
         var qual = r.GetString(0);
         var wc = r.GetString(1);
         Assert.Contains("is_member", qual, StringComparison.Ordinal);

@@ -44,22 +44,10 @@ public sealed partial class LqlSubqueryLayoutTests
         string tail
     ) =>
         Assert.Equal(
-            $"""
-            WITH active AS (
-                SELECT id
-                FROM users
-                WHERE active = 1
+            SqlData_TwoCtes_JoinedAndPaged_RenderPerDialectPaging_1(
+                selectPrefix: selectPrefix,
+                tail: tail
             ),
-            big AS (
-                SELECT user_id
-                FROM orders
-                WHERE total > 500
-            )
-            SELECT {selectPrefix}a.id
-            FROM active a
-            INNER JOIN big b ON a.id = b.user_id
-            {tail}
-            """,
             Transpile(
                 "with active as (users |> filter(fn(u) => u.users.active = 1) |> select(users.id)), big as (orders |> filter(fn(o) => o.orders.total > 500) |> select(orders.user_id)) active |> join(big, on = active.id = big.user_id) |> select(active.id) |> order_by(active.id asc) |> limit(5)",
                 dialect
@@ -73,15 +61,7 @@ public sealed partial class LqlSubqueryLayoutTests
         string paging
     ) =>
         Assert.Equal(
-            $"""
-            SELECT u.id
-            FROM users u
-            INNER JOIN (
-                SELECT user_id
-                FROM orders
-            ) o ON u.id = o.user_id
-            {paging}
-            """,
+            SqlData_DerivedTableJoin_WithOffsetAndLimit_RendersPagingAfterJoin_1(paging: paging),
             Transpile(
                 "users |> join((orders |> select(orders.user_id)), on = users.id = orders.user_id) |> select(users.id) |> offset(10) |> limit(5)",
                 dialect

@@ -175,28 +175,7 @@ public sealed partial record QueryBuilderPlatformE2ETests
     private static void CreateProductSchema(string provider, string connectionString)
     {
         var schema = provider == "postgres" ? "public" : "dbo";
-        var yaml = $$"""
-            name: query_builder_platform
-            tables:
-              - name: products
-                schema: {{schema}}
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                  - name: price
-                    type: Decimal(10,2)
-                    isNullable: false
-                  - name: category
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-            """;
+        var yaml = SqlData_CreateProductSchema_1(schema: schema);
         var path = Path.GetTempFileName();
         try
         {

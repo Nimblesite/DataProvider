@@ -36,9 +36,7 @@ mod diagnostics_tests {
     // ── pipe spacing ───────────────────────────────────────────────────
     #[test]
     fn correct_pipe_spacing_no_warning() {
-        let diags = analyze("users |> select(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "Pipeline");
-        assert!(pipe_diags.is_empty());
+        verify_correct_pipe_spacing_no_warning("users |> select(users.id)", "Pipeline");
     }
 
     #[test]
@@ -68,40 +66,30 @@ mod diagnostics_tests {
 
     #[test]
     fn tab_before_pipe_is_ok() {
-        let diags = analyze("users\t|> select(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "preceded");
-        assert!(pipe_diags.is_empty());
+        verify_correct_pipe_spacing_no_warning("users\t|> select(users.id)", "preceded");
     }
 
     #[test]
     fn tab_after_pipe_is_ok() {
-        let diags = analyze("users |>\tselect(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "followed");
-        assert!(pipe_diags.is_empty());
+        verify_correct_pipe_spacing_no_warning("users |>\tselect(users.id)", "followed");
     }
 
     #[test]
     fn pipe_at_end_of_line_no_after_warning() {
-        let diags = analyze("users |>", &empty_scope());
-        let after = diags_matching(&diags, "followed");
-        assert!(after.is_empty());
+        verify_correct_pipe_spacing_no_warning("users |>", "followed");
     }
 
     #[test]
     fn pipe_at_start_of_line_no_before_warning() {
-        let diags = analyze("|> select(users.id)", &empty_scope());
-        let before = diags_matching(&diags, "preceded");
-        assert!(before.is_empty());
+        verify_correct_pipe_spacing_no_warning("|> select(users.id)", "preceded");
     }
 
     #[test]
     fn multiple_pipes_on_one_line() {
-        let diags = analyze(
+        verify_multiple_pipes_on_one_line(
             "a |> filter(fn(r) => r.a.x > 1) |> select(a.id)",
-            &empty_scope(),
+            "Pipeline",
         );
-        let pipe_diags = diags_matching(&diags, "Pipeline");
-        assert!(pipe_diags.is_empty());
     }
 
     #[test]
@@ -115,9 +103,7 @@ mod diagnostics_tests {
     // ── unknown functions ──────────────────────────────────────────────
     #[test]
     fn known_function_no_diagnostic() {
-        let diags = analyze("users |> select(users.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
+        verify_correct_pipe_spacing_no_warning("users |> select(users.id)", "Unknown");
     }
 
     #[test]
@@ -140,10 +126,10 @@ mod diagnostics_tests {
 
     #[test]
     fn keyword_not_reported_as_unknown() {
-        // "fn" after pipe should not be flagged
-        let diags = analyze("users |> filter(fn(r) => r.users.id > 0)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown function: `fn`");
-        assert!(unknown.is_empty());
+        verify_correct_pipe_spacing_no_warning(
+            "users |> filter(fn(r) => r.users.id > 0)",
+            "Unknown function: `fn`",
+        );
     }
 
     #[test]
@@ -222,37 +208,28 @@ mod diagnostics_tests {
 
     #[test]
     fn case_insensitive_function_check() {
-        let diags = analyze("x |> SELECT(x.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
+        verify_correct_pipe_spacing_no_warning("x |> SELECT(x.id)", "Unknown");
     }
 
     #[test]
     fn string_literal_not_checked_for_functions() {
-        // 'blah(' inside a string shouldn't trigger unknown function
-        let diags = analyze(
+        verify_multiple_pipes_on_one_line(
             "users |> filter(fn(r) => r.users.name = 'blah(')",
-            &empty_scope(),
+            "Unknown function: `blah`",
         );
-        let unknown = diags_matching(&diags, "Unknown function: `blah`");
-        assert!(unknown.is_empty());
     }
 
     #[test]
     fn escaped_quote_in_string() {
-        let diags = analyze(
+        verify_multiple_pipes_on_one_line(
             r"users |> filter(fn(r) => r.users.name = 'it\'s(test')",
-            &empty_scope(),
+            "Unknown function: `s`",
         );
-        let unknown = diags_matching(&diags, "Unknown function: `s`");
-        assert!(unknown.is_empty());
     }
 
     #[test]
     fn identifier_not_followed_by_paren_not_reported() {
-        let diags = analyze("users |> select(users.foobar)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
+        verify_correct_pipe_spacing_no_warning("users |> select(users.foobar)", "Unknown");
     }
 
     #[test]
@@ -339,6 +316,20 @@ mod diagnostics_tests {
         let pipe_diags = diags_matching(&diags, "preceded");
         assert_eq!(pipe_diags.len(), 1);
         assert_eq!(pipe_diags[0].line, 1);
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_correct_pipe_spacing_no_warning(input0: &str, input1: &str) {
+        let diags = analyze(input0, &empty_scope());
+        let pipe_diags = diags_matching(&diags, input1);
+        assert!(pipe_diags.is_empty());
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_multiple_pipes_on_one_line(input0: &str, input1: &str) {
+        let diags = analyze(input0, &empty_scope());
+        let pipe_diags = diags_matching(&diags, input1);
+        assert!(pipe_diags.is_empty());
     }
 }
 

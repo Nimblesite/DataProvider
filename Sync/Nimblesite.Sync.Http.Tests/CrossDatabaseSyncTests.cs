@@ -321,9 +321,10 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Assert
         using var verifyCmd = postgres.CreateCommand();
-        verifyCmd.CommandText = "SELECT name, email FROM person WHERE id = 'u1'";
-        using var reader = verifyCmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            verifyCmd,
+            command => command.CommandText = "SELECT name, email FROM person WHERE id = 'u1'"
+        );
         Assert.Equal("Updated", reader.GetString(0));
         Assert.Equal("updated@example.com", reader.GetString(1));
     }

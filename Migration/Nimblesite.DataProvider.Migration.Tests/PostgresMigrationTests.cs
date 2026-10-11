@@ -671,9 +671,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify defaults
         using var selectCmd = _connection.CreateCommand();
-        selectCmd.CommandText = "SELECT is_active, is_deleted FROM flags";
-        using var reader = selectCmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            selectCmd,
+            command => command.CommandText = "SELECT is_active, is_deleted FROM flags"
+        );
         Assert.True(reader.GetBoolean(0)); // is_active = true
         Assert.False(reader.GetBoolean(1)); // is_deleted = false
     }
@@ -700,9 +701,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify defaults
         using var selectCmd = _connection.CreateCommand();
-        selectCmd.CommandText = "SELECT count, score, rate FROM counters";
-        using var reader = selectCmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            selectCmd,
+            command => command.CommandText = "SELECT count, score, rate FROM counters"
+        );
         Assert.Equal(0, reader.GetInt32(0));
         Assert.Equal(100m, reader.GetDecimal(1));
         Assert.Equal(0.5, reader.GetDouble(2), 2);
@@ -730,9 +732,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify defaults
         using var selectCmd = _connection.CreateCommand();
-        selectCmd.CommandText = "SELECT status, category FROM statuses";
-        using var reader = selectCmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            selectCmd,
+            command => command.CommandText = "SELECT status, category FROM statuses"
+        );
         Assert.Equal("pending", reader.GetString(0));
         Assert.Equal("default", reader.GetString(1));
     }
@@ -865,9 +868,12 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         using (var selectCmd = _connection.CreateCommand())
         {
-            selectCmd.CommandText = "SELECT body, vector_dims(embedding) FROM public.documents";
-            using var reader = selectCmd.ExecuteReader();
-            Assert.True(reader.Read());
+            using var reader = DatabaseCommands.ReadFirstRow(
+                selectCmd,
+                command =>
+                    command.CommandText =
+                        "SELECT body, vector_dims(embedding) FROM public.documents"
+            );
             Assert.Equal("hello", reader.GetString(0));
             Assert.Equal(384, reader.GetInt32(1));
         }

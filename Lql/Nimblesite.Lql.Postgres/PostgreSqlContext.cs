@@ -295,24 +295,11 @@ public sealed class PostgreSqlContext : ISqlContext
             // Skip string literals.
             if (c == '\'')
             {
-                sb.Append(c);
-                i++;
-                while (i < sql.Length)
-                {
-                    sb.Append(sql[i]);
-                    if (sql[i] == '\'')
-                    {
-                        if (i + 1 < sql.Length && sql[i + 1] == '\'')
-                        {
-                            sb.Append(sql[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: sql,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
 
@@ -735,24 +722,11 @@ public sealed class PostgreSqlContext : ISqlContext
 
             if (c == '\'')
             {
-                sb.Append(c);
-                i++;
-                while (i < expression.Length)
-                {
-                    sb.Append(expression[i]);
-                    if (expression[i] == '\'')
-                    {
-                        if (i + 1 < expression.Length && expression[i + 1] == '\'')
-                        {
-                            sb.Append(expression[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: expression,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
 

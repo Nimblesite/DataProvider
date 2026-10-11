@@ -52,9 +52,10 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         Assert.True(((BoolSyncOk)result).Value);
 
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'"
+        );
         Assert.Equal("Alice", reader.GetString(0));
         Assert.Equal(30, reader.GetInt64(1));
         Assert.Equal("alice@example.com", reader.GetString(2));
@@ -87,9 +88,10 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         Assert.True(result is BoolSyncOk);
 
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT Name, Age FROM Person WHERE Id = 'p1'"
+        );
         Assert.Equal("Alice Updated", reader.GetString(0));
         Assert.Equal(31, reader.GetInt64(1));
     }
@@ -110,9 +112,10 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'"
+        );
         Assert.Equal("Alice Updated", reader.GetString(0));
         Assert.Equal(31, reader.GetInt64(1));
         Assert.Equal("alice.new@example.com", reader.GetString(2));

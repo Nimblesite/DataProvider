@@ -139,15 +139,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         // To exercise policies we need a non-bypassrls role and grant CRUD.
         using (var roleCmd = _connection.CreateCommand())
         {
-            roleCmd.CommandText = $"""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{AppRole}') THEN
-                        CREATE ROLE {AppRole} NOLOGIN NOBYPASSRLS;
-                    END IF;
-                END$$;
-                GRANT USAGE ON SCHEMA public TO {AppRole};
-                """;
+            roleCmd.CommandText = SqlData_ApplyAndForceRls_1();
             roleCmd.ExecuteNonQuery();
         }
 

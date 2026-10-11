@@ -162,28 +162,5 @@ public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFix
         );
 
     private static string PolicyYaml(string? predicate, string? check, bool sql) =>
-        $$"""
-            name: nap_policy_repro
-            tables:
-              - name: items
-                schema: public
-                columns:
-                  - name: id
-                    type: Int
-                    isNullable: false
-                primaryKey:
-                  columns: [id]
-                rowLevelSecurity:
-                  enabled: true
-                  forced: true
-                  policies:
-                    - name: item_visible
-                      permissive: true
-                      operations: [{{(check is null ? "Select" : predicate is null ? "Insert" : "All")}}]
-                      roles: [PUBLIC]
-                      {{(predicate is null ? "" : $"{(sql ? "usingSql" : "using")}: '{predicate}'")}}
-                      {{(
-                check is null ? "" : $"{(sql ? "withCheckSql" : "withCheck")}: '{check}'"
-            )}}
-            """;
+        SqlData_PolicyYaml_1(check: check, predicate: predicate, sql: sql);
 }

@@ -224,29 +224,11 @@ public sealed partial class SqliteDeclarativeTriggerTests
     )
     {
         var extra = extraTriggerYaml is null ? string.Empty : $"\n        {extraTriggerYaml}";
-        var yaml = $"""
-            name: tenant_app
-            tables:
-              - name: TenantMembers
-                schema: main
-                columns:
-                  - name: Id
-                    type: Text
-                    isNullable: false
-                  - name: TenantId
-                    type: Text
-                    isNullable: false
-                  - name: Role
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - Id
-                triggers:
-                  - name: guard_variant
-                    events: {events}
-                    raiseWhen: "{raiseWhen}"{extra}
-            """;
+        var yaml = SqlData_TryApplyGuardVariant_1(
+            events: events,
+            raiseWhen: raiseWhen,
+            extra: extra
+        );
         return SqliteTestDb.TryApplySchema(connection, SchemaYamlSerializer.FromYaml(yaml));
     }
 

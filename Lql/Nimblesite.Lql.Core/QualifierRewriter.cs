@@ -84,4 +84,31 @@ internal static class QualifierRewriter
         sql.Append(c);
         return i + 1;
     }
+
+    // Implements [LQL-SHARED-LITERAL-COPY].
+    internal static int CopyStringLiteral(string source, StringBuilder sb, int i)
+    {
+        sb.Append(source[i]);
+        i++;
+        while (i < source.Length)
+        {
+            sb.Append(source[i]);
+            if (source[i] == '\'')
+            {
+                if (i + 1 < source.Length && source[i + 1] == '\'')
+                {
+                    sb.Append(source[i + 1]);
+                    i += 2;
+                    continue;
+                }
+
+                i++;
+                break;
+            }
+
+            i++;
+        }
+
+        return i;
+    }
 }

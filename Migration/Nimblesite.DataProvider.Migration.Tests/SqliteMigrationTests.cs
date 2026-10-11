@@ -872,9 +872,11 @@ public sealed partial class SqliteMigrationTests
             );
 
             using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT is_active, is_deleted FROM flags WHERE id = 1";
-            using var reader = selectCmd.ExecuteReader();
-            Assert.True(reader.Read());
+            using var reader = DatabaseCommands.ReadFirstRow(
+                selectCmd,
+                command =>
+                    command.CommandText = "SELECT is_active, is_deleted FROM flags WHERE id = 1"
+            );
             Assert.Equal(1, reader.GetInt64(0)); // is_active = true = 1
             Assert.Equal(0, reader.GetInt64(1)); // is_deleted = false = 0
         });
@@ -899,9 +901,11 @@ public sealed partial class SqliteMigrationTests
             );
 
             using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT count, priority, rate FROM counters WHERE id = 1";
-            using var reader = selectCmd.ExecuteReader();
-            Assert.True(reader.Read());
+            using var reader = DatabaseCommands.ReadFirstRow(
+                selectCmd,
+                command =>
+                    command.CommandText = "SELECT count, priority, rate FROM counters WHERE id = 1"
+            );
             Assert.Equal(0, reader.GetInt64(0));
             Assert.Equal(100, reader.GetInt64(1));
             Assert.Equal(1.5, reader.GetDouble(2), 2);
@@ -927,9 +931,10 @@ public sealed partial class SqliteMigrationTests
             );
 
             using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT status, category FROM items WHERE id = 1";
-            using var reader = selectCmd.ExecuteReader();
-            Assert.True(reader.Read());
+            using var reader = DatabaseCommands.ReadFirstRow(
+                selectCmd,
+                command => command.CommandText = "SELECT status, category FROM items WHERE id = 1"
+            );
             Assert.Equal("pending", reader.GetString(0));
             Assert.Equal("uncategorized", reader.GetString(1));
         });
@@ -1107,9 +1112,10 @@ public sealed partial class SqliteMigrationTests
 
             using (var selectCmd = connection.CreateCommand())
             {
-                selectCmd.CommandText = "SELECT Body, length(Embedding) FROM documents";
-                using var r = selectCmd.ExecuteReader();
-                Assert.True(r.Read());
+                using var r = DatabaseCommands.ReadFirstRow(
+                    selectCmd,
+                    command => command.CommandText = "SELECT Body, length(Embedding) FROM documents"
+                );
                 Assert.Equal("hello", r.GetString(0));
                 // 384 floats × 4 bytes = 1536 bytes
                 Assert.Equal(1536L, r.GetInt64(1));

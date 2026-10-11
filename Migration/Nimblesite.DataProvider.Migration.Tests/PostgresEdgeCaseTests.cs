@@ -1,3 +1,5 @@
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -41,9 +43,12 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         cmd.ExecuteNonQuery();
 
         // Verify nulls are stored
-        cmd.CommandText = "SELECT name, email, age, balance FROM nullable_test WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command =>
+                command.CommandText =
+                    "SELECT name, email, age, balance FROM nullable_test WHERE id = 1"
+        );
         Assert.True(reader.IsDBNull(0));
         Assert.True(reader.IsDBNull(1));
         Assert.True(reader.IsDBNull(2));
@@ -86,9 +91,10 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         Assert.True(result is MigrationApplyResultOk);
 
         // Verify existing data preserved with NULL in new column
-        cmd.CommandText = "SELECT id, name, email FROM evolving_table";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT id, name, email FROM evolving_table"
+        );
         Assert.Equal(1, reader.GetInt32(0));
         Assert.Equal("Test User", reader.GetString(1));
         Assert.True(reader.IsDBNull(2));

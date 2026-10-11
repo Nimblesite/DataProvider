@@ -36,16 +36,16 @@ Git requires explicit user authorization for the task; otherwise, leave operatio
 
 ## Duplication
 
-Implements `[CI-DESLOP]`. Read [Deslop docs](https://deslop.live/docs/for-ai/); report [false positives](https://github.com/Nimblesite/Deslop/issues). Use MCP tools on every code change:
+Implements `[CI-DESLOP]`. Read [docs](https://deslop.live/docs/for-ai/); report [false positives](https://github.com/Nimblesite/Deslop/issues). Every code change requires:
 
-- Before authoring functions, methods, classes, helpers, fixtures, or test setup, call `find-similar`:
+- Before authoring code, fixtures, or test setup: `find-similar`.
   - `signals.fused ≥ 0.85` or `identical` / `nearly_identical`: reuse; never duplicate.
-  - `0.6 ≤ fused < 0.85`: open the canonical occurrence; strongly prefer reuse/extension.
+  - `0.6 ≤ fused < 0.85`: inspect canonical code; strongly prefer reuse/extension.
   - `fused < 0.6` or empty: proceed.
-- After changes: `rescan`, then `top-offenders` (worst clusters ranked by severity); `cluster-by-id` for merge candidates' full members/signals. Inspect files/ranges with `report-for-file` / `report-for-range`. Read `schema-doc` once per session to learn the report shape.
-- Never game the gate: no widening `max_duplication_percent`, marking code `hidden`, or trivial variations.
+- After changes: `rescan` → `top-offenders` (severity-ranked); `cluster-by-id` for merge candidates' full members/signals. Inspect with `report-for-file` / `report-for-range`; read `schema-doc` once per session.
+- Never evade the gate through budget increases, `hidden` code, or trivial variations.
 
-Committed `.deslop.toml` sets `max_duplication_percent`. CI runs `deslop .`; exceeding the budget fails with exit 3. Lower the threshold in the same PR when reducing duplication; never raise it without written justification.
+`.deslop.toml`: `max_duplication_percent`; CI: `deslop .`, exit 3 when exceeded. Lower the threshold with duplication reductions in the same PR; increases require written justification.
 
 ## Database and model rules
 

@@ -11,7 +11,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresSupportE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresSupportE2ETests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -237,15 +238,7 @@ public sealed class PostgresSupportE2ETests(PostgresContainerFixture fixture) : 
         Function(
             name,
             "boolean",
-            $"""
-            SELECT EXISTS (
-                SELECT 1
-                FROM public.tenant_members tm
-                WHERE tm.tenant_id = p_tenant_id
-                  AND tm.user_id = p_user_id
-                  {roleClause}
-            )
-            """,
+            SqlData_MembershipFunction_1(roleClause: roleClause),
             true,
             names
         ) with

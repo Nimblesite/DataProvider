@@ -46,6 +46,16 @@ internal static class DatabaseCommands
         return command.ExecuteScalar();
     }
 
+    // Implements [CI-TEST-SHARED-READ-FIRST-ROW]. Executes the configured query
+    // and advances to the first row, preserving the original read assertion.
+    internal static DbDataReader ReadFirstRow(DbCommand command, Action<DbCommand> configure)
+    {
+        configure(obj: command);
+        var reader = command.ExecuteReader();
+        Xunit.Assert.True(reader.Read());
+        return reader;
+    }
+
     // Implements [CI-TEST-SHARED-READ-COLUMN]. Reads every value of one result
     // column into a list, preserving the caller's original iteration order.
     internal static List<string> ReadStrings(DbCommand command, int ordinal = 0) =>

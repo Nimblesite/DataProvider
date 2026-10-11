@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <!-- Implements [LQL-RENDER-SHARED]: keep the shared renderer internal. -->
+    <InternalsVisibleTo Include="DataProvider" />
+    <InternalsVisibleTo Include="Nimblesite.DataProvider.Migration.Core" />
+    <InternalsVisibleTo Include="Nimblesite.DataProvider.Migration.Postgres" />
     <InternalsVisibleTo Include="Nimblesite.Lql.Postgres" />
     <InternalsVisibleTo Include="Nimblesite.Lql.SQLite" />
     <InternalsVisibleTo Include="Nimblesite.Lql.SqlServer" />

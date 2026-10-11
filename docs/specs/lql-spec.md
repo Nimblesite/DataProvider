@@ -180,3 +180,14 @@ unchanged, including multi-line document positions.
 Protocol tests reuse document initialization, completion requests, hover requests,
 diagnostics updates and formatting validation. Every original test and assertion
 remains active; helpers accept the original documents, positions and messages.
+
+### Shared Rust diagnostic scenarios [LQL-RUST-SHARED-TEST-WORKFLOWS]
+
+Diagnostic tests with identical workflows share their execution and assertions.
+Every named test remains, with its original source, search strings and assertions.
+
+### Shared literal copying [LQL-SHARED-LITERAL-COPY]
+
+The CLI, Postgres renderer and migration expression rewriters reuse one internal
+string-literal copying routine. It preserves escaped apostrophes, closing-delimiter
+positions and unterminated-text handling from the original routines.

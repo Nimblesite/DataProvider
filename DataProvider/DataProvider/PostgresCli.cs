@@ -1369,24 +1369,11 @@ internal static class PostgresCli
             // Pass through single-quoted string literals.
             if (c == '\'')
             {
-                sb.Append(c);
-                i++;
-                while (i < sql.Length)
-                {
-                    sb.Append(sql[i]);
-                    if (sql[i] == '\'')
-                    {
-                        if (i + 1 < sql.Length && sql[i + 1] == '\'')
-                        {
-                            sb.Append(sql[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: sql,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
 

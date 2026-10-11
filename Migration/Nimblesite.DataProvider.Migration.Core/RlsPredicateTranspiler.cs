@@ -280,25 +280,11 @@ public static partial class RlsPredicateTranspiler
             var c = source[i];
             if (c == '\'')
             {
-                // copy verbatim through closing quote (handles '' escape)
-                sb.Append(c);
-                i++;
-                while (i < source.Length)
-                {
-                    sb.Append(source[i]);
-                    if (source[i] == '\'')
-                    {
-                        if (i + 1 < source.Length && source[i + 1] == '\'')
-                        {
-                            sb.Append(source[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: source,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
             if (
@@ -363,24 +349,11 @@ public static partial class RlsPredicateTranspiler
             var c = predicate[i];
             if (c == '\'')
             {
-                sb.Append(c);
-                i++;
-                while (i < predicate.Length)
-                {
-                    sb.Append(predicate[i]);
-                    if (predicate[i] == '\'')
-                    {
-                        if (i + 1 < predicate.Length && predicate[i + 1] == '\'')
-                        {
-                            sb.Append(predicate[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: predicate,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
             if (c == open)
