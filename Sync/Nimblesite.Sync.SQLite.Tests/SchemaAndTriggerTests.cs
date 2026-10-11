@@ -1,7 +1,5 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
+
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
@@ -32,10 +30,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void CreateSchema_EmptyDatabase_CreatesAllTables()
     {
         // Act
-        var result = SyncSchema.CreateSchema(_db);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: SyncSchema.CreateSchema(_db));
 
         // Verify tables exist
         using var cmd = _db.CreateCommand();
@@ -43,11 +38,13 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
 
         var tables = DatabaseCommands.ReadStrings(cmd);
 
-        Assert.Contains("_sync_clients", tables);
-        Assert.Contains("_sync_log", tables);
-        Assert.Contains("_sync_session", tables);
-        Assert.Contains("_sync_state", tables);
-        Assert.Contains("_sync_subscriptions", tables);
+        global::Nimblesite.Sync.SQLite.Tests.SpecComplianceTests.VerifyDatabaseWorkflow3(
+            input0: tables,
+            value0: "_sync_clients",
+            value1: "_sync_log",
+            value2: "_sync_session",
+            value3: "_sync_state"
+        );
     }
 
     [Fact]
@@ -59,9 +56,9 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result3 = SyncSchema.CreateSchema(_db);
 
         // Assert
-        Assert.True(result1 is BoolSyncOk);
-        Assert.True(result2 is BoolSyncOk);
-        Assert.True(result3 is BoolSyncOk);
+        _ = global::Tests.Shared.ResultAssertions.Expected<BoolSyncOk>(actual: result1);
+        _ = global::Tests.Shared.ResultAssertions.Expected<BoolSyncOk>(actual: result2);
+        _ = global::Tests.Shared.ResultAssertions.Expected<BoolSyncOk>(actual: result3);
     }
 
     [Fact]
@@ -110,10 +107,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act
-        var result = SyncSchema.SetOriginId(_db, OriginId);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: SyncSchema.SetOriginId(_db, OriginId));
 
         var storedOrigin =
             global::Tests.Shared.DatabaseCommands.Scalar(
@@ -129,15 +123,14 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void GetOriginId_AfterSet_ReturnsValue()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
+        global::Tests.Shared.TempSqliteDatabase.InitializeSync(connection: _db, origin: OriginId);
 
         // Act
         var result = SyncSchema.GetOriginId(_db);
 
         // Assert
-        Assert.True(result is StringSyncOk);
-        Assert.Equal(OriginId, ((StringSyncOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<StringSyncOk>(actual: result);
+        Assert.Equal(OriginId, (Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -150,8 +143,8 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = SyncSchema.GetOriginId(_db);
 
         // Assert
-        Assert.True(result is StringSyncOk);
-        Assert.Equal("", ((StringSyncOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<StringSyncOk>(actual: result);
+        Assert.Equal("", (Ok(actual: result)).Value);
     }
 
     [Theory]
@@ -280,17 +273,13 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         );
 
         // Act
-        var result = TriggerGenerator.GenerateTriggersFromSchema(
-            _db,
-            "Products",
-            NullLogger.Instance
-        );
-
+        // Act
         // Assert
-
-        var triggers = Ok(actual: result).Value;
-        ContainsAll(
-            actual: triggers,
+        // Act
+        // Assert
+        SqlFragments(
+            read: () =>
+                TriggerGenerator.GenerateTriggersFromSchema(_db, "Products", NullLogger.Instance),
             expected: ["Products_sync_insert", "Products_sync_update", "Products_sync_delete"]
         );
     }
@@ -302,40 +291,37 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act
-        var result = TriggerGenerator.GenerateTriggersFromSchema(
-            _db,
-            "NonExistentTable",
-            NullLogger.Instance
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: TriggerGenerator.GenerateTriggersFromSchema(
+                _db,
+                "NonExistentTable",
+                NullLogger.Instance
+            )
         );
-
-        // Assert
-        Assert.True(result is StringSyncError);
     }
 
     [Fact]
     public void CreateTriggers_ValidTable_CreatesTriggers()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
+        using var cmd = CreateSyncCommand();
         cmd.CommandText = Data_CreateTriggers_ValidTable_CreatesTriggers_1;
         cmd.ExecuteNonQuery();
 
         // Act
-        var result = TriggerGenerator.CreateTriggers(_db, "Orders", NullLogger.Instance);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: TriggerGenerator.CreateTriggers(_db, "Orders", NullLogger.Instance)
+        );
 
         // Verify triggers exist
         cmd.CommandText = Data_CreateTriggers_ValidTable_CreatesTriggers_2;
 
-        var triggers = DatabaseCommands.ReadStrings(cmd);
-
-        Assert.Contains("Orders_sync_delete", triggers);
-        Assert.Contains("Orders_sync_insert", triggers);
-        Assert.Contains("Orders_sync_update", triggers);
+        global::Nimblesite.Sync.SQLite.Tests.SpecComplianceTests.VerifySyncLoopWorkflow4(
+            input0: cmd,
+            value0: "Orders_sync_delete",
+            value1: "Orders_sync_insert",
+            value2: "Orders_sync_update"
+        );
     }
 
     [Fact]
@@ -345,22 +331,22 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act
-        var result = TriggerGenerator.CreateTriggers(_db, "NonExistent", NullLogger.Instance);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: TriggerGenerator.CreateTriggers(_db, "NonExistent", NullLogger.Instance)
+        );
     }
 
     [Fact]
     public void DropTriggers_ExistingTriggers_RemovesThem()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_DropTriggers_ExistingTriggers_RemovesThem_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Items", NullLogger.Instance);
+        using var cmd = CreateSyncCommand();
+        CreateTableAndTriggers(
+            command: cmd,
+            createTableSql: Data_DropTriggers_ExistingTriggers_RemovesThem_1,
+            db: _db,
+            table: "Items"
+        );
 
         // Verify triggers exist
         cmd.CommandText =
@@ -368,10 +354,9 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         Assert.Equal(3L, cmd.ExecuteScalar());
 
         // Act
-        var result = TriggerGenerator.DropTriggers(_db, "Items", NullLogger.Instance);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: TriggerGenerator.DropTriggers(_db, "Items", NullLogger.Instance)
+        );
         Assert.Equal(0L, cmd.ExecuteScalar());
     }
 
@@ -382,10 +367,9 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act
-        var result = TriggerGenerator.DropTriggers(_db, "NonExistent", NullLogger.Instance);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: TriggerGenerator.DropTriggers(_db, "NonExistent", NullLogger.Instance)
+        );
     }
 
     [Fact]
@@ -397,11 +381,9 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         cmd.ExecuteNonQuery();
 
         // Act
-        var result = TriggerGenerator.GetTableColumns(_db, "Customers");
-
+        // Act
         // Assert
-
-        var columns = Ok(actual: result).Value;
+        var columns = Ok(read: () => TriggerGenerator.GetTableColumns(_db, "Customers")).Value;
         Assert.Equal(4, columns.Count);
 
         var pk = columns.First(c => c.IsPrimaryKey);
@@ -415,17 +397,15 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = TriggerGenerator.GetTableColumns(_db, "NonExistent");
 
         // Assert
-        Assert.True(result is ColumnInfoListOk);
-        Assert.Empty(((ColumnInfoListOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<ColumnInfoListOk>(actual: result);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void Triggers_InsertLogsToSyncLog()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
+        using var cmd = CreateSyncCommand();
         cmd.CommandText = Data_Triggers_InsertLogsToSyncLog_1;
         CreateTriggersAndPrepareInsert(
             input0: cmd,
@@ -444,48 +424,28 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void Triggers_UpdateLogsToSyncLog()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_UpdateLogsToSyncLog_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Events", NullLogger.Instance);
-
-        cmd.CommandText = "INSERT INTO Events (EventId, Title) VALUES ('e1', 'Meeting')";
-        cmd.ExecuteNonQuery();
-
-        // Act
-        cmd.CommandText = "UPDATE Events SET Title = 'Updated Meeting' WHERE EventId = 'e1'";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText =
-            "SELECT operation FROM _sync_log WHERE table_name = 'Events' ORDER BY version DESC LIMIT 1";
-        Assert.Equal("update", cmd.ExecuteScalar());
+        using var cmd = CreateSyncCommand();
+        VerifySharedChecks3(
+            input0: cmd,
+            input1: Data_Triggers_UpdateLogsToSyncLog_1,
+            input2: _db,
+            value2: "UPDATE Events SET Title = 'Updated Meeting' WHERE EventId = 'e1'",
+            value4: "update"
+        );
     }
 
     [Fact]
     public void Triggers_DeleteLogsToSyncLog()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_DeleteLogsToSyncLog_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Events", NullLogger.Instance);
-
-        cmd.CommandText = "INSERT INTO Events (EventId, Title) VALUES ('e1', 'Meeting')";
-        cmd.ExecuteNonQuery();
-
-        // Act
-        cmd.CommandText = "DELETE FROM Events WHERE EventId = 'e1'";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText =
-            "SELECT operation FROM _sync_log WHERE table_name = 'Events' ORDER BY version DESC LIMIT 1";
-        Assert.Equal("delete", cmd.ExecuteScalar());
+        using var cmd = CreateSyncCommand();
+        VerifySharedChecks3(
+            input0: cmd,
+            input1: Data_Triggers_DeleteLogsToSyncLog_1,
+            input2: _db,
+            value2: "DELETE FROM Events WHERE EventId = 'e1'",
+            value4: "delete"
+        );
 
         cmd.CommandText =
             "SELECT payload FROM _sync_log WHERE table_name = 'Events' ORDER BY version DESC LIMIT 1";
@@ -496,12 +456,13 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void Triggers_SyncActiveSuppressions()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_SyncActiveSuppressions_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Events", NullLogger.Instance);
+        using var cmd = CreateSyncCommand();
+        CreateTableAndTriggers(
+            command: cmd,
+            createTableSql: Data_Triggers_SyncActiveSuppressions_1,
+            db: _db,
+            table: "Events"
+        );
 
         // Set sync_active to suppress triggers
         cmd.CommandText = "UPDATE _sync_session SET sync_active = 1";
@@ -524,19 +485,14 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void Triggers_LogPrimaryKeyAsJson()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_LogPrimaryKeyAsJson_1;
-        CreateTriggersAndPrepareInsert(
-            input0: cmd,
-            value0: "Records",
-            value1: "INSERT INTO Records (RecordId, Data) VALUES ('r123', 'test data')",
-            value2: "SELECT pk_value FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
+        using var cmd = CreateSyncCommand();
+        var pkValue = VerifyTriggerLogQuery(
+            command: cmd,
+            createTableSql: Data_Triggers_LogPrimaryKeyAsJson_1,
+            table: "Records",
+            insertSql: "INSERT INTO Records (RecordId, Data) VALUES ('r123', 'test data')",
+            selectSql: "SELECT pk_value FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
         );
-        var pkValue = cmd.ExecuteScalar() as string;
-
-        Assert.NotNull(pkValue);
         ContainsAll(actual: pkValue, expected: ["RecordId", "r123"]);
     }
 
@@ -544,19 +500,14 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void Triggers_LogPayloadAsJson()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_LogPayloadAsJson_1;
-        CreateTriggersAndPrepareInsert(
-            input0: cmd,
-            value0: "Records",
-            value1: "INSERT INTO Records (RecordId, Name, Value) VALUES ('r1', 'TestName', 42)",
-            value2: "SELECT payload FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
+        using var cmd = CreateSyncCommand();
+        var payload = VerifyTriggerLogQuery(
+            command: cmd,
+            createTableSql: Data_Triggers_LogPayloadAsJson_1,
+            table: "Records",
+            insertSql: "INSERT INTO Records (RecordId, Name, Value) VALUES ('r1', 'TestName', 42)",
+            selectSql: "SELECT payload FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
         );
-        var payload = cmd.ExecuteScalar() as string;
-
-        Assert.NotNull(payload);
         ContainsAll(actual: payload, expected: ["RecordId", "Name", "Value", "TestName"]);
     }
 
@@ -565,17 +516,15 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     {
         // Arrange
         var myOrigin = "my-unique-origin";
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, myOrigin);
+        global::Tests.Shared.TempSqliteDatabase.InitializeSync(connection: _db, origin: myOrigin);
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_LogOriginId_1;
-        CreateTriggersAndPrepareInsert(
+        var origin = VerifySharedChecks1(
             input0: cmd,
+            input1: Data_Triggers_LogOriginId_1,
             value0: "Tasks",
             value1: "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Do something')",
             value2: "SELECT origin FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1"
         );
-        var origin = cmd.ExecuteScalar() as string;
 
         Assert.Equal(myOrigin, origin);
     }
@@ -584,19 +533,14 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void Triggers_LogTimestamp()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, OriginId);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_Triggers_LogTimestamp_1;
-        CreateTriggersAndPrepareInsert(
-            input0: cmd,
-            value0: "Tasks",
-            value1: "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Task')",
-            value2: "SELECT timestamp FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1"
+        using var cmd = CreateSyncCommand();
+        var timestamp = VerifyTriggerLogQuery(
+            command: cmd,
+            createTableSql: Data_Triggers_LogTimestamp_1,
+            table: "Tasks",
+            insertSql: "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Task')",
+            selectSql: "SELECT timestamp FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1"
         );
-        var timestamp = cmd.ExecuteScalar() as string;
-
-        Assert.NotNull(timestamp);
         Assert.Matches(@"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", timestamp);
     }
 
@@ -625,7 +569,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         // Assert
 
         var error = Expected<StringSyncError>(actual: result).Value;
-        Assert.True(error is SyncErrorDatabase);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncErrorDatabase>(actual: error);
         Assert.Contains("no primary key", ((SyncErrorDatabase)error).Message.ToLowerInvariant());
     }
 
@@ -637,20 +581,11 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     public void EnableSuppression_ValidConnection_SetsFlag()
     {
         // Arrange
-        SyncSchema.CreateSchema(_db);
-
-        // Act
-        var result = SyncSessionManager.EnableSuppression(_db);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        Assert.Equal(
-            1L,
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _db,
-                configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
-            )
+        VerifyDatabaseWorkflow1(
+            input0: _db,
+            value0: SyncSchema.CreateSchema,
+            value1: SyncSessionManager.EnableSuppression,
+            value2: 1L
         );
     }
 
@@ -659,20 +594,11 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
     {
         // Arrange
         SyncSchema.CreateSchema(_db);
-        SyncSessionManager.EnableSuppression(_db);
-
-        // Act
-        var result = SyncSessionManager.DisableSuppression(_db);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        Assert.Equal(
-            0L,
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _db,
-                configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
-            )
+        VerifyDatabaseWorkflow1(
+            input0: _db,
+            value0: SyncSessionManager.EnableSuppression,
+            value1: SyncSessionManager.DisableSuppression,
+            value2: 0L
         );
     }
 
@@ -684,11 +610,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSessionManager.EnableSuppression(_db);
 
         // Act
-        var result = SyncSessionManager.IsSuppressionActive(_db);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-        Assert.True(((BoolSyncOk)result).Value);
+        AssertOkValue(SyncSessionManager.IsSuppressionActive(_db), value => Assert.True(value));
     }
 
     [Fact]
@@ -698,11 +620,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act
-        var result = SyncSessionManager.IsSuppressionActive(_db);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-        Assert.False(((BoolSyncOk)result).Value);
+        AssertOkValue(SyncSessionManager.IsSuppressionActive(_db), value => Assert.False(value));
     }
 
     [Fact]
@@ -713,34 +631,26 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
 
         // Act & Assert
         SyncSessionManager.EnableSuppression(_db);
-        Assert.True(((BoolSyncOk)SyncSessionManager.IsSuppressionActive(_db)).Value);
+        Assert.True((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
 
         SyncSessionManager.DisableSuppression(_db);
-        Assert.False(((BoolSyncOk)SyncSessionManager.IsSuppressionActive(_db)).Value);
+        Assert.False((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
 
         SyncSessionManager.EnableSuppression(_db);
-        Assert.True(((BoolSyncOk)SyncSessionManager.IsSuppressionActive(_db)).Value);
+        Assert.True((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
 
         SyncSessionManager.DisableSuppression(_db);
-        Assert.False(((BoolSyncOk)SyncSessionManager.IsSuppressionActive(_db)).Value);
+        Assert.False((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
     }
 
     #endregion
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
@@ -760,5 +670,146 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
 
         // Assert
         input0.CommandText = value2;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string? VerifySharedChecks1(
+        SqliteCommand input0,
+        string input1,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        input0.CommandText = input1;
+        CreateTriggersAndPrepareInsert(
+            input0: input0,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
+        var pkValue = input0.ExecuteScalar() is string text ? text : null;
+
+        return pkValue;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks3(
+        SqliteCommand input0,
+        string input1,
+        SqliteConnection input2,
+        string value2,
+        string value4
+    )
+    {
+        CreateTableAndTriggers(
+            command: input0,
+            createTableSql: input1,
+            db: input2,
+            table: "Events"
+        );
+
+        input0.CommandText = "INSERT INTO Events (EventId, Title) VALUES ('e1', 'Meeting')";
+        input0.ExecuteNonQuery();
+
+        // Act
+        input0.CommandText = value2;
+        input0.ExecuteNonQuery();
+
+        // Assert
+        input0.CommandText =
+            "SELECT operation FROM _sync_log WHERE table_name = 'Events' ORDER BY version DESC LIMIT 1";
+        Assert.Equal(value4, input0.ExecuteScalar());
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifyReusableWorkflow4(
+        Func<SqliteCommand, string, string, string, string, string?> input0,
+        SqliteCommand input1,
+        global::System.String value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        var pkValue = input0(arg1: input1, arg2: value0, arg3: value1, arg4: value2, arg5: value3);
+        Assert.NotNull(pkValue);
+        return pkValue;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertOkValue<TValue, TError>(
+        Outcome.Result<TValue, TError> result,
+        Action<TValue> verify
+    )
+    {
+        _ = global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        verify((Ok(actual: result)).Value);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private SqliteCommand CreateSyncCommand()
+    {
+        global::Tests.Shared.TempSqliteDatabase.InitializeSync(connection: _db, origin: OriginId);
+        return _db.CreateCommand();
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void CreateTableAndTriggers(
+        SqliteCommand command,
+        string createTableSql,
+        SqliteConnection db,
+        string table
+    )
+    {
+        command.CommandText = createTableSql;
+        command.ExecuteNonQuery();
+        TriggerGenerator.CreateTriggers(db, table, NullLogger.Instance);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string? VerifyTriggerLogQuery(
+        SqliteCommand command,
+        string createTableSql,
+        string table,
+        string insertSql,
+        string selectSql
+    ) =>
+        VerifyReusableWorkflow4(
+            input0: VerifySharedChecks1,
+            input1: command,
+            value0: createTableSql,
+            value1: table,
+            value2: insertSql,
+            value3: selectSql
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyDatabaseWorkflow1(
+        SqliteConnection input0,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::Outcome.Result<global::System.Boolean, global::Nimblesite.Sync.Core.SyncError>
+        > value0,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::Outcome.Result<global::System.Boolean, global::Nimblesite.Sync.Core.SyncError>
+        > value1,
+        object value2
+    )
+    {
+        value0(arg: input0);
+
+        // Act
+        global::Tests.Shared.ResultAssertions.Ok(actual: value1(arg: input0));
+
+        Assert.Equal(
+            value2,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: input0,
+                configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
+            )
+        );
     }
 }

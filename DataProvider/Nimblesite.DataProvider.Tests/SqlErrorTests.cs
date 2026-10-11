@@ -5,16 +5,24 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for SqlError record type
 /// </summary>
-public sealed class SqlErrorTests
+public sealed partial class SqlErrorTests
 {
-    [Fact]
-    public void SqlError_CanBeCreatedWithMessageOnly()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData3))]
+    public void SqlError_CanBeCreatedWithMessageOnly_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         // Arrange & Act
-        var error = new SqlError("Test error message");
+        var error = new SqlError(scenario0);
 
         // Assert
-        Assert.Equal("Test error message", error.Message);
+        Assert.Equal(scenario1, error.Message);
         Assert.Null(error.Exception);
     }
 
@@ -86,17 +94,6 @@ public sealed class SqlErrorTests
             expected: ["Test error message", "InvalidOperationException"],
             comparison: StringComparison.Ordinal
         );
-    }
-
-    [Fact]
-    public void SqlError_WithEmptyMessage_IsValid()
-    {
-        // Arrange & Act
-        var error = new SqlError("");
-
-        // Assert
-        Assert.Equal("", error.Message);
-        Assert.Null(error.Exception);
     }
 
     [Fact]

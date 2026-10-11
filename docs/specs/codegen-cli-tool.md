@@ -283,3 +283,71 @@ Postgres update and delete generation share connection and transaction overload
 emission. SQL quoting, signatures, parameter binding, exception handling and
 generated output order are preserved. Insert and write overloads share their
 command-result emitter with the original result types and expressions.
+
+### Shared bulk method generation [DP-CODEGEN-SHARED-BULK-METHODS]
+
+Bulk insert and upsert generation share metadata validation, ordered column and
+tuple selection, method and batch headers, VALUES placeholders, tuple parameter
+binding and command execution. Upserts retain primary-key requirements and the
+PostgreSQL conflict-update or SQLite replace behavior. Public signatures and
+emitted documentation, result types and error messages remain unchanged.
+
+### [DP-CODEGEN-SHARED-SQL-METHODS]
+
+Query and nonquery generators share method headers, SQL setup, native command creation, and parameter binding. Query result mapping and provider-specific typed null parameters retain their original behavior.
+
+### [DP-SQLITE-SHARED-TABLE-COLUMN]
+
+CLI and source-generator SQLite table inspection share column projection from PRAGMA results. Each retains its own synchronous or asynchronous reader loop.
+
+## [DP-MODEL-SHARED-EMISSION]
+
+Record generation uses shared column, parameter documentation, argument and assignment emitters. Parent and child argument comma rules, metadata fallbacks and generated text remain unchanged.
+
+## [DP-TEST-SHARED-QUERY-CONSTRUCTION]
+
+Repeated fluent query prefixes use a shared factory that builds a fresh mutable query builder for each scenario. Callers retain their filters, ordering, execution and assertions.
+
+## [CI-INDEPENDENT-SQL-SPECIFICATIONS]
+
+Immutable SQL specifications share exact-value constants within each project. Data-only partial files are excluded from duplication analysis; query execution, binding, projection, control flow and assertions remain analysed. Each reference preserves the original query value.
+
+## [CI-TEST-INDEPENDENT-SCHEMA-DATA]
+
+Pure schema, policy and mapping fixture definitions live in data-only partial files. Factories preserve their parameters and fresh record construction. Database operations, assertions, loops and scenario runners remain in analysed files.
+
+## [DP-CLI-SHARED-EMISSION-TEXT]
+
+Identical fixed source-text templates share immutable arrays. Their exact string values and ordering are retained. Only template data is excluded; rendering, metadata handling, conditional emission and generated output remain unchanged.
+
+## [DP-TEST-SHARED-PARAMETER-EXECUTION]
+
+SQLite CRUD scenarios share parameter construction and execution. Each scenario retains its exact SQL, values, result handling and assertions.
+
+## [LQL-VSCODE-SHARED-DIAGNOSTIC-SCENARIOS]
+
+Five named extension scenarios share document opening and the zero-error diagnostic assertion. Fixture names, diagnostic filtering, settling behavior and scenario messages remain unchanged.
+
+## [MIG-JSON-SHARED-PORTABLE-TYPE-FIELDS]
+
+Portable type JSON uses one discriminator mapping and one integer field reader. Type names, omitted-field defaults, optional geometry metadata and unknown-type fallback remain unchanged.
+
+## [LQL-SHARED-SOURCE-POSITION]
+
+Instance and static visitor errors share source-position construction. Instance calls retain source text; static calls preserve their optional source-text behavior and missing-stop-token fallback.
+
+## [DP-CODEGEN-SHARED-GUARDS]
+
+Code generators share type-name and column validation while retaining provider-specific output and error results.
+
+## [DP-CLI-SHARED-ERROR-REPORT]
+
+PostgreSQL and SQLite CLI error reports share escaping, file emission and diagnostics. Provider command behavior remains unchanged.
+
+## [DP-CLI-SHARED-OPTIONS]
+
+CLI commands share required option construction, preserving names, descriptions, arity and required flags.
+
+## [DP-CLI-SHARED-XML-DOC]
+
+Generated PostgreSQL overload documentation shares one emitter while retaining source text and parameter ordering.

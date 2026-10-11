@@ -302,4 +302,48 @@ public partial class SchemaIntegrityVerifierTests
                 ),
             ]
         );
+
+    private static string[] Fixture_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_2() =>
+        [
+            "public.accounts.id: nullability expected NOT NULL but found NULL",
+            "public.accounts.id: identity expected True but found False",
+            "public.accounts.id: default expected gen_uuid() but found <none>",
+            "public.accounts.code: default expected 'new' but found 'old'",
+            "public.accounts.missing: missing column",
+            "public.accounts: primary key columns expected (id) but found (tenant_id)",
+            "public.accounts: foreign key fk_accounts_tenant columns drifted",
+        ];
+
+    private static string[] Fixture_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_3() =>
+        [
+            "public.accounts: foreign key fk_accounts_tenant referenced table drifted",
+            "public.accounts: foreign key fk_accounts_tenant referenced columns drifted",
+            "public.accounts: foreign key fk_accounts_tenant on delete expected Cascade but found NoAction",
+            "public.accounts: foreign key fk_accounts_tenant on update expected NoAction but found Cascade",
+            "public.accounts: missing foreign key FK_accounts_missing_fk on (missing_fk)",
+            "public.accounts: unique constraint uq_accounts_tenant_code columns expected (tenant_id, code) but found (code, tenant_id)",
+            "public.accounts: missing unique constraint UQ_accounts_status on (status)",
+        ];
+
+    private static string[] Fixture_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_4() =>
+        [
+            "public.accounts: index idx_accounts_code uniqueness drifted",
+            "public.accounts: index idx_accounts_code columns drifted",
+            "public.accounts: index idx_accounts_code expressions drifted",
+            "public.accounts: index idx_accounts_code filter drifted",
+            "public.accounts: missing index idx_accounts_missing",
+            "public.accounts: check constraint ck_accounts_code expression drifted",
+            "public.accounts: missing check constraint ck_accounts_missing",
+        ];
+
+    private static string[] Fixture_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_2() =>
+        [
+            "public.documents: row-level security expected True but found False",
+            "public.documents: forced row-level security expected True but found False",
+            "public.documents: missing row-level security policy tenant_read",
+            "role app_user: login drifted",
+            "role app_user: bypassRls drifted",
+            "role missing_role: missing role",
+            "public.current_tenant_id: missing function",
+        ];
 }

@@ -21,14 +21,18 @@ public sealed partial class LqlExpressionEvaluatorTests
         LqlExpressionAssertions.EvaluatesTo(json: json, expression: expression, expected: expected);
     }
 
-    [Fact]
-    public void Length_ReturnsStringLength()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Length_ReturnsStringLength_ContextCasesData))]
+    public void Length_ReturnsStringLength_ContextCases(
+        string caseName,
+        string value0,
+        string value1,
+        object value2
+    )
     {
-        var source = JsonDocument.Parse("""{"Name":"Alice"}""").RootElement;
-
-        var result = LqlExpressionEvaluator.Evaluate("length(Name)", source);
-
-        Assert.Equal(5, result);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix3(value0: value0, value1: value1, value2: value2);
     }
 
     #endregion
@@ -54,25 +58,15 @@ public sealed partial class LqlExpressionEvaluatorTests
         Assert.True(string.IsNullOrEmpty(result?.ToString()));
     }
 
-    [Fact]
-    public void LqlTransform_NumericColumn_Works()
-    {
-        var source = JsonDocument.Parse("""{"Price":99.99}""").RootElement;
-
-        var result = LqlExpressionEvaluator.Evaluate("Price", source);
-
-        Assert.Equal(99.99, result);
-    }
-
-    [Fact]
-    public void LqlTransform_BooleanColumn_Works()
-    {
-        var source = JsonDocument.Parse("""{"IsActive":true}""").RootElement;
-
-        var result = LqlExpressionEvaluator.Evaluate("IsActive", source);
-
-        Assert.Equal(true, result);
-    }
-
     #endregion
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix3(string value0, string value1, object value2)
+    {
+        var source = JsonDocument.Parse(value0).RootElement;
+
+        var result = LqlExpressionEvaluator.Evaluate(value1, source);
+
+        Assert.Equal(value2, result);
+    }
 }

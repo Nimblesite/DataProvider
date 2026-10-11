@@ -1,9 +1,4 @@
 using System.Data.Common;
-using Xunit;
-using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
-    int,
-    Nimblesite.Sql.Model.SqlError
->;
 
 namespace Nimblesite.DataProvider.Example.Tests;
 
@@ -57,7 +52,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "2024-01-01"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(customer).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: customer).Value);
         var invoice = await tx.InsertInvoiceAsync(
                 ids.Invoice.ToString(),
                 "INV-001",
@@ -69,7 +64,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Initial invoice"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(invoice).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: invoice).Value);
         var line = await tx.InsertInvoiceLineAsync(
                 ids.InvoiceLine.ToString(),
                 ids.Invoice.ToString(),
@@ -81,7 +76,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Initial line note"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(line).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: line).Value);
         var address = await tx.InsertAddressAsync(
                 ids.Address.ToString(),
                 ids.Customer.ToString(),
@@ -92,7 +87,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Australia"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(address).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: address).Value);
         var order = await tx.InsertOrdersAsync(
                 ids.Order.ToString(),
                 "ORD-001",
@@ -102,7 +97,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Pending"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(order).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: order).Value);
         var item = await tx.InsertOrderItemAsync(
                 ids.OrderItem.ToString(),
                 ids.Order.ToString(),
@@ -112,7 +107,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 90.00
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(item).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: item).Value);
     }
 
     private static async Task UpdateRelationsAsync(DbTransaction tx, RelationIds ids)
@@ -128,7 +123,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Updated invoice"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(invoice).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: invoice).Value);
         var line = await tx.UpdateInvoiceLineAsync(
                 ids.InvoiceLine.ToString(),
                 ids.Invoice.ToString(),
@@ -140,7 +135,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Updated line note"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(line).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: line).Value);
         var address = await tx.UpdateAddressAsync(
                 ids.Address.ToString(),
                 ids.Customer.ToString(),
@@ -151,7 +146,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Australia"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(address).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: address).Value);
         var order = await tx.UpdateOrdersAsync(
                 ids.Order.ToString(),
                 "ORD-UPDATED",
@@ -161,7 +156,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Completed"
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(order).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: order).Value);
         var item = await tx.UpdateOrderItemAsync(
                 ids.OrderItem.ToString(),
                 ids.Order.ToString(),
@@ -171,7 +166,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 150.00
             )
             .ConfigureAwait(false);
-        Assert.Equal(1, Assert.IsType<AffectedRowsOk>(item).Value);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: item).Value);
 
         var missing = Guid.NewGuid().ToString();
         var missingInvoice = await tx.UpdateInvoiceAsync(
@@ -185,7 +180,10 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Missing"
             )
             .ConfigureAwait(false);
-        Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missingInvoice).Value);
+        Assert.Equal(
+            0,
+            global::Tests.Shared.ResultAssertions.ExactOk(actual: missingInvoice).Value
+        );
         var missingLine = await tx.UpdateInvoiceLineAsync(
                 missing,
                 ids.Invoice.ToString(),
@@ -197,7 +195,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Missing"
             )
             .ConfigureAwait(false);
-        Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missingLine).Value);
+        Assert.Equal(0, global::Tests.Shared.ResultAssertions.ExactOk(actual: missingLine).Value);
         var missingAddress = await tx.UpdateAddressAsync(
                 missing,
                 ids.Customer.ToString(),
@@ -208,7 +206,10 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Australia"
             )
             .ConfigureAwait(false);
-        Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missingAddress).Value);
+        Assert.Equal(
+            0,
+            global::Tests.Shared.ResultAssertions.ExactOk(actual: missingAddress).Value
+        );
         var missingOrder = await tx.UpdateOrdersAsync(
                 missing,
                 "ORD-MISSING",
@@ -218,7 +219,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 "Missing"
             )
             .ConfigureAwait(false);
-        Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missingOrder).Value);
+        Assert.Equal(0, global::Tests.Shared.ResultAssertions.ExactOk(actual: missingOrder).Value);
         var missingItem = await tx.UpdateOrderItemAsync(
                 missing,
                 ids.Order.ToString(),
@@ -228,7 +229,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                 1.0
             )
             .ConfigureAwait(false);
-        Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missingItem).Value);
+        Assert.Equal(0, global::Tests.Shared.ResultAssertions.ExactOk(actual: missingItem).Value);
     }
 
     private sealed record RelationIds(

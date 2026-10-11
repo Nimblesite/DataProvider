@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// migration tool (e.g. Sync change tracking) stay invisible to the diff so
 /// destructive runs never drop them.
 /// </summary>
-internal static class PostgresTriggerSchemaInspector
+internal static partial class PostgresTriggerSchemaInspector
 {
     public static IReadOnlyList<TriggerDefinition> Inspect(
         NpgsqlConnection connection,
@@ -24,13 +24,7 @@ internal static class PostgresTriggerSchemaInspector
             connection: connection,
             configure: command =>
             {
-                command.CommandText = """
-                SELECT trigger_name, event_manipulation, action_timing, action_orientation
-                FROM information_schema.triggers
-                WHERE event_object_schema = @schema AND event_object_table = @table
-                  AND trigger_name LIKE @managedPattern ESCAPE '\'
-                ORDER BY trigger_name
-                """;
+                command.CommandText = CatalogQuery_Inspect_1;
                 command.Parameters.AddWithValue("@schema", schemaName);
                 command.Parameters.AddWithValue("@table", tableName);
                 command.Parameters.AddWithValue(

@@ -1,5 +1,3 @@
-using Nimblesite.Sql.Model;
-
 #pragma warning disable CA1812 // Avoid uninstantiated internal classes
 
 namespace Nimblesite.DataProvider.Tests;
@@ -7,7 +5,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for LINQ query expression support with SelectQueryable
 /// </summary>
-public sealed class SqlQueryableTests
+public sealed partial class SqlQueryableTests
 {
     [Fact]
     public void SimpleSelectQuery_GeneratesCorrectSqlStatement()
@@ -58,24 +56,14 @@ public sealed class SqlQueryableTests
 
         // Assert
         Assert.Single(statement.Tables);
-        Assert.Single(statement.OrderByItems);
-
-        var orderBy = statement.OrderByItems[0];
-        Assert.Equal("Name", orderBy.Column);
-        Assert.Equal("ASC", orderBy.Direction);
+        AssertSingleOrderBy(statement: statement, column: "Name", direction: "ASC");
     }
 
     [Fact]
     public void SelectWithComplexWhere_OrCondition_GeneratesCorrectSqlStatement()
     {
         // Arrange & Act
-        var query =
-            from num in SelectStatement.From<Number>("numbers")
-            where num.Value < 3 || num.Value > 7
-            orderby num.Value
-            select num;
-
-        var statement = query.ToSqlStatement();
+        var statement = BuildOrConditionStatement();
 
         // Assert
         Assert.Single(statement.Tables);
@@ -89,10 +77,7 @@ public sealed class SqlQueryableTests
         Assert.Contains(conditions, c => c == LogicalOperator.OrOperator);
 
         // Check ORDER BY
-        Assert.Single(statement.OrderByItems);
-        var orderBy = statement.OrderByItems[0];
-        Assert.Equal("Value", orderBy.Column);
-        Assert.Equal("ASC", orderBy.Direction);
+        AssertSingleOrderBy(statement: statement, column: "Value", direction: "ASC");
     }
 
     [Fact]
@@ -116,6 +101,30 @@ public sealed class SqlQueryableTests
         Assert.Contains(conditions, c => c == LogicalOperator.AndOperator);
     }
 
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertSingleOrderBy(
+        SelectStatement statement,
+        string column,
+        string direction
+    )
+    {
+        Assert.Single(statement.OrderByItems);
+        var orderBy = statement.OrderByItems[0];
+        Assert.Equal(column, orderBy.Column);
+        Assert.Equal(direction, orderBy.Direction);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SelectStatement BuildOrConditionStatement()
+    {
+        var query =
+            from num in SelectStatement.From<Number>("numbers")
+            where num.Value < 3 || num.Value > 7
+            orderby num.Value
+            select num;
+        return query.ToSqlStatement();
+    }
+
     [Fact]
     public void SelectWithOrderByDescending_GeneratesCorrectSqlStatement()
     {
@@ -129,10 +138,7 @@ public sealed class SqlQueryableTests
         var statement = query.ToSqlStatement();
 
         // Assert
-        Assert.Single(statement.OrderByItems);
-        var orderBy = statement.OrderByItems[0];
-        Assert.Equal("Price", orderBy.Column);
-        Assert.Equal("DESC", orderBy.Direction);
+        AssertSingleOrderBy(statement: statement, column: "Price", direction: "DESC");
     }
 
     [Fact]
@@ -220,13 +226,7 @@ public sealed class SqlQueryableTests
     public void ComplexNumberQuery_LikeOriginalExample_GeneratesCorrectSqlStatement()
     {
         // Arrange & Act - This mimics the user's example
-        var query =
-            from num in SelectStatement.From<Number>("numbers")
-            where num.Value < 3 || num.Value > 7
-            orderby num.Value
-            select num;
-
-        var statement = query.ToSqlStatement();
+        var statement = BuildOrConditionStatement();
 
         // Assert
         Assert.Equal("numbers", statement.Tables.FirstOrDefault()?.Name);
@@ -324,22 +324,22 @@ public sealed class SqlQueryableTests
 
     #region PredicateBuilder Tests
 
-    [Fact]
-    public void PredicateBuilder_True_GeneratesAlwaysTrueExpression()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(PredicateBuilder_True_GeneratesAlwaysTrueExpression_ContextCasesData))]
+    public void PredicateBuilder_True_GeneratesAlwaysTrueExpression_ContextCases(
+        string caseName,
+        object value0
+    )
     {
-        // Arrange & Act
-        var predicate = PredicateBuilder.True<User>();
-        var statement = BuildAndAssertQueryStatement(input0: predicate);
-        Assert.NotNull(statement);
-    }
-
-    [Fact]
-    public void PredicateBuilder_False_GeneratesAlwaysFalseExpression()
-    {
-        // Arrange & Act
-        var predicate = PredicateBuilder.False<User>();
-        var statement = BuildAndAssertQueryStatement(input0: predicate);
-        Assert.NotNull(statement);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix1(
+            input0: BuildAndAssertQueryStatement,
+            value0: Assert.IsType<global::System.Func<global::System.Linq.Expressions.Expression<global::System.Func<
+                global::Nimblesite.DataProvider.Tests.SqlQueryableTests.User,
+                global::System.Boolean
+            >>>>(@object: value0)
+        );
     }
 
     [Fact]
@@ -351,9 +351,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var combined = predicate1.Or(predicate2);
-        var statement = BuildAndAssertQueryStatement(input0: combined);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions);
+        VerifySharedContinuation2(input0: combined);
     }
 
     [Fact]
@@ -365,9 +363,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var combined = predicate1.And(predicate2);
-        var statement = BuildAndAssertQueryStatement(input0: combined);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions);
+        VerifySharedContinuation2(input0: combined);
     }
 
     [Fact]
@@ -378,9 +374,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var negated = predicate.Not();
-        var statement = BuildAndAssertQueryStatement(input0: negated);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions);
+        VerifySharedContinuation2(input0: negated);
     }
 
     [Fact]
@@ -397,9 +391,7 @@ public sealed class SqlQueryableTests
             predicate = predicate.Or(u => u.Id == tempId);
         }
 
-        var statement = BuildAndAssertQueryStatement(input0: predicate);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions); // Complex condition gets flattened
+        VerifySharedContinuation2(input0: predicate); // Complex condition gets flattened
     }
 
     [Fact]
@@ -415,9 +407,7 @@ public sealed class SqlQueryableTests
         predicate = predicate.And(u => u.Age <= maxAge);
         predicate = predicate.And(u => u.Email != null);
 
-        var statement = BuildAndAssertQueryStatement(input0: predicate);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions); // Complex condition gets flattened
+        VerifySharedContinuation2(input0: predicate); // Complex condition gets flattened
     }
 
     [Fact]
@@ -438,9 +428,7 @@ public sealed class SqlQueryableTests
         // Combine with age filter using AND
         var finalPredicate = namePredicate.And(u => u.Age >= minAge);
 
-        var statement = BuildAndAssertQueryStatement(input0: finalPredicate);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions);
+        VerifySharedContinuation2(input0: finalPredicate);
     }
 
     [Fact]
@@ -486,9 +474,7 @@ public sealed class SqlQueryableTests
         }
         predicate = predicate.And(u => u.Email != null);
 
-        var statement = BuildAndAssertQueryStatement(input0: predicate);
-        Assert.NotNull(statement);
-        Assert.Single(statement.WhereConditions);
+        VerifySharedContinuation2(input0: predicate);
     }
 
     #endregion
@@ -508,5 +494,29 @@ public sealed class SqlQueryableTests
         Assert.NotNull(input0);
 
         return statement;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedContinuation2(
+        System.Linq.Expressions.Expression<Func<User, bool>> input0
+    )
+    {
+        var statement = BuildAndAssertQueryStatement(input0: input0);
+        Assert.NotNull(statement);
+        Assert.Single(statement.WhereConditions);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix1(
+        Func<System.Linq.Expressions.Expression<Func<User, bool>>, SelectStatement> input0,
+        global::System.Func<global::System.Linq.Expressions.Expression<global::System.Func<
+            global::Nimblesite.DataProvider.Tests.SqlQueryableTests.User,
+            global::System.Boolean
+        >>> value0
+    )
+    { // Arrange & Act
+        var predicate = value0();
+        var statement = input0(arg: predicate);
+        Assert.NotNull(statement);
     }
 }

@@ -1,7 +1,5 @@
 using System.Collections.Frozen;
 using Nimblesite.DataProvider.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
@@ -54,13 +52,7 @@ public partial class CustomCodeGenerationTests
         string connectionString,
         string sql,
         IEnumerable<ParameterInfo> parameters
-    ) =>
-        Task.FromResult<Result<IReadOnlyList<DatabaseColumn>, SqlError>>(
-            new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(TestColumns)
-        );
+    ) => CodeGenerationTestDoubles.ColumnMetadata(columns: TestColumns);
 
     [Fact]
     public void CustomModelGenerator_GeneratesClassesInsteadOfRecords()
@@ -278,9 +270,9 @@ public record Create{typeName}Request(
 
         var config = new TableConfig { GenerateInsert = true, GenerateUpdate = true };
 
-        var result = customTableGenerator.GenerateTableOperations(table, config);
-
-        var generatedCode = Ok(actual: result).Value;
+        var generatedCode = Ok(read: () =>
+            customTableGenerator.GenerateTableOperations(table, config)
+        ).Value;
 
         var expectedCode = Data_CustomTableOperationGenerator_GeneratesRepositoryPattern_1;
 
@@ -295,18 +287,18 @@ public record Create{typeName}Request(
         string input3
     )
     {
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            input0,
-            "test.db",
-            input1,
-            false,
-            null,
-            input2
-        );
-
-        var generatedCode = Ok(actual: result).Value;
+        var generatedCode = Ok(read: () =>
+            SqliteCodeGenerator.GenerateCodeWithMetadata(
+                "User",
+                "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
+                input0,
+                "test.db",
+                input1,
+                false,
+                null,
+                input2
+            )
+        ).Value;
 
         var expectedCode = input3;
 
@@ -465,136 +457,56 @@ internal static class StringExtensions
 /// </summary>
 public partial class NonQueryCodeGenerationTests
 {
-    [Fact]
-    public void GenerateNonQueryMethod_UpdateStatement_GeneratesCorrectExtension()
-    {
-        var sql = "UPDATE gk_session SET is_revoked = 1 WHERE id = @jti";
-        var parameters = new List<ParameterInfo> { new("jti", "TEXT") };
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "RevokeSessionExtensions",
-            "RevokeSession",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        var code = Ok(actual: result).Value;
-
-        // Verify key parts of generated code
-        ContainsAll(
-            actual: code,
-            expected:
-            [
-                "public static partial class RevokeSessionExtensions",
-                "public static async Task<Result<int, SqlError>> RevokeSessionAsync",
-                "this SqliteConnection connection",
-                "object? jti",
-                "ExecuteNonQueryAsync",
-                "UPDATE gk_session SET is_revoked = 1 WHERE id = @jti",
-            ]
-        );
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_DeleteStatement_GeneratesCorrectExtension()
-    {
-        var sql = "DELETE FROM sync_log WHERE created_at < @cutoff";
-        var parameters = new List<ParameterInfo> { new("cutoff", "TEXT") };
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "PurgeSyncLogExtensions",
-            "PurgeSyncLog",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        var code = Ok(actual: result).Value;
-
-        ContainsAll(
-            actual: code,
-            expected: ["PurgeSyncLogAsync", "DELETE FROM sync_log", "@cutoff"]
-        );
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_MultipleParameters_GeneratesAllParameters()
-    {
-        var sql = "UPDATE users SET name = @name, email = @email WHERE id = @id";
-        var parameters = new List<ParameterInfo>
-        {
-            new("name", "TEXT"),
-            new("email", "TEXT"),
-            new("id", "INTEGER"),
-        };
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "UpdateUserExtensions",
-            "UpdateUser",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        var code = Ok(actual: result).Value;
-
-        ContainsAll(
-            actual: code,
-            expected:
-            [
-                "object? name",
-                "object? email",
-                "object? id",
-                "AddWithValue(\"@name\"",
-                "AddWithValue(\"@email\"",
-                "AddWithValue(\"@id\"",
-            ]
-        );
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_NoParameters_GeneratesMethodWithoutParams()
-    {
-        var sql = "DELETE FROM temp_data";
-        var parameters = new List<ParameterInfo>();
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "ClearTempDataExtensions",
-            "ClearTempData",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        var code = Ok(actual: result).Value;
-
-        // Should have connection param only
-        Assert.Contains("ClearTempDataAsync(this SqliteConnection connection)", code);
-        Assert.DoesNotContain("AddWithValue", code);
-    }
-
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: all four original non-query fact
+    // names are retained as named cases; fragment checks and the no-parameter
+    // guard are preserved in a single shared workflow.
     [Theory]
-    // GenerateNonQueryMethod_EmptyClassName_ReturnsError
+    [MemberData(nameof(GenerateNonQueryMethod_CasesData))]
+    public void GenerateNonQueryMethod_GeneratesCorrectExtension(
+        string caseName,
+        string className,
+        string methodName,
+        string sql,
+        List<ParameterInfo> parameters,
+        string[] expected,
+        bool assertNoAddWithValue
+    )
+    {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+
+        var code = SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateNonQueryMethod(
+                    className,
+                    methodName,
+                    sql,
+                    parameters,
+                    "SqliteConnection"
+                ),
+            expected: [.. expected]
+        );
+
+        if (assertNoAddWithValue)
+            Assert.DoesNotContain("AddWithValue", code);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
     [MemberData(nameof(GenerateNonQueryMethod_EmptyClassName_ReturnsError_CasesInlineCases))]
-    // GenerateNonQueryMethod_EmptyMethodName_ReturnsError
-
-    // GenerateNonQueryMethod_EmptySql_ReturnsError
-
     public void GenerateNonQueryMethod_EmptyClassName_ReturnsError_Cases(
         string caseValue0,
         string caseValue1,
         string caseValue2
     )
     {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            caseValue0,
-            caseValue1,
-            caseValue2,
-            new List<ParameterInfo>(),
-            "SqliteConnection"
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                caseValue0,
+                caseValue1,
+                caseValue2,
+                new List<ParameterInfo>(),
+                "SqliteConnection"
+            )
         );
-
-        Assert.True(result is StringError);
     }
 }

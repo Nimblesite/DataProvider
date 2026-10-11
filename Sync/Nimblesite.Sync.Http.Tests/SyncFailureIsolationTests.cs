@@ -39,12 +39,10 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
 
     private static void InitializeDatabase(SqliteConnection conn, string originId)
     {
-        SyncSchema.CreateSchema(conn);
-        SyncSchema.SetOriginId(conn, originId);
-
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: command => command.CommandText = Data_InitializeDatabase_1
+        global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow1(
+            configure0: command => command.CommandText = Data_InitializeDatabase_1,
+            input0: conn,
+            input1: originId
         );
 
         TriggerGenerator.CreateTriggers(conn, "fhir_Encounter", NullLogger.Instance);
@@ -57,22 +55,12 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     /// </summary>
     public void Dispose()
     {
-        _serverConn.Close();
-        _serverConn.Dispose();
-        _clientConn.Close();
-        _clientConn.Dispose();
-
-        try
-        {
-            if (File.Exists(_serverDbPath))
-                File.Delete(_serverDbPath);
-            if (File.Exists(_clientDbPath))
-                File.Delete(_clientDbPath);
-        }
-        catch
-        {
-            // Ignore cleanup errors
-        }
+        global::Nimblesite.Sync.Http.Tests.HttpSyncE2ETests.VerifyReusableWorkflow3(
+            input0: _serverConn,
+            input1: _clientConn,
+            input2: _serverDbPath,
+            input3: _clientDbPath
+        );
     }
 
     #region Connection Timeout Tests (sync-004: Encounter enc-101)
@@ -115,22 +103,13 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     public async Task SyncApply_WhenOperationTimesOut_ShouldRecordFailureAndAllowRetry()
     {
         // Arrange - insert an encounter that will be synced
-        var encounterId = "enc-101";
-        DatabaseCommands.Execute(
-            connection: _clientConn,
-            configure: cmd =>
-                cmd.CommandText = $"""
-                INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class, ServiceType, StartDate)
-                VALUES ('{encounterId}', 'patient-123', 'in-progress', 'ambulatory', 'consultation', '2024-01-15T09:00:00Z')
-                """
+        var encounterChange = InsertAndFetchSingle(
+            _clientConn,
+            """
+            INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class, ServiceType, StartDate)
+            VALUES ('enc-101', 'patient-123', 'in-progress', 'ambulatory', 'consultation', '2024-01-15T09:00:00Z')
+            """
         );
-
-        // Get the change
-        var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-
-        var changesList = Ok(actual: changes).Value;
-        Assert.Single(changesList);
-        var encounterChange = changesList[0];
 
         // Act - simulate timeout by using cancellation token that expires immediately
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1));
@@ -188,8 +167,7 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         }
 
         // Get changes
-        var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList = CrossDatabaseSyncTests.FetchAllChanges(_clientConn);
         Assert.Equal(10, changesList.Count);
 
         // Act - time the sync operation
@@ -226,34 +204,29 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     {
         // Arrange - insert practitioner on server with version 5
         var practitionerId = "pract-202";
-        DatabaseCommands.Execute(
-            connection: _serverConn,
-            configure: cmd =>
-                cmd.CommandText = $"""
-                INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Qualification, Specialty, Version)
-                VALUES ('{practitionerId}', 'DR-202', 1, 'Smith', 'John', 'MD', 'Cardiology', 5)
-                """
-        );
-
-        // Get server change (version 5)
-        var serverChanges = SyncLogRepository.FetchChanges(_serverConn, 0, 100);
-        _ = ((SyncLogListOk)serverChanges).Value[0];
+        var serverChanges =
+            global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow2(
+                configure0: cmd =>
+                    cmd.CommandText = $"""
+                    INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Qualification, Specialty, Version)
+                    VALUES ('{practitionerId}', 'DR-202', 1, 'Smith', 'John', 'MD', 'Cardiology', 5)
+                    """,
+                input0: _serverConn
+            );
+        _ = (Ok(actual: serverChanges)).Value[0];
 
         // Create a conflicting client change with version 3 (older)
-        var clientChangeWithOldVersion = new SyncLogEntry(
-            Version: 1,
-            TableName: "fhir_Practitioner",
-            PkValue: $"{{\"Id\":\"{practitionerId}\"}}",
-            Operation: SyncOperation.Update,
-            Payload: $"{{\"Id\":\"{practitionerId}\",\"Identifier\":\"DR-202\",\"Active\":1,\"NameFamily\":\"Smith\",\"NameGiven\":\"Jane\",\"Qualification\":\"DO\",\"Specialty\":\"Neurology\",\"Version\":3}}",
-            Origin: _clientOriginId,
-            Timestamp: DateTime.UtcNow.AddMinutes(-10).ToString("O") // Older timestamp
+        var clientChangeWithOldVersion = PractitionerUpdate(
+            practitionerId,
+            $"{{\"Id\":\"{practitionerId}\",\"Identifier\":\"DR-202\",\"Active\":1,\"NameFamily\":\"Smith\",\"NameGiven\":\"Jane\",\"Qualification\":\"DO\",\"Specialty\":\"Neurology\",\"Version\":3}}",
+            DateTime.UtcNow.AddMinutes(-10).ToString("O") // Older timestamp
         );
 
         // Act - attempt to apply client change with older version to server
-        SyncSessionManager.EnableSuppression(_serverConn);
-        _ = ChangeApplierSQLite.ApplyChange(_serverConn, clientChangeWithOldVersion);
-        SyncSessionManager.DisableSuppression(_serverConn);
+        _ = CrossDatabaseSyncTests.ApplyChangeWithSuppression(
+            _serverConn,
+            clientChangeWithOldVersion
+        );
 
         // Assert - currently the system just overwrites without version check
         // This test SHOULD fail because we expect conflict detection
@@ -287,28 +260,22 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         var practitionerId = "pract-concurrent";
 
         // Server version (v2)
-        DatabaseCommands.Execute(
-            connection: _serverConn,
-            configure: cmd =>
-                cmd.CommandText = $"""
-                INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Specialty, Version)
-                VALUES ('{practitionerId}', 'DR-CONC', 1, 'ServerFamily', 'ServerGiven', 'ServerSpecialty', 2)
-                """
+        CrossDatabaseSyncTests.ExecuteSql(
+            _serverConn,
+            $"""
+            INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Specialty, Version)
+            VALUES ('{practitionerId}', 'DR-CONC', 1, 'ServerFamily', 'ServerGiven', 'ServerSpecialty', 2)
+            """
         );
 
         // Fetch server's log entry
-        var serverChanges = SyncLogRepository.FetchChanges(_serverConn, 0, 100);
-        var serverEntry = ((SyncLogListOk)serverChanges).Value[0];
+        var serverEntry = CrossDatabaseSyncTests.FetchAllChanges(_serverConn)[0];
 
         // Create client change with older version (v1) and older timestamp
-        var clientEntry = new SyncLogEntry(
-            Version: 1,
-            TableName: "fhir_Practitioner",
-            PkValue: $"{{\"Id\":\"{practitionerId}\"}}",
-            Operation: SyncOperation.Update,
-            Payload: $"{{\"Id\":\"{practitionerId}\",\"Identifier\":\"DR-CONC\",\"Active\":1,\"NameFamily\":\"ClientFamily\",\"NameGiven\":\"ClientGiven\",\"Specialty\":\"ClientSpecialty\",\"Version\":1}}",
-            Origin: _clientOriginId,
-            Timestamp: DateTime.UtcNow.AddHours(-1).ToString("O") // 1 hour older
+        var clientEntry = PractitionerUpdate(
+            practitionerId,
+            $"{{\"Id\":\"{practitionerId}\",\"Identifier\":\"DR-CONC\",\"Active\":1,\"NameFamily\":\"ClientFamily\",\"NameGiven\":\"ClientGiven\",\"Specialty\":\"ClientSpecialty\",\"Version\":1}}",
+            DateTime.UtcNow.AddHours(-1).ToString("O") // 1 hour older
         );
 
         // Act - use conflict resolver with LastWriteWins strategy
@@ -329,19 +296,13 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
 
         // Now verify that applying the losing change doesn't overwrite the winner
         // This is where the bug is - the system doesn't check versions during apply
-        SyncSessionManager.EnableSuppression(_serverConn);
-        _ = ChangeApplierSQLite.ApplyChange(_serverConn, clientEntry);
-        SyncSessionManager.DisableSuppression(_serverConn);
+        _ = CrossDatabaseSyncTests.ApplyChangeWithSuppression(_serverConn, clientEntry);
 
         // Verify server state after apply
-        var currentFamily = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _serverConn,
-                configure: command =>
-                    command.CommandText =
-                        $"SELECT NameFamily FROM fhir_Practitioner WHERE Id = '{practitionerId}'"
-            )
-            ?.ToString();
+        var currentFamily = CrossDatabaseSyncTests.ScalarString(
+            _serverConn,
+            $"SELECT NameFamily FROM fhir_Practitioner WHERE Id = '{practitionerId}'"
+        );
 
         // BUG: Currently this fails because client overwrites server despite being older
         Assert.Equal("ServerFamily", currentFamily); // WILL FAIL - proves version mismatch bug
@@ -397,27 +358,19 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     {
         // Arrange - create an appointment
         var appointmentId = "appt-789";
-        DatabaseCommands.Execute(
-            connection: _clientConn,
-            configure: cmd =>
-                cmd.CommandText = $"""
-                INSERT INTO fhir_Appointment (Id, ServiceCategory, ServiceType, Priority, Start, End, Status, PatientReference, PractitionerReference)
-                VALUES ('{appointmentId}', 'General', 'Consultation', 'routine', '2024-01-15T10:00:00Z', '2024-01-15T10:30:00Z', 'pending', 'patient-123', 'pract-456')
-                """
+        var appointmentChange = InsertAndFetchSingle(
+            _clientConn,
+            $"""
+            INSERT INTO fhir_Appointment (Id, ServiceCategory, ServiceType, Priority, Start, End, Status, PatientReference, PractitionerReference)
+            VALUES ('{appointmentId}', 'General', 'Consultation', 'routine', '2024-01-15T10:00:00Z', '2024-01-15T10:30:00Z', 'pending', 'patient-123', 'pract-456')
+            """
         );
 
-        // Get the change
-        var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-
-        var changesList = Ok(actual: changes).Value;
-        Assert.Single(changesList);
-
-        var appointmentChange = changesList[0];
-
         // Act - apply the change to server
-        SyncSessionManager.EnableSuppression(_serverConn);
-        var result = ChangeApplierSQLite.ApplyChange(_serverConn, appointmentChange);
-        SyncSessionManager.DisableSuppression(_serverConn);
+        var result = CrossDatabaseSyncTests.ApplyChangeWithSuppression(
+            _serverConn,
+            appointmentChange
+        );
 
         // Assert - change should be applied successfully, not stuck
         Assert.True(
@@ -426,14 +379,10 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         );
 
         // Verify appointment exists on server
-        var status = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _serverConn,
-                configure: command =>
-                    command.CommandText =
-                        $"SELECT Status FROM fhir_Appointment WHERE Id = '{appointmentId}'"
-            )
-            ?.ToString();
+        var status = CrossDatabaseSyncTests.ScalarString(
+            _serverConn,
+            $"SELECT Status FROM fhir_Appointment WHERE Id = '{appointmentId}'"
+        );
 
         Assert.NotNull(status);
         Assert.Equal("pending", status); // The appointment status is pending, but sync should be complete
@@ -488,8 +437,7 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         }
 
         // Get all changes
-        var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList = CrossDatabaseSyncTests.FetchAllChanges(_clientConn);
         Assert.Equal(3, changesList.Count);
 
         // Act - sync all appointments
@@ -516,15 +464,11 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         Assert.Equal(0, failCount);
 
         // Verify all appointments on server
-        var serverCount = Convert.ToInt32(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _serverConn,
-                configure: command => command.CommandText = "SELECT COUNT(*) FROM fhir_Appointment"
-            ),
-            System.Globalization.CultureInfo.InvariantCulture
+        CrossDatabaseSyncTests.AssertScalarInt32(
+            _serverConn,
+            "SELECT COUNT(*) FROM fhir_Appointment",
+            3
         );
-
-        Assert.Equal(3, serverCount);
     }
 
     #endregion
@@ -560,18 +504,15 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
             cmd.ExecuteNonQuery();
         }
 
-        DatabaseCommands.Execute(
-            connection: _clientConn,
-            configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class)
-                VALUES ('enc-101', 'patient-123', 'finished', 'ambulatory');
-                """
-        );
-
-        // Get all changes
-        var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList =
+            global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifySharedPhase1(
+                configure0: cmd =>
+                    cmd.CommandText = """
+                    INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class)
+                    VALUES ('enc-101', 'patient-123', 'finished', 'ambulatory');
+                    """,
+                input0: _clientConn
+            );
 
         // Act - sync to server with timing
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -615,4 +556,39 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     }
 
     #endregion
+    /// <summary>Executes an insert and returns the single logged change.</summary>
+    private static SyncLogEntry InsertAndFetchSingle(SqliteConnection connection, string sql) =>
+        VerifyReusableWorkflow4(input0: connection, configure0: cmd => cmd.CommandText = sql);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SyncLogEntry VerifyReusableWorkflow4(
+        SqliteConnection input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        // Get the change
+        var changesList = CrossDatabaseSyncTests.FetchAllChanges(input0);
+        Assert.Single(changesList);
+        var encounterChange = changesList[0];
+
+        return encounterChange;
+    }
+
+    /// <summary>Builds a Practitioner update entry from the client origin.</summary>
+    private SyncLogEntry PractitionerUpdate(
+        string practitionerId,
+        string payload,
+        string timestamp
+    ) =>
+        new(
+            Version: 1,
+            TableName: "fhir_Practitioner",
+            PkValue: $"{{\"Id\":\"{practitionerId}\"}}",
+            Operation: SyncOperation.Update,
+            Payload: payload,
+            Origin: _clientOriginId,
+            Timestamp: timestamp
+        );
 }

@@ -1,9 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Microsoft.Data.Sqlite;
+
 using Nimblesite.Lql.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
-using Tests.Shared;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -56,8 +53,11 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             .ToSqlStatement();
 
         var sql = ToSqliteSql(statement);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Category", sql);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: sql,
+            value0: "WHERE",
+            value2: "Category"
+        );
 
         var queryResult = _connection.Query<TestProduct>(
             sql: sql,
@@ -71,13 +71,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             }
         );
 
-        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
-            IReadOnlyList<TestProduct>,
-            SqlError
-        >.Ok<IReadOnlyList<TestProduct>, SqlError>>(
-            actual: queryResult,
-            message: "Expected Ok result"
-        );
+        var ok = global::Tests.Shared.ResultAssertions.ExactOk(actual: queryResult);
 
         var rows = ok.Value;
         Assert.Equal(3, rows.Count);
@@ -90,9 +84,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
     [Fact]
     public void WhereGeneric_GreaterThanComparison_ReturnsMatchingRows()
     {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name"), (null, "Price")])
+        var statement = ProductsWithNameAndPrice()
             .Where<TestProduct>(p => p.Price > 50.0)
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
@@ -100,50 +92,56 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         var sql = ToSqliteSql(statement);
         Assert.Contains(">", sql);
 
-        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
-        Assert.Equal("Gadget X", rows[0].Name);
-        Assert.Equal(99.99, rows[0].Price);
-        Assert.Equal("Gadget Y", rows[1].Name);
+        var rows = VerifySharedContinuation1(
+            input0: sql,
+            value0: 3,
+            value1: "Gadget X",
+            value3: 99.99,
+            value5: "Gadget Y",
+            value6: 1
+        );
         Assert.Equal("Premium Widget", rows[2].Name);
     }
 
     [Fact]
     public void WhereGeneric_AndCondition_ReturnsMatchingRows()
     {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name"), (null, "Price")])
+        var statement = ProductsWithNameAndPrice()
             .Where<TestProduct>(p => p.Price > 10 && p.Category == "Tools")
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
 
-        var sql = ToSqliteSql(statement);
-        Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
-
-        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
-        Assert.Equal("Tool Gamma", rows[0].Name);
-        Assert.Equal(15.00, rows[0].Price);
-        Assert.Equal("Tool Alpha", rows[1].Name);
+        var rows = VerifyReusableWorkflow12(
+            input0: ToSqliteSql,
+            input1: statement,
+            input2: VerifySharedContinuation1,
+            value0: "AND",
+            value2: 3,
+            value3: "Tool Gamma",
+            value4: 15.00,
+            value5: "Tool Alpha"
+        );
         Assert.Equal("Tool Beta", rows[2].Name);
     }
 
     [Fact]
     public void WhereGeneric_OrCondition_ReturnsMatchingRows()
     {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name"), (null, "Price")])
+        var statement = ProductsWithNameAndPrice()
             .Where<TestProduct>(p => p.Price < 20 || p.Price > 100)
             .OrderBy(columnName: "Price")
             .ToSqlStatement();
 
-        var sql = ToSqliteSql(statement);
-        Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
-
-        var rows = QueryProductsAndAssertCount(input0: sql, value3: 4);
-        Assert.Equal("Widget A", rows[0].Name);
-        Assert.Equal(10.00, rows[0].Price);
-        Assert.Equal("Tool Gamma", rows[1].Name);
+        var rows = VerifyReusableWorkflow12(
+            input0: ToSqliteSql,
+            input1: statement,
+            input2: VerifySharedContinuation1,
+            value0: "OR",
+            value2: 4,
+            value3: "Widget A",
+            value4: 10.00,
+            value5: "Tool Gamma"
+        );
         Assert.Equal(15.00, rows[1].Price);
         Assert.Equal("Gadget Y", rows[2].Name);
         Assert.Equal(149.99, rows[2].Price);
@@ -152,33 +150,34 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
     }
 
     [Fact]
-    public void WhereGeneric_StringContains_GeneratesLikeClause()
-    {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name")])
-            .Where<TestProduct>(p => p.Name.Contains("Widget"))
-            .OrderBy(columnName: "Name")
-            .ToSqlStatement();
-
-        var sql = ToSqliteSql(statement);
-        Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
-        ContainsAll(actual: sql, expected: ["Widget", "Name"]);
-    }
+    public void WhereGeneric_StringContains_GeneratesLikeClause() =>
+        AssertLikeClause(predicate: p => p.Name.Contains("Widget"), fragment: "Widget");
 
     [Fact]
-    public void WhereGeneric_StringStartsWith_GeneratesLikeClause()
+    public void WhereGeneric_StringStartsWith_GeneratesLikeClause() =>
+        AssertLikeClause(predicate: p => p.Name.StartsWith("Tool"), fragment: "Tool");
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertLikeClause(
+        System.Linq.Expressions.Expression<Func<TestProduct, bool>> predicate,
+        string fragment
+    )
     {
         var statement = "Products"
             .From()
             .Select(columns: [(null, "Name")])
-            .Where<TestProduct>(p => p.Name.StartsWith("Tool"))
+            .Where<TestProduct>(predicate)
             .OrderBy(columnName: "Name")
             .ToSqlStatement();
 
         var sql = ToSqliteSql(statement);
-        Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
-        ContainsAll(actual: sql, expected: ["Tool", "Name"]);
+        global::Nimblesite.DataProvider.Tests.LqlSqliteE2ETests.VerifyReusableWorkflow5(
+            input0: sql,
+            input1: ContainsAll,
+            value0: "LIKE",
+            value2: fragment,
+            value3: "Name"
+        );
     }
 
     [Fact]
@@ -193,34 +192,40 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
         var queryResult = _connection.Query<string>(sql: sql, mapper: r => r.GetString(0));
 
-        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
-            IReadOnlyList<string>,
-            SqlError
-        >.Ok<IReadOnlyList<string>, SqlError>>(actual: queryResult, message: "Expected Ok result");
-
-        Assert.Equal(8, ok.Value.Count);
-        Assert.Contains("Widget A", ok.Value);
-        Assert.Contains("Premium Widget", ok.Value);
+        VerifyReusableWorkflow13(
+            input0: queryResult,
+            value0: "Expected Ok result",
+            value1: 8,
+            value2: "Widget A",
+            value3: "Premium Widget"
+        );
     }
 
     [Fact]
     public void OrderByGeneric_SingleColumn_ReturnsSortedResults()
     {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name"), (null, "Price")])
+        var statement = ProductsWithNameAndPrice()
             .OrderBy<TestProduct>(p => p.Price)
             .ToSqlStatement();
 
         var sql = ToSqliteSql(statement);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Price", sql);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: sql,
+            value0: "ORDER BY",
+            value2: "Price"
+        );
 
-        var rows = QueryProductsAndAssertCount(input0: sql, value3: 8);
-        Assert.Equal("Widget A", rows[0].Name);
-        Assert.Equal(10.00, rows[0].Price);
-        Assert.Equal("Premium Widget", rows[7].Name);
-        Assert.Equal(500.00, rows[7].Price);
+        var rows = VerifyCompletionWorkflow2(
+            input0: VerifySharedContinuation1,
+            input1: sql,
+            value0: 8,
+            value1: "Widget A",
+            value2: 10.00,
+            value3: "Premium Widget",
+            value4: 7,
+            value5: 500.00,
+            value6: 7
+        );
 
         for (var i = 1; i < rows.Count; i++)
         {
@@ -231,9 +236,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
     [Fact]
     public void FullLinqChain_WhereSelectOrderByTakeSkip_ExecutesCorrectly()
     {
-        var statement = "Products"
-            .From()
-            .Select(columns: [(null, "Name"), (null, "Price")])
+        var statement = ProductsWithNameAndPrice()
             .Where<TestProduct>(p => p.Price > 10)
             .OrderBy<TestProduct>(p => p.Price)
             .Skip(count: 1)
@@ -247,16 +250,17 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             comparison: StringComparison.OrdinalIgnoreCase
         );
 
-        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
-
-        // Products with Price > 10 ordered by Price ASC:
-        // Tool Gamma (15), Widget B (25.5), Tool Alpha (35), Tool Beta (45),
-        // Gadget X (99.99), Gadget Y (149.99), Premium Widget (500)
-        // Skip 1 -> Widget B, Take 3 -> Widget B, Tool Alpha, Tool Beta
-        Assert.Equal("Widget B", rows[0].Name);
-        Assert.Equal(25.50, rows[0].Price);
-        Assert.Equal("Tool Alpha", rows[1].Name);
-        Assert.Equal(35.00, rows[1].Price);
+        var rows = VerifyCompletionWorkflow2(
+            input0: VerifySharedContinuation1,
+            input1: sql,
+            value0: 3,
+            value1: "Widget B",
+            value2: 25.50,
+            value3: "Tool Alpha",
+            value4: 1,
+            value5: 35.00,
+            value6: 1
+        );
         Assert.Equal("Tool Beta", rows[2].Name);
         Assert.Equal(45.00, rows[2].Price);
     }
@@ -264,10 +268,14 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
     /// <summary>
     /// Convert a statement to SQLite SQL, asserting the result is Ok, and return the SQL text.
     /// </summary>
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::Nimblesite.Sql.Model.SelectStatementBuilder ProductsWithNameAndPrice() =>
+        "Products".From().Select(columns: [(null, "Name"), (null, "Price")]);
+
     private static string ToSqliteSql(SelectStatement statement)
     {
         var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
+        var sqlOk = global::Tests.Shared.ResultAssertions.ExactOk(actual: sqlResult);
         return sqlOk.Value;
     }
 
@@ -282,16 +290,115 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             mapper: r => (r.GetString(0), r.GetDouble(1))
         );
 
-        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
-            IReadOnlyList<(string Name, double Price)>,
-            SqlError
-        >.Ok<IReadOnlyList<(string Name, double Price)>, SqlError>>(
-            actual: queryResult,
-            message: "Expected Ok result"
-        );
+        var ok = global::Tests.Shared.ResultAssertions.ExactOk(actual: queryResult);
 
         var rows = ok.Value;
         Assert.Equal(value3, rows.Count);
+
+        return rows;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<(string Name, double Price)> VerifySharedContinuation1(
+        string input0,
+        int value0,
+        string value1,
+        double value3,
+        string value5,
+        int value6
+    )
+    {
+        var rows = QueryProductsAndAssertCount(input0: input0, value3: value0);
+        Assert.Equal(value1, rows[0].Name);
+        Assert.Equal(value3, rows[0].Price);
+        Assert.Equal(value5, rows[value6].Name);
+
+        return rows;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static IReadOnlyList<(string Name, double Price)> VerifyReusableWorkflow12(
+        Func<SelectStatement, string> input0,
+        SelectStatement input1,
+        Func<
+            string,
+            int,
+            string,
+            double,
+            string,
+            int,
+            IReadOnlyList<(string Name, double Price)>
+        > input2,
+        string value0,
+        int value2,
+        string value3,
+        double value4,
+        string value5
+    )
+    {
+        var sql = input0(arg: input1);
+        Assert.Contains(value0, sql, StringComparison.OrdinalIgnoreCase);
+        var rows = input2(
+            arg1: sql,
+            arg2: value2,
+            arg3: value3,
+            arg4: value4,
+            arg5: value5,
+            arg6: 1
+        );
+        return rows;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow13(
+        Result<IReadOnlyList<string>, Sql.Model.SqlError> input0,
+        string value0,
+        int value1,
+        string value2,
+        string value3
+    )
+    {
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<string>,
+            SqlError
+        >.Ok<IReadOnlyList<string>, SqlError>>(actual: input0, message: value0);
+
+        Assert.Equal(value1, ok.Value.Count);
+        Assert.Contains(value2, ok.Value);
+        Assert.Contains(value3, ok.Value);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<(string Name, double Price)> VerifyCompletionWorkflow2(
+        Func<
+            string,
+            int,
+            string,
+            double,
+            string,
+            int,
+            IReadOnlyList<(string Name, double Price)>
+        > input0,
+        string input1,
+        int value0,
+        string value1,
+        double value2,
+        string value3,
+        int value4,
+        double value5,
+        int value6
+    )
+    {
+        var rows = input0(
+            arg1: input1,
+            arg2: value0,
+            arg3: value1,
+            arg4: value2,
+            arg5: value3,
+            arg6: value4
+        );
+        Assert.Equal(value5, rows[value6].Price);
 
         return rows;
     }

@@ -11,7 +11,6 @@
     <GenerateProgramFile>false</GenerateProgramFile>
     <NoWarn>CS1591;CA1707;CA1307;CA1062;CA1515;CA2100;CA1822;CA1859;CA1849;CA2234;CA1812;CA2007;CA2000;xUnit1030</NoWarn>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
@@ -30,7 +29,6 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
@@ -39,7 +37,6 @@
     <ProjectReference Include="../Nimblesite.Sync.Http/Nimblesite.Sync.Http.csproj" />
     <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
   </ItemGroup>
-
   <ItemGroup>
     <Compile
       Include="..\..\Tests.Shared\PostgresContainerFixture.cs"
@@ -69,6 +66,15 @@
     <Compile
       Include="../../Tests.Shared/TempSqliteDatabase.cs"
       Link="Shared/TempSqliteDatabase.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/MappingAssertions.cs" Link="Shared/MappingAssertions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.Sync.cs"
+      Link="Shared/TempSqliteDatabase.Sync.cs"
     />
   </ItemGroup>
 </Project>

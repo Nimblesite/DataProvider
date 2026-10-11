@@ -1129,3 +1129,30 @@ SQLite and Postgres repository mutations share command lifetime, parameter bindi
 execution and typed exception conversion in Core. Each caller retains its SQL,
 parameter order, Boolean or row-count result and original failure prefix.
 Parameter factories evaluate after the SQL is assigned inside the exception scope.
+
+### Shared coordinator batching [SYNC-COORDINATOR-SHARED-BATCHES]
+
+Pull and push share batch fetching, empty-batch termination, error propagation,
+version advancement and completion. Pull retains its trigger-suppression finally
+block and retrying change application; push retains its remote-send callback.
+Structured phase logs retain the rendered operation messages.
+
+The SQLite mapping compatibility API delegates single-record reads and matching deletes to `MappingStateRepository`. Both upsert APIs use shared bind/execute operations while retaining their original SQL text. Public signatures, result variants and database-error messages remain unchanged.
+
+### Shared repository reads [SYNC-REPOSITORY-SHARED-READS]
+
+Provider repositories reuse command creation, parameter binding, disposal and
+provider-specific exception handling. Each query retains its SQL, row projection,
+null handling and original error result. Writes use the same command lifecycle.
+
+## [SYNC-MAPPED-SHARED-BATCHES]
+
+Mapped pull and push share fetch, termination, version advancement and mapping state updates. Mapping application, echo prevention, hash writes, failure propagation and trigger suppression retain their direction-specific ordering.
+
+## [SYNC-TEST-SHARED-DATABASE-BOOTSTRAP]
+
+SQLite integration fixtures share opening their isolated disk database, creating the sync schema and setting the origin. Per-scenario table setup and fixture disposal remain with each test class.
+
+### Shared HTTP database connections [SYNC-HTTP-SHARED-CONNECTION-LIFETIME]
+
+HTTP repository adapters use one typed connection-lifetime operation: construct, open, invoke the provider operation, then dispose. Fetch, client upsert, maximum-version and apply operations retain their provider calls and exception behavior.

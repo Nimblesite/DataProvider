@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 
 namespace Nimblesite.DataProvider.Migration.Postgres;
 
-internal static class PostgresSupportSchemaInspector
+internal static partial class PostgresSupportSchemaInspector
 {
     public static IReadOnlyList<PostgresRoleDefinition> InspectRoles(NpgsqlConnection connection)
     {
@@ -163,14 +163,7 @@ internal static class PostgresSupportSchemaInspector
     )
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT grantee.rolname, acl.privilege_type
-            FROM pg_namespace n
-            CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, acldefault('n', n.nspowner))) acl
-            JOIN pg_roles grantee ON grantee.oid = acl.grantee
-            WHERE n.nspname = @schema
-            ORDER BY grantee.rolname, acl.privilege_type
-            """;
+        command.CommandText = CatalogQuery_InspectSchemaGrants_1;
         command.Parameters.AddWithValue("@schema", schemaName);
         return ReadGrantRows(command, schemaName, PostgresGrantTarget.Schema, null);
     }
@@ -181,16 +174,7 @@ internal static class PostgresSupportSchemaInspector
     )
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT c.relname, grantee.rolname, acl.privilege_type
-            FROM pg_class c
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) acl
-            JOIN pg_roles grantee ON grantee.oid = acl.grantee
-            WHERE n.nspname = @schema
-              AND c.relkind IN ('r', 'p')
-            ORDER BY c.relname, grantee.rolname, acl.privilege_type
-            """;
+        command.CommandText = CatalogQuery_InspectTableGrants_2;
         command.Parameters.AddWithValue("@schema", schemaName);
         return ReadGrantRows(command, schemaName, PostgresGrantTarget.Table, null);
     }

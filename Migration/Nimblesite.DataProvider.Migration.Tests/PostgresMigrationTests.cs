@@ -1,5 +1,5 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Tests.Shared;
+
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
@@ -10,26 +10,10 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Each test gets its own database within the shared container.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
 public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("migration_test").ConfigureAwait(false);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override string DatabaseName => "migration_test";
 
     [Fact]
     public void CreateDatabaseFromScratch_SingleTable_Success()
@@ -38,13 +22,11 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1();
 
         // Act
-        var emptySchema = PostgresSchemaInspector.Inspect(_connection, "public", _logger);
-        Assert.True(emptySchema is SchemaResultOk);
-
+        // Act
         var operations = SchemaDiff.Calculate(
-            ((SchemaResultOk)emptySchema).Value,
+            (Ok(read: () => PostgresSchemaInspector.Inspect(Connection, "public", Logger))).Value,
             schema,
-            logger: _logger
+            logger: Logger
         );
 
         var ops = Ok(actual: operations).Value;
@@ -58,9 +40,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         );
 
         // Verify table exists
-        var inspected = PostgresSchemaInspector.Inspect(_connection, "public", _logger);
-
-        var inspectedSchema = Ok(actual: inspected).Value;
+        // Verify table exists
+        var inspectedSchema = Ok(read: () =>
+            PostgresSchemaInspector.Inspect(Connection, "public", Logger)
+        ).Value;
         Assert.Contains(inspectedSchema.Tables, t => t.Name == "users");
     }
 
@@ -68,17 +51,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success()
     {
         // Arrange
-        var schema = Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        // Assert
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
+        VerifyReusableWorkflow7(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1,
+            input2: VerifySharedContinuation11
         );
 
         var inspected = InspectPublic();
@@ -94,29 +70,16 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeExistingDatabase_AddColumn_Success()
     {
         // Arrange - Create initial schema
-        var v1 = Fixture_UpgradeExistingDatabase_AddColumn_Success_1();
-
-        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
-        _ = Apply(operations: v1Ops);
-
-        // Define v2 with new columns
-        var v2 = Fixture_UpgradeExistingDatabase_AddColumn_Success_2();
-
-        // Act
-        var currentSchema = InspectPublic();
-
-        var upgradeOps = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-        ).Value;
+        var upgradeOps = VerifyConsolidatedPhase2(
+            input0: Fixture_UpgradeExistingDatabase_AddColumn_Success_1,
+            input1: Fixture_UpgradeExistingDatabase_AddColumn_Success_2,
+            input2: Logger
+        );
 
         // Should have 2 AddColumn operations
-        Assert.Equal(2, upgradeOps.Count);
-        Assert.All(upgradeOps, op => Assert.IsType<AddColumnOperation>(op));
+        PostgresTestDb.AssertTwoAddColumns(upgradeOps: upgradeOps);
 
-        var result = Apply(operations: upgradeOps);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: Apply(operations: upgradeOps));
 
         var finalSchema = InspectPublic();
         var products = finalSchema.Tables.Single(t => t.Name == "products");
@@ -127,28 +90,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeExistingDatabase_AddTable_Success()
     {
         // Arrange
-        var v1 = Fixture_UpgradeExistingDatabase_AddTable_Success_1();
-
-        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
-        _ = Apply(operations: v1Ops);
-
-        // v2 adds a new table
-        var v2 = Fixture_UpgradeExistingDatabase_AddTable_Success_2();
-
-        // Act
-        var currentSchema = InspectPublic();
-
-        var upgradeOps = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-        ).Value;
-
-        Assert.Single(upgradeOps);
-        Assert.IsType<CreateTableOperation>(upgradeOps[0]);
-
-        var result = Apply(operations: upgradeOps);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        VerifyUpgradeOperation<CreateTableOperation>(
+            input0: Fixture_UpgradeExistingDatabase_AddTable_Success_1,
+            input2: Fixture_UpgradeExistingDatabase_AddTable_Success_2
+        );
 
         var finalSchema = InspectPublic();
         Assert.Contains(finalSchema.Tables, t => t.Name == "items");
@@ -158,28 +103,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeExistingDatabase_AddIndex_Success()
     {
         // Arrange
-        var v1 = Fixture_UpgradeExistingDatabase_AddIndex_Success_1();
-
-        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
-        _ = Apply(operations: v1Ops);
-
-        // v2 adds an index
-        var v2 = Fixture_UpgradeExistingDatabase_AddIndex_Success_2();
-
-        // Act
-        var currentSchema = InspectPublic();
-
-        var upgradeOps = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-        ).Value;
-
-        Assert.Single(upgradeOps);
-        Assert.IsType<CreateIndexOperation>(upgradeOps[0]);
-
-        var result = Apply(operations: upgradeOps);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        VerifyUpgradeOperation<CreateIndexOperation>(
+            input0: Fixture_UpgradeExistingDatabase_AddIndex_Success_1,
+            input2: Fixture_UpgradeExistingDatabase_AddIndex_Success_2
+        );
 
         var finalSchema = InspectPublic();
         var logs = finalSchema.Tables.Single(t => t.Name == "logs");
@@ -197,9 +124,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         {
             var operations = InspectAndApplyInitialSchema(input0: schema);
 
-            var result = Apply(operations: operations);
-
-            Assert.True(result is MigrationApplyResultOk);
+            global::Tests.Shared.ResultAssertions.Ok(actual: Apply(operations: operations));
 
             // Second run should have 0 operations
             if (i == 1)
@@ -213,17 +138,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void CreateTable_PostgresNativeTypes_Success()
     {
         // Arrange
-        var schema = Fixture_CreateTable_PostgresNativeTypes_Success_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        CreateAndApplySchema(create: Fixture_CreateTable_PostgresNativeTypes_Success_1);
 
         // Verify native types are used
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = Data_CreateTable_PostgresNativeTypes_Success_1;
         using var reader = cmd.ExecuteReader();
 
@@ -242,14 +160,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     [Fact]
     public void CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase()
     {
-        var schema = Fixture_CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase_1();
-
-        var current = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: current, input1: schema);
-
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
+        VerifyReusableWorkflow7(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase_1,
+            input2: VerifySharedContinuation11
         );
         InsertPatientGender("male");
         var ex = Assert.Throws<PostgresException>(() => InsertPatientGender("invalid"));
@@ -260,20 +174,14 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_CreateWithLowerFunction_Success()
     {
         // Arrange - Create table with expression index for case-insensitive uniqueness
-        var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        // Assert - Migration succeeded
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
+        VerifyReusableWorkflow7(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1,
+            input2: VerifySharedContinuation11
         );
 
         // Verify index exists and is unique
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = Data_ExpressionIndex_CreateWithLowerFunction_Success_1;
         using var reader = cmd.ExecuteReader();
 
@@ -286,20 +194,19 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_EnforcesCaseInsensitiveUniqueness()
     {
         // Arrange - Create table with expression index
-        var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1();
-
-        var operations = InspectAndApplyInitialSchema(input0: schema);
-        _ = Apply(operations: operations);
+        VerifySharedContinuation9(
+            input0: Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1
+        );
 
         // Act - Insert first venue
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: command =>
                 command.CommandText = "INSERT INTO venues (name) VALUES ('The Corner Hotel')"
         );
 
         // Try to insert duplicate with different case - should fail
-        using var duplicateCmd = _connection.CreateCommand();
+        using var duplicateCmd = Connection.CreateCommand();
         duplicateCmd.CommandText = "INSERT INTO venues (name) VALUES ('THE CORNER HOTEL')";
 
         // Assert - Should throw unique constraint violation
@@ -311,28 +218,16 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_MultiExpression_CompositeIndexSuccess()
     {
         // Arrange - Create table with multi-expression index (like venues with suburb_id)
-        var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        // Assert
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
+        VerifyReusableWorkflow7(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1,
+            input2: VerifySharedContinuation11
         );
 
         // Verify composite expression index exists
-        var indexDef = (string?)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
-                configure: command =>
-                    command.CommandText =
-                        Data_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1
-            );
-
-        Assert.NotNull(indexDef);
+        var indexDef = VerifySharedContinuation7(configure0: command =>
+            command.CommandText = Data_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1
+        );
         ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "suburb_id"]);
     }
 
@@ -340,21 +235,20 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb()
     {
         // Arrange - Create tables with composite expression index
-        var schema = Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1();
-
-        var operations = InspectAndApplyInitialSchema(input0: schema);
-        _ = Apply(operations: operations);
+        VerifySharedContinuation9(
+            input0: Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1
+        );
 
         // Create two regions
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: command =>
                 command.CommandText =
                     Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1
         );
 
         // Act - Insert same name in different regions (should succeed)
-        using var insertCmd = _connection.CreateCommand();
+        using var insertCmd = Connection.CreateCommand();
         insertCmd.CommandText =
             Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_2;
         var rowsAffected = insertCmd.ExecuteNonQuery();
@@ -363,7 +257,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         Assert.Equal(2, rowsAffected);
 
         // Try to insert duplicate in same region - should fail
-        using var duplicateCmd = _connection.CreateCommand();
+        using var duplicateCmd = Connection.CreateCommand();
         duplicateCmd.CommandText = """
             INSERT INTO locations (name, region_id) VALUES
             ('THE CORNER', '11111111-1111-1111-1111-111111111111')
@@ -396,17 +290,12 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         }
 
         // Verify expression index exists and is functional
-        var indexDef = (string?)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
-                configure: command =>
-                    command.CommandText = """
-                    SELECT indexdef FROM pg_indexes
-                    WHERE tablename = 'bands' AND indexname = 'uq_bands_name'
-                    """
-            );
-
-        Assert.NotNull(indexDef);
+        var indexDef = VerifySharedContinuation7(configure0: command =>
+            command.CommandText = """
+            SELECT indexdef FROM pg_indexes
+            WHERE tablename = 'bands' AND indexname = 'uq_bands_name'
+            """
+        );
         Assert.Contains("lower", indexDef);
     }
 
@@ -418,50 +307,14 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeIndex_ColumnToExpression_RequiresDropAndCreate()
     {
         // Arrange - Create table with regular column index
-        var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1();
-
-        // Apply v1
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
-        _ = Apply(operations: v1Ops);
-
-        // v2 changes to expression index (different name since semantically different)
-        var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2();
-
-        // Act - Calculate upgrade operations
-        var currentSchema = InspectPublic();
-        var upgradeOps = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-        ).Value;
-
-        // Assert - Should have drop old index + create new expression index
-        Assert.Equal(2, upgradeOps.Count);
-        Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-        Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
-
-        // Apply the upgrade
-        var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
-
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Upgrade failed: {(result as MigrationApplyResultError)?.Value}"
+        var indexDef = VerifyIndexConversion(
+            input0: Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1,
+            input2: Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2,
+            query: """
+            SELECT indexdef FROM pg_indexes
+            WHERE tablename = 'artists' AND indexname = 'uq_artists_name_ci'
+            """
         );
-
-        // Verify new expression index exists
-        var indexDef = (string?)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
-                configure: command =>
-                    command.CommandText = """
-                    SELECT indexdef FROM pg_indexes
-                    WHERE tablename = 'artists' AND indexname = 'uq_artists_name_ci'
-                    """
-            );
-
-        Assert.NotNull(indexDef);
         Assert.Contains("lower", indexDef);
     }
 
@@ -469,49 +322,14 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate()
     {
         // Arrange - Create table with expression index
-        var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1();
-
-        // Apply v1
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
-        _ = Apply(operations: v1Ops);
-
-        // v2 changes back to simple column index (different name)
-        var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2();
-
-        // Act
-        var currentSchema = InspectPublic();
-        var upgradeOps = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-        ).Value;
-
-        // Assert - Should have drop + create
-        Assert.Equal(2, upgradeOps.Count);
-        Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-        Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
-
-        var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
-
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Upgrade failed: {(result as MigrationApplyResultError)?.Value}"
+        var indexDef = VerifyIndexConversion(
+            input0: Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1,
+            input2: Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2,
+            query: """
+            SELECT indexdef FROM pg_indexes
+            WHERE tablename = 'venues' AND indexname = 'idx_venues_name'
+            """
         );
-
-        // Verify new column index exists (no lower() function)
-        var indexDef = (string?)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
-                configure: command =>
-                    command.CommandText = """
-                    SELECT indexdef FROM pg_indexes
-                    WHERE tablename = 'venues' AND indexname = 'idx_venues_name'
-                    """
-            );
-
-        Assert.NotNull(indexDef);
         Assert.DoesNotContain("lower", indexDef);
     }
 
@@ -523,21 +341,18 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Converting an index type is a destructive operation requiring explicit opt-in.
 
         // Arrange - Create table with regular column index
-        var v1 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1();
-
-        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
-        _ = Apply(operations: v1Ops);
+        VerifySharedContinuation9(
+            input0: Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1
+        );
 
         // v2 wants to change to expression index with SAME name
         // This is a semantic change - case-sensitive to case-insensitive
-        var v2 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2();
-
-        // Act - Calculate without destructive flag
-        var currentSchema = InspectPublic();
-        var upgradeOps = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(currentSchema, v2, allowDestructive: false, logger: _logger)
-        ).Value;
+        var upgradeOps = VerifyReusableWorkflow27(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2,
+            input2: Logger,
+            value0: false
+        );
 
         // Assert - No operations since index name already exists and we can't drop without destructive
         // The SchemaDiff only compares by name, not by definition
@@ -548,29 +363,22 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void Destructive_DropTable_AllowedWithOption()
     {
         // Arrange - Create initial tables
-        var v1 = Fixture_Destructive_DropTable_AllowedWithOption_1();
-
-        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
-        _ = Apply(operations: v1Ops);
+        VerifySharedContinuation9(input0: Fixture_Destructive_DropTable_AllowedWithOption_1);
 
         // v2 removes dropme table
-        var v2 = Fixture_Destructive_DropTable_AllowedWithOption_2();
-
-        // Act
-        var currentSchema = InspectPublic();
-
-        var operations = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-        ).Value;
+        var operations = VerifyReusableWorkflow27(
+            input0: VerifySharedContinuation1,
+            input1: Fixture_Destructive_DropTable_AllowedWithOption_2,
+            input2: Logger,
+            value0: true
+        );
 
         Assert.Single(operations);
         Assert.IsType<DropTableOperation>(operations[0]);
 
-        var result = Apply(operations: operations, options: MigrationOptions.Destructive);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: Apply(operations: operations, options: MigrationOptions.Destructive)
+        );
 
         var finalSchema = InspectPublic();
         Assert.DoesNotContain(finalSchema.Tables, t => t.Name == "dropme");
@@ -585,26 +393,17 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void LqlDefault_NowFunction_GeneratesCurrentTimestamp()
     {
         // Arrange - Create table with LQL now() default
-        var schema = Fixture_LqlDefault_NowFunction_GeneratesCurrentTimestamp_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert a row without specifying created_at - should use default
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
+        VerifySharedContinuation3(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO events (id) VALUES ('11111111-1111-1111-1111-111111111111')"
+                    "INSERT INTO events (id) VALUES ('11111111-1111-1111-1111-111111111111')",
+            input0: Fixture_LqlDefault_NowFunction_GeneratesCurrentTimestamp_1
         );
 
         // Verify the default was applied - should be a recent timestamp
         var createdAt = (DateTime)
             global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
+                connection: Connection,
                 configure: command =>
                     command.CommandText =
                         "SELECT created_at FROM events WHERE id = '11111111-1111-1111-1111-111111111111'"
@@ -618,31 +417,21 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void LqlDefault_GenUuidFunction_GeneratesValidUuid()
     {
         // Arrange - Create table with LQL gen_uuid() default
-        var schema = Fixture_LqlDefault_GenUuidFunction_GeneratesValidUuid_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert rows without specifying id - should generate unique UUIDs
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
-                command.CommandText = Data_LqlDefault_GenUuidFunction_GeneratesValidUuid_1
+        VerifySharedContinuation3(
+            configure0: command =>
+                command.CommandText = Data_LqlDefault_GenUuidFunction_GeneratesValidUuid_1,
+            input0: Fixture_LqlDefault_GenUuidFunction_GeneratesValidUuid_1
         );
 
         // Verify UUIDs were generated and are unique
-        using var selectCmd = _connection.CreateCommand();
+        using var selectCmd = Connection.CreateCommand();
         selectCmd.CommandText = "SELECT id FROM items ORDER BY name";
         using var reader = selectCmd.ExecuteReader();
 
-        var uuids = new List<Guid>();
-        while (reader.Read())
-        {
-            uuids.Add(reader.GetGuid(0));
-        }
+        var uuids =
+            global::Nimblesite.DataProvider.Migration.Tests.PostgresRlsE2ETests.VerifyReusableWorkflow22(
+                input0: reader
+            );
 
         Assert.Equal(3, uuids.Count);
         Assert.Equal(3, uuids.Distinct().Count()); // All unique
@@ -653,115 +442,85 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void LqlDefault_BooleanTrue_GeneratesCorrectValue()
     {
         // Arrange
-        var schema = Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert without specifying booleans
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
+        VerifySharedContinuation3(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO flags (id) VALUES ('11111111-1111-1111-1111-111111111111')"
+                    "INSERT INTO flags (id) VALUES ('11111111-1111-1111-1111-111111111111')",
+            input0: Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1
         );
 
         // Verify defaults
-        using var selectCmd = _connection.CreateCommand();
-        using var reader = DatabaseCommands.ReadFirstRow(
-            selectCmd,
-            command => command.CommandText = "SELECT is_active, is_deleted FROM flags"
+        PostgresTestDb.WithFirstRow(
+            Connection,
+            "SELECT is_active, is_deleted FROM flags",
+            reader =>
+            {
+                Assert.True(reader.GetBoolean(0)); // is_active = true
+                Assert.False(reader.GetBoolean(1)); // is_deleted = false
+            }
         );
-        Assert.True(reader.GetBoolean(0)); // is_active = true
-        Assert.False(reader.GetBoolean(1)); // is_deleted = false
     }
 
     [Fact]
     public void LqlDefault_NumericLiterals_GeneratesCorrectValues()
     {
         // Arrange - Test integer and decimal defaults
-        var schema = Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert without specifying values
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
+        VerifySharedContinuation3(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO counters (id) VALUES ('11111111-1111-1111-1111-111111111111')"
+                    "INSERT INTO counters (id) VALUES ('11111111-1111-1111-1111-111111111111')",
+            input0: Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1
         );
 
         // Verify defaults
-        using var selectCmd = _connection.CreateCommand();
-        using var reader = DatabaseCommands.ReadFirstRow(
-            selectCmd,
-            command => command.CommandText = "SELECT count, score, rate FROM counters"
+        PostgresTestDb.WithFirstRow(
+            Connection,
+            "SELECT count, score, rate FROM counters",
+            reader =>
+            {
+                Assert.Equal(0, reader.GetInt32(0));
+                Assert.Equal(100m, reader.GetDecimal(1));
+                Assert.Equal(0.5, reader.GetDouble(2), 2);
+            }
         );
-        Assert.Equal(0, reader.GetInt32(0));
-        Assert.Equal(100m, reader.GetDecimal(1));
-        Assert.Equal(0.5, reader.GetDouble(2), 2);
     }
 
     [Fact]
     public void LqlDefault_StringLiteral_GeneratesCorrectValue()
     {
         // Arrange - Test string literal default with single quotes
-        var schema = Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert without specifying strings
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
+        VerifySharedContinuation3(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO statuses (id) VALUES ('11111111-1111-1111-1111-111111111111')"
+                    "INSERT INTO statuses (id) VALUES ('11111111-1111-1111-1111-111111111111')",
+            input0: Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1
         );
 
         // Verify defaults
-        using var selectCmd = _connection.CreateCommand();
-        using var reader = DatabaseCommands.ReadFirstRow(
-            selectCmd,
-            command => command.CommandText = "SELECT status, category FROM statuses"
+        PostgresTestDb.WithFirstRow(
+            Connection,
+            "SELECT status, category FROM statuses",
+            reader =>
+            {
+                Assert.Equal("pending", reader.GetString(0));
+                Assert.Equal("default", reader.GetString(1));
+            }
         );
-        Assert.Equal("pending", reader.GetString(0));
-        Assert.Equal("default", reader.GetString(1));
     }
 
     [Fact]
     public void LqlDefault_AllTypesInOneTable_WorksTogether()
     {
         // Arrange - Comprehensive test with all LQL default types
-        var schema = Fixture_LqlDefault_AllTypesInOneTable_WorksTogether_1();
-
-        // Act
-        var emptySchema = InspectPublic();
-        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
-
-        Assert.True(result is MigrationApplyResultOk);
-
-        // Insert only name - all other columns should use defaults
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command =>
+        VerifySharedContinuation3(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO comprehensive_defaults (name) VALUES ('Test Item')"
+                    "INSERT INTO comprehensive_defaults (name) VALUES ('Test Item')",
+            input0: Fixture_LqlDefault_AllTypesInOneTable_WorksTogether_1
         );
 
         // Verify all defaults
-        using var selectCmd = _connection.CreateCommand();
+        using var selectCmd = Connection.CreateCommand();
         selectCmd.CommandText =
             "SELECT id, created_at, is_active, is_archived, count, priority, status FROM comprehensive_defaults";
         using var reader = selectCmd.ExecuteReader();
@@ -796,21 +555,10 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     {
         // Arrange — a Documents table with a 384-dim embedding, the
         // sentence-transformers default.
-        var schema =
-            Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1();
-
-        // The pgvector extension must exist in the database before any
-        // vector(N) column can be created. The migration pipeline is
-        // expected to emit `CREATE EXTENSION IF NOT EXISTS vector` as
-        // part of applying a schema that contains a VectorType column.
-        // If the source-side fix is still in progress, this test will
-        // fail loudly on CREATE TABLE, proving the gap.
-
-        var emptySchema = InspectPublic();
-
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
+        var operations = VerifySharedPhase3(
+            input0: Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1,
+            input1: Logger
+        );
 
         // Act
         var result = Apply(operations: operations);
@@ -826,7 +574,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         Assert.Contains(inspected.Tables, t => t.Name == "documents");
 
         // Assert — pgvector extension is installed in the database
-        using (var extCmd = _connection.CreateCommand())
+        using (var extCmd = Connection.CreateCommand())
         {
             extCmd.CommandText = "SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'";
             var extCount = Convert.ToInt32(
@@ -838,7 +586,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Assert — embedding column has the real pgvector type with the
         // correct dimension, not TEXT / BYTEA / anything else.
-        using (var typeCmd = _connection.CreateCommand())
+        using (var typeCmd = Connection.CreateCommand())
         {
             typeCmd.CommandText =
                 "SELECT format_type(a.atttypid, a.atttypmod) "
@@ -853,7 +601,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         }
 
         // Act — round-trip insert + select a known vector
-        using (var insertCmd = _connection.CreateCommand())
+        using (var insertCmd = Connection.CreateCommand())
         {
             var vecLiteral =
                 "[" + string.Join(",", Enumerable.Range(0, 384).Select(i => "0.5")) + "]";
@@ -866,7 +614,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             Assert.Equal(1, rows);
         }
 
-        using (var selectCmd = _connection.CreateCommand())
+        using (var selectCmd = Connection.CreateCommand())
         {
             using var reader = DatabaseCommands.ReadFirstRow(
                 selectCmd,
@@ -902,7 +650,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             "vector(3072)",
             (string?)
                 global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _connection,
+                    connection: Connection,
                     configure: command =>
                         command.CommandText =
                             "SELECT format_type(a.atttypid, a.atttypmod) "
@@ -915,7 +663,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
     private void InsertPatientGender(string gender)
     {
-        using var command = _connection.CreateCommand();
+        using var command = Connection.CreateCommand();
         command.CommandText =
             "INSERT INTO \"fhir_patient\" (\"id\", \"Gender\") VALUES (@id, @gender)";
         command.Parameters.AddWithValue("@id", Guid.NewGuid());
@@ -929,14 +677,13 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         MigrationOptions? options = null
     ) =>
         PostgresTestDb.TryApply(
-            connection: _connection,
+            connection: Connection,
             operations: operations,
-            logger: _logger,
+            logger: Logger,
             options: options
         );
 
-    private SchemaDefinition InspectPublic() =>
-        ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)).Value;
+    private SchemaDefinition InspectPublic() => PostgresTestDb.Inspect(Connection, Logger);
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private global::Outcome.Result<
@@ -948,7 +695,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     )
     {
         var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(input0, input1, logger: _logger)
+            (OperationsResultOk)SchemaDiff.Calculate(input0, input1, logger: Logger)
         ).Value;
 
         var result = Apply(operations: operations);
@@ -963,9 +710,218 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     {
         var emptySchema = InspectPublic();
         var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, input0, logger: _logger)
+            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, input0, logger: Logger)
         ).Value;
 
         return v1Ops;
+    }
+
+    // Implements [MIG-TEST-PG-SCHEMA-WORKFLOW].
+    private SchemaDefinition CreateAndApplySchema(Func<SchemaDefinition> create)
+    {
+        var schema = create();
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: CalculateAndApplySchemaChanges(input0: InspectPublic(), input1: schema)
+        );
+        return schema;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (SchemaDefinition, SchemaDefinition) VerifySharedContinuation1(
+        Func<SchemaDefinition> input0
+    )
+    { // Arrange
+        var schema = input0();
+
+        // Act
+        var emptySchema = InspectPublic();
+
+        return (schema, emptySchema);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation3(
+        Func<SchemaDefinition> input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    { // Arrange - Create table with LQL now() default
+        CreateAndApplySchema(create: input0);
+
+        // Insert a row without specifying created_at - should use default
+        DatabaseCommands.Execute(connection: Connection, configure: configure0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string VerifySharedContinuation7(
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        // Verify composite expression index exists
+        var indexDef = Assert.IsType<string>(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: Connection,
+                configure: configure0
+            )
+        );
+
+        Assert.NotNull(indexDef);
+
+        return indexDef;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation9(Func<SchemaDefinition> input0)
+    { // Arrange - Create initial schema
+        var v1 = input0();
+
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
+        _ = Apply(operations: v1Ops);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation11(SchemaDefinition input0, SchemaDefinition input1)
+    {
+        var result = CalculateAndApplySchemaChanges(input0: input0, input1: input1);
+
+        // Assert
+        Assert.True(
+            result is MigrationApplyResultOk,
+            $"Migration failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation14(SchemaDefinition input0, SchemaDefinition input1)
+    {
+        var upgradeOps = (
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SchemaDiff.Calculate(input0, input1, allowDestructive: true, logger: Logger)
+            )
+        ).Value;
+
+        // Assert - Should have drop old index + create new expression index
+        Assert.Equal(2, upgradeOps.Count);
+        Assert.Contains(upgradeOps, op => op is DropIndexOperation);
+        Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
+
+        // Apply the upgrade
+        var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
+
+        Assert.True(
+            result is MigrationApplyResultOk,
+            $"Upgrade failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal IReadOnlyList<SchemaOperation> VerifySharedPhase3(
+        Func<SchemaDefinition> input0,
+        ILogger input1
+    )
+    {
+        // Define v2 with new columns
+        var (v2, currentSchema) = VerifySharedContinuation1(input0: input0);
+
+        var upgradeOps = (
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SchemaDiff.Calculate(currentSchema, v2, logger: input1)
+            )
+        ).Value;
+
+        return upgradeOps;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyUpgradeOperation<T>(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input2
+    )
+        where T : SchemaOperation
+    {
+        var upgradeOps = VerifyConsolidatedPhase2(input0: input0, input1: input2, input2: Logger);
+        Assert.Single(upgradeOps);
+        Assert.IsType<T>(upgradeOps[0]);
+        global::Tests.Shared.ResultAssertions.Ok(actual: Apply(operations: upgradeOps));
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string VerifyIndexConversion(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input2,
+        string query
+    )
+    {
+        VerifyConsolidatedPhase4(input0: input0, input1: Logger, input2: input2);
+        return VerifySharedContinuation7(configure0: command => command.CommandText = query);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal IReadOnlyList<SchemaOperation> VerifyConsolidatedPhase2(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input1,
+        ILogger input2
+    )
+    { // Arrange - Create initial schema
+        VerifySharedContinuation9(input0: input0);
+
+        // Define v2 with new columns
+        var upgradeOps = VerifySharedPhase3(input0: input1, input1: input2);
+
+        return upgradeOps;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal void VerifyConsolidatedPhase4(
+        Func<SchemaDefinition> input0,
+        ILogger input1,
+        Func<SchemaDefinition> input2
+    )
+    { // Arrange - Create table with regular column index
+        var v1Ops = VerifySharedPhase3(input0: input0, input1: input1);
+        _ = Apply(operations: v1Ops);
+
+        // v2 changes to expression index (different name since semantically different)
+        VerifyReusableWorkflow7(
+            input0: VerifySharedContinuation1,
+            input1: input2,
+            input2: VerifySharedContinuation14
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow7(
+        Func<Func<SchemaDefinition>, (SchemaDefinition, SchemaDefinition)> input0,
+        Func<SchemaDefinition> input1,
+        Action<SchemaDefinition, SchemaDefinition> input2
+    )
+    { // Arrange
+        var (schema, emptySchema) = input0(arg: input1);
+        input2(arg1: emptySchema, arg2: schema);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow27(
+        Func<Func<SchemaDefinition>, (SchemaDefinition, SchemaDefinition)> input0,
+        Func<SchemaDefinition> input1,
+        ILogger input2,
+        bool value0
+    )
+    {
+        // v2 wants to change to expression index with SAME name
+        // This is a semantic change - case-sensitive to case-insensitive
+        var (v2, currentSchema) = input0(arg: input1);
+        var upgradeOps = (
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SchemaDiff.Calculate(
+                    currentSchema,
+                    v2,
+                    allowDestructive: value0,
+                    logger: input2
+                )
+            )
+        ).Value;
+        return upgradeOps;
     }
 }

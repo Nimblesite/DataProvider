@@ -12,15 +12,10 @@ public sealed partial class ModelGenerationIntegrationTests
     public void GenerateRecordType_WithSimpleColumns_GeneratesValidCode()
     {
         // Arrange
-        var columns = Dataset_GenerateRecordType_WithSimpleColumns_GeneratesValidCode_1();
-
-        // Act
-        var result = ModelGenerator.GenerateRecordType("UserRecord", columns);
-
-        // Assert
-
-        var success = Ok(actual: result);
-        var code = success.Value;
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GenerateRecordType_WithSimpleColumns_GeneratesValidCode_1,
+            value0: "UserRecord"
+        );
 
         ContainsAll(
             actual: code,
@@ -75,17 +70,17 @@ public sealed partial class ModelGenerationIntegrationTests
             Dataset_GenerateGroupedRecordTypes_WithValidInputs_GeneratesParentAndChild_1();
 
         // Act
-        var result = ModelGenerator.GenerateGroupedRecordTypes(
-            "Customer",
-            "Order",
-            parentColumns,
-            childColumns,
-            allColumns
-        );
-
+        // Act
         // Assert
-
-        var success = Ok(actual: result);
+        var success = Ok(read: () =>
+            ModelGenerator.GenerateGroupedRecordTypes(
+                "Customer",
+                "Order",
+                parentColumns,
+                childColumns,
+                allColumns
+            )
+        );
         var code = success.Value;
 
         // Check parent record
@@ -114,23 +109,17 @@ public sealed partial class ModelGenerationIntegrationTests
         var columns = Dataset_GenerateRawRecordType_WithColumns_GeneratesInternalRecord_1();
 
         // Act
-        var result = ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns);
-
+        // Act
         // Assert
-
-        var success = Ok(actual: result);
-        var code = success.Value;
-
-        ContainsAll(
-            actual: code,
-            expected:
-            [
-                "internal record UserOrderRaw(",
-                "int UserId,",
-                "string UserName,",
-                "int OrderCount",
-                ");",
-            ]
+        var success = Ok(read: () => ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns));
+        global::Nimblesite.DataProvider.Tests.CodeGenerationExtendedE2ETests.VerifyReusableWorkflow6(
+            input0: success,
+            input1: ContainsAll,
+            value0: "internal record UserOrderRaw(",
+            value1: "int UserId,",
+            value2: "string UserName,",
+            value3: "int OrderCount",
+            value4: ");"
         );
     }
 
@@ -138,16 +127,10 @@ public sealed partial class ModelGenerationIntegrationTests
     public void GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly()
     {
         // Arrange - Testing edge cases with column names
-        var columns =
-            Dataset_GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly_1();
-
-        // Act
-        var result = ModelGenerator.GenerateRecordType("UserProfile", columns);
-
-        // Assert
-
-        var success = Ok(actual: result);
-        var code = success.Value;
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly_1,
+            value0: "UserProfile"
+        );
 
         ContainsAll(
             actual: code,
@@ -176,11 +159,9 @@ public sealed partial class ModelGenerationIntegrationTests
         }
 
         // Act
-        var result = ModelGenerator.GenerateRecordType("LargeRecord", columns);
-
+        // Act
         // Assert
-
-        var success = Ok(actual: result);
+        var success = Ok(read: () => ModelGenerator.GenerateRecordType("LargeRecord", columns));
         var code = success.Value;
 
         ContainsAll(
@@ -217,69 +198,69 @@ public sealed partial class ModelGenerationIntegrationTests
             Dataset_GenerateGroupedRecordTypes_WithNullInputs_ReturnsAppropriateFailures_1();
 
         // Act & Assert - Null parent name
-        var result1 = ModelGenerator.GenerateGroupedRecordTypes(
-            null!,
-            "Child",
-            validColumns,
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                null!,
+                "Child",
+                validColumns,
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result1 is StringError);
 
         // Act & Assert - Null child name
-        var result2 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            null!,
-            validColumns,
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                null!,
+                validColumns,
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result2 is StringError);
 
         // Act & Assert - Empty parent columns
-        var result3 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            [],
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                [],
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result3 is StringError);
 
         // Act & Assert - Empty child columns
-        var result4 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            validColumns,
-            [],
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                validColumns,
+                [],
+                allColumns
+            )
         );
-        Assert.True(result4 is StringError);
 
         // Act & Assert - Empty all columns
-        var result5 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            validColumns,
-            validColumns,
-            []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                validColumns,
+                validColumns,
+                []
+            )
         );
-        Assert.True(result5 is StringError);
     }
 
     [Fact]
     public void GeneratedCode_CompileabilityTest_ValidCSharp()
     {
         // Arrange - Generate code and verify it contains proper C# syntax
-        var columns = Dataset_GeneratedCode_CompileabilityTest_ValidCSharp_1();
-
-        // Act
-        var result = ModelGenerator.GenerateRecordType("TestEntity", columns);
-
-        // Assert
-
-        var success = Ok(actual: result);
-        var code = success.Value;
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GeneratedCode_CompileabilityTest_ValidCSharp_1,
+            value0: "TestEntity"
+        );
 
         // Verify proper C# syntax elements
         ContainsAll(
@@ -306,5 +287,22 @@ public sealed partial class ModelGenerationIntegrationTests
                 "/// <summary>Column 'CreatedAt'.</summary>",
             ]
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifySharedContinuation3(
+        Func<List<DatabaseColumn>> input0,
+        string value0
+    )
+    { // Arrange
+        var columns = input0();
+
+        // Act
+        // Act
+        // Assert
+        var success = Ok(read: () => ModelGenerator.GenerateRecordType(value0, columns));
+        var code = success.Value;
+
+        return code;
     }
 }

@@ -41,18 +41,22 @@ public static class SyncSessionManager
     /// <returns>True if suppression active, or database error.</returns>
     public static BoolSyncResult IsSuppressionActive(SqliteConnection connection)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT sync_active FROM _sync_session LIMIT 1";
-            var result = cmd.ExecuteScalar();
-            return new BoolSyncOk(result is long value && value == 1);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to check suppression state: {ex.Message}")
-            );
-        }
+        return SyncCommandExecution.Read<SqliteException, BoolSyncResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "SELECT sync_active FROM _sync_session LIMIT 1",
+            parameters: () => [],
+            read: command =>
+            {
+                var result = command.ExecuteScalar();
+                return new BoolSyncOk(result is long value && value == 1);
+            },
+            failure: ex =>
+            {
+                return new BoolSyncError(
+                    new SyncErrorDatabase($"Failed to check suppression state: {ex.Message}")
+                );
+            }
+        );
     }
 }

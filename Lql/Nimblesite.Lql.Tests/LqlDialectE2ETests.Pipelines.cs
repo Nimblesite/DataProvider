@@ -1,4 +1,3 @@
-using Xunit;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
@@ -43,37 +42,34 @@ public sealed partial class LqlDialectE2ETests
         Assert.NotEqual(filtered, ranked);
     }
 
-    [Fact]
-    public void ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData10))]
+    public void ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2,
+        System.String scenario3
+    )
     {
-        var lql = Data_ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
+        var (pg, ss, sl) = VerifySharedChecks1(input0: scenario0);
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            AssertBothSqlFragments(input0: sql, value0: "WHERE", value1: "AND");
-            Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void OrderByDescending_AllDialects_GeneratesDescSQL()
-    {
-        var lql = Data_OrderByDescending_AllDialects_GeneratesDescSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            AssertBothSqlFragments(input0: sql, value0: "ORDER BY", value1: "DESC");
-            Assert.Contains("ASC", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: scenario1, value1: scenario2);
+            Assert.Contains(scenario3, sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 
     [Fact]
     public void FilterWithStringLiteral_AllDialects_PreservesQuotes()
     {
-        var lql = Data_FilterWithStringLiteral_AllDialects_PreservesQuotes_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_FilterWithStringLiteral_AllDialects_PreservesQuotes_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -85,21 +81,22 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            ContainsAll(actual: sql, expected: [">=", "<="], comparison: StringComparison.Ordinal);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
+            VerifyLifetimePhase1(input0: sql, value0: ">=", value1: "<=", value3: "WHERE");
         }
     }
 
     [Fact]
     public void JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks()
     {
-        var lql = Data_JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -124,8 +121,7 @@ public sealed partial class LqlDialectE2ETests
         string caseValue5
     )
     {
-        var lql = caseValue0;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(input0: caseValue0);
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -137,23 +133,33 @@ public sealed partial class LqlDialectE2ETests
         }
     }
 
-    [Fact]
-    public void SimpleTableReference_AllDialects_GeneratesSelectStar()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(SimpleTableReference_AllDialects_GeneratesSelectStar_ContextCasesData))]
+    public void SimpleTableReference_AllDialects_GeneratesSelectStar_ContextCases(
+        string caseName,
+        string value0,
+        string value1,
+        string value2
+    )
     {
-        var lql = "users |> select(users.id, users.name)";
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            AssertBothSqlFragments(input0: sql, value0: "SELECT", value1: "FROM");
-        }
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix1(
+            input0: VerifyReusableWorkflow2,
+            input1: ConvertToAllDialects,
+            input2: AssertBothSqlFragments,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
     }
 
     [Fact]
     public void ArithmeticExpressions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_ArithmeticExpressions_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_ArithmeticExpressions_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -168,8 +174,9 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void FilterWithNotEquals_AllDialects_GeneratesCorrectOperator()
     {
-        var lql = Data_FilterWithNotEquals_AllDialects_GeneratesCorrectOperator_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_FilterWithNotEquals_AllDialects_GeneratesCorrectOperator_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -185,30 +192,34 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void SelectWithColumnAlias_AllDialects_GeneratesAliasedColumns()
     {
-        var lql = """
+        var (pg, ss, sl) = VerifyReusableWorkflow2(
+            input0: ConvertToAllDialects,
+            value0: """
             users
             |> select(users.id, users.name as full_name, users.email as contact_email)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+            """
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            ContainsAll(
-                actual: sql,
-                expected: ["full_name", "contact_email"],
-                comparison: StringComparison.Ordinal
+            VerifyLifetimePhase1(
+                input0: sql,
+                value0: "full_name",
+                value1: "contact_email",
+                value3: "AS"
             );
-            Assert.Contains("AS", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 
     [Fact]
     public void LimitOnly_AllDialects_GeneratesLimitSQL()
     {
-        var lql = """
+        var (pg, ss, sl) = VerifyReusableWorkflow2(
+            input0: ConvertToAllDialects,
+            value0: """
             users |> limit(25) |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+            """
+        );
 
         Assert.Contains("LIMIT", pg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LIMIT", sl, StringComparison.OrdinalIgnoreCase);
@@ -232,5 +243,64 @@ public sealed partial class LqlDialectE2ETests
             expected: [value0, value1],
             comparison: StringComparison.OrdinalIgnoreCase
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static (string, string, string) VerifySharedChecks1(string input0)
+    {
+        var lql = input0;
+        var (pg, ss, sl) = ConvertToAllDialects(lql);
+
+        return (pg, ss, sl);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyLifetimePhase1(
+        string input0,
+        string value0,
+        string value1,
+        string value3
+    )
+    {
+        ContainsAll(
+            actual: input0,
+            expected: [value0, value1],
+            comparison: StringComparison.Ordinal
+        );
+        Assert.Contains(value3, input0, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static (string, string, string) VerifyReusableWorkflow2(
+        Func<string, (string PostgreSql, string SqlServer, string SQLite)> input0,
+        string value0
+    )
+    {
+        var lql = value0;
+        var (pg, ss, sl) = input0(arg: lql);
+
+        return (pg, ss, sl);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix1(
+        Func<
+            Func<string, (string PostgreSql, string SqlServer, string SQLite)>,
+            string,
+            (string, string, string)
+        > input0,
+        Func<string, (string PostgreSql, string SqlServer, string SQLite)> input1,
+        Action<string, string, string> input2,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var (pg, ss, sl) = input0(arg1: input1, arg2: value0);
+
+        foreach (var sql in new[] { pg, ss, sl })
+        {
+            input2(arg1: sql, arg2: value1, arg3: value2);
+        }
     }
 }

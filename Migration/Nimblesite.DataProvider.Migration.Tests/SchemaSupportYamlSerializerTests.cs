@@ -1,5 +1,3 @@
-using static global::Tests.Shared.StringAssertions;
-
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -25,16 +23,17 @@ public sealed partial class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresSupportObjects_OmitsSemanticDefaults()
     {
-        var schema = Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1();
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1
+            );
 
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-
-        ContainsAll(
-            actual: yaml,
-            expected: ["functions:", "name: app_user_id"],
-            comparison: StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: yaml,
+            value0: "functions:",
+            value1: "name: app_user_id",
+            value3: "language: sql"
         );
-        Assert.DoesNotContain("language: sql", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("volatility: stable", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("revokePublicExecute: true", yaml, StringComparison.Ordinal);
     }
@@ -42,9 +41,10 @@ public sealed partial class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresGrantRunAs_EmitsRunAs()
     {
-        var schema = Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1();
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1
+            );
 
         Assert.Contains("runAs: supabase_admin", yaml, StringComparison.Ordinal);
     }

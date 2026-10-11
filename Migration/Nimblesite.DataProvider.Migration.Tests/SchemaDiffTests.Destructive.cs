@@ -4,18 +4,18 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 // Implements [MIG-TEST-DIFF-SHARED].
 public sealed partial class SchemaDiffTests
 {
-    [Fact]
-    public void Calculate_RemovedTable_NotDroppedByDefault()
+    // Implements [MIG-TEST-DIFF-SHARED].
+    [Theory]
+    [MemberData(nameof(NonDestructiveRemovalCases))]
+    public void Calculate_Removal_NotDroppedByDefault(
+        string scenario,
+        SchemaDefinition current,
+        SchemaDefinition desired
+    )
     {
-        // Arrange
-        var current = Fixture_Calculate_RemovedTable_NotDroppedByDefault_1();
-
-        var desired = UsersSchema(name: "Desired");
-
-        // Act
+        _ = scenario;
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: false);
-
-        Assert.Empty(ops);
+        Assert.Empty(collection: ops);
     }
 
     [Fact]
@@ -27,26 +27,12 @@ public sealed partial class SchemaDiffTests
         var desired = UsersSchema(name: "Desired");
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
-
-        Assert.Single(ops);
-        Assert.IsType<DropTableOperation>(ops[0]);
-        var dropOp = (DropTableOperation)ops[0];
+        var dropOp = SchemaDiffAssertions.DiffSingle<DropTableOperation>(
+            current: current,
+            desired: desired,
+            destructive: true
+        );
         Assert.Equal("obsolete", dropOp.TableName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedColumn_NotDroppedByDefault()
-    {
-        // Arrange
-        var current = UsersSchema(name: "Current", oldField: true);
-
-        var desired = UsersSchema(name: "Desired");
-
-        // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: false);
-
-        Assert.Empty(ops);
     }
 
     [Fact]
@@ -58,26 +44,12 @@ public sealed partial class SchemaDiffTests
         var desired = UsersSchema(name: "Desired");
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
-
-        Assert.Single(ops);
-        Assert.IsType<DropColumnOperation>(ops[0]);
-        var dropColOp = (DropColumnOperation)ops[0];
+        var dropColOp = SchemaDiffAssertions.DiffSingle<DropColumnOperation>(
+            current: current,
+            desired: desired,
+            destructive: true
+        );
         Assert.Equal("old_field", dropColOp.ColumnName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedIndex_NotDroppedByDefault()
-    {
-        // Arrange
-        var current = UsersSchema(name: "Current", indexEmail: true);
-
-        var desired = UsersSchema(name: "Desired", email: true);
-
-        // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: false);
-
-        Assert.Empty(ops);
     }
 
     [Fact]
@@ -89,11 +61,11 @@ public sealed partial class SchemaDiffTests
         var desired = UsersSchema(name: "Desired", email: true);
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
-
-        Assert.Single(ops);
-        Assert.IsType<DropIndexOperation>(ops[0]);
-        var dropIdxOp = (DropIndexOperation)ops[0];
+        var dropIdxOp = SchemaDiffAssertions.DiffSingle<DropIndexOperation>(
+            current: current,
+            desired: desired,
+            destructive: true
+        );
         Assert.Equal("idx_users_email", dropIdxOp.IndexName);
     }
 
@@ -106,24 +78,19 @@ public sealed partial class SchemaDiffTests
         var desired = Fixture_Calculate_RemovedForeignKey_DroppedWhenDestructiveAllowed_2();
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
-
-        Assert.Single(ops);
-        Assert.IsType<DropForeignKeyOperation>(ops[0]);
+        _ = SchemaDiffAssertions.DiffSingle<DropForeignKeyOperation>(
+            current: current,
+            desired: desired,
+            destructive: true
+        );
     }
 
     [Fact]
     public void Calculate_CurrentForcedRls_AllowDestructive_EmitsDisableForceRls()
     {
-        var current = SchemaTestData.Schema(
-            name: "Current",
-            tables: [RlsTable(new RlsPolicySetDefinition { Forced = true })]
-        );
+        var current = RlsSchema("Current", new RlsPolicySetDefinition { Forced = true });
 
-        var desired = SchemaTestData.Schema(
-            name: "Desired",
-            tables: [RlsTable(new RlsPolicySetDefinition())]
-        );
+        var desired = RlsSchema("Desired", new RlsPolicySetDefinition());
 
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
         Assert.Contains(ops, op => op is DisableForceRlsOperation);

@@ -16,14 +16,7 @@ public sealed partial record HttpEndpointPlatformTests
             {
                 using var client = _factory.CreateClient();
                 var id = Guid.Parse("cefe2151-5420-4e4f-a9a6-13944e6cfd07");
-                await PushAsync(
-                    client,
-                    provider,
-                    connectionString,
-                    Entry(id, "insert", "Ada"),
-                    expected: 1
-                );
-                await PushAsync(
+                await PushTwiceAsync(
                     client,
                     provider,
                     connectionString,
@@ -51,14 +44,7 @@ public sealed partial record HttpEndpointPlatformTests
                     0L,
                     SyncHelpers.GetMaxVersion(connectionString, provider, NullLogger.Instance)
                 );
-                await PushAsync(
-                    client,
-                    provider,
-                    connectionString,
-                    Entry(id, "delete", "Ada"),
-                    expected: 1
-                );
-                await PushAsync(
+                await PushTwiceAsync(
                     client,
                     provider,
                     connectionString,
@@ -139,8 +125,14 @@ public sealed partial record HttpEndpointPlatformTests
                         }
                     ),
                 };
-                await PushAsync(client, provider, connectionString, child, expected: 0);
-                Assert.Equal(0L, CountPeople(provider, connectionString));
+                await PushAndAssertCount(
+                    client,
+                    provider,
+                    connectionString,
+                    child,
+                    expected: 0,
+                    expectedCount: 0L
+                );
                 await PushAsync(
                     client,
                     provider,
@@ -148,8 +140,14 @@ public sealed partial record HttpEndpointPlatformTests
                     Entry(parentId, "insert", "Parent"),
                     expected: 1
                 );
-                await PushAsync(client, provider, connectionString, child, expected: 1);
-                Assert.Equal(2L, CountPeople(provider, connectionString));
+                await PushAndAssertCount(
+                    client,
+                    provider,
+                    connectionString,
+                    child,
+                    expected: 1,
+                    expectedCount: 2L
+                );
             }
         );
 
@@ -213,6 +211,31 @@ public sealed partial record HttpEndpointPlatformTests
             Timestamp: "2024-01-01T00:00:00Z"
         );
 
+    private static async Task PushTwiceAsync(
+        HttpClient client,
+        string provider,
+        string connectionString,
+        SyncLogEntryDto entry,
+        int expected
+    )
+    {
+        await PushAsync(client, provider, connectionString, entry, expected);
+        await PushAsync(client, provider, connectionString, entry, expected);
+    }
+
+    private static async Task PushAndAssertCount(
+        HttpClient client,
+        string provider,
+        string connectionString,
+        SyncLogEntryDto entry,
+        int expected,
+        long expectedCount
+    )
+    {
+        await PushAsync(client, provider, connectionString, entry, expected);
+        Assert.Equal(expectedCount, CountPeople(provider, connectionString));
+    }
+
     private static async Task PushAsync(
         HttpClient client,
         string provider,
@@ -229,11 +252,14 @@ public sealed partial record HttpEndpointPlatformTests
         using var response = await client
             .PostAsync($"/sync/changes?{Query(provider, connectionString)}", content)
             .ConfigureAwait(true);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var json = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync().ConfigureAwait(true)
-        );
+        using var json = await ReadJsonOkAsync(response).ConfigureAwait(true);
         Assert.Equal(expected, json.RootElement.GetProperty("applied").GetInt32());
+    }
+
+    private static async Task<JsonDocument> ReadJsonOkAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ReadJsonDocumentAsync(response).ConfigureAwait(true);
     }
 
     private static void ApplyLocal(
@@ -242,7 +268,11 @@ public sealed partial record HttpEndpointPlatformTests
         SyncLogEntryDto change
     ) =>
         Assert.True(
-            Assert.IsType<BoolSyncOk>(ApplyLocalResult(provider, connectionString, change)).Value
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: ApplyLocalResult(provider, connectionString, change)
+                )
+                .Value
         );
 
     private static Outcome.Result<bool, SyncError>? ApplyLocalResult(
@@ -298,12 +328,9 @@ public sealed partial record HttpEndpointPlatformTests
     private static long CountPeople(string provider, string connectionString)
     {
         using var connection = OpenConnection(provider, connectionString);
-        return Convert.ToInt64(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: connection,
-                configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
-            ),
-            System.Globalization.CultureInfo.InvariantCulture
+        return global::Tests.Shared.DatabaseCommands.ScalarInt64(
+            connection: connection,
+            configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
         );
     }
 
@@ -320,10 +347,7 @@ public sealed partial record HttpEndpointPlatformTests
                 $"/sync/changes?fromVersion={fromVersion}&batchSize=1&{Query(provider, connectionString)}"
             )
             .ConfigureAwait(true);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var json = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync().ConfigureAwait(true)
-        );
+        using var json = await ReadJsonOkAsync(response).ConfigureAwait(true);
         Assert.True(json.RootElement.GetProperty("hasMore").GetBoolean());
         Assert.Equal(nextVersion, json.RootElement.GetProperty("toVersion").GetInt64());
         Assert.Equal(

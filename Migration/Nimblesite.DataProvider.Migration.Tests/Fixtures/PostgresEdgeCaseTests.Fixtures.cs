@@ -283,4 +283,50 @@ public partial class PostgresEdgeCaseTests
                         .ForeignKey("ordered_id", "ordered_ops", "id")
             )
             .Build();
+
+    private static string[] Fixture_UnicodeData_InsertAndRetrieve_Success_2() =>
+        [
+            "日本語テスト",
+            "العربية",
+            "🎉🚀💻",
+            "Ñoño español",
+            "Ελληνικά",
+            "中文测试",
+            "한국어 테스트",
+            "Тест кириллицы",
+        ];
+
+    private static string[] Fixture_SpecialChars_InData_Success_2() =>
+        [
+            "Line1\nLine2\nLine3",
+            "Tab\there\ttoo",
+            "Quote's \"double\" `backtick`",
+            "Backslash \\ path",
+            "<html>&amp;entity</html>",
+            "{ \"json\": true }",
+            "100% of $money",
+        ];
+
+    /// <summary>Independent named scenario inputs and expectations.</summary>
+    public static IEnumerable<object?[]> InsertAndVerifyStringsCases()
+    {
+        yield return
+        [
+            (Func<global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition>)
+                Fixture_UnicodeData_InsertAndRetrieve_Success_1,
+            "INSERT INTO unicode_test (id, name) VALUES ({0}, @name)",
+            "@name",
+            "SELECT id, name FROM unicode_test ORDER BY id",
+            Fixture_UnicodeData_InsertAndRetrieve_Success_2(),
+        ];
+        yield return
+        [
+            (Func<global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition>)
+                Fixture_SpecialChars_InData_Success_1,
+            "INSERT INTO special_chars (id, value) VALUES ({0}, @value)",
+            "@value",
+            "SELECT id, value FROM special_chars ORDER BY id",
+            Fixture_SpecialChars_InData_Success_2(),
+        ];
+    }
 }

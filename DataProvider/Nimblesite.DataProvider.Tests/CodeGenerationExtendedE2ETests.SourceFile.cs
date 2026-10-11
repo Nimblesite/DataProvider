@@ -1,4 +1,3 @@
-using Nimblesite.Sql.Model;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -35,7 +34,7 @@ public sealed partial class CodeGenerationExtendedE2ETests
             columns: OrderColumns,
             connectionType: "NpgsqlConnection"
         );
-        var code = Assert.IsType<StringOk>(result).Value;
+        var code = global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
         ContainsAll(
             actual: code,
             expected:

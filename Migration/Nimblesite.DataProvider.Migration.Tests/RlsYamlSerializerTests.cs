@@ -11,9 +11,10 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicyDefinition_YamlRoundTrip_Simple()
     {
-        var schema = Fixture_RlsPolicyDefinition_YamlRoundTrip_Simple_1();
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_RlsPolicyDefinition_YamlRoundTrip_Simple_1
+            );
         var deserialized = SchemaYamlSerializer.FromYaml(yaml);
 
         Assert.Single(deserialized.Tables);
@@ -82,9 +83,10 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicy_RestrictiveAndRoles_RoundTrip()
     {
-        var schema = Fixture_RlsPolicy_RestrictiveAndRoles_RoundTrip_1();
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_RlsPolicy_RestrictiveAndRoles_RoundTrip_1
+            );
         var policy = SchemaYamlSerializer.FromYaml(yaml).Tables[0].RowLevelSecurity!.Policies[0];
 
         Assert.False(policy.IsPermissive);
@@ -99,9 +101,10 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicySet_DisabledFlag_RoundTrip()
     {
-        var schema = Fixture_RlsPolicySet_DisabledFlag_RoundTrip_1();
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_RlsPolicySet_DisabledFlag_RoundTrip_1
+            );
         var back = SchemaYamlSerializer.FromYaml(yaml);
         Assert.NotNull(back.Tables[0].RowLevelSecurity);
         Assert.False(back.Tables[0].RowLevelSecurity!.Enabled);
@@ -123,9 +126,10 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RowLevelSecurity_Absent_DoesNotAppearInYaml()
     {
-        var schema = Fixture_RowLevelSecurity_Absent_DoesNotAppearInYaml_1();
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_RowLevelSecurity_Absent_DoesNotAppearInYaml_1
+            );
 
         Assert.DoesNotContain("rowLevelSecurity", yaml, StringComparison.Ordinal);
     }

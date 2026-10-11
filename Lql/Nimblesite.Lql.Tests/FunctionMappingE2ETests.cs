@@ -2,7 +2,6 @@ using Nimblesite.Lql.Core.FunctionMapping;
 using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
-using Xunit;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;

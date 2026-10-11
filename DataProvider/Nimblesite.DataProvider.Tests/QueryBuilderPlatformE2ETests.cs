@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
 using System.Data;
-using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.SqlClient;
-using Nimblesite.Sql.Model;
 using Npgsql;
 using NpgsqlTypes;
 using static global::Tests.Shared.StringAssertions;

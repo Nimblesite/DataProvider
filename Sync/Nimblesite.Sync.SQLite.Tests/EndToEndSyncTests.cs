@@ -1,8 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
+
+using static global::Tests.Shared.ResultAssertions;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -44,10 +43,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
         ApplyChangesToTarget(changes);
 
         // Assert: Person exists in target
-        var person = GetPerson(_targetDb, "p1");
-        Assert.NotNull(person);
-        Assert.Equal("Alice", person.Value.Name);
-        Assert.Equal("alice@example.com", person.Value.Email);
+        AssertPerson(_targetDb, "p1", "Alice", "alice@example.com");
     }
 
     [Fact]
@@ -64,10 +60,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
         ApplyChangesToTarget(changes);
 
         // Assert: Target has updated values
-        var person = GetPerson(_targetDb, "p1");
-        Assert.NotNull(person);
-        Assert.Equal("Alice Updated", person.Value.Name);
-        Assert.Equal("alice.updated@example.com", person.Value.Email);
+        AssertPerson(_targetDb, "p1", "Alice Updated", "alice.updated@example.com");
     }
 
     [Fact]
@@ -196,7 +189,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
 
         // Assert: No error, but nothing applied
 
-        var applyResult = (Assert.IsType<BatchApplyResultOk>(result)).Value;
+        var applyResult = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(0, applyResult.AppliedCount);
         Assert.Null(GetPerson(_targetDb, "p1"));
     }
@@ -234,8 +227,10 @@ public sealed partial class EndToEndSyncTests : IDisposable
 
     private static void SetupSchema(SqliteConnection connection, string originId)
     {
-        SyncSchema.CreateSchema(connection);
-        SyncSchema.SetOriginId(connection, originId);
+        global::Tests.Shared.TempSqliteDatabase.InitializeSync(
+            connection: connection,
+            origin: originId
+        );
 
         // Create Person table
         DatabaseCommands.Execute(
@@ -251,18 +246,43 @@ public sealed partial class EndToEndSyncTests : IDisposable
         }
     }
 
-    private static void InsertPerson(SqliteConnection db, string id, string name, string email)
+    private static void ExecutePerson(
+        SqliteConnection db,
+        string sql,
+        string id,
+        string name,
+        string email
+    )
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
+        cmd.CommandText = sql;
         PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
-    private static void UpdatePerson(SqliteConnection db, string id, string name, string email)
+    private static void InsertPerson(SqliteConnection db, string id, string name, string email) =>
+        ExecutePerson(
+            db: db,
+            sql: "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)",
+            id: id,
+            name: name,
+            email: email
+        );
+
+    private static void UpdatePerson(SqliteConnection db, string id, string name, string email) =>
+        ExecutePerson(
+            db: db,
+            sql: "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id",
+            id: id,
+            name: name,
+            email: email
+        );
+
+    private static void AssertPerson(SqliteConnection db, string id, string name, string email)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id";
-        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
+        var person = GetPerson(db, id);
+        Assert.NotNull(person);
+        Assert.Equal(name, person.Value.Name);
+        Assert.Equal(email, person.Value.Email);
     }
 
     private static void DeletePerson(SqliteConnection db, string id)
@@ -287,12 +307,8 @@ public sealed partial class EndToEndSyncTests : IDisposable
         return null;
     }
 
-    private List<SyncLogEntry> FetchChangesFromSource(long fromVersion = 0, int batchSize = 1000)
-    {
-        var result = SyncLogRepository.FetchChanges(_sourceDb, fromVersion, batchSize);
-        Assert.IsType<SyncLogListOk>(result);
-        return [.. ((SyncLogListOk)result).Value];
-    }
+    private List<SyncLogEntry> FetchChangesFromSource(long fromVersion = 0, int batchSize = 1000) =>
+        FetchChanges(_sourceDb, fromVersion, batchSize);
 
     private static List<SyncLogEntry> FetchChanges(
         SqliteConnection db,
@@ -302,7 +318,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
     {
         var result = SyncLogRepository.FetchChanges(db, fromVersion, batchSize);
         Assert.IsType<SyncLogListOk>(result);
-        return [.. ((SyncLogListOk)result).Value];
+        return [.. (Ok(actual: result)).Value];
     }
 
     private void ApplyChangesToTarget(List<SyncLogEntry> changes, bool skipSuppression = false) =>
@@ -340,7 +356,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
                 NullLogger.Instance
             );
 
-            Assert.IsType<BatchApplyResultOk>(result);
+            global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         }
         finally
         {
@@ -402,26 +418,14 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Dispose()
     {
         _sourceDb.Dispose();
-        _targetDb.Dispose();
-        if (File.Exists(_sourceDbPath))
-        {
-            try
-            {
-                File.Delete(_sourceDbPath);
-            }
-            catch
-            { /* File may be locked */
-            }
-        }
-        if (File.Exists(_targetDbPath))
-        {
-            try
-            {
-                File.Delete(_targetDbPath);
-            }
-            catch
-            { /* File may be locked */
-            }
-        }
+        VerifyReusableWorkflow5(input0: _targetDb, input1: _sourceDbPath);
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _targetDbPath);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow5(SqliteConnection input0, string input1)
+    {
+        input0.Dispose();
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: input1);
     }
 }

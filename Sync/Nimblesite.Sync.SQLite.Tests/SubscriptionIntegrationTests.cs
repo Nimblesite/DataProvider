@@ -1,7 +1,3 @@
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
-
 namespace Nimblesite.Sync.SQLite.Tests;
 
 /// <summary>
@@ -20,10 +16,7 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
 
     public SubscriptionIntegrationTests()
     {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
     }
 
     #region Section 10.2: Subscription Types
@@ -230,13 +223,16 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
         var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
-        Assert.Contains("subscription_id", columns);
-        Assert.Contains("origin_id", columns);
-        Assert.Contains("subscription_type", columns);
-        Assert.Contains("table_name", columns);
-        Assert.Contains("filter", columns);
-        Assert.Contains("created_at", columns);
-        Assert.Contains("expires_at", columns);
+        global::Nimblesite.Sync.SQLite.Tests.SpecComplianceTests.VerifyDatabaseWorkflow2(
+            input0: columns,
+            value0: "subscription_id",
+            value1: "origin_id",
+            value2: "subscription_type",
+            value3: "table_name",
+            value4: "filter",
+            value5: "created_at",
+            value6: "expires_at"
+        );
     }
 
     /// <summary>
@@ -354,36 +350,13 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
 
     #region Helpers
 
-    private static SyncLogEntry CreateChange(
-        string tableName,
-        string pkValue,
-        SyncOperation operation,
-        long version = 1
-    ) =>
-        new(
-            version,
-            tableName,
-            pkValue,
-            operation,
-            operation == SyncOperation.Delete ? null : "{\"Id\":\"test\"}",
-            "server-origin",
-            Timestamp
-        );
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
     }
 
     #endregion

@@ -3,7 +3,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
@@ -22,9 +22,7 @@ public sealed partial class LqlDialectE2ETests
         var result = LqlStatementConverter.ToStatement(lqlCode);
         if (result is not Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> parseOk)
         {
-            Assert.Fail(
-                $"Parse failed: {((Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>)result).Value.DetailedMessage}"
-            );
+            Assert.Fail($"Parse failed: {(Error(actual: result)).Value.DetailedMessage}");
             return default;
         }
 
@@ -58,8 +56,9 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void CountFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_CountFunction_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_CountFunction_AllDialects_GeneratesCorrectSQL_1
+        );
 
         Assert.Contains("COUNT(*)", pg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("COUNT(*)", ss, StringComparison.OrdinalIgnoreCase);
@@ -75,26 +74,28 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
             AssertBothSqlFragments(input0: sql, value0: "SUM", value1: "AVG");
-            ContainsAll(
-                actual: sql,
-                expected: ["total_amount", "avg_amount"],
-                comparison: StringComparison.Ordinal
+            VerifyLifetimePhase1(
+                input0: sql,
+                value0: "total_amount",
+                value1: "avg_amount",
+                value3: "GROUP BY"
             );
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 
     [Fact]
     public void CountDistinctFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_CountDistinctFunction_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_CountDistinctFunction_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -108,11 +109,13 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void UpperLowerFunctions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
+        var (pg, ss, sl) = VerifyReusableWorkflow2(
+            input0: ConvertToAllDialects,
+            value0: """
             users
             |> select(upper(users.name) as upper_name, lower(users.email) as lower_email)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+            """
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -126,24 +129,11 @@ public sealed partial class LqlDialectE2ETests
     }
 
     [Fact]
-    public void SelectDistinct_AllDialects_GeneratesDistinctSQL()
-    {
-        var lql = """
-            users |> select_distinct(users.country)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            AssertBothSqlFragments(input0: sql, value0: "SELECT DISTINCT", value1: "country");
-        }
-    }
-
-    [Fact]
     public void OffsetAndLimit_AllDialects_GeneratesCorrectPagination()
     {
-        var lql = Data_OffsetAndLimit_AllDialects_GeneratesCorrectPagination_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_OffsetAndLimit_AllDialects_GeneratesCorrectPagination_1
+        );
 
         AssertBothSqlFragments(input0: pg, value0: "OFFSET", value1: "LIMIT");
         ContainsAll(actual: pg, expected: ["20", "10"], comparison: StringComparison.Ordinal);
@@ -161,8 +151,9 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void HavingClause_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_HavingClause_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_HavingClause_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -173,8 +164,9 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void LeftJoin_AllDialects_GeneratesLeftJoinSQL()
     {
-        var lql = Data_LeftJoin_AllDialects_GeneratesLeftJoinSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_LeftJoin_AllDialects_GeneratesLeftJoinSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
@@ -187,8 +179,9 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void MultipleJoins_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = Data_MultipleJoins_AllDialects_GeneratesCorrectSQL_1;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_MultipleJoins_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {

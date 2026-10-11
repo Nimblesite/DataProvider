@@ -113,6 +113,29 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
             .ConfigureAwait(false);
     }
 
+    // Implements [DP-SQLITE-SHARED-TABLE-COLUMN].
+    internal static DatabaseColumn ReadTableColumn(global::System.Data.Common.DbDataReader reader)
+    {
+        var columnName = reader.GetString(1); // name column
+        var sqliteType = reader.GetString(2); // type column
+        var notNull = reader.GetInt32(3) == 1; // notnull column
+        var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
+
+        var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(sqliteType, !notNull);
+
+        return new DatabaseColumn
+        {
+            Name = columnName,
+            SqlType = sqliteType,
+            CSharpType = csharpType,
+            IsNullable = !notNull,
+            IsPrimaryKey = isPrimaryKey,
+            IsIdentity =
+                isPrimaryKey && sqliteType.Contains("INTEGER", StringComparison.OrdinalIgnoreCase),
+            IsComputed = false,
+        };
+    }
+
     /// <summary>
     /// Gets table metadata using SQLite's native PRAGMA table_info command
     /// </summary>
@@ -135,32 +158,10 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
 
                 while (reader.Read())
                 {
-                    var columnName = reader.GetString(1); // name column
-                    var sqliteType = reader.GetString(2); // type column
-                    var notNull = reader.GetInt32(3) == 1; // notnull column
-                    var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
-
-                    var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(
-                        sqliteType,
-                        !notNull
-                    );
-
                     columns.Add(
-                        new DatabaseColumn
-                        {
-                            Name = columnName,
-                            SqlType = sqliteType,
-                            CSharpType = csharpType,
-                            IsNullable = !notNull,
-                            IsPrimaryKey = isPrimaryKey,
-                            IsIdentity =
-                                isPrimaryKey
-                                && sqliteType.Contains(
-                                    "INTEGER",
-                                    StringComparison.OrdinalIgnoreCase
-                                ),
-                            IsComputed = false,
-                        }
+                        item: global::Nimblesite.DataProvider.SQLite.SqliteCodeGenerator.ReadTableColumn(
+                            reader: reader
+                        )
                     );
                 }
             }

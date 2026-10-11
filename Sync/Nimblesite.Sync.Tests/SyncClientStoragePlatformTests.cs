@@ -10,10 +10,6 @@ using ClientListOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
     Nimblesite.Sync.Core.SyncError
 >;
-using ClientOk = Outcome.Result<
-    Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -61,9 +57,9 @@ public sealed partial record SyncClientStoragePlatformTests
     {
         Assert.Empty(Clients(connection: connection));
         Assert.Null(
-            Assert
-                .IsType<ClientOk>(
-                    SyncClientStorage.GetByOrigin<DbException>(
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: SyncClientStorage.GetByOrigin<DbException>(
                         connection: connection,
                         originId: "missing"
                     )
@@ -83,9 +79,9 @@ public sealed partial record SyncClientStoragePlatformTests
         Upsert(connection: connection, client: updated with { CreatedAt = "2024-03-01T00:00:00Z" });
         Assert.Equal(
             updated,
-            Assert
-                .IsType<ClientOk>(
-                    SyncClientStorage.GetByOrigin<DbException>(
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: SyncClientStorage.GetByOrigin<DbException>(
                         connection: connection,
                         originId: first.OriginId
                     )
@@ -97,34 +93,29 @@ public sealed partial record SyncClientStoragePlatformTests
 
     private static void AssertDeletes(DbConnection connection)
     {
-        Assert.IsType<BoolSyncOk>(
-            SyncClientStorage.Delete<DbException>(connection: connection, originId: "second")
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: SyncClientStorage.Delete<DbException>(
+                connection: connection,
+                originId: "second"
+            )
         );
         Assert.Single(Clients(connection: connection));
-        Assert.Equal(
-            1,
-            Assert
-                .IsType<IntSyncOk>(
-                    SyncClientStorage.DeleteMultiple<DbException>(
-                        connection: connection,
-                        originIds: ["O'Brien 雪", "O'Brien 雪", "missing"],
-                        failurePrefix: "Delete failed"
-                    )
-                )
-                .Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 1,
+            actual: SyncClientStorage.DeleteMultiple<DbException>(
+                connection: connection,
+                originIds: ["O'Brien 雪", "O'Brien 雪", "missing"],
+                failurePrefix: "Delete failed"
+            )
         );
         Assert.Empty(Clients(connection: connection));
-        Assert.Equal(
-            0,
-            Assert
-                .IsType<IntSyncOk>(
-                    SyncClientStorage.DeleteMultiple<DbException>(
-                        connection: connection,
-                        originIds: [],
-                        failurePrefix: "Delete failed"
-                    )
-                )
-                .Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 0,
+            actual: SyncClientStorage.DeleteMultiple<DbException>(
+                connection: connection,
+                originIds: [],
+                failurePrefix: "Delete failed"
+            )
         );
     }
 
@@ -139,8 +130,8 @@ public sealed partial record SyncClientStoragePlatformTests
             .Value;
 
     private static void Upsert(DbConnection connection, SyncClient client) =>
-        Assert.IsType<BoolSyncOk>(
-            connection is SqlConnection server
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: connection is SqlConnection server
                 ? Nimblesite.Sync.SqlServer.SqlServerSyncStore.UpsertClient(
                     connection: server,
                     client: client

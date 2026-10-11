@@ -1,7 +1,7 @@
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 // Implements [MIG-TEST-ID-NAME-COLUMNS].
 // Implements [CI-TEST-SHARED-COMMAND].
-using Tests.Shared;
+
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
@@ -21,8 +21,7 @@ public sealed partial class SqliteMigrationTests
         ILogger logger
     )
     {
-        var current = ((SchemaResultOk)SqliteSchemaInspector.Inspect(connection, logger)).Value;
-        var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: logger)).Value;
+        var ops = SqliteTestDb.CalculateChanges(connection, schema, logger);
         return SqliteTestDb.TryApply(connection: connection, operations: ops, logger: logger);
     }
 
@@ -36,30 +35,28 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1();
 
             // Act
-            var emptySchema = SqliteSchemaInspector.Inspect(connection, _logger);
-            Assert.True(emptySchema is SchemaResultOk);
-
+            // Act
             var operations = SchemaDiff.Calculate(
-                ((SchemaResultOk)emptySchema).Value,
+                (Ok(read: () => SqliteSchemaInspector.Inspect(connection, _logger))).Value,
                 schema,
                 logger: _logger
             );
 
             var ops = Ok(actual: operations).Value;
 
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: ops,
-                logger: _logger
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SqliteTestDb.TryApply(
+                    connection: connection,
+                    operations: ops,
+                    logger: _logger
+                )
             );
 
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
-
             // Verify table exists
-            var inspected = SqliteSchemaInspector.Inspect(connection, _logger);
-
-            var inspectedSchema = Ok(actual: inspected).Value;
+            // Verify table exists
+            var inspectedSchema = Ok(read: () =>
+                SqliteSchemaInspector.Inspect(connection, _logger)
+            ).Value;
             Assert.Single(inspectedSchema.Tables);
             Assert.Equal("Users", inspectedSchema.Tables[0].Name);
             Assert.Equal(3, inspectedSchema.Tables[0].Columns.Count);
@@ -80,15 +77,12 @@ public sealed partial class SqliteMigrationTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema =
-                Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
+            VerifySharedChecks2(
+                input0: Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1,
+                input1: connection
+            );
 
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            var inspected = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
+            var inspected = SqliteTestDb.Inspect(connection);
 
             Assert.Equal(2, inspected.Tables.Count);
             Assert.Contains(inspected.Tables, t => t.Name == "Users");
@@ -108,26 +102,15 @@ public sealed partial class SqliteMigrationTests
         SqliteTestDb.WithDb(test: connection =>
         {
             // Create initial schema
-            var v1 = Fixture_UpgradeExistingDatabase_AddColumn_Success_1();
-
-            // Apply v1
-            SeedSchema(connection, v1, _logger);
-
-            // Define v2 with new columns
-            var v2 = Fixture_UpgradeExistingDatabase_AddColumn_Success_2();
-
-            // Act - upgrade to v2
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var upgradeOps = (
-                (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-            ).Value;
+            var upgradeOps = VerifySharedPhase8(
+                input0: Fixture_UpgradeExistingDatabase_AddColumn_Success_1,
+                input1: connection,
+                input2: _logger,
+                input3: Fixture_UpgradeExistingDatabase_AddColumn_Success_2
+            );
 
             // Should have 2 AddColumn operations
-            Assert.Equal(2, upgradeOps.Count);
-            Assert.All(upgradeOps, op => Assert.IsType<AddColumnOperation>(op));
+            PostgresTestDb.AssertTwoAddColumns(upgradeOps: upgradeOps);
 
             var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
             var users = finalSchema.Tables.Single(t => t.Name == "Users");
@@ -144,31 +127,11 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Build();
-
-            // Apply v1
-            SeedSchema(connection, v1, _logger);
-
-            // v2 adds a new table
-            var v2 = Fixture_UpgradeExistingDatabase_AddTable_Success_1();
-
-            // Act
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var upgradeOps = (
-                (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-            ).Value;
-
-            // Should have 1 CreateTable operation
-            Assert.Single(upgradeOps);
-            Assert.IsType<CreateTableOperation>(upgradeOps[0]);
-
-            var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
+            var finalSchema = VerifyUpgradeOperation<CreateTableOperation>(
+                connection: connection,
+                input1: Data_UpgradeExistingDatabase_AddTable_Success_1,
+                input4: Fixture_UpgradeExistingDatabase_AddTable_Success_1
+            );
             Assert.Equal(2, finalSchema.Tables.Count);
             Assert.Contains(finalSchema.Tables, t => t.Name == "Products");
         });
@@ -181,27 +144,11 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Fixture_UpgradeExistingDatabase_AddIndex_Success_1();
-
-            // Apply v1
-            SeedSchema(connection, v1, _logger);
-
-            // v2 adds an index
-            var v2 = Fixture_UpgradeExistingDatabase_AddIndex_Success_2();
-
-            // Act
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var upgradeOps = (
-                (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-            ).Value;
-
-            Assert.Single(upgradeOps);
-            Assert.IsType<CreateIndexOperation>(upgradeOps[0]);
-
-            var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
+            var finalSchema = VerifyUpgradeOperation<CreateIndexOperation>(
+                connection: connection,
+                input1: Fixture_UpgradeExistingDatabase_AddIndex_Success_1,
+                input4: Fixture_UpgradeExistingDatabase_AddIndex_Success_2
+            );
             var users = finalSchema.Tables.Single(t => t.Name == "Users");
             Assert.Single(users.Indexes);
             Assert.Equal("idx_users_email", users.Indexes[0].Name);
@@ -221,21 +168,20 @@ public sealed partial class SqliteMigrationTests
             // Act - Run migration twice
             for (var i = 0; i < 2; i++)
             {
-                var currentSchema = (
-                    (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-                ).Value;
+                var operations =
+                    global::Nimblesite.DataProvider.Migration.Tests.MigrationCornerCaseTests.VerifyCrossClassChecks4(
+                        input0: connection,
+                        input1: _logger,
+                        input2: schema
+                    );
 
-                var operations = (
-                    (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-                ).Value;
-
-                var result = SqliteTestDb.TryApply(
-                    connection: connection,
-                    operations: operations,
-                    logger: _logger
+                global::Tests.Shared.ResultAssertions.Ok(
+                    actual: SqliteTestDb.TryApply(
+                        connection: connection,
+                        operations: operations,
+                        logger: _logger
+                    )
                 );
-
-                Assert.True(result is MigrationApplyResultOk);
 
                 // Second run should have 0 operations
                 if (i == 1)
@@ -253,14 +199,12 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_CreateTable_AllPortableTypes_Success_1();
+            VerifySharedChecks2(
+                input0: Fixture_CreateTable_AllPortableTypes_Success_1,
+                input1: connection
+            );
 
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            var inspected = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
+            var inspected = SqliteTestDb.Inspect(connection);
             var table = inspected.Tables.Single();
             Assert.Equal(25, table.Columns.Count);
         });
@@ -274,34 +218,14 @@ public sealed partial class SqliteMigrationTests
         SqliteTestDb.WithDb(test: connection =>
         {
             // Create initial schema with 2 tables
-            var v1 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Table("Products", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Build();
-
-            SeedSchema(connection, v1, _logger);
-
-            // v2 removes Products table
-            var v2 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Build();
-
-            // Act - Calculate diff WITHOUT AllowDestructive
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var operations = (
-                (OperationsResultOk)
-                    SchemaDiff.Calculate(
-                        currentSchema,
-                        v2,
-                        allowDestructive: false,
-                        logger: _logger
-                    )
-            ).Value;
+            var operations = VerifyReusableWorkflow3(
+                input0: Data_Destructive_DropTable_BlockedByDefault_1,
+                input1: VerifyConsolidatedPhase1,
+                input2: connection,
+                input3: _logger,
+                input4: Data_Destructive_DropTable_BlockedByDefault_2,
+                value0: false
+            );
 
             // Assert - No drop operations should be generated
             Assert.Empty(operations);
@@ -315,45 +239,30 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Table("Products", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Build();
-
-            SeedSchema(connection, v1, _logger);
-
-            var v2 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Build();
-
-            // Act - Calculate diff WITH AllowDestructive
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            var operations = (
-                (OperationsResultOk)
-                    SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-            ).Value;
+            var operations = VerifyReusableWorkflow3(
+                input0: Data_Destructive_DropTable_AllowedWithOption_1,
+                input1: VerifyConsolidatedPhase1,
+                input2: connection,
+                input3: _logger,
+                input4: Data_Destructive_DropTable_AllowedWithOption_2,
+                value0: true
+            );
 
             // Should have DropTableOperation
             Assert.Single(operations);
             Assert.IsType<DropTableOperation>(operations[0]);
 
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: operations,
-                logger: _logger,
-                options: MigrationOptions.Destructive
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SqliteTestDb.TryApply(
+                    connection: connection,
+                    operations: operations,
+                    logger: _logger,
+                    options: MigrationOptions.Destructive
+                )
             );
 
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
-
             var finalSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
+                Ok(actual: SqliteSchemaInspector.Inspect(connection, _logger))
             ).Value;
             Assert.Single(finalSchema.Tables);
             Assert.DoesNotContain(finalSchema.Tables, t => t.Name == "Products");
@@ -373,14 +282,7 @@ public sealed partial class SqliteMigrationTests
             SeedSchema(connection, schema, _logger);
 
             // Act - Inspect and compare
-            var inspected = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-
-            // Calculate diff between original and inspected - should be empty
-            var diff = (
-                (OperationsResultOk)SchemaDiff.Calculate(inspected, schema, logger: _logger)
-            ).Value;
+            var diff = SqliteTestDb.CalculateChanges(connection, schema, _logger);
 
             // Assert
             Assert.Empty(diff);
@@ -448,19 +350,13 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command =>
+            var schema = VerifySharedContinuation12(
+                configure0: command =>
                     command.CommandText =
-                        Data_SchemaCapture_ExistingDatabase_ReturnsCompleteSchema_1
+                        Data_SchemaCapture_ExistingDatabase_ReturnsCompleteSchema_1,
+                input0: connection,
+                input1: _logger
             );
-
-            // Act - CAPTURE the existing schema
-            var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
-
-            // Assert - schema captured successfully
-
-            var schema = Ok(actual: captureResult).Value;
 
             // Verify tables captured
             Assert.Equal(2, schema.Tables.Count);
@@ -490,16 +386,12 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command =>
-                    command.CommandText = Data_SchemaCapture_SerializesToJson_RoundTrip_1
+            var schema = VerifySharedContinuation12(
+                configure0: command =>
+                    command.CommandText = Data_SchemaCapture_SerializesToJson_RoundTrip_1,
+                input0: connection,
+                input1: _logger
             );
-
-            // Act - Capture and serialize to JSON
-            var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
-
-            var schema = Ok(actual: captureResult).Value;
 
             var json = SchemaSerializer.ToJson(schema);
 
@@ -527,30 +419,13 @@ public sealed partial class SqliteMigrationTests
         // Arrange - Create table with expression index for case-insensitive uniqueness
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
-        {
-            var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1();
-
-            // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert - Migration succeeded
-            Assert.True(
-                result is MigrationApplyResultOk,
-                $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
-            );
-
-            // Verify index exists
-            var indexDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name'"
-                ) as string;
-
-            Assert.NotNull(indexDef);
-            ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower"]);
-        });
+            VerifyExpressionIndex(
+                connection: connection,
+                input1: Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1,
+                indexName: "uq_artists_name",
+                expected: ["UNIQUE", "lower"]
+            )
+        );
     }
 
     [Fact]
@@ -589,30 +464,13 @@ public sealed partial class SqliteMigrationTests
         // Arrange - Create table with multi-expression index
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
-        {
-            var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1();
-
-            // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(
-                result is MigrationApplyResultOk,
-                $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
-            );
-
-            // Verify composite expression index exists
-            var indexDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_places_name_suburb'"
-                ) as string;
-
-            Assert.NotNull(indexDef);
-            ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "SuburbId"]);
-        });
+            VerifyExpressionIndex(
+                connection: connection,
+                input1: Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1,
+                indexName: "uq_places_name_suburb",
+                expected: ["UNIQUE", "lower", "SuburbId"]
+            )
+        );
     }
 
     [Fact]
@@ -627,13 +485,12 @@ public sealed partial class SqliteMigrationTests
             // Act - Run migration twice
             for (var i = 0; i < 2; i++)
             {
-                var currentSchema = (
-                    (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-                ).Value;
-
-                var operations = (
-                    (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-                ).Value;
+                var operations =
+                    global::Nimblesite.DataProvider.Migration.Tests.MigrationCornerCaseTests.VerifyCrossClassChecks4(
+                        input0: connection,
+                        input1: _logger,
+                        input2: schema
+                    );
 
                 var result = SqliteTestDb.TryApply(
                     connection: connection,
@@ -662,19 +519,13 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command =>
+            var schema = VerifySharedContinuation12(
+                configure0: command =>
                     command.CommandText =
-                        Data_ExpressionIndex_SchemaInspector_DetectsExpressionIndex_1
+                        Data_ExpressionIndex_SchemaInspector_DetectsExpressionIndex_1,
+                input0: connection,
+                input1: _logger
             );
-
-            // Act - Inspect schema
-            var result = SqliteSchemaInspector.Inspect(connection, _logger);
-
-            // Assert
-
-            var schema = Ok(actual: result).Value;
             var artists = schema.Tables.Single(t => t.Name == "artists");
 
             Assert.Single(artists.Indexes);
@@ -695,52 +546,13 @@ public sealed partial class SqliteMigrationTests
     {
         // Arrange - Create table with regular column index
         // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
-        {
-            var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1();
-
-            // Apply v1
-            SeedSchema(connection, v1, _logger);
-
-            // v2 changes to expression index (different name since it's semantically different)
-            var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2();
-
-            // Act - Calculate upgrade operations
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var upgradeOps = (
-                (OperationsResultOk)
-                    SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-            ).Value;
-
-            // Assert - Should have drop old index + create new expression index
-            Assert.Equal(2, upgradeOps.Count);
-            Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-            Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
-
-            // Apply the upgrade
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: upgradeOps,
-                logger: _logger,
-                options: MigrationOptions.Destructive
-            );
-
-            Assert.True(result is MigrationApplyResultOk);
-
-            // Verify new expression index exists
-            var indexDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name_ci'"
-                ) as string;
-
-            Assert.NotNull(indexDef);
-            Assert.Contains("lower", indexDef);
-        });
+        VerifyIndexConversion(
+            createInitial: Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1,
+            createDesired: Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2,
+            readIndex: connection =>
+                ReadSqliteDefinition(connection: connection, indexName: "uq_artists_name_ci"),
+            verifyIndex: indexDef => Assert.Contains("lower", indexDef)
+        );
     }
 
     [Fact]
@@ -748,51 +560,13 @@ public sealed partial class SqliteMigrationTests
     {
         // Arrange - Create table with expression index
         // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
-        {
-            var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1();
-
-            // Apply v1
-            SeedSchema(connection, v1, _logger);
-
-            // v2 changes back to simple column index (different name)
-            var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2();
-
-            // Act
-            var currentSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
-            var upgradeOps = (
-                (OperationsResultOk)
-                    SchemaDiff.Calculate(currentSchema, v2, allowDestructive: true, logger: _logger)
-            ).Value;
-
-            // Assert - Should have drop + create
-            Assert.Equal(2, upgradeOps.Count);
-            Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-            Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
-
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: upgradeOps,
-                logger: _logger,
-                options: MigrationOptions.Destructive
-            );
-
-            Assert.True(result is MigrationApplyResultOk);
-
-            // Verify new column index exists (no lower() function)
-            var indexDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_venues_name'"
-                ) as string;
-
-            Assert.NotNull(indexDef);
-            Assert.DoesNotContain("lower", indexDef);
-        });
+        VerifyIndexConversion(
+            createInitial: Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1,
+            createDesired: Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2,
+            readIndex: connection =>
+                ReadSqliteDefinition(connection: connection, indexName: "idx_venues_name"),
+            verifyIndex: indexDef => Assert.DoesNotContain("lower", indexDef)
+        );
     }
 
     // =============================================================================
@@ -806,21 +580,11 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_NowFunction_TranslatesToCurrentTimestamp_1();
-
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Verify table DDL contains datetime('now') - the SQLite translation of now()
-            var tableDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='table' AND name='events'"
-                ) as string;
-
-            Assert.NotNull(tableDef);
+            var tableDef = VerifyTableDdl(
+                connection: connection,
+                input1: Fixture_LqlDefault_NowFunction_TranslatesToCurrentTimestamp_1,
+                tableName: "events"
+            );
             Assert.Contains("(datetime('now'))", tableDef);
 
             // Insert and verify default works
@@ -829,14 +593,11 @@ public sealed partial class SqliteMigrationTests
                 configure: command => command.CommandText = "INSERT INTO events (id) VALUES (1)"
             );
 
-            var createdAt =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText = "SELECT created_at FROM events WHERE id = 1"
-                ) as string;
-
-            Assert.NotNull(createdAt);
+            var createdAt = VerifySharedContinuation4(
+                configure0: command =>
+                    command.CommandText = "SELECT created_at FROM events WHERE id = 1",
+                input0: connection
+            );
             Assert.NotEmpty(createdAt);
         });
     }
@@ -848,21 +609,11 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_BooleanTrue_TranslatesTo1_1();
-
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Verify table DDL contains 1 and 0 for boolean defaults
-            var tableDef =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText =
-                            "SELECT sql FROM sqlite_master WHERE type='table' AND name='flags'"
-                ) as string;
-
-            Assert.NotNull(tableDef);
+            var tableDef = VerifyTableDdl(
+                connection: connection,
+                input1: Fixture_LqlDefault_BooleanTrue_TranslatesTo1_1,
+                tableName: "flags"
+            );
             ContainsAll(actual: tableDef, expected: ["DEFAULT 1", "DEFAULT 0"]); // false -> 0
 
             // Insert and verify defaults work
@@ -889,26 +640,22 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_NumericValues_PassThrough_1();
+            SeedAndInsert(
+                input0: connection,
+                input1: Fixture_LqlDefault_NumericValues_PassThrough_1,
+                value0: "INSERT INTO counters (id) VALUES (1)"
+            );
 
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Insert and verify defaults work
-            DatabaseCommands.Execute(
+            AssertFirstRow(
                 connection: connection,
-                configure: command => command.CommandText = "INSERT INTO counters (id) VALUES (1)"
+                value0: "SELECT count, priority, rate FROM counters WHERE id = 1",
+                assert: reader =>
+                {
+                    Assert.Equal(0, reader.GetInt64(0));
+                    Assert.Equal(100, reader.GetInt64(1));
+                    Assert.Equal(1.5, reader.GetDouble(2), 2);
+                }
             );
-
-            using var selectCmd = connection.CreateCommand();
-            using var reader = DatabaseCommands.ReadFirstRow(
-                selectCmd,
-                command =>
-                    command.CommandText = "SELECT count, priority, rate FROM counters WHERE id = 1"
-            );
-            Assert.Equal(0, reader.GetInt64(0));
-            Assert.Equal(100, reader.GetInt64(1));
-            Assert.Equal(1.5, reader.GetDouble(2), 2);
         });
     }
 
@@ -919,24 +666,21 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_StringLiteral_PassThrough_1();
+            SeedAndInsert(
+                input0: connection,
+                input1: Fixture_LqlDefault_StringLiteral_PassThrough_1,
+                value0: "INSERT INTO items (id) VALUES (1)"
+            );
 
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Insert and verify defaults work
-            DatabaseCommands.Execute(
+            AssertFirstRow(
                 connection: connection,
-                configure: command => command.CommandText = "INSERT INTO items (id) VALUES (1)"
+                value0: "SELECT status, category FROM items WHERE id = 1",
+                assert: reader =>
+                {
+                    Assert.Equal("pending", reader.GetString(0));
+                    Assert.Equal("uncategorized", reader.GetString(1));
+                }
             );
-
-            using var selectCmd = connection.CreateCommand();
-            using var reader = DatabaseCommands.ReadFirstRow(
-                selectCmd,
-                command => command.CommandText = "SELECT status, category FROM items WHERE id = 1"
-            );
-            Assert.Equal("pending", reader.GetString(0));
-            Assert.Equal("uncategorized", reader.GetString(1));
         });
     }
 
@@ -947,38 +691,34 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1();
-
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Insert multiple rows and verify UUIDs are generated and unique
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command =>
-                    command.CommandText =
-                        "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')"
+            SeedAndInsert(
+                input0: connection,
+                input1: Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1,
+                value0: "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')"
             );
 
-            using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT id FROM records";
-            using var reader = selectCmd.ExecuteReader();
+            WithReader(
+                connection,
+                "SELECT id FROM records",
+                reader =>
+                {
+                    var uuids = new List<string>();
+                    while (reader.Read())
+                    {
+                        var uuid = reader.GetString(0);
+                        Assert.NotNull(uuid);
+                        Assert.Matches(
+                            @"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+                            uuid
+                        );
+                        uuids.Add(uuid);
+                    }
 
-            var uuids = new List<string>();
-            while (reader.Read())
-            {
-                var uuid = reader.GetString(0);
-                Assert.NotNull(uuid);
-                Assert.Matches(
-                    @"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-                    uuid
-                );
-                uuids.Add(uuid);
-            }
-
-            // All UUIDs should be unique
-            Assert.Equal(3, uuids.Count);
-            Assert.Equal(3, uuids.Distinct().Count());
+                    // All UUIDs should be unique
+                    Assert.Equal(3, uuids.Count);
+                    Assert.Equal(3, uuids.Distinct().Count());
+                }
+            );
         });
     }
 
@@ -989,25 +729,17 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1();
-
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Insert and verify default date
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command => command.CommandText = "INSERT INTO logs (id) VALUES (1)"
+            SeedAndInsert(
+                input0: connection,
+                input1: Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1,
+                value0: "INSERT INTO logs (id) VALUES (1)"
             );
 
-            var logDate =
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: connection,
-                    configure: command =>
-                        command.CommandText = "SELECT log_date FROM logs WHERE id = 1"
-                ) as string;
-
-            Assert.NotNull(logDate);
+            var logDate = VerifySharedContinuation4(
+                configure0: command =>
+                    command.CommandText = "SELECT log_date FROM logs WHERE id = 1",
+                input0: connection
+            );
             Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", logDate); // YYYY-MM-DD format
         });
     }
@@ -1019,34 +751,32 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1();
-
-            // Act
-            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
-
-            // Insert with no columns specified - all defaults should apply
-            DatabaseCommands.Execute(
-                connection: connection,
-                configure: command => command.CommandText = "INSERT INTO orders DEFAULT VALUES"
+            SeedAndInsert(
+                input0: connection,
+                input1: Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1,
+                value0: "INSERT INTO orders DEFAULT VALUES"
             );
 
-            using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText =
-                "SELECT id, status, quantity, is_urgent, created_at FROM orders";
-            using var reader = selectCmd.ExecuteReader();
-            Assert.True(reader.Read());
+            WithReader(
+                connection,
+                "SELECT id, status, quantity, is_urgent, created_at FROM orders",
+                reader =>
+                {
+                    Assert.True(reader.Read());
 
-            var id = reader.GetString(0);
-            var status = reader.GetString(1);
-            var quantity = reader.GetInt64(2);
-            var isUrgent = reader.GetInt64(3);
-            var createdAt = reader.GetString(4);
+                    var id = reader.GetString(0);
+                    var status = reader.GetString(1);
+                    var quantity = reader.GetInt64(2);
+                    var isUrgent = reader.GetInt64(3);
+                    var createdAt = reader.GetString(4);
 
-            Assert.Matches(@"^[0-9a-f-]{36}$", id); // UUID format
-            Assert.Equal("pending", status); // String default
-            Assert.Equal(1, quantity); // Numeric default
-            Assert.Equal(0, isUrgent); // Boolean false = 0
-            Assert.NotEmpty(createdAt); // Timestamp generated
+                    Assert.Matches(@"^[0-9a-f-]{36}$", id); // UUID format
+                    Assert.Equal("pending", status); // String default
+                    Assert.Equal(1, quantity); // Numeric default
+                    Assert.Equal(0, isUrgent); // Boolean false = 0
+                    Assert.NotEmpty(createdAt); // Timestamp generated
+                }
+            );
         });
     }
 
@@ -1123,6 +853,24 @@ public sealed partial class SqliteMigrationTests
         });
     }
 
+    // Implements [MIG-TEST-SHARED-INDEX].
+    private void VerifyExpressionIndex(
+        SqliteConnection connection,
+        Func<SchemaDefinition> input1,
+        string indexName,
+        System.Collections.Immutable.ImmutableArray<string> expected
+    )
+    {
+        VerifySharedContinuation15(input1, connection, _logger);
+        var indexDef = VerifySharedContinuation4(
+            input0: connection,
+            configure0: command =>
+                command.CommandText =
+                    $"SELECT sql FROM sqlite_master WHERE type='index' AND name='{indexName}'"
+        );
+        ContainsAll(actual: indexDef, expected: expected);
+    }
+
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private void SeedSchemaAndAssertSuccess(
         global::Microsoft.Data.Sqlite.SqliteConnection input0,
@@ -1130,10 +878,9 @@ public sealed partial class SqliteMigrationTests
     )
     {
         // Act
-        var result = SeedSchema(connection: input0, schema: input1, logger: _logger);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SeedSchema(connection: input0, schema: input1, logger: _logger)
+        );
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
@@ -1142,13 +889,326 @@ public sealed partial class SqliteMigrationTests
         global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.SchemaOperation> input1
     )
     {
-        var result = SqliteTestDb.TryApply(connection: input0, operations: input1, logger: _logger);
-
-        // Assert
-        Assert.True(result is MigrationApplyResultOk);
-
-        var finalSchema = ((SchemaResultOk)SqliteSchemaInspector.Inspect(input0, _logger)).Value;
+        var finalSchema =
+            global::Nimblesite.DataProvider.Migration.Tests.MigrationCornerCaseTests.VerifyReusableWorkflow32(
+                input0: input0,
+                input1: input1,
+                input2: _logger
+            );
 
         return finalSchema;
+    }
+
+    // Implements [MIG-TEST-SHARED-INDEX].
+    private static string? ReadSqliteDefinition(SqliteConnection connection, string indexName)
+    {
+        var result = global::Tests.Shared.DatabaseCommands.Scalar(
+            connection: connection,
+            configure: command =>
+                command.CommandText =
+                    $"SELECT sql FROM sqlite_master WHERE type='index' AND name='{indexName}'"
+        );
+        return result is string sql ? sql : null;
+    }
+
+    // Implements [MIG-TEST-SHARED-INDEX-CONVERSION].
+    private void VerifyIndexConversion(
+        Func<SchemaDefinition> createInitial,
+        Func<SchemaDefinition> createDesired,
+        Func<SqliteConnection, string?> readIndex,
+        Action<string?> verifyIndex
+    )
+    {
+        SqliteTestDb.WithDb(test: connection =>
+        {
+            var upgradeOps = VerifyReusableWorkflow3(
+                input0: createInitial,
+                input1: VerifyConsolidatedPhase1,
+                input2: connection,
+                input3: _logger,
+                input4: createDesired,
+                value0: true
+            );
+
+            // Assert - Should have drop old index + create new expression index
+            Assert.Equal(2, upgradeOps.Count);
+            Assert.Contains(upgradeOps, op => op is DropIndexOperation);
+            Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
+
+            // Apply the upgrade
+            global::Tests.Shared.ResultAssertions.Ok(
+                actual: SqliteTestDb.TryApply(
+                    connection: connection,
+                    operations: upgradeOps,
+                    logger: _logger,
+                    options: MigrationOptions.Destructive
+                )
+            );
+
+            // Verify new expression index exists
+            var indexDef = readIndex(connection);
+
+            Assert.NotNull(indexDef);
+            verifyIndex(indexDef);
+        });
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedChecks2(Func<SchemaDefinition> input0, SqliteConnection input1)
+    {
+        var schema = input0();
+
+        // Act
+        SeedSchemaAndAssertSuccess(input0: input1, input1: schema);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifySharedContinuation4(
+        SqliteConnection input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        // Verify index exists
+        var indexDef = Assert.IsType<string>(
+            global::Tests.Shared.DatabaseCommands.Scalar(connection: input0, configure: configure0)
+        );
+
+        Assert.NotNull(indexDef);
+
+        return indexDef;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string VerifyTableDdl(
+        SqliteConnection connection,
+        Func<SchemaDefinition> input1,
+        string tableName
+    )
+    {
+        VerifySharedChecks2(input0: input1, input1: connection);
+        return VerifySharedContinuation4(
+            input0: connection,
+            configure0: command =>
+                command.CommandText =
+                    $"SELECT sql FROM sqlite_master WHERE type='table' AND name='{tableName}'"
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private SchemaDefinition VerifyUpgradeOperation<T>(
+        SqliteConnection connection,
+        Func<SchemaDefinition> input1,
+        Func<SchemaDefinition> input4
+    )
+        where T : SchemaOperation
+    {
+        var upgradeOps = VerifyReusableWorkflow28(
+            input0: VerifySharedPhase8,
+            input1: input1,
+            input2: connection,
+            input3: _logger,
+            input4: input4
+        );
+        Assert.IsType<T>(upgradeOps[0]);
+        return ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void SeedAndInsert(
+        SqliteConnection input0,
+        Func<SchemaDefinition> input1,
+        string value0
+    ) =>
+        VerifySharedContinuation5(
+            configure0: command => command.CommandText = value0,
+            input0: input1,
+            input1: input0
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void WithReader(
+        SqliteConnection connection,
+        string sql,
+        Action<System.Data.Common.DbDataReader> assert
+    )
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        using var reader = cmd.ExecuteReader();
+        assert(obj: reader);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertFirstRow(
+        SqliteConnection connection,
+        string value0,
+        Action<System.Data.Common.DbDataReader> assert
+    )
+    {
+        using var selectCmd = connection.CreateCommand();
+        using var reader = DatabaseCommands.ReadFirstRow(
+            selectCmd,
+            command => command.CommandText = value0
+        );
+        assert(obj: reader);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation5(
+        Func<SchemaDefinition> input0,
+        SqliteConnection input1,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        VerifySharedChecks2(input0: input0, input1: input1);
+
+        // Insert and verify defaults work
+        DatabaseCommands.Execute(connection: input1, configure: configure0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static IReadOnlyList<SchemaOperation> VerifySharedContinuation8(
+        SqliteConnection input0,
+        SchemaDefinition input1,
+        ILogger input2,
+        Func<SchemaDefinition> input3
+    )
+    {
+        // Apply v1
+        var upgradeOps = VerifyConsolidatedPhase1(
+            input0: input0,
+            input1: input1,
+            input2: input2,
+            input3: input3,
+            value0: false
+        );
+
+        return upgradeOps;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SchemaDefinition VerifySharedContinuation12(
+        SqliteConnection input0,
+        ILogger input1,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        // Act - CAPTURE the existing schema
+        // Act - CAPTURE the existing schema
+        // Assert - schema captured successfully
+        var schema = Ok(read: () => SqliteSchemaInspector.Inspect(input0, input1)).Value;
+
+        return schema;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedContinuation15(
+        Func<SchemaDefinition> input0,
+        SqliteConnection input1,
+        ILogger input2
+    )
+    {
+        var schema = input0();
+        // Act
+        var result = SeedSchema(connection: input1, schema: schema, logger: input2);
+        // Assert - Migration succeeded
+        Assert.True(
+            result is MigrationApplyResultOk,
+            $"Migration failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifySharedPhase8(
+        Func<SchemaDefinition> input0,
+        SqliteConnection input1,
+        ILogger input2,
+        Func<SchemaDefinition> input3
+    )
+    { // Create initial schema
+        var v1 = input0();
+
+        // Apply v1
+        var upgradeOps = VerifySharedContinuation8(
+            input0: input1,
+            input1: v1,
+            input2: input2,
+            input3: input3
+        );
+
+        return upgradeOps;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyConsolidatedPhase1(
+        SqliteConnection input0,
+        SchemaDefinition input1,
+        ILogger input2,
+        Func<SchemaDefinition> input3,
+        bool value0
+    )
+    {
+        SeedSchema(input0, input1, input2);
+
+        // v2 removes Products table
+        var operations =
+            global::Nimblesite.DataProvider.Migration.Tests.MigrationCornerCaseTests.VerifySharedPhase2(
+                input0: input3,
+                input1: input0,
+                input2: input2,
+                value0: value0
+            );
+
+        return operations;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow3(
+        Func<SchemaDefinition> input0,
+        Func<
+            SqliteConnection,
+            SchemaDefinition,
+            ILogger,
+            Func<SchemaDefinition>,
+            bool,
+            IReadOnlyList<SchemaOperation>
+        > input1,
+        SqliteConnection input2,
+        ILogger input3,
+        Func<SchemaDefinition> input4,
+        bool value0
+    )
+    { // Create initial schema with 2 tables
+        var v1 = input0();
+
+        var operations = input1(arg1: input2, arg2: v1, arg3: input3, arg4: input4, arg5: value0);
+
+        return operations;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow28(
+        Func<
+            Func<SchemaDefinition>,
+            SqliteConnection,
+            ILogger,
+            Func<SchemaDefinition>,
+            IReadOnlyList<SchemaOperation>
+        > input0,
+        Func<SchemaDefinition> input1,
+        SqliteConnection input2,
+        ILogger input3,
+        Func<SchemaDefinition> input4
+    )
+    {
+        var upgradeOps = input0(arg1: input1, arg2: input2, arg3: input3, arg4: input4);
+
+        // Should have 1 CreateTable operation
+        Assert.Single(upgradeOps);
+
+        return upgradeOps;
     }
 }

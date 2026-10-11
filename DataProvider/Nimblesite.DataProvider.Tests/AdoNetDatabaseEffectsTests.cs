@@ -1,6 +1,4 @@
-using Microsoft.Data.Sqlite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 
 #pragma warning disable CA2007 // No ConfigureAwait in tests
 #pragma warning disable CA1849 // Tests can use sync over async
@@ -36,13 +34,7 @@ public sealed partial class AdoNetDatabaseEffectsTests
             caseValue1,
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
     }
 
     [Fact]
@@ -54,13 +46,7 @@ public sealed partial class AdoNetDatabaseEffectsTests
             "SELECT 1",
             null!
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
     }
 
     [Fact]
@@ -72,18 +58,7 @@ public sealed partial class AdoNetDatabaseEffectsTests
             "SELECT 1 AS id, 'x' AS name",
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-        var ok = (Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-            IReadOnlyList<DatabaseColumn>,
-            SqlError
-        >)result;
-        Assert.Equal(2, ok.Value.Count);
+        var ok = VerifyReusableWorkflow17(input0: result);
         Assert.Equal("id", ok.Value[0].Name);
         Assert.Equal("name", ok.Value[1].Name);
     }
@@ -98,18 +73,7 @@ public sealed partial class AdoNetDatabaseEffectsTests
             "SELECT @id AS matched_id, @limit AS matched_limit",
             parameters
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-        var ok = (Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-            IReadOnlyList<DatabaseColumn>,
-            SqlError
-        >)result;
-        Assert.Equal(2, ok.Value.Count);
+        var ok = VerifyReusableWorkflow17(input0: result);
         Assert.Contains(ok.Value, c => c.Name == "matched_id");
         Assert.Contains(ok.Value, c => c.Name == "matched_limit");
     }
@@ -125,12 +89,18 @@ public sealed partial class AdoNetDatabaseEffectsTests
             "SELECT 1",
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Result<IReadOnlyList<DatabaseColumn>, Sql.Model.SqlError>.Ok<
+        IReadOnlyList<DatabaseColumn>,
+        Sql.Model.SqlError
+    > VerifyReusableWorkflow17(Result<IReadOnlyList<DatabaseColumn>, Sql.Model.SqlError> input0)
+    {
+        var ok = Ok(actual: input0);
+        Assert.Equal(2, ok.Value.Count);
+
+        return ok;
     }
 }

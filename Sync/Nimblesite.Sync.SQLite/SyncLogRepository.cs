@@ -25,45 +25,39 @@ public static class SyncLogRepository
         int batchSize
     )
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT version, table_name, pk_value, operation, payload, origin, timestamp
-                FROM _sync_log
-                WHERE version > @fromVersion
-                ORDER BY version ASC
-                LIMIT @batchSize
-                """;
-            cmd.Parameters.AddWithValue("@fromVersion", fromVersion);
-            cmd.Parameters.AddWithValue("@batchSize", batchSize);
-
-            var entries = new List<SyncLogEntry>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+        return SyncCommandExecution.Read<SqliteException, SyncLogListResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification24,
+            parameters: () => [("@fromVersion", fromVersion), ("@batchSize", batchSize)],
+            read: command =>
             {
-                entries.Add(
-                    new SyncLogEntry(
-                        Version: reader.GetInt64(0),
-                        TableName: reader.GetString(1),
-                        PkValue: reader.GetString(2),
-                        Operation: ParseOperation(reader.GetString(3)),
-                        Payload: reader.IsDBNull(4) ? null : reader.GetString(4),
-                        Origin: reader.GetString(5),
-                        Timestamp: reader.GetString(6)
+                return new SyncLogListOk(
+                    SyncCommandExecution.ReadRows<SyncLogEntry>(
+                        command: command,
+                        read: row => new SyncLogEntry(
+                            Version: row.GetInt64(0),
+                            TableName: row.GetString(1),
+                            PkValue: row.GetString(2),
+                            Operation: ParseOperation(row.GetString(3)),
+                            Payload: row.IsDBNull(4) ? null : row.GetString(4),
+                            Origin: row.GetString(5),
+                            Timestamp: row.GetString(6)
+                        )
                     )
                 );
+            },
+            failure: ex =>
+            {
+                return new SyncLogListError(
+                    new SyncErrorDatabase($"Failed to fetch changes: {ex.Message}")
+                );
             }
-
-            return new SyncLogListOk(entries);
-        }
-        catch (SqliteException ex)
-        {
-            return new SyncLogListError(
-                new SyncErrorDatabase($"Failed to fetch changes: {ex.Message}")
-            );
-        }
+        );
     }
 
     /// <summary>
@@ -73,21 +67,26 @@ public static class SyncLogRepository
     /// <returns>Last server version or database error.</returns>
     public static LongSyncResult GetLastServerVersion(SqliteConnection connection)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'last_server_version'";
-            var result = cmd.ExecuteScalar();
-            return result is string strValue && long.TryParse(strValue, out var version)
-                ? new LongSyncOk(version)
-                : new LongSyncOk(0);
-        }
-        catch (SqliteException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get last server version: {ex.Message}")
-            );
-        }
+        return SyncCommandExecution.Read<SqliteException, LongSyncResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "SELECT value FROM _sync_state WHERE key = 'last_server_version'",
+            parameters: () => [],
+            read: command =>
+            {
+                var result = command.ExecuteScalar();
+                return result is string strValue && long.TryParse(strValue, out var version)
+                    ? new LongSyncOk(version)
+                    : new LongSyncOk(0);
+            },
+            failure: ex =>
+            {
+                return new LongSyncError(
+                    new SyncErrorDatabase($"Failed to get last server version: {ex.Message}")
+                );
+            }
+        );
     }
 
     /// <summary>

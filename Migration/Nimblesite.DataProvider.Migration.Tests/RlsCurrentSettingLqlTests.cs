@@ -1,13 +1,7 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
-using TranspileError = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Error<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
-using TranspileOk = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -31,12 +25,12 @@ public sealed partial class RlsCurrentSettingLqlTests
     {
         var sql = Pg("tenant_id = current_setting('app.tenant_id')::uuid");
 
-        ContainsAll(
-            actual: sql,
-            expected: ["\"tenant_id\"", "current_setting('app.tenant_id', true)::uuid"],
-            comparison: StringComparison.Ordinal
+        VerifyCrossClassChecks2(
+            input0: sql,
+            value0: "\"tenant_id\"",
+            value1: "current_setting('app.tenant_id', true)::uuid",
+            value3: "\"uuid\""
         );
-        Assert.DoesNotContain("\"uuid\"", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -57,13 +51,22 @@ public sealed partial class RlsCurrentSettingLqlTests
         );
     }
 
-    [Fact]
-    public void Translate_CurrentSetting_InsideStringLiteral_IsNotRewritten()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData16))]
+    public void Translate_CurrentSetting_InsideStringLiteral_IsNotRewritten_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2
+    )
     {
-        var sql = Pg("note = 'current_setting(''app.tenant_id'')'");
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
 
-        Assert.Contains("'current_setting(''app.tenant_id'')'", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain(", true", sql, StringComparison.Ordinal);
+        var sql = Pg(scenario0);
+
+        Assert.Contains(scenario1, sql, StringComparison.Ordinal);
+        Assert.DoesNotContain(scenario2, sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -88,19 +91,6 @@ public sealed partial class RlsCurrentSettingLqlTests
     }
 
     [Fact]
-    public void Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting()
-    {
-        var sql = Pg(Data_Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting_1);
-
-        Assert.Contains(
-            "is_member(current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.DoesNotContain("__RLS_CURRENT_SETTING_", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument()
     {
         var ddl = PostgresDdlGenerator.Generate(
@@ -115,32 +105,22 @@ public sealed partial class RlsCurrentSettingLqlTests
         Assert.DoesNotContain("current_setting('app.tenant_id')", ddl, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError_ContextCasesData))]
+    public void Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError_ContextCases(
+        string caseName,
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value3
+    )
     {
-        var result = RlsPredicateTranspiler.Translate(
-            "tenant_id = current_setting('app.tenant_id')::uuid",
-            RlsPlatform.Sqlite,
-            "tenant"
-        );
-
-        Assert.True(result is TranspileError);
-        Assert.Contains("supported only for PostgreSQL", ((TranspileError)result).Value.Message);
-    }
-
-    [Fact]
-    public void Translate_CurrentSetting_NonLiteralArgument_ReturnsParseError()
-    {
-        var result = RlsPredicateTranspiler.Translate(
-            "tenant_id = current_setting(app.tenant_id)::uuid",
-            RlsPlatform.Postgres,
-            "tenant"
-        );
-
-        Assert.True(result is TranspileError);
-        Assert.Contains(
-            "requires exactly one string-literal argument",
-            ((TranspileError)result).Value.Message
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix3(
+            input0: VerifyReusableWorkflow11,
+            value0: value0,
+            value1: value1,
+            value3: value3
         );
     }
 
@@ -151,6 +131,48 @@ public sealed partial class RlsCurrentSettingLqlTests
             result is TranspileOk,
             result is TranspileError e ? e.Value.Message : "expected Ok"
         );
-        return ((TranspileOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyCrossClassChecks2(
+        string input0,
+        string value0,
+        string value1,
+        string value3
+    )
+    {
+        ContainsAll(
+            actual: input0,
+            expected: [value0, value1],
+            comparison: StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(value3, input0, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Outcome.Result<string, MigrationError> VerifyReusableWorkflow11(
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value2
+    )
+    {
+        var result = RlsPredicateTranspiler.Translate(value0, value1, value2);
+
+        Assert.True(result is TranspileError);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix3(
+        Func<string, RlsPlatform, string, Outcome.Result<string, MigrationError>> input0,
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value3
+    )
+    {
+        var result = input0(arg1: value0, arg2: value1, arg3: "tenant");
+        Assert.Contains(value3, (Error(actual: result)).Value.Message);
     }
 }

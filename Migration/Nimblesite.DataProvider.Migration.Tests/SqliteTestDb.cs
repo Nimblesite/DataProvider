@@ -1,6 +1,4 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using System.Globalization;
-using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -32,7 +30,47 @@ internal static class SqliteTestDb
     }
 
     public static SchemaDefinition Inspect(SqliteConnection connection) =>
-        Assert.IsType<SchemaResultOk>(SqliteSchemaInspector.Inspect(connection, Logger)).Value;
+        global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: SqliteSchemaInspector.Inspect(connection, Logger)
+            )
+            .Value;
+
+    // Implements [MIG-TEST-SHARED-INSPECT-DIFF].
+    // Implements [MIG-TEST-SHARED-INSPECT-DIFF].
+    internal static IReadOnlyList<SchemaOperation> CalculateChanges(
+        SqliteConnection connection,
+        SchemaDefinition desired,
+        ILogger logger
+    ) =>
+        CalculateChanges(
+            inspect: () =>
+                (
+                    global::Tests.Shared.ResultAssertions.Ok(
+                        actual: SqliteSchemaInspector.Inspect(connection, logger)
+                    )
+                ).Value,
+            desired: desired,
+            allowDestructive: false,
+            logger: logger
+        );
+
+    internal static IReadOnlyList<SchemaOperation> CalculateChanges(
+        Func<SchemaDefinition> inspect,
+        SchemaDefinition desired,
+        bool allowDestructive = false,
+        ILogger? logger = null
+    ) =>
+        global::Tests
+            .Shared.ResultAssertions.Ok(
+                actual: SchemaDiff.Calculate(
+                    current: inspect(),
+                    desired: desired,
+                    allowDestructive: allowDestructive,
+                    logger: logger
+                )
+            )
+            .Value;
 
     public static void ApplySchema(
         SqliteConnection connection,
@@ -81,9 +119,31 @@ internal static class SqliteTestDb
             logger: Logger,
             options: options ?? MigrationOptions.Default
         );
-        var error = result is MigrationApplyResultError failure ? failure.Value.Message : null;
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {error}");
+        AssertApplyOk(result: result);
     }
+
+    // Implements [MIG-TEST-RUNNER-SHARED].
+    internal static void AssertApplyOk(MigrationApplyResult result)
+    {
+        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
+        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
+    }
+
+    // Implements [MIG-TEST-RUNNER-SHARED].
+    internal static MigrationApplyResult ApplyWith(
+        System.Data.IDbConnection connection,
+        IReadOnlyList<SchemaOperation> operations,
+        Func<SchemaOperation, string> generateDdl,
+        ILogger logger,
+        MigrationOptions? options = null
+    ) =>
+        MigrationRunner.Apply(
+            connection: connection,
+            operations: operations,
+            generateDdl: generateDdl,
+            options: options ?? MigrationOptions.Default,
+            logger: logger
+        );
 
     // Implements [MIG-TEST-RUNNER-SHARED].
     internal static MigrationApplyResult TryApply(
@@ -91,14 +151,7 @@ internal static class SqliteTestDb
         IReadOnlyList<SchemaOperation> operations,
         ILogger logger,
         MigrationOptions? options = null
-    ) =>
-        MigrationRunner.Apply(
-            connection: connection,
-            operations: operations,
-            generateDdl: SqliteDdlGenerator.Generate,
-            options: options ?? MigrationOptions.Default,
-            logger: logger
-        );
+    ) => ApplyWith(connection, operations, SqliteDdlGenerator.Generate, logger, options);
 
     public static void SetUser(SqliteConnection connection, string userId)
     {
@@ -125,12 +178,9 @@ internal static class SqliteTestDb
 
     public static int Count(SqliteConnection connection, string sql)
     {
-        return Convert.ToInt32(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: connection,
-                configure: command => command.CommandText = sql
-            ),
-            CultureInfo.InvariantCulture
+        return global::Tests.Shared.DatabaseCommands.ScalarInt32(
+            connection: connection,
+            configure: command => command.CommandText = sql
         );
     }
 }

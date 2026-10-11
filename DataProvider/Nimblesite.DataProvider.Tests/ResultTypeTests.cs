@@ -1,36 +1,21 @@
-using Outcome;
-
 namespace Nimblesite.DataProvider.Tests;
 
 public class ResultTypeTests
 {
-    [Fact]
-    public void Result_SuccessValue_CreatesSuccessResult()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: each original fact name is retained
+    // as a named case label. Both Result factories must not throw and stay non-null.
+    [Theory]
+    [InlineData("Result_SuccessValue_CreatesSuccessResult", true, "Success")]
+    [InlineData("Result_ErrorValue_CreatesFailureResult", false, "Something went wrong")]
+    public void Result_CreatesResult(string caseName, bool isOk, string value)
     {
-        // Arrange
-        const string value = "Success";
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
 
-        // Act
-        var result = new Result<string, string>.Ok<string, string>(value);
+        object result = isOk
+            ? new Result<string, string>.Ok<string, string>(value)
+            : new Result<string, string>.Error<string, string>(value);
 
-        // Assert
         Assert.NotNull(result);
-        // Note: Testing actual Result<T,E> functionality depends on the implementation
-        // These tests assume the Result type follows standard functional programming patterns
-    }
-
-    [Fact]
-    public void Result_ErrorValue_CreatesFailureResult()
-    {
-        // Arrange
-        const string error = "Something went wrong";
-
-        // Act
-        var result = new Result<string, string>.Error<string, string>(error);
-
-        // Assert
-        Assert.NotNull(result);
-        // Note: Testing actual Result<T,E> functionality depends on the implementation
     }
 
     [Fact]

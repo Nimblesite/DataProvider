@@ -1,13 +1,5 @@
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
-using TranspileError = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Error<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
-using TranspileOk = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -18,98 +10,61 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// </summary>
 public sealed partial class RlsPredicateTranspilerTests
 {
-    [Fact]
-    public void CurrentUserIdExpression_Postgres_UsesCurrentSetting()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(CurrentUserIdExpression_Postgres_UsesCurrentSetting_ContextCasesData))]
+    public void CurrentUserIdExpression_Postgres_UsesCurrentSetting_ContextCases(
+        string caseName,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value0,
+        string value1
+    )
     {
-        var expr = RlsPredicateTranspiler.CurrentUserIdExpression(RlsPlatform.Postgres);
-        Assert.Equal("current_setting('rls.current_user_id', true)", expr);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix8(value0: value0, value1: value1);
     }
 
-    [Fact]
-    public void CurrentUserIdExpression_Sqlite_ReadsRlsContextTable()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Translate_SimplePredicate_Postgres_QuotesColumnAndSubstitutesUserId_CasesData)
+    )]
+    public void Translate_SimplePredicate_Postgres_QuotesColumnAndSubstitutesUserId_Cases(
+        string caseName,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        global::System.String value3,
+        global::System.String value4
+    )
     {
-        var expr = RlsPredicateTranspiler.CurrentUserIdExpression(RlsPlatform.Sqlite);
-        Assert.Equal("(SELECT current_user_id FROM [__rls_context] LIMIT 1)", expr);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseEnumCaseMatrix1(value1: value1, value3: value3, value4: value4);
     }
 
-    [Fact]
-    public void CurrentUserIdExpression_SqlServer_UsesSessionContext()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData18))]
+    public void Translate_EmptyPredicate_ReturnsRlsEmptyPredicateError_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2,
+        System.String scenario3
+    )
     {
-        var expr = RlsPredicateTranspiler.CurrentUserIdExpression(RlsPlatform.SqlServer);
-        Assert.Equal("CAST(SESSION_CONTEXT(N'current_user_id') AS NVARCHAR(450))", expr);
-    }
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
 
-    [Fact]
-    public void Translate_SimplePredicate_Postgres_QuotesColumnAndSubstitutesUserId()
-    {
-        var result = RlsPredicateTranspiler.Translate(
-            "OwnerId = current_user_id()",
-            RlsPlatform.Postgres,
-            "owner_isolation"
-        );
-
-        var sql = Ok(actual: result).Value;
-        ContainsAll(
-            actual: sql,
-            expected: ["\"OwnerId\"", "current_setting('rls.current_user_id', true)"],
-            comparison: StringComparison.Ordinal
-        );
-    }
-
-    [Fact]
-    public void Translate_SimplePredicate_Sqlite_BracketsColumn()
-    {
-        var result = RlsPredicateTranspiler.Translate(
-            "OwnerId = current_user_id()",
-            RlsPlatform.Sqlite,
-            "owner_isolation"
-        );
-
-        var sql = Ok(actual: result).Value;
-        ContainsAll(
-            actual: sql,
-            expected: ["[OwnerId]", "__rls_context"],
-            comparison: StringComparison.Ordinal
-        );
-    }
-
-    [Fact]
-    public void Translate_SimplePredicate_SqlServer_BracketsColumnAndUsesSessionContext()
-    {
-        var result = RlsPredicateTranspiler.Translate(
-            "OwnerId = current_user_id()",
-            RlsPlatform.SqlServer,
-            "owner_isolation"
-        );
-
-        var sql = Ok(actual: result).Value;
-        ContainsAll(
-            actual: sql,
-            expected: ["[OwnerId]", "SESSION_CONTEXT"],
-            comparison: StringComparison.Ordinal
-        );
-    }
-
-    [Fact]
-    public void Translate_EmptyPredicate_ReturnsRlsEmptyPredicateError()
-    {
-        var result = RlsPredicateTranspiler.Translate("", RlsPlatform.Postgres, "p");
+        var result = RlsPredicateTranspiler.Translate(scenario0, RlsPlatform.Postgres, scenario1);
 
         var err = Expected<TranspileError>(actual: result).Value;
-        Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", err.Message, StringComparison.Ordinal);
-        Assert.Contains("'p'", err.Message, StringComparison.Ordinal);
+        VerifyCrossClassChecks3(input0: err, value0: scenario2, value2: scenario3);
     }
 
     [Fact]
     public void Translate_WhitespaceOnlyPredicate_ReturnsRlsEmptyPredicateError()
     {
-        var result = RlsPredicateTranspiler.Translate("   \n\t  ", RlsPlatform.Sqlite, "noop");
-
-        Assert.True(result is TranspileError);
-        Assert.Contains(
-            "MIG-E-RLS-EMPTY-PREDICATE",
-            ((TranspileError)result).Value.Message,
-            StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsLqlExhaustiveTests.VerifyCompletionWorkflow3(
+            value0: "   \n\t  ",
+            value1: RlsPlatform.Sqlite,
+            value2: "noop"
         );
     }
 
@@ -118,26 +73,11 @@ public sealed partial class RlsPredicateTranspilerTests
     {
         const string lql =
             Data_Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers_1;
-        var input = $"exists({lql})";
-
-        var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Postgres, "ex");
-
-        var sql = Ok(
-            actual: result,
-            message: result is TranspileError e ? e.Value.Message : "expected Ok"
-        ).Value;
-        Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
+        var sql = VerifyReusableWorkflow25(input0: lql, value0: RlsPlatform.Postgres);
         Assert.EndsWith(")", sql, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            sql,
-            StringComparison.Ordinal
-        );
-        // Sentinel must not leak into output.
-        Assert.DoesNotContain(
-            RlsPredicateTranspilerTestAccess.Sentinel,
-            sql,
-            StringComparison.Ordinal
+        VerifyReusableWorkflow31(
+            input0: sql,
+            value0: "current_setting('rls.current_user_id', true)"
         );
     }
 
@@ -145,58 +85,37 @@ public sealed partial class RlsPredicateTranspilerTests
     public void Translate_ExistsSubquery_Sqlite_SubstitutesContextLookup()
     {
         const string lql = Data_Translate_ExistsSubquery_Sqlite_SubstitutesContextLookup_1;
-        var input = $"exists({lql})";
-
-        var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Sqlite, "ex");
-
-        var sql = Ok(
-            actual: result,
-            message: result is TranspileError e ? e.Value.Message : "expected Ok"
-        ).Value;
-        Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
-        Assert.Contains("__rls_context", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            RlsPredicateTranspilerTestAccess.Sentinel,
-            sql,
-            StringComparison.Ordinal
-        );
+        var sql = VerifyReusableWorkflow25(input0: lql, value0: RlsPlatform.Sqlite);
+        VerifyReusableWorkflow31(input0: sql, value0: "__rls_context");
     }
 
-    [Fact]
-    public void Translate_ExistsSubquery_BadLql_ReturnsLqlParseError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Translate_BooleanLiteralPredicate_RoundTripsKeywordsUnquoted_ContextCasesData)
+    )]
+    public void Translate_BooleanLiteralPredicate_RoundTripsKeywordsUnquoted_ContextCases(
+        string caseName,
+        string value2
+    )
     {
-        var result = RlsPredicateTranspiler.Translate(
-            "exists(this is not valid lql @@@)",
-            RlsPlatform.Postgres,
-            "broken"
-        );
-
-        var err = Expected<TranspileError>(actual: result).Value;
-        Assert.Contains("MIG-E-RLS-LQL", err.Message, StringComparison.Ordinal);
-        Assert.Contains("'broken'", err.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Translate_BooleanLiteralPredicate_RoundTripsKeywordsUnquoted()
-    {
-        var result = RlsPredicateTranspiler.Translate("true", RlsPlatform.Postgres, "any");
-        Assert.True(result is TranspileOk);
-        Assert.Equal("true", ((TranspileOk)result).Value);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix9(value2: value2);
     }
 
     [Fact]
     public void Translate_StringLiteralWithReservedWordInside_NotQuoted()
     {
         // Inside string literal, words like AND must not be wrapped as identifiers.
-        var result = RlsPredicateTranspiler.Translate(
-            "OwnerName = 'AND OR NOT'",
-            RlsPlatform.Postgres,
-            "p"
-        );
-
-        var sql = Ok(actual: result).Value;
-        ContainsAll(
-            actual: sql,
+        // Inside string literal, words like AND must not be wrapped as identifiers.
+        // Inside string literal, words like AND must not be wrapped as identifiers.
+        var sql = SqlFragments(
+            read: () =>
+                RlsPredicateTranspiler.Translate(
+                    "OwnerName = 'AND OR NOT'",
+                    RlsPlatform.Postgres,
+                    "p"
+                ),
             expected: ["'AND OR NOT'", "\"OwnerName\""],
             comparison: StringComparison.Ordinal
         );
@@ -219,23 +138,13 @@ public sealed partial class RlsPredicateTranspilerTests
             message: result is TranspileError e ? e.Value.Message : "expected Ok"
         ).Value;
 
-        ContainsAll(
-            actual: sql,
-            expected: ["\"tenant_id\"", "app_tenant_id()", "is_member(", "app_user_id()"],
-            comparison: StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsLqlExhaustiveTests.VerifyCompletionWorkflow5(
+            input0: ContainsAll,
+            input1: sql,
+            value4: "\"app_tenant_id\"",
+            value5: "\"is_member\""
         );
-        Assert.DoesNotContain("\"app_tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"is_member\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("\"app_user_id\"", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Translate_NapShape_LiteralTrue_PassesThrough()
-    {
-        // admin_all policies use literal `true` predicate.
-        var result = RlsPredicateTranspiler.Translate("true", RlsPlatform.Postgres, "admin_all");
-        Assert.True(result is TranspileOk);
-        Assert.Equal("true", ((TranspileOk)result).Value);
     }
 
     [Fact]
@@ -243,15 +152,17 @@ public sealed partial class RlsPredicateTranspilerTests
     {
         // tenant_members_self_or_owner shape:
         // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner(app_user_id(), app_tenant_id()))
-        var result = RlsPredicateTranspiler.Translate(
-            "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner(app_user_id(), app_tenant_id()))",
-            RlsPlatform.Postgres,
-            "self_or_owner"
-        );
-
-        var sql = Ok(actual: result).Value;
-        ContainsAll(
-            actual: sql,
+        // tenant_members_self_or_owner shape:
+        // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner(app_user_id(), app_tenant_id()))
+        // tenant_members_self_or_owner shape:
+        // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner(app_user_id(), app_tenant_id()))
+        SqlFragments(
+            read: () =>
+                RlsPredicateTranspiler.Translate(
+                    "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner(app_user_id(), app_tenant_id()))",
+                    RlsPlatform.Postgres,
+                    "self_or_owner"
+                ),
             expected:
             [
                 "\"user_id\"",
@@ -262,6 +173,85 @@ public sealed partial class RlsPredicateTranspilerTests
             ],
             comparison: StringComparison.Ordinal
         );
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseEnumCaseMatrix1(
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        global::System.String value3,
+        global::System.String value4
+    )
+    {
+        SqlFragments(
+            read: () =>
+                RlsPredicateTranspiler.Translate(
+                    "OwnerId = current_user_id()",
+                    value1,
+                    "owner_isolation"
+                ),
+            expected: [value3, value4],
+            comparison: StringComparison.Ordinal
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyCrossClassChecks3(
+        MigrationError input0,
+        string value0,
+        string value2
+    )
+    {
+        Assert.Contains(value0, input0.Message, StringComparison.Ordinal);
+        Assert.Contains(value2, input0.Message, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyReusableWorkflow25(
+        string input0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value0
+    )
+    {
+        var input = $"exists({input0})";
+
+        var result = RlsPredicateTranspiler.Translate(input, value0, "ex");
+
+        var sql = Ok(
+            actual: result,
+            message: result is TranspileError e ? e.Value.Message : "expected Ok"
+        ).Value;
+        Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
+
+        return sql;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow31(string input0, string value0)
+    {
+        Assert.Contains(value0, input0, StringComparison.Ordinal);
+        // Sentinel must not leak into output.
+        Assert.DoesNotContain(
+            RlsPredicateTranspilerTestAccess.Sentinel,
+            input0,
+            StringComparison.Ordinal
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix8(
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value0,
+        string value1
+    )
+    {
+        var expr = RlsPredicateTranspiler.CurrentUserIdExpression(value0);
+        Assert.Equal(value1, expr);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix9(string value2)
+    {
+        var result = RlsPredicateTranspiler.Translate("true", RlsPlatform.Postgres, value2);
+        Assert.True(result is TranspileOk);
+        Assert.Equal("true", (Ok(actual: result)).Value);
     }
 }
 

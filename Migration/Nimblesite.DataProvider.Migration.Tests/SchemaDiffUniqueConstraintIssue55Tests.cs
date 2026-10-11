@@ -33,17 +33,11 @@ public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
                 ),
             ]
         );
-        var desired =
-            Dataset_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
-                current: current
+        var ops =
+            global::Nimblesite.DataProvider.Migration.Tests.SchemaDiffCheckConstraintIssue57Tests.VerifySharedStep5(
+                input0: Dataset_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1,
+                input1: current
             );
-
-        var ops = SchemaDiffAssertions.Diff(
-            current: current,
-            desired: desired,
-            destructive: false,
-            logger: NullLogger.Instance
-        );
         Assert.Contains(
             ops,
             op =>

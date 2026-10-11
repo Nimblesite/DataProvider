@@ -1,4 +1,4 @@
-using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
@@ -17,27 +17,12 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// and that the resulting policy enforces correctly at query time.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
 public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
+    protected override string DatabaseName => "rls_lql_e2e";
 
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("rls_lql_e2e").ConfigureAwait(false);
-        BootstrapRolesAndGucReaders(_connection);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override void OnDatabaseCreated() => BootstrapRolesAndGucReaders(Connection);
 
     /// <summary>
     /// Phase 1 bootstrap: roles + GUC reader fns. Does NOT include is_member()
@@ -65,12 +50,13 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         ILogger logger
     )
     {
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(connection, "public", logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: logger)
-        ).Value;
+        var ops = SqliteTestDb.CalculateChanges(
+            inspect: () =>
+                (Ok(actual: PostgresSchemaInspector.Inspect(connection, "public", logger))).Value,
+            desired: desired,
+            allowDestructive: false,
+            logger: logger
+        );
         ApplyOperations(connection, ops, logger);
     }
 
@@ -89,132 +75,32 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
             operations: operations,
             logger: logger
         );
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: apply);
     }
 
     private void ApplyAndGrant(SchemaDefinition desired, params string[] tableNames)
     {
-        ApplySchema(connection: _connection, desired: desired, logger: _logger);
+        ApplySchema(connection: Connection, desired: desired, logger: Logger);
 
         foreach (var t in tableNames)
         {
             PostgresTestDb.Exec(
-                _connection,
+                Connection,
                 $"GRANT USAGE ON SCHEMA public TO lql_user, lql_admin; "
                     + $"GRANT SELECT,INSERT,UPDATE,DELETE ON \"public\".\"{t}\" TO lql_user, lql_admin"
             );
         }
     }
 
-    private static void SetSession(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
-        string role,
-        Guid? tenant,
-        Guid? user
-    )
-    {
-        PostgresTestDb.Exec(conn, tx, $"SET LOCAL ROLE {role}");
-        PostgresTestDb.Exec(
-            conn,
-            tx,
-            $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'"
-        );
-        PostgresTestDb.Exec(
-            conn,
-            tx,
-            $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'"
-        );
-    }
-
-    private static SchemaDefinition TenantMembersSchema() =>
-        SchemaTestData.Schema(
-            name: "lql",
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "tenant_members",
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                        SchemaTestData.Column(
-                            name: "user_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "tenant_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
-                ),
-            ]
-        );
-
-    private static SchemaDefinition TenantTableLqlOnly(string name) =>
-        SchemaTestData.Schema(
-            name: "lql",
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: name,
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                        SchemaTestData.Column(
-                            name: "tenant_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "title",
-                            type: new VarCharType(200),
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
-                    rowLevelSecurity: SchemaTestData.RlsPolicySet(
-                        enabled: true,
-                        forced: true,
-                        policies:
-                        [
-                            SchemaTestData.RlsPolicy(
-                                name: $"{name}_member",
-                                operations: [RlsOperation.All],
-                                roles: ["lql_user"],
-                                usingLql: "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
-                                withCheckLql: "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())"
-                            ),
-                            SchemaTestData.RlsPolicy(
-                                name: $"{name}_admin_all",
-                                operations: [RlsOperation.All],
-                                roles: ["lql_admin"],
-                                usingLql: "true",
-                                withCheckLql: "true"
-                            ),
-                        ]
-                    )
-                ),
-            ]
-        );
-
     [Fact]
     public void LqlOnly_NapShape_AppliesAndCreatesPolicies()
     {
         // tenant_members must exist before is_member fn body resolves rows.
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("agent_configs"), "agent_configs");
 
         // Verify both policies exist and are PERMISSIVE FOR ALL.
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = Data_LqlOnly_NapShape_AppliesAndCreatesPolicies_1;
         using var r = cmd.ExecuteReader();
         var rows = new List<(string Name, string P, string Cmd)>();
@@ -231,69 +117,28 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
     [Fact]
     public void LqlOnly_TenantIsolation_RealCrossUserBlock()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("docs_iso"), "docs_iso");
 
-        var tenantA = Guid.NewGuid();
-        var tenantB = Guid.NewGuid();
-        var userA = Guid.NewGuid();
-        var userB = Guid.NewGuid();
-
         // Membership rows.
-        PostgresTestDb.Exec(
-            _connection,
-            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userA}', '{tenantA}')"
+        var (tenantA, tenantB, userA, userB, docA) = SeedMembership();
+        PostgresTestDb.SeedTwoTenantsAndAssertIsolation(
+            Connection,
+            "lql_user",
+            "docs_iso",
+            docA,
+            tenantA,
+            tenantB,
+            userA,
+            userB,
+            "SELECT id FROM docs_iso"
         );
-        PostgresTestDb.Exec(
-            _connection,
-            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userB}', '{tenantB}')"
-        );
-
-        // Tenant A inserts.
-        var docA = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantA, userA);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO docs_iso(id, tenant_id, title) VALUES ('{docA}', '{tenantA}', 'a')"
-            );
-            tx.Commit();
-        }
-
-        // Tenant B inserts.
-        var docB = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantB, userB);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO docs_iso(id, tenant_id, title) VALUES ('{docB}', '{tenantB}', 'b')"
-            );
-            tx.Commit();
-        }
-
-        // Tenant A user reads -> only sees A.
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantA, userA);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT id FROM docs_iso";
-            var ids = DatabaseCommands.ReadAll(sel, reader => reader.GetGuid(0));
-            Assert.Single(ids);
-            Assert.Equal(docA, ids[0]);
-        }
     }
 
     [Fact]
     public void LqlOnly_NonMember_BlockedByIsMemberCheck()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("docs_nm"), "docs_nm");
 
         var tenant = Guid.NewGuid();
@@ -301,9 +146,16 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
 
         // No tenant_members row -> is_member() returns false -> insert blocked
         // by WITH CHECK predicate.
-        using var tx = _connection.BeginTransaction();
-        SetSession(_connection, tx, "lql_user", tenant, user);
-        using var ins = _connection.CreateCommand();
+        using var tx = Connection.BeginTransaction();
+        PostgresTestDb.SetTenantSession(
+            connection: Connection,
+            transaction: tx,
+            role: "lql_user",
+            tenant: tenant,
+            user: user,
+            settingNamespace: "rls"
+        );
+        using var ins = Connection.CreateCommand();
         ins.Transaction = tx;
         ins.CommandText =
             $"INSERT INTO docs_nm(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenant}', 'x')";
@@ -314,70 +166,61 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
     [Fact]
     public void LqlOnly_Admin_SeesAllTenants()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("docs_admin"), "docs_admin");
 
         // Admin policy is "true" — admin sees everything.
         var t1 = Guid.NewGuid();
         var t2 = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_admin", null, null);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t1}', 'x')"
-            );
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t2}', 'y')"
-            );
-            tx.Commit();
-        }
+        PostgresTestDb.InsertAsTenant(
+            Connection,
+            "lql_admin",
+            null,
+            null,
+            "rls",
+            $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t1}', 'x')",
+            $"INSERT INTO docs_admin(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{t2}', 'y')"
+        );
 
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_admin", null, null);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT COUNT(*) FROM docs_admin";
-            var n = (long)sel.ExecuteScalar()!;
-            Assert.Equal(2, n);
-        }
+        Assert.Equal(
+            2,
+            PostgresTestDb.CountAsTenant(
+                Connection,
+                "lql_admin",
+                null,
+                null,
+                "rls",
+                "SELECT COUNT(*) FROM docs_admin"
+            )
+        );
     }
 
     [Fact]
     public void LqlOnly_Idempotent_SecondApplyEmitsZeroOps()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("docs_idem"), "docs_idem");
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
         // Re-apply same desired -> 0 ops.
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, TenantTableLqlOnly("docs_idem"), logger: _logger)
-        ).Value;
+        var ops = PostgresTestDb.CalculateChanges(
+            Connection,
+            TenantTableLqlOnly("docs_idem"),
+            Logger
+        );
         Assert.Empty(ops);
     }
 
     [Fact]
     public void LqlOnly_OrCombination_SelfOrOwner()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         var schema = Fixture_LqlOnly_OrCombination_SelfOrOwner_1();
         ApplyAndGrant(schema, "self_owner");
 
         // Verify the OR-combination predicate landed in pg_policies.
         var qual = (string)
             global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
+                connection: Connection,
                 configure: command =>
                     command.CommandText =
                         "SELECT qual FROM pg_policies WHERE tablename='self_owner' AND policyname='self_or_member'"
@@ -394,28 +237,27 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         // We don't have is_tenant_writer() in this test so fall back to a
         // simpler asymmetric pair that proves the asymmetry plumbs through:
         // USING is_member(...), WITH CHECK is_member(...) AND is_member(...).
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         var schema = Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1();
         ApplyAndGrant(schema, "asymmetric");
 
-        using var cmd = _connection.CreateCommand();
-        using var r = DatabaseCommands.ReadFirstRow(
-            cmd,
-            command =>
-                command.CommandText =
-                    "SELECT qual, with_check FROM pg_policies WHERE tablename='asymmetric'"
+        PostgresTestDb.WithFirstRow(
+            Connection,
+            "SELECT qual, with_check FROM pg_policies WHERE tablename='asymmetric'",
+            r =>
+            {
+                var qual = r.GetString(0);
+                var wc = r.GetString(1);
+                Assert.Contains("is_member", qual, StringComparison.Ordinal);
+                ContainsAll(
+                    actual: wc,
+                    expected: ["is_member", "tenant_id"],
+                    comparison: StringComparison.Ordinal
+                );
+                // Asymmetry: with_check has tenant_id check, qual doesn't.
+                Assert.DoesNotContain("\"tenant_id\"", qual, StringComparison.Ordinal);
+            }
         );
-        var qual = r.GetString(0);
-        var wc = r.GetString(1);
-        Assert.Contains("is_member", qual, StringComparison.Ordinal);
-        ContainsAll(
-            actual: wc,
-            expected: ["is_member", "tenant_id"],
-            comparison: StringComparison.Ordinal
-        );
-        // Asymmetry: with_check has tenant_id check, qual doesn't.
-        Assert.DoesNotContain("\"tenant_id\"", qual, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -428,8 +270,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         // (Unsupported expr type in comparison: ExprContext) and that
         // preview6 fixes. End-to-end test proves the full pipeline:
         // YAML -> LQL parse -> Postgres CREATE POLICY -> runtime enforce.
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
 
         // Parent table: conversations.
         var convSchema =
@@ -442,76 +283,76 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         ApplyAndGrant(msgSchema, "messages");
 
         // Set up: tenantA has userA as member, tenantB has userB as member.
-        var tenantA = Guid.NewGuid();
-        var tenantB = Guid.NewGuid();
-        var userA = Guid.NewGuid();
-        var userB = Guid.NewGuid();
-        PostgresTestDb.Exec(
-            _connection,
-            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userA}', '{tenantA}')"
-        );
-        PostgresTestDb.Exec(
-            _connection,
-            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{userB}', '{tenantB}')"
-        );
-
-        // Conversations: convA in tenantA, convB in tenantB.
-        var convA = Guid.NewGuid();
+        var (tenantA, tenantB, userA, userB, convA) = SeedMembership();
         var convB = Guid.NewGuid();
         PostgresTestDb.Exec(
-            _connection,
+            Connection,
             $"INSERT INTO conversations(id, tenant_id) VALUES ('{convA}', '{tenantA}')"
         );
         PostgresTestDb.Exec(
-            _connection,
+            Connection,
             $"INSERT INTO conversations(id, tenant_id) VALUES ('{convB}', '{tenantB}')"
         );
 
         // userA (tenantA) inserts a message in convA -> allowed.
         var msgA = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantA, userA);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO messages(id, conversation_id, body) VALUES ('{msgA}', '{convA}', 'hi')"
-            );
-            tx.Commit();
-        }
+        PostgresTestDb.WithTenantTransaction(
+            connection: Connection,
+            role: "lql_user",
+            tenant: tenantA,
+            user: userA,
+            settingNamespace: "rls",
+            run: tx =>
+            {
+                PostgresTestDb.Exec(
+                    Connection,
+                    tx,
+                    $"INSERT INTO messages(id, conversation_id, body) VALUES ('{msgA}', '{convA}', 'hi')"
+                );
+            },
+            commit: true
+        );
 
         // userA tries to insert a message in convB (tenantB's conversation)
         // -> blocked because exists() returns false: convB.tenant_id is
         // tenantB, and is_member(userA, tenantB) is false.
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantA, userA);
-            using var ins = _connection.CreateCommand();
-            ins.Transaction = tx;
-            ins.CommandText =
-                $"INSERT INTO messages(id, conversation_id, body) VALUES ('{Guid.NewGuid()}', '{convB}', 'evil')";
-            var ex = Assert.Throws<PostgresException>(() => ins.ExecuteNonQuery());
-            Assert.Contains("row-level security", ex.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        PostgresTestDb.WithTenantTransaction(
+            connection: Connection,
+            role: "lql_user",
+            tenant: tenantA,
+            user: userA,
+            settingNamespace: "rls",
+            run: tx =>
+            {
+                using var ins = Connection.CreateCommand();
+                ins.Transaction = tx;
+                ins.CommandText =
+                    $"INSERT INTO messages(id, conversation_id, body) VALUES ('{Guid.NewGuid()}', '{convB}', 'evil')";
+                var ex = Assert.Throws<PostgresException>(() => ins.ExecuteNonQuery());
+                Assert.Contains(
+                    "row-level security",
+                    ex.Message,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            },
+            commit: false
+        );
 
         // userA SELECTs messages -> sees only msgA (in convA, in their tenant).
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "lql_user", tenantA, userA);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT id FROM messages";
-            var ids = DatabaseCommands.ReadAll(sel, reader => reader.GetGuid(0));
-            Assert.Single(ids);
-            Assert.Equal(msgA, ids[0]);
-        }
+        PostgresTestDb.AssertTenantSeesSingle(
+            Connection,
+            "lql_user",
+            tenantA,
+            userA,
+            msgA,
+            "SELECT id FROM messages"
+        );
     }
 
     [Fact]
     public void LqlOnly_DropPolicy_AllowDestructive_RemovesIt()
     {
-        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
-        BootstrapMembershipFns(_connection);
+        VerifySharedContinuation13();
         ApplyAndGrant(TenantTableLqlOnly("docs_drop"), "docs_drop");
 
         var depleted = TenantTableLqlOnly("docs_drop") with
@@ -524,31 +365,79 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
                 },
             ],
         };
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var current = PostgresTestDb.Inspect(Connection, Logger);
         var ops = (
             (OperationsResultOk)
-                SchemaDiff.Calculate(current, depleted, allowDestructive: true, logger: _logger)
+                SchemaDiff.Calculate(current, depleted, allowDestructive: true, logger: Logger)
         ).Value;
 
-        var apply = PostgresTestDb.TryApply(
-            connection: _connection,
-            operations: ops,
-            logger: _logger,
-            options: MigrationOptions.Destructive
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: PostgresTestDb.TryApply(
+                connection: Connection,
+                operations: ops,
+                logger: Logger,
+                options: MigrationOptions.Destructive
+            )
         );
-        Assert.True(apply is MigrationApplyResultOk);
 
         Assert.Equal(
             0L,
             (long)
                 global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _connection,
+                    connection: Connection,
                     configure: command =>
                         command.CommandText =
                             "SELECT COUNT(*) FROM pg_policies WHERE tablename='docs_drop'"
                 )!
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation13()
+    { // tenant_members must exist before is_member fn body resolves rows.
+        ApplyAndGrant(TenantMembersSchema(), "tenant_members");
+        BootstrapMembershipFns(Connection);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (Guid TenantA, Guid TenantB, Guid UserA, Guid UserB, Guid Seed) SeedMembership()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+        var seed = VerifyReusableWorkflow19(
+            input0: Connection,
+            input1: userA,
+            input2: tenantA,
+            input3: userB,
+            input4: tenantB
+        );
+        return (tenantA, tenantB, userA, userB, seed);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Guid VerifyReusableWorkflow19(
+        NpgsqlConnection input0,
+        Guid input1,
+        Guid input2,
+        Guid input3,
+        Guid input4
+    )
+    {
+        // Membership rows.
+        PostgresTestDb.Exec(
+            input0,
+            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{input1}', '{input2}')"
+        );
+        PostgresTestDb.Exec(
+            input0,
+            $"INSERT INTO tenant_members(id, user_id, tenant_id) VALUES ('{Guid.NewGuid()}', '{input3}', '{input4}')"
+        );
+
+        // Tenant A inserts.
+        var docA = Guid.NewGuid();
+
+        return docA;
     }
 }

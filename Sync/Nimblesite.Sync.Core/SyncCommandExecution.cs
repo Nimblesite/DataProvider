@@ -6,6 +6,17 @@ namespace Nimblesite.Sync.Core;
 // Implements [SYNC-REPOSITORY-SHARED-WRITES].
 internal static class SyncCommandExecution
 {
+    internal static IReadOnlyList<T> ReadRows<T>(DbCommand command, Func<DbDataReader, T> read)
+    {
+        var rows = ImmutableArray.CreateBuilder<T>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(read(arg: reader));
+        }
+        return rows.ToImmutable();
+    }
+
     internal static BoolSyncResult Write<TException>(
         DbConnection connection,
         Action<DbCommand> setSql,
@@ -13,13 +24,17 @@ internal static class SyncCommandExecution
         string failurePrefix
     )
         where TException : Exception =>
-        Execute<TException, BoolSyncResult>(
+        Read<TException, BoolSyncResult>(
             connection: connection,
             setSql: setSql,
             parameters: parameters,
-            success: _ => new BoolSyncOk(true),
-            failure: message => new BoolSyncError(
-                new SyncErrorDatabase($"{failurePrefix}: {message}")
+            read: command =>
+            {
+                command.ExecuteNonQuery();
+                return new BoolSyncOk(true);
+            },
+            failure: exception => new BoolSyncError(
+                new SyncErrorDatabase($"{failurePrefix}: {exception.Message}")
             )
         );
 
@@ -30,22 +45,23 @@ internal static class SyncCommandExecution
         string failurePrefix
     )
         where TException : Exception =>
-        Execute<TException, IntSyncResult>(
+        Read<TException, IntSyncResult>(
             connection: connection,
             setSql: setSql,
             parameters: parameters,
-            success: count => new IntSyncOk(count),
-            failure: message => new IntSyncError(
-                new SyncErrorDatabase($"{failurePrefix}: {message}")
+            read: command => new IntSyncOk(command.ExecuteNonQuery()),
+            failure: exception => new IntSyncError(
+                new SyncErrorDatabase($"{failurePrefix}: {exception.Message}")
             )
         );
 
-    private static TResult Execute<TException, TResult>(
+    // Implements [SYNC-REPOSITORY-SHARED-READS].
+    internal static TResult Read<TException, TResult>(
         DbConnection connection,
         Action<DbCommand> setSql,
         Func<ImmutableArray<(string Name, object Value)>> parameters,
-        Func<int, TResult> success,
-        Func<string, TResult> failure
+        Func<DbCommand, TResult> read,
+        Func<TException, TResult> failure
     )
         where TException : Exception
     {
@@ -57,11 +73,11 @@ internal static class SyncCommandExecution
             {
                 SyncClientStorage.Bind(command: command, name: name, value: value);
             }
-            return success(command.ExecuteNonQuery());
+            return read(command);
         }
         catch (TException exception)
         {
-            return failure(exception.Message);
+            return failure(exception);
         }
     }
 }

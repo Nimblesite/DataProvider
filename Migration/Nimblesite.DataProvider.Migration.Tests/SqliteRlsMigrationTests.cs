@@ -24,13 +24,7 @@ public sealed partial class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Insert]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Insert);
 
             var ex = Assert.Throws<SqliteException>(() =>
                 InsertDocument(connection, "doc-b", "user-b")
@@ -44,12 +38,7 @@ public sealed partial class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Update]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Update);
 
             var ex = Assert.Throws<SqliteException>(() =>
                 SqliteTestDb.Execute(connection, "UPDATE [Documents] SET [OwnerId]='user-b'")
@@ -63,12 +52,7 @@ public sealed partial class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Delete]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Delete);
             SqliteTestDb.SetUser(connection, "user-b");
 
             var ex = Assert.Throws<SqliteException>(() =>
@@ -267,51 +251,14 @@ public sealed partial class SqliteRlsMigrationTests
                 comparisonType: StringComparison.Ordinal
             );
 
-    private static TableDefinition DocumentsTable(RlsPolicyDefinition policy) =>
-        SchemaTestData.Table(
-            schema: "main",
-            name: "Documents",
-            columns:
-            [
-                RequiredText("Id"),
-                RequiredText("OwnerId"),
-                SchemaTestData.Column(name: "Title", type: PortableTypes.Text),
-            ],
-            primaryKey: SchemaTestData.PrimaryKey(name: "PK_Documents", columns: ["Id"]),
-            rowLevelSecurity: new RlsPolicySetDefinition { Policies = [policy] }
-        );
-
     private static SchemaDefinition GroupMembershipSchema() =>
         SchemaTestData.Schema(
             name: "sqlite",
             tables: [MembershipTable(), DocumentsTable(GroupMembershipPolicy())]
         );
 
-    private static TableDefinition MembershipTable() =>
-        SchemaTestData.Table(
-            schema: "main",
-            name: "UserGroupMemberships",
-            columns: [RequiredText("Id"), RequiredText("UserId")],
-            primaryKey: SchemaTestData.PrimaryKey(name: "PK_UserGroupMemberships", columns: ["Id"])
-        );
-
     private static ColumnDefinition RequiredText(string name) =>
         SchemaTestData.Column(name: name, type: PortableTypes.Text, isNullable: false);
-
-    private static RlsPolicyDefinition OwnerPolicy(IReadOnlyList<RlsOperation> ops) =>
-        SchemaTestData.RlsPolicy(
-            name: "owner_isolation",
-            operations: ops,
-            usingLql: "OwnerId = current_user_id()",
-            withCheckLql: "OwnerId = current_user_id()"
-        );
-
-    private static RlsPolicyDefinition GroupMembershipPolicy() =>
-        SchemaTestData.RlsPolicy(
-            name: "group_member_insert",
-            operations: [RlsOperation.Insert],
-            withCheckLql: Data_GroupMembershipPolicy_1
-        );
 
     private static void InsertDocument(SqliteConnection connection, string id, string ownerId) =>
         SqliteTestDb.Execute(
@@ -324,4 +271,16 @@ public sealed partial class SqliteRlsMigrationTests
             connection,
             $"INSERT INTO [UserGroupMemberships]([Id], [UserId]) VALUES ('{id}', '{userId}')"
         );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySharedStep4(
+        SqliteConnection input0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsOperation value0
+    )
+    {
+        SqliteTestDb.ApplySchema(input0, DocumentsSchema(OwnerPolicy([value0])));
+        SqliteTestDb.SetUser(input0, "user-a");
+
+        InsertDocument(input0, "doc-a", "user-a");
+    }
 }

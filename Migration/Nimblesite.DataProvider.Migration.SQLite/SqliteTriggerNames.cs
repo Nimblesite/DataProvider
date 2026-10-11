@@ -12,21 +12,13 @@ internal static class SqliteTriggerNames
 
     public static List<string> Read(SqliteConnection connection, string tableName, string pattern)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT name FROM sqlite_master
-            WHERE type = 'trigger' AND tbl_name = @table AND name LIKE @pattern
-            ORDER BY name
-            """;
-        command.Parameters.AddWithValue("@table", tableName);
-        command.Parameters.AddWithValue("@pattern", pattern);
-        using var reader = command.ExecuteReader();
-        var names = new List<string>();
-        while (reader.Read())
-        {
-            names.Add(reader.GetString(0));
-        }
-        return names;
+        return ReadManaged<string>(
+            connection: connection,
+            tableName: tableName,
+            pattern: pattern,
+            setSql: command => command.CommandText = SqliteSchemaInspector.SqlSpecification3,
+            read: reader => reader.GetString(0)
+        );
     }
 
     /// <summary>
@@ -39,21 +31,16 @@ internal static class SqliteTriggerNames
         string pattern
     )
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT name, sql FROM sqlite_master
-            WHERE type = 'trigger' AND tbl_name = @table AND name LIKE @pattern
-            ORDER BY name
-            """;
-        command.Parameters.AddWithValue("@table", tableName);
-        command.Parameters.AddWithValue("@pattern", pattern);
-        using var reader = command.ExecuteReader();
-        var triggers = new List<ManagedTriggerDefinition>();
-        while (reader.Read())
-        {
-            triggers.Add(new ManagedTriggerDefinition(reader.GetString(0), reader.GetString(1)));
-        }
-        return triggers;
+        return ReadManaged<ManagedTriggerDefinition>(
+            connection: connection,
+            tableName: tableName,
+            pattern: pattern,
+            setSql: command => command.CommandText = SqliteSchemaInspector.SqlSpecification4,
+            read: reader => new ManagedTriggerDefinition(
+                Name: reader.GetString(0),
+                Sql: reader.GetString(1)
+            )
+        );
     }
 
     public static ParsedTriggerName? Parse(
@@ -81,6 +68,26 @@ internal static class SqliteTriggerNames
             }
         }
         return null;
+    }
+
+    // Implements [MIG-SQLITE-SHARED-MANAGED-TRIGGER-READS].
+    private static List<T> ReadManaged<T>(
+        SqliteConnection connection,
+        string tableName,
+        string pattern,
+        Action<SqliteCommand> setSql,
+        Func<SqliteDataReader, T> read
+    )
+    {
+        using var command = connection.CreateCommand();
+        setSql(obj: command);
+        command.Parameters.AddWithValue(parameterName: "@table", value: tableName);
+        command.Parameters.AddWithValue(parameterName: "@pattern", value: pattern);
+        using var reader = command.ExecuteReader();
+        var rows = new List<T>();
+        while (reader.Read())
+            rows.Add(item: read(arg: reader));
+        return rows;
     }
 }
 

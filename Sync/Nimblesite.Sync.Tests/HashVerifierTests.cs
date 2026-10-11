@@ -89,7 +89,7 @@ public sealed partial class HashVerifierTests
     {
         var result = HashVerifier.VerifyHash("abc123", "ABC123");
 
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
     }
 
     [Fact]

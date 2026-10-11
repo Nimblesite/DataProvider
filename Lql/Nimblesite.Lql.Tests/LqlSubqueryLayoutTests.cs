@@ -3,19 +3,10 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
 using LqlStatementError = Outcome.Result<
     Nimblesite.Lql.Core.LqlStatement,
     Nimblesite.Sql.Model.SqlError
 >.Error<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using LqlStatementOk = Outcome.Result<
-    Nimblesite.Lql.Core.LqlStatement,
-    Nimblesite.Sql.Model.SqlError
->.Ok<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using SqlTextOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
-    string,
-    Nimblesite.Sql.Model.SqlError
->;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -85,13 +76,15 @@ public sealed partial class LqlSubqueryLayoutTests
 
     private static string Transpile(string lql, string dialect)
     {
-        var statement = Assert.IsType<LqlStatementOk>(LqlStatementConverter.ToStatement(lql)).Value;
+        var statement = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: LqlStatementConverter.ToStatement(lql))
+            .Value;
         Result<string, SqlError> sql = dialect switch
         {
             "PostgreSql" => statement.ToPostgreSql(),
             "SqlServer" => statement.ToSqlServer(),
             _ => statement.ToSQLite(),
         };
-        return Assert.IsType<SqlTextOk>(sql).Value;
+        return global::Tests.Shared.ResultAssertions.ExactOk(actual: sql).Value;
     }
 }

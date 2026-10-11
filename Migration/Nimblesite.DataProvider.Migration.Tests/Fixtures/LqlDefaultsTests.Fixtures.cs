@@ -297,4 +297,52 @@ public partial class LqlDefaultsTests
                         .Column("t", PortableTypes.Time(), c => c.DefaultLql("current_time()"))
             )
             .Build();
+
+    /// <summary>Independent named scenario inputs and expectations.</summary>
+    public static IEnumerable<object?[]> LqlBoolean_WorksOnBothPlatformsCases()
+    {
+        yield return
+        [
+            (Func<SchemaDefinition>)Fixture_LqlBoolean_True_WorksOnBothPlatforms_1,
+            "settings",
+            "enabled",
+            new[] { "enabled", "DEFAULT true" },
+            new[] { "[enabled]", "DEFAULT 1" },
+            true,
+            1L,
+        ];
+        yield return
+        [
+            (Func<SchemaDefinition>)Fixture_LqlBoolean_False_WorksOnBothPlatforms_1,
+            "flags",
+            "disabled",
+            new[] { "disabled", "DEFAULT false" },
+            new[] { "[disabled]", "DEFAULT 0" },
+            false,
+            0L,
+        ];
+    }
+
+    /// <summary>Independent named scenario inputs and expectations.</summary>
+    public static IEnumerable<object?[]> LqlNumeric_SameValueBothPlatformsCases()
+    {
+        yield return
+        [
+            "LqlNumericInteger_DefaultsCorrectly_BothPlatforms",
+            (Func<SchemaDefinition>)Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1,
+            "INSERT INTO counters (id) VALUES (1)",
+            "counters",
+            new[] { "count", "negative", "zero" },
+            new long[] { 42, -100, 0 },
+        ];
+        yield return
+        [
+            "LqlNumeric_LargeInteger_SameValueBothPlatforms",
+            (Func<SchemaDefinition>)Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1,
+            "INSERT INTO large_nums (id) VALUES (1)",
+            "large_nums",
+            new[] { "big_pos", "big_neg" },
+            new long[] { 2147483647L, -2147483648L },
+        ];
+    }
 }

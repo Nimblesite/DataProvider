@@ -2,7 +2,6 @@
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
-using Xunit;
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
@@ -33,16 +32,16 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.TotalAmount < 600.0)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.TotalAmount < 600.0)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
         Assert.Equal(500.00, orders[0].TotalAmount);
     }
@@ -52,16 +51,16 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.TotalAmount <= 500.0)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.TotalAmount <= 500.0)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
     }
 
@@ -70,16 +69,16 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.TotalAmount >= 750.0)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.TotalAmount >= 750.0)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
         Assert.Equal(750.00, orders[0].TotalAmount);
     }
@@ -89,17 +88,17 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.Status == "Completed" || o.Status == "Processing")
-                .OrderBy(o => o.Id)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.Status == "Completed" || o.Status == "Processing")
+                    .OrderBy(o => o.Id)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Equal(2, orders.Count);
     }
 
@@ -108,16 +107,16 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.TotalAmount > 400.0 && o.Status == "Completed")
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.TotalAmount > 400.0 && o.Status == "Completed")
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
         Assert.Equal("Completed", orders[0].Status);
     }
@@ -127,16 +126,16 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.Status != "Completed")
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.Status != "Completed")
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
         Assert.Equal("Processing", orders[0].Status);
     }
@@ -154,8 +153,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .OrderBy<Customer>(c => c.CustomerName)
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["CustomerName"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["CustomerName"]);
     }
 
     [Fact]
@@ -163,13 +161,17 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            "Customer".From().SelectAll().OrderBy<Customer>(c => c.CustomerName).ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapCustomer
-        );
-
-        var customers = Ok(actual: result).Value;
+        var customers = Ok(read: () =>
+            _connection.GetRecords(
+                "Customer"
+                    .From()
+                    .SelectAll()
+                    .OrderBy<Customer>(c => c.CustomerName)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapCustomer
+            )
+        ).Value;
         Assert.Equal(2, customers.Count);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
     }
@@ -187,17 +189,21 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Where("o.Status", (object)null!)
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["NULL"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["NULL"]);
     }
 
-    [Fact]
-    public void Builder_WhereWithBoolFalse_GeneratesZero()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Builder_WhereWithBoolFalse_GeneratesZero_ContextCasesData))]
+    public void Builder_WhereWithBoolFalse_GeneratesZero_ContextCases(
+        string caseName,
+        string value2,
+        object value3,
+        string value4
+    )
     {
-        var query = "Orders".From("o").SelectAll().Where("o.IsActive", false).ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["o.IsActive = 0"]);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix1(value2: value2, value3: value3, value4: value4);
     }
 
     [Fact]
@@ -211,8 +217,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .AddWhereCondition(WhereCondition.CloseParen())
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["(", ")"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["(", ")"]);
     }
 
     [Fact]
@@ -224,65 +229,67 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .GroupBy("o.Status")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
+    // Implements [CI-TEST-SHARED-SCENARIOS].
     [Fact]
-    public void Builder_WhereWithDoubleValue_GeneratesNumeric()
-    {
-        var query = "Orders".From("o").SelectAll().Where("o.TotalAmount", 99.99).ToSqlStatement();
+    public void Builder_ComparisonOperator_Like_GeneratesCorrectSQL() =>
+        AssertComparisonOperatorSql(
+            column: "Name",
+            @operator: ComparisonOperator.Like,
+            right: "%test%",
+            expected: "LIKE"
+        );
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["99.99"]);
-    }
-
+    // Implements [CI-TEST-SHARED-SCENARIOS].
     [Fact]
-    public void Builder_ComparisonOperator_Like_GeneratesCorrectSQL()
+    public void Builder_ComparisonOperator_In_GeneratesCorrectSQL() =>
+        AssertComparisonOperatorSql(
+            column: "Status",
+            @operator: ComparisonOperator.In,
+            right: "('Completed','Processing')",
+            expected: "IN"
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    [Fact]
+    public void Builder_ComparisonOperator_IsNull_GeneratesCorrectSQL() =>
+        AssertComparisonOperatorSql(
+            column: "Notes",
+            @operator: ComparisonOperator.IsNull,
+            right: "",
+            expected: "IS NULL"
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    [Fact]
+    public void Builder_ComparisonOperator_IsNotNull_GeneratesCorrectSQL() =>
+        AssertComparisonOperatorSql(
+            column: "Notes",
+            @operator: ComparisonOperator.IsNotNull,
+            right: "",
+            expected: "IS NOT NULL"
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertComparisonOperatorSql(
+        string column,
+        ComparisonOperator @operator,
+        string right,
+        string expected
+    )
     {
         var query = "Orders"
             .From()
             .Select(("", "Id"))
-            .Where("Name", ComparisonOperator.Like, "%test%")
+            .Where(column, @operator, right)
             .ToSqlStatement();
-        var sql = ((StringSqlOk)query.ToSQLite()).Value;
-        Assert.Contains("LIKE", sql);
-    }
-
-    [Fact]
-    public void Builder_ComparisonOperator_In_GeneratesCorrectSQL()
-    {
-        var query = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Status", ComparisonOperator.In, "('Completed','Processing')")
-            .ToSqlStatement();
-        var sql = ((StringSqlOk)query.ToSQLite()).Value;
-        Assert.Contains("IN", sql);
-    }
-
-    [Fact]
-    public void Builder_ComparisonOperator_IsNull_GeneratesCorrectSQL()
-    {
-        var query = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Notes", ComparisonOperator.IsNull, "")
-            .ToSqlStatement();
-        var sql = ((StringSqlOk)query.ToSQLite()).Value;
-        Assert.Contains("IS NULL", sql);
-    }
-
-    [Fact]
-    public void Builder_ComparisonOperator_IsNotNull_GeneratesCorrectSQL()
-    {
-        var query = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Notes", ComparisonOperator.IsNotNull, "")
-            .ToSqlStatement();
-        var sql = ((StringSqlOk)query.ToSQLite()).Value;
-        Assert.Contains("IS NOT NULL", sql);
+        global::Tests.Shared.StringAssertions.SqlFragments(
+            read: () => query.ToSQLite(),
+            expected: [expected],
+            comparison: StringComparison.CurrentCulture
+        );
     }
 
     #endregion
@@ -294,18 +301,18 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o => o.TotalAmount > 0.0)
-                .OrderByDescending(o => o.TotalAmount)
-                .Take(10)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o => o.TotalAmount > 0.0)
+                    .OrderByDescending(o => o.TotalAmount)
+                    .Take(10)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Equal(2, orders.Count);
         Assert.True(orders[0].TotalAmount >= orders[1].TotalAmount);
     }
@@ -315,18 +322,18 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .OrderBy(o => o.Id)
-                .Skip(1)
-                .Take(1)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .OrderBy(o => o.Id)
+                    .Skip(1)
+                    .Take(1)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Single(orders);
     }
 
@@ -335,19 +342,25 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         var query = "Orders".From().Select<Order>(o => o.Status).Distinct().ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["DISTINCT"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["DISTINCT"]);
     }
 
     #endregion
 
     #region SqlError coverage
 
-    [Fact]
-    public void SqlError_Create_SetsMessageCorrectly()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(SqlError_Create_SetsMessageCorrectly_ContextCasesData))]
+    public void SqlError_Create_SetsMessageCorrectly_ContextCases(
+        string caseName,
+        string value0,
+        string value1,
+        global::System.Func<global::Nimblesite.Sql.Model.SqlError, global::System.String> value2
+    )
     {
-        var error = SqlError.Create("Test error message");
-        Assert.Equal("Test error message", error.Message);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix3(value0: value0, value1: value1, value2: value2);
     }
 
     [Fact]
@@ -415,13 +428,6 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         var error = SqlError.WithPosition("Syntax error", line: 3, column: 7);
         Assert.Contains("line 3", error.FormattedMessage);
         Assert.Contains("column 7", error.FormattedMessage);
-    }
-
-    [Fact]
-    public void SqlError_FormattedMessage_WithoutPosition_ReturnsMessage()
-    {
-        var error = SqlError.Create("Simple error");
-        Assert.Equal("Simple error", error.FormattedMessage);
     }
 
     [Fact]
@@ -526,8 +532,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Where(c => c.CustomerName != null && c.CustomerName.Contains("Acme"))
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["LIKE", "Acme"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["LIKE", "Acme"]);
     }
 
     [Fact]
@@ -538,8 +543,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Where(c => c.CustomerName != null && c.CustomerName.StartsWith("Tech"))
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["LIKE", "Tech"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["LIKE", "Tech"]);
     }
 
     [Fact]
@@ -547,19 +551,20 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o =>
-                    (o.Status == "Completed" && o.TotalAmount > 400.0) || o.Status == "Processing"
-                )
-                .OrderBy(o => o.Id)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o =>
+                        (o.Status == "Completed" && o.TotalAmount > 400.0)
+                        || o.Status == "Processing"
+                    )
+                    .OrderBy(o => o.Id)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Equal(2, orders.Count);
     }
 
@@ -571,9 +576,8 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Select<Customer>(c => new { c.CustomerName, c.Email })
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(
-            result: sqlResult,
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
             fragments: ["CustomerName", "Email"]
         );
     }
@@ -585,26 +589,21 @@ public sealed partial class SqlModelCoverageTests : IDisposable
 
         var query = SelectStatement.From<Customer>().Where(c => c.Email == null).ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
-    [Fact]
-    public void FormatValue_WithLongValue_GeneratesNumeric()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(FormatValue_WithLongValue_GeneratesNumeric_ContextCasesData))]
+    public void FormatValue_WithLongValue_GeneratesNumeric_ContextCases(
+        string caseName,
+        string value1,
+        object value2,
+        string value3
+    )
     {
-        var query = "Orders".From().SelectAll().Where("Count", 42L).ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["42"]);
-    }
-
-    [Fact]
-    public void FormatValue_WithDecimalValue_GeneratesNumeric()
-    {
-        var query = "Orders".From().SelectAll().Where("Amount", 19.99m).ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["19.99"]);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix2(value1: value1, value2: value2, value3: value3);
     }
 
     #endregion
@@ -646,8 +645,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Where(o => o.TotalAmount > 0.0 && o.TotalAmount < 10000.0)
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
     [Fact]
@@ -658,8 +656,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .Where(o => o.Status == "A" || o.Status == "B" || o.Status == "C")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
     [Fact]
@@ -672,9 +669,8 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .And("IsDeleted", false)
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(
-            result: sqlResult,
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
             fragments: ["IsActive = 1", "IsDeleted = 0"]
         );
     }
@@ -703,9 +699,8 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         builder.AddSelectColumn(ColumnInfo.FromExpression("SUM(o.TotalAmount)"));
         var query = builder.GroupBy("o.Status").ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(
-            result: sqlResult,
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
             fragments: ["COUNT(*)", "SUM(o.TotalAmount)"]
         );
     }
@@ -715,18 +710,18 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            SelectStatement
-                .From<Order>("Orders")
-                .Where(o =>
-                    (o.TotalAmount >= 500.0 && o.TotalAmount <= 1000.0) || o.Status == "VIP"
-                )
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: _connection.GetRecords(
+                SelectStatement
+                    .From<Order>("Orders")
+                    .Where(o =>
+                        (o.TotalAmount >= 500.0 && o.TotalAmount <= 1000.0) || o.Status == "VIP"
+                    )
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
         );
-
-        Assert.True(result is OrderReadOnlyListOk);
     }
 
     [Fact]
@@ -739,8 +734,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             select order
         ).ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["Orders"]);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["Orders"]);
     }
 
     [Fact]
@@ -786,17 +780,17 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.GetRecords(
-            "Orders"
-                .From()
-                .SelectAll()
-                .Where("TotalAmount", ComparisonOperator.GreaterOrEq, "0")
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                "Orders"
+                    .From()
+                    .SelectAll()
+                    .Where("TotalAmount", ComparisonOperator.GreaterOrEq, "0")
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapOrder
+            )
+        ).Value;
         Assert.Equal(2, orders.Count);
     }
 
@@ -813,8 +807,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         Assert.Empty(query.Unions);
         Assert.Null(query.HavingCondition);
 
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
     [Fact]
@@ -828,8 +821,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         Assert.Equal(2, query.OrderByItems.Count);
-        var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: query.ToSQLite());
     }
 
     [Fact]
@@ -842,8 +834,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         Assert.NotNull(statement.Parameters);
-        var sqlResult = statement.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: statement.ToSQLite());
     }
 
     [Fact]
@@ -901,23 +892,42 @@ public sealed partial class SqlModelCoverageTests : IDisposable
 
     private async Task SetupDatabase()
     {
-        await _connection.OpenAsync().ConfigureAwait(false);
-        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", _connection))
-        {
-            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-
-        var createTablesScript = Data_SetupDatabase_1;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-
-        var insertScript = Data_SetupDatabase_2;
-
-        using var insertCommand = new SqliteCommand(insertScript, _connection);
-        await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await global::Nimblesite
+            .DataProvider.Example.Tests.ProgramCoverageTests.VerifyReusableWorkflow3(
+                configure0: command => command.CommandText = Data_SetupDatabase_1,
+                configure1: command => command.CommandText = Data_SetupDatabase_2,
+                input0: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     public void Dispose() =>
         CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix1(string value2, object value3, string value4)
+    {
+        var query = "Orders".From("o").SelectAll().Where(value2, value3).ToSqlStatement();
+
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: [value4]);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix2(string value1, object value2, string value3)
+    {
+        var query = "Orders".From().SelectAll().Where(value1, value2).ToSqlStatement();
+
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: [value3]);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix3(
+        string value0,
+        string value1,
+        global::System.Func<global::Nimblesite.Sql.Model.SqlError, global::System.String> value2
+    )
+    {
+        var error = SqlError.Create(value0);
+        Assert.Equal(value1, value2(arg: error));
+    }
 }

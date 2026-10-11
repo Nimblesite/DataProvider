@@ -1,5 +1,3 @@
-using Tests.Shared;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -96,10 +94,12 @@ public static partial class SchemaVerifier
         string schemaName = "public"
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_VerifyPostgresColumn_1;
-        cmd.Parameters.AddWithValue("@schema", schemaName);
-        cmd.Parameters.AddWithValue("@table", tableName);
+        using var cmd = PreparePostgresLookup(
+            conn,
+            Data_VerifyPostgresColumn_1,
+            schemaName,
+            tableName
+        );
         cmd.Parameters.AddWithValue("@column", expected.Name);
 
         using var reader = cmd.ExecuteReader();
@@ -133,19 +133,12 @@ public static partial class SchemaVerifier
         string schemaName = "public"
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_VerifyPostgresPrimaryKey_1;
-        cmd.Parameters.AddWithValue("@schema", schemaName);
-        cmd.Parameters.AddWithValue("@table", tableName);
-
-        var actualColumns = new List<string>();
-        using (var reader = cmd.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                actualColumns.Add(reader.GetString(0));
-            }
-        }
+        var actualColumns = ReadPostgresStrings(
+            conn,
+            Data_VerifyPostgresPrimaryKey_1,
+            schemaName,
+            tableName
+        );
 
         Assert.Equal(expected.Columns.Count, actualColumns.Count);
         for (var i = 0; i < expected.Columns.Count; i++)
@@ -164,10 +157,12 @@ public static partial class SchemaVerifier
         string schemaName = "public"
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_VerifyPostgresIndex_1;
-        cmd.Parameters.AddWithValue("@schema", schemaName);
-        cmd.Parameters.AddWithValue("@table", tableName);
+        using var cmd = PreparePostgresLookup(
+            conn,
+            Data_VerifyPostgresIndex_1,
+            schemaName,
+            tableName
+        );
         cmd.Parameters.AddWithValue("@index", expected.Name);
 
         using var reader = cmd.ExecuteReader();
@@ -205,10 +200,12 @@ public static partial class SchemaVerifier
         string schemaName = "public"
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_VerifyPostgresForeignKey_1;
-        cmd.Parameters.AddWithValue("@schema", schemaName);
-        cmd.Parameters.AddWithValue("@table", tableName);
+        using var cmd = PreparePostgresLookup(
+            conn,
+            Data_VerifyPostgresForeignKey_1,
+            schemaName,
+            tableName
+        );
         cmd.Parameters.AddWithValue("@column", expected.Columns[0]);
 
         using var reader = cmd.ExecuteReader();
@@ -238,19 +235,12 @@ public static partial class SchemaVerifier
         string schemaName = "public"
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_VerifyPostgresUniqueConstraint_1;
-        cmd.Parameters.AddWithValue("@schema", schemaName);
-        cmd.Parameters.AddWithValue("@table", tableName);
-
-        var actualColumns = new List<string>();
-        using (var reader = cmd.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                actualColumns.Add(reader.GetString(0));
-            }
-        }
+        var actualColumns = ReadPostgresStrings(
+            conn,
+            Data_VerifyPostgresUniqueConstraint_1,
+            schemaName,
+            tableName
+        );
 
         // Check that expected columns are present
         foreach (var col in expected.Columns)
@@ -484,12 +474,14 @@ public static partial class SchemaVerifier
 
     private static List<string> GetPostgresTables(NpgsqlConnection conn, string schema)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        using var cmd = PrepareInformationSchemaLookup(
+            conn,
+            schema,
+            """
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = @schema AND table_type = 'BASE TABLE'
-            """;
-        cmd.Parameters.AddWithValue("@schema", schema);
+            """
+        );
 
         return DatabaseCommands.ReadStrings(cmd);
     }
@@ -500,15 +492,34 @@ public static partial class SchemaVerifier
         string schema
     )
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        using var cmd = PrepareInformationSchemaLookup(
+            conn,
+            schema,
+            """
             SELECT column_name FROM information_schema.columns
             WHERE table_schema = @schema AND table_name = @table
-            """;
-        cmd.Parameters.AddWithValue("@schema", schema);
+            """
+        );
         cmd.Parameters.AddWithValue("@table", tableName);
 
         return DatabaseCommands.ReadStrings(cmd);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static NpgsqlCommand PrepareInformationSchemaLookup(
+        NpgsqlConnection conn,
+        string schema,
+        string sql
+    )
+    {
+        var cmd = conn.CreateCommand();
+        PostgresRlsPhaseUpgradeTests.VerifyReusableWorkflow20(
+            input0: cmd,
+            input1: schema,
+            value0: sql,
+            value1: "@schema"
+        );
+        return cmd;
     }
 
     internal static bool SqliteTableExists(SqliteConnection conn, string tableName)
@@ -561,4 +572,61 @@ public static partial class SchemaVerifier
         string? DefaultValue,
         bool IsPrimaryKey
     );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static NpgsqlCommand PreparePostgresLookup(
+        NpgsqlConnection conn,
+        string sql,
+        string schemaName,
+        string tableName
+    )
+    {
+        var cmd = conn.CreateCommand();
+        LqlDefaultsTests.VerifyUnifiedWorkflow102(
+            input0: cmd,
+            input1: sql,
+            input2: schemaName,
+            input3: tableName
+        );
+        return cmd;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static List<string> ReadPostgresStrings(
+        NpgsqlConnection conn,
+        string sql,
+        string schemaName,
+        string tableName
+    )
+    {
+        using var cmd = PreparePostgresLookup(conn, sql, schemaName, tableName);
+        return VerifySharedStep2(input0: cmd, input1: sql, input2: schemaName, input3: tableName);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static List<string> VerifySharedStep2(
+        NpgsqlCommand input0,
+        string input1,
+        string input2,
+        string input3
+    )
+    {
+        global::Nimblesite.DataProvider.Migration.Tests.LqlDefaultsTests.VerifyUnifiedWorkflow102(
+            input0: input0,
+            input1: input1,
+            input2: input2,
+            input3: input3
+        );
+
+        var actualColumns = new List<string>();
+        using (var reader = input0.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                actualColumns.Add(reader.GetString(0));
+            }
+        }
+
+        return actualColumns;
+    }
 }

@@ -1,10 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Data;
-using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
-using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -65,10 +62,9 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
 
         // Convert to SQLite
         var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
+        var sqlOk = global::Tests.Shared.ResultAssertions.ExactOk(actual: sqlResult);
         var sql = sqlOk.Value;
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Products", sql);
+        VerifyReusableWorkflow1(input0: sql, value0: "SELECT", value2: "Products");
         Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
 
         // Execute against real DB
@@ -76,10 +72,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             sql: sql,
             mapper: r => (r.GetString(0), r.GetDouble(1))
         );
-        var rows = Assert.IsType<Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-            IReadOnlyList<(string Name, double Price)>,
-            SqlError
-        >>(queryResult);
+        var rows = ExactOk(actual: queryResult);
         Assert.Equal(2, rows.Value.Count);
         Assert.Equal("Tool Gamma", rows.Value[0].Name);
         Assert.Equal(15.00, rows.Value[0].Price);
@@ -98,17 +91,11 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .OrderBy(columnName: "Category")
             .ToSqlStatement();
 
-        var distinctSqlOk = Assert.IsType<StringOk>(distinctStmt.ToSQLite());
-        var distinctSql = distinctSqlOk.Value;
+        var distinctSql = VerifyConsolidatedPhase1(input0: distinctStmt);
 
-        var distinctResult = _connection.Query<string>(
-            sql: distinctSql,
-            mapper: r => r.GetString(0)
+        var categories = Ok(read: () =>
+            _connection.Query<string>(sql: distinctSql, mapper: r => r.GetString(0))
         );
-        var categories = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(distinctResult);
         Assert.Equal(3, categories.Value.Count);
         Assert.Equal("Electronics", categories.Value[0]);
         Assert.Equal("Gadgets", categories.Value[1]);
@@ -127,22 +114,20 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .Take(count: 3)
             .ToSqlStatement();
 
-        var pagedSqlOk = Assert.IsType<StringOk>(pagedStmt.ToSQLite());
-        var pagedSql = pagedSqlOk.Value;
+        var pagedSql = VerifyConsolidatedPhase1(input0: pagedStmt);
         ContainsAll(
             actual: pagedSql,
             expected: ["OFFSET", "LIMIT"],
             comparison: StringComparison.OrdinalIgnoreCase
         );
 
-        var pagedResult = _connection.Query<string>(
-            sql: pagedSql,
-            mapper: r => r.GetString(1) // Name is column index 1
+        // Name is column index 1
+        var page = Ok(read: () =>
+            _connection.Query<string>(
+                sql: pagedSql,
+                mapper: r => r.GetString(1) // Name is column index 1
+            )
         );
-        var page = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(pagedResult);
         Assert.Equal(3, page.Value.Count);
     }
 
@@ -164,18 +149,14 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .OrderBy(columnName: "Products.Name")
             .ToSqlStatement();
 
-        var joinSqlOk = Assert.IsType<StringOk>(joinStmt.ToSQLite());
-        var joinSql = joinSqlOk.Value;
+        var joinSql = VerifyConsolidatedPhase1(input0: joinStmt);
         Assert.Contains("JOIN", joinSql, StringComparison.OrdinalIgnoreCase);
 
         var joinResult = _connection.Query<(string, string)>(
             sql: joinSql,
             mapper: r => (r.GetString(0), r.GetString(1))
         );
-        var joined = Assert.IsType<Result<IReadOnlyList<(string, string)>, SqlError>.Ok<
-            IReadOnlyList<(string, string)>,
-            SqlError
-        >>(joinResult);
+        var joined = ExactOk(actual: joinResult);
         Assert.Equal(3, joined.Value.Count);
         Assert.All(joined.Value, j => Assert.Equal("Electronic devices and components", j.Item2));
     }
@@ -198,10 +179,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             mapper: r => (r.GetString(0), r.GetString(1), r.GetDouble(2))
         );
 
-        var recordsOk = Assert.IsType<Result<IReadOnlyList<(string, string, double)>, SqlError>.Ok<
-            IReadOnlyList<(string, string, double)>,
-            SqlError
-        >>(result);
+        var recordsOk = ExactOk(actual: result);
         Assert.Equal(4, recordsOk.Value.Count);
         Assert.Equal("Tool Beta", recordsOk.Value[0].Item2);
         Assert.Equal(45.00, recordsOk.Value[0].Item3);
@@ -221,10 +199,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             sqlGenerator: s => s.ToSQLite(),
             mapper: r => r.GetString(0)
         );
-        Assert.True(
-            nullConn
-                is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: nullConn);
 
         // Null statement
         var nullStmt = _connection.GetRecords<string>(
@@ -232,10 +207,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             sqlGenerator: s => s.ToSQLite(),
             mapper: r => r.GetString(0)
         );
-        Assert.True(
-            nullStmt
-                is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: nullStmt);
 
         // Null generator
         var nullGen = _connection.GetRecords<string>(
@@ -243,10 +215,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             sqlGenerator: null!,
             mapper: r => r.GetString(0)
         );
-        Assert.True(
-            nullGen
-                is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: nullGen);
 
         // Null mapper
         var nullMapper = _connection.GetRecords<string>(
@@ -254,10 +223,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             sqlGenerator: s => s.ToSQLite(),
             mapper: null!
         );
-        Assert.True(
-            nullMapper
-                is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: nullMapper);
     }
 
     [Fact]
@@ -265,16 +231,19 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
     {
         // Simple select all
         var simple = "Products".From().SelectAll().ToSqlStatement();
-        var simpleSql = ((StringOk)simple.ToSQLite()).Value;
-        ContainsAll(actual: simpleSql, expected: ["SELECT *", "FROM Products"]);
+
+        var simpleSql = SqlFragments(
+            read: () => simple.ToSQLite(),
+            expected: ["SELECT *", "FROM Products"]
+        );
 
         // With specific columns
         var cols = "Products"
             .From()
             .Select(columns: [(null, "Name"), (null, "Price")])
             .ToSqlStatement();
-        var colsSql = ((StringOk)cols.ToSQLite()).Value;
-        ContainsAll(actual: colsSql, expected: ["Name", "Price"]);
+
+        var colsSql = SqlFragments(read: () => cols.ToSQLite(), expected: ["Name", "Price"]);
         Assert.DoesNotContain("*", colsSql);
 
         // With WHERE + AND
@@ -284,9 +253,9 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .Where(columnName: "Category", value: "Tools")
             .And(columnName: "Price", value: 35.0)
             .ToSqlStatement();
-        var filteredSql = ((StringOk)filtered.ToSQLite()).Value;
-        ContainsAll(
-            actual: filteredSql,
+
+        var filteredSql = SqlFragments(
+            read: () => filtered.ToSQLite(),
             expected: ["WHERE", "AND"],
             comparison: StringComparison.OrdinalIgnoreCase
         );
@@ -314,18 +283,19 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .OrderBy(columnName: "Name")
             .ToSqlStatement();
 
-        var orSql = ((StringOk)orStmt.ToSQLite()).Value;
-        Assert.Contains("OR", orSql, StringComparison.OrdinalIgnoreCase);
-
-        var orResult = _connection.Query<(string Name, string Category)>(
-            sql: orSql,
-            mapper: r => (r.GetString(0), r.GetString(1))
+        var orSql = global::Tests.Shared.StringAssertions.SqlFragments(
+            read: () => orStmt.ToSQLite(),
+            expected: ["OR"],
+            comparison: StringComparison.OrdinalIgnoreCase
         );
+
         var orRows = (
-            (Result<IReadOnlyList<(string Name, string Category)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, string Category)>,
-                SqlError
-            >)orResult
+            Ok(read: () =>
+                _connection.Query<(string Name, string Category)>(
+                    sql: orSql,
+                    mapper: r => (r.GetString(0), r.GetString(1))
+                )
+            )
         ).Value;
         Assert.Equal(5, orRows.Count);
         Assert.All(orRows, r => Assert.True(r.Category is "Electronics" or "Gadgets"));
@@ -335,8 +305,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
     public void SelectStatementBuilder_ExpressionColumns_GeneratesCorrectSQL()
     {
         // Use expression column for computed values
-        var builder = new SelectStatementBuilder();
-        builder.AddTable(name: "Products");
+        var builder = VerifyReusableWorkflow4(value0: "Products");
         builder.AddSelectColumn(name: "Name");
         builder.AddSelectColumn(
             ColumnInfo.FromExpression(expression: "Price * Quantity", alias: "TotalValue")
@@ -344,18 +313,18 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
         builder.AddOrderBy(column: "Name", direction: "ASC");
         var stmt = builder.Build();
 
-        var sql = ((StringOk)stmt.ToSQLite()).Value;
-        ContainsAll(actual: sql, expected: ["Price * Quantity", "TotalValue"]);
-
-        var result = _connection.Query<(string Name, double TotalValue)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
+        var sql = SqlFragments(
+            read: () => stmt.ToSQLite(),
+            expected: ["Price * Quantity", "TotalValue"]
         );
+
         var rows = (
-            (Result<IReadOnlyList<(string Name, double TotalValue)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double TotalValue)>,
-                SqlError
-            >)result
+            Ok(read: () =>
+                _connection.Query<(string Name, double TotalValue)>(
+                    sql: sql,
+                    mapper: r => (r.GetString(0), r.GetDouble(1))
+                )
+            )
         ).Value;
         Assert.Equal(8, rows.Count);
 
@@ -365,5 +334,32 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
 
         var premiumWidget = rows.First(r => r.Name == "Premium Widget");
         Assert.Equal(1000.00, premiumWidget.TotalValue, precision: 2);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyConsolidatedPhase1(SelectStatement input0)
+    {
+        var distinctSqlOk = global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: input0.ToSQLite()
+        );
+        var distinctSql = distinctSqlOk.Value;
+
+        return distinctSql;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow1(string input0, string value0, string value2)
+    {
+        Assert.Contains(value0, input0, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(value2, input0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SelectStatementBuilder VerifyReusableWorkflow4(string value0)
+    { // Use expression column for computed values
+        var builder = new SelectStatementBuilder();
+        builder.AddTable(name: value0);
+
+        return builder;
     }
 }

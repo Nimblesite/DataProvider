@@ -32,15 +32,7 @@ public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
 
         try
         {
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    SchemaWithoutUnique(),
-                    Logger
-                ),
-                Logger
-            );
+            PostgresTestDb.ApplySchema(connection, SchemaWithoutUnique(), Logger);
 
             var live = PostgresTestDb.Inspect(connection, Logger);
             var agentConfigs = live.Tables.Single(t => t.Name == "agent_configs");

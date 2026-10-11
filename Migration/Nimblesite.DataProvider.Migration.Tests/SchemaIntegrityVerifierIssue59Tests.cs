@@ -1,13 +1,7 @@
 using System.Collections.Immutable;
-// Implements [MIG-TEST-SCHEMA-FIXTURES].
+using static global::Tests.Shared.ResultAssertions;
 
-using SchemaIntegrityOk = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -31,9 +25,7 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
         var live = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1();
         var desired = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2();
 
-        var mismatches = Verify(live: live, desired: desired);
-
-        Assert.Empty(mismatches);
+        Assert.Empty(Verify(live: live, desired: desired));
 
         var changedDefault =
             Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3();
@@ -45,55 +37,24 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
         Assert.DoesNotContain("default expected 'pending'", changedDefaultMismatches[0]);
     }
 
-    [Fact]
-    public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_CasesData)
+    )]
+    public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_Cases(
+        string caseName,
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input1,
+        Func<SchemaDefinition, SchemaDefinition> input2,
+        global::System.String value0
+    )
     {
-        var live =
-            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1();
-        var desired =
-            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2();
-
-        var mismatches = Verify(live: live, desired: desired);
-
-        Assert.Empty(mismatches);
-
-        var missingAdminGrant =
-            Dataset_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1(
-                live: live
-            );
-
-        var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
-
-        Assert.Single(missingAdminMismatches);
-        Assert.Contains("grant Schema", missingAdminMismatches[0]);
-        Assert.Contains("missing grant", missingAdminMismatches[0]);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseTypedCaseMatrix1(input0: input0, input1: input1, input2: input2, value0: value0);
     }
 
-    [Fact]
-    public void Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector()
-    {
-        var live =
-            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1();
-        var desired =
-            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2();
-
-        var mismatches = Verify(live: live, desired: desired);
-
-        Assert.Empty(mismatches);
-
-        var missingTableGrant =
-            Dataset_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1(
-                live: live
-            );
-
-        var missingTableMismatches = Verify(live: missingTableGrant, desired: desired);
-
-        Assert.Single(missingTableMismatches);
-        Assert.Contains("grant AllTablesInSchema", missingTableMismatches[0]);
-        Assert.Contains("missing grant", missingTableMismatches[0]);
-    }
-
-    private static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)
+    internal static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)
     {
         var result = SchemaIntegrityVerifier.Verify(
             live: live,
@@ -105,6 +66,28 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
             result is SchemaIntegrityOk,
             "Expected schema integrity verification to succeed."
         );
-        return ((SchemaIntegrityOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseTypedCaseMatrix1(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input1,
+        Func<SchemaDefinition, SchemaDefinition> input2,
+        global::System.String value0
+    )
+    {
+        var live = input0();
+        var desired = input1();
+
+        Assert.Empty(Verify(live: live, desired: desired));
+
+        var missingAdminGrant = input2(live);
+
+        var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
+
+        Assert.Single(missingAdminMismatches);
+        Assert.Contains(value0, missingAdminMismatches[0]);
+        Assert.Contains("missing grant", missingAdminMismatches[0]);
     }
 }

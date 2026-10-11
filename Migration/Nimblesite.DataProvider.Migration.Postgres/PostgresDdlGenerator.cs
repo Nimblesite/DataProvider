@@ -592,31 +592,13 @@ public static partial class PostgresDdlGenerator
             var c = expression[i];
 
             // Single-quoted string literal — copy verbatim until closing quote.
-            if (c == '\'')
+            if (expression[i] is '\'' or '"')
             {
-                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
                     source: expression,
-                    sb: sb,
-                    i: i
+                    start: i,
+                    sql: sb
                 );
-                continue;
-            }
-
-            // Double-quoted identifier — copy verbatim, already quoted.
-            if (c == '"')
-            {
-                sb.Append(c);
-                i++;
-                while (i < expression.Length)
-                {
-                    sb.Append(expression[i]);
-                    if (expression[i] == '"')
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
                 continue;
             }
 
@@ -625,13 +607,10 @@ public static partial class PostgresDdlGenerator
             {
                 var start = i;
                 i++;
-                while (
-                    i < expression.Length
-                    && (char.IsLetterOrDigit(expression[i]) || expression[i] == '_')
-                )
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: expression,
+                    start: i
+                );
                 var word = expression[start..i];
 
                 // Don't quote if the previous non-whitespace char is `.` —

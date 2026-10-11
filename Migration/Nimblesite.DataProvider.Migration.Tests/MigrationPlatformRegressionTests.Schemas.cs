@@ -3,6 +3,10 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed partial record MigrationPlatformRegressionTests
 {
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static ColumnDefinition Col(string name, PortableType type, bool isNullable) =>
+        SchemaTestData.Column(name: name, type: type, isNullable: isNullable);
+
     private static SchemaDefinition NullableSchema(
         bool stripeIdNullable,
         bool externalIdNullable
@@ -16,32 +20,16 @@ public sealed partial record MigrationPlatformRegressionTests
                     name: "topup",
                     columns:
                     [
-                        SchemaTestData.Column(
-                            name: "id",
-                            type: PortableTypes.Uuid,
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "stripe_payment_intent_id",
-                            type: PortableTypes.Text,
+                        Col("id", PortableTypes.Uuid, isNullable: false),
+                        Col(
+                            "stripe_payment_intent_id",
+                            PortableTypes.Text,
                             isNullable: stripeIdNullable
                         ),
-                        SchemaTestData.Column(
-                            name: "required_receipt_reference",
-                            type: PortableTypes.Text,
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "external_id",
-                            type: PortableTypes.Uuid,
-                            isNullable: externalIdNullable
-                        ),
-                        SchemaTestData.Column(
-                            name: "optional_note",
-                            type: PortableTypes.Text,
-                            isNullable: true
-                        ),
-                        UuidColumn("tenant_id"),
+                        Col("required_receipt_reference", PortableTypes.Text, isNullable: false),
+                        Col("external_id", PortableTypes.Uuid, isNullable: externalIdNullable),
+                        Col("optional_note", PortableTypes.Text, isNullable: true),
+                        SchemaTestData.RequiredUuid(name: "tenant_id"),
                     ],
                     primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
                     foreignKeys: [ForeignKey("tenant_id", "tenants")]
@@ -85,7 +73,12 @@ public sealed partial record MigrationPlatformRegressionTests
         var projects = ParentTable("projects");
         var events = SchemaTestData.Table(
             name: "usage_events",
-            columns: [UuidColumn("id"), UuidColumn("tenant_id"), UuidColumn("project_id")],
+            columns:
+            [
+                SchemaTestData.RequiredUuid(name: "id"),
+                SchemaTestData.RequiredUuid(name: "tenant_id"),
+                SchemaTestData.RequiredUuid(name: "project_id"),
+            ],
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
             foreignKeys: includeTenantForeignKey && includeProjectForeignKey
                     ? [ForeignKey("tenant_id", "tenants"), ForeignKey("project_id", "projects")]
@@ -94,7 +87,11 @@ public sealed partial record MigrationPlatformRegressionTests
         );
         var audit = SchemaTestData.Table(
             name: "audit_events",
-            columns: [UuidColumn("id"), UuidColumn("tenant_id")],
+            columns:
+            [
+                SchemaTestData.RequiredUuid(name: "id"),
+                SchemaTestData.RequiredUuid(name: "tenant_id"),
+            ],
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
             foreignKeys: [ForeignKey("tenant_id", "tenants")]
         );
@@ -109,12 +106,9 @@ public sealed partial record MigrationPlatformRegressionTests
     private static TableDefinition ParentTable(string name) =>
         SchemaTestData.Table(
             name: name,
-            columns: [UuidColumn("id")],
+            columns: [SchemaTestData.RequiredUuid(name: "id")],
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
         );
-
-    private static ColumnDefinition UuidColumn(string name) =>
-        SchemaTestData.Column(name: name, type: PortableTypes.Uuid, isNullable: false);
 
     private static ForeignKeyDefinition ForeignKey(string column, string referencedTable) =>
         SchemaTestData.ForeignKey(
@@ -131,7 +125,7 @@ public sealed partial record MigrationPlatformRegressionTests
             [
                 SchemaTestData.Table(
                     name: "documents",
-                    columns: [UuidColumn("id")],
+                    columns: [SchemaTestData.RequiredUuid(name: "id")],
                     primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
                     rowLevelSecurity: new RlsPolicySetDefinition
                     {

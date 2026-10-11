@@ -6,37 +6,51 @@
 //! test starts an ephemeral Postgres, seeds it with a known schema, then
 //! calls fetch_postgres_schema and asserts the cache is populated.
 
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
+use testcontainers_modules::{
+    postgres::Postgres,
+    testcontainers::{runners::AsyncRunner, ContainerAsync},
+};
 use tokio_postgres::NoTls;
 
-#[tokio::test]
-async fn fetch_postgres_schema_returns_seeded_tables() {
-    // Start a fresh Postgres container.
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Starts an ephemeral Postgres container and returns it with a libpq URI.
+async fn start_postgres() -> (ContainerAsync<Postgres>, String) {
     let container = Postgres::default()
         .start()
         .await
         .expect("failed to start postgres container");
-
     let host = container.get_host().await.expect("container has no host");
     let port = container
         .get_host_port_ipv4(5432)
         .await
         .expect("container exposes no port");
-
-    // Seed a known schema using tokio-postgres directly.
     let conn_str =
         format!("host={host} port={port} user=postgres password=postgres dbname=postgres");
-    let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
+    (container, conn_str)
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Runs `ddl` against `conn_str` through a fresh tokio-postgres connection.
+async fn seed_postgres(conn_str: &str, ddl: &str) {
+    let (client, connection) = tokio_postgres::connect(conn_str, NoTls)
         .await
         .expect("seeder connect");
-    let connection_handle = tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let _ = connection.await;
     });
+    client.batch_execute(ddl).await.expect("seed schema");
+    drop(client);
+    let _ = handle.await;
+}
 
-    client
-        .batch_execute(
-            "CREATE TABLE pg_test_users (
+#[tokio::test]
+async fn fetch_postgres_schema_returns_seeded_tables() {
+    let (container, conn_str) = start_postgres().await;
+
+    // Seed a known schema using tokio-postgres directly.
+    seed_postgres(
+        &conn_str,
+        "CREATE TABLE pg_test_users (
                 id UUID PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
                 email TEXT
@@ -46,12 +60,8 @@ async fn fetch_postgres_schema_returns_seeded_tables() {
                 user_id UUID NOT NULL,
                 total NUMERIC(10,2) NOT NULL
             );",
-        )
-        .await
-        .expect("seed schema");
-
-    drop(client);
-    let _ = connection_handle.await;
+    )
+    .await;
 
     // Now exercise fetch_postgres_schema against the seeded DB.
     let schema = lql_lsp::db::fetch_postgres_schema(&conn_str)
@@ -93,29 +103,14 @@ async fn fetch_schema_dispatches_to_postgres_for_libpq_uri() {
     // Drives the dispatch arm of `fetch_schema` (db.rs line 132) — when
     // the connection string is NOT detected as SQLite, the call routes
     // to fetch_postgres_schema.
-    let container = Postgres::default()
-        .start()
-        .await
-        .expect("failed to start postgres container");
-
-    let host = container.get_host().await.unwrap();
-    let port = container.get_host_port_ipv4(5432).await.unwrap();
-    let conn_str =
-        format!("host={host} port={port} user=postgres password=postgres dbname=postgres");
+    let (container, conn_str) = start_postgres().await;
 
     // Seed something so the schema is non-empty.
-    let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
-        .await
-        .expect("seeder connect");
-    let h = tokio::spawn(async move {
-        let _ = connection.await;
-    });
-    client
-        .batch_execute("CREATE TABLE dispatch_pg_test (id UUID PRIMARY KEY NOT NULL);")
-        .await
-        .expect("seed");
-    drop(client);
-    let _ = h.await;
+    seed_postgres(
+        &conn_str,
+        "CREATE TABLE dispatch_pg_test (id UUID PRIMARY KEY NOT NULL);",
+    )
+    .await;
 
     let schema = lql_lsp::db::fetch_schema(&conn_str)
         .await

@@ -68,55 +68,36 @@ mod tests {
 
     #[test]
     fn test_extract_single_let() {
-        let syms = extract_symbols("let x = users |> select(users.id)");
-        assert_eq!(syms.len(), 1);
-        assert_eq!(syms[0].name, "x");
-        assert_eq!(syms[0].kind, SymbolKind::Variable);
-        assert_eq!(syms[0].line, 0);
+        crate::test_support::verify_cross_module_single_let_binding();
     }
 
     #[test]
     fn test_extract_multiple_lets() {
-        let source = "let alpha = users\nlet beta = orders";
-        let syms = extract_symbols(source);
-        assert_eq!(syms.len(), 2);
-        assert_eq!(syms[0].name, "alpha");
-        assert_eq!(syms[0].line, 0);
-        assert_eq!(syms[1].name, "beta");
-        assert_eq!(syms[1].line, 1);
+        crate::test_support::verify_symbols_multiple_lets(
+            "let alpha = users\nlet beta = orders",
+            "alpha",
+            "beta",
+        );
     }
 
     #[test]
     fn test_extract_no_lets() {
-        let syms = extract_symbols("users |> select(users.id)");
-        assert!(syms.is_empty());
+        crate::test_support::verify_cross_module_empty_source_no_symbols(
+            "users |> select(users.id)",
+        );
     }
 
     #[test]
-    fn test_extract_let_with_underscore() {
-        let syms = extract_symbols("let my_var = stuff");
-        assert_eq!(syms.len(), 1);
-        assert_eq!(syms[0].name, "my_var");
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_extract_let_with_underscore_cases() {
+        for &(input0, input1) in named_cases(NAMED_CASES_1) {
+            verify_expanded_test_extract_let_with_underscore(input0, input1);
+        }
     }
 
     #[test]
     fn test_extract_empty_source() {
-        let syms = extract_symbols("");
-        assert!(syms.is_empty());
-    }
-
-    #[test]
-    fn test_extract_indented_let() {
-        let syms = extract_symbols("  let x = 1");
-        assert_eq!(syms.len(), 1);
-        assert_eq!(syms[0].name, "x");
-    }
-
-    #[test]
-    fn test_extract_let_name_with_digits() {
-        let syms = extract_symbols("let var2 = stuff");
-        assert_eq!(syms.len(), 1);
-        assert_eq!(syms[0].name, "var2");
+        crate::test_support::verify_cross_module_empty_source_no_symbols("");
     }
 
     #[test]
@@ -135,4 +116,17 @@ mod tests {
         assert_eq!(syms[0].name, "x");
         assert_eq!(syms[1].name, "y");
     }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_extract_let_with_underscore(input0: &str, input1: &str) {
+        let syms = extract_symbols(input0);
+        assert_eq!(syms.len(), 1);
+        assert_eq!(syms[0].name, input1);
+    }
+
+    include!("symbols_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }

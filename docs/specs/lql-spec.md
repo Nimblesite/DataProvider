@@ -146,7 +146,10 @@ All dialect providers reuse mappings for count, sum, average, minimum, maximum,
 coalesce, uppercase and lowercase. PostgreSQL and SQL Server additionally share
 standard substring, EXISTS and window-function mappings. Providers retain their
 exact supported-function sets and their existing date, length and SQLite substring
-handlers; unknown functions retain the existing fallback behavior.
+handlers; unknown functions retain the existing fallback behavior. PostgreSQL and
+SQL Server share construction of date-function overrides, retaining their native
+function names and handlers. PostgreSQL and SQLite share LIMIT/OFFSET syntax
+construction with their original date expressions and boolean support.
 
 ### Shared error-test execution [LQL-ERROR-TEST-EXECUTION]
 
@@ -191,3 +194,45 @@ Every named test remains, with its original source, search strings and assertion
 The CLI, Postgres renderer and migration expression rewriters reuse one internal
 string-literal copying routine. It preserves escaped apostrophes, closing-delimiter
 positions and unterminated-text handling from the original routines.
+
+### Independent Rust expectations [LQL-RUST-INDEPENDENT-EXPECTATIONS]
+
+Keep expected function-name arrays independent of implementation constants so
+language diagnostics are checked against explicit test oracles. Data-only include
+files contain the original arrays and are excluded from duplication analysis;
+all iteration, analysis and assertions remain in the test runners.
+
+### Shared protocol position requests [LQL-PROTOCOL-SHARED-POSITION-REQUEST]
+
+Protocol tests share the standard text-document URI and cursor-position request
+shape. Each caller retains its method, document, position and response checks.
+
+### Shared terminal text [LQL-SHARED-TERMINAL-TEXT]
+
+AST conversion reuses the first available terminal's text through the generated
+ANTLR getters. Token priority and later unsupported-expression handling retain
+the original order; no additional SQL or LQL parser is introduced.
+
+### [LQL-CLI-SHARED-COMMAND]
+
+Platform subcommands share required input, optional output, validation options, and handler setup. Each supplies its platform label and SQL conversion function.
+
+### [LQL-SHARED-QUOTED-TOKEN]
+
+SQL rewriting shares quoted-token dispatch and preserves single-quote escapes, double-quoted identifiers, and unterminated-token handling.
+
+## [LQL-FSHARP-SHARED-SQL-ASSERTIONS]
+
+Named F# runtime scenarios use one transpile and case-insensitive assertion workflow, retaining every input and expected fragment in its original order.
+
+## [LQL-SHARED-IDENTIFIER-END]
+
+Existing identifier rewrite paths use one letter, digit and underscore scan. Callers keep their start offsets, quoted handling and replacement decisions.
+
+## [LQL-RUST-NAMED-CASE-MATRICES]
+
+Repeated Rust test bodies run once per named input row. Each iteration retains the original assertions and creates fresh local state. Data-only tables contain original case names, inputs and expected values; runners remain analysed.
+
+### Shared ORDER BY column extraction [LQL-ORDER-SHARED-COLUMN-EXTRACTION]
+
+Explicit and implicit ORDER BY directions use the same ANTLR column extraction, preserving qualified identifiers and branch-specific error messages. The fallback checks DESC before ASC and retains suffix trimming and case-insensitive matching.

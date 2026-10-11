@@ -3,6 +3,7 @@
 using Microsoft.Data.Sqlite;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -104,23 +105,13 @@ public sealed partial class TestDb : IDisposable
 
     internal static T AssertSuccess<T>(Result<T, SyncError> result)
     {
-        Assert.IsType<Result<T, SyncError>.Ok<T, SyncError>>(result);
-        return ((Result<T, SyncError>.Ok<T, SyncError>)result).Value;
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        return (Ok(actual: result)).Value;
     }
 
     public void Dispose()
     {
         Connection.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _dbPath);
     }
 }

@@ -3,16 +3,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
 using static global::Tests.Shared.StringAssertions;
-using LqlStatementOk = Outcome.Result<
-    Nimblesite.Lql.Core.LqlStatement,
-    Nimblesite.Sql.Model.SqlError
->.Ok<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using SqlTextOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
-    string,
-    Nimblesite.Sql.Model.SqlError
->;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -60,10 +51,12 @@ public partial class LqlFileBasedTests
 
         // Act
         var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
+        var statement = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statementResult)
+            .Value;
 
         var sqlResult = ToDialectSql(statement, dialect);
-        var actualSql = Assert.IsType<SqlTextOk>(sqlResult).Value;
+        var actualSql = global::Tests.Shared.ResultAssertions.ExactOk(actual: sqlResult).Value;
 
         Assert.False(
             string.IsNullOrWhiteSpace(actualSql),
@@ -119,25 +112,17 @@ public partial class LqlFileBasedTests
         );
 
         // Act
-        var lqlFiles = Directory
-            .GetFiles(lqlDirectory, "*.lql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
+        var (lqlFiles, postgreSqlFiles) = VerifyReusableWorkflow1(
+            input0: lqlDirectory,
+            input1: postgreSqlDirectory,
+            value0: "*.lql"
+        );
 
-        var postgreSqlFiles = Directory
-            .GetFiles(postgreSqlDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
-
-        var sqlServerFiles = Directory
-            .GetFiles(sqlServerDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
-
-        var sqliteFiles = Directory
-            .GetFiles(sqliteDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
+        var (sqlServerFiles, sqliteFiles) = VerifyReusableWorkflow1(
+            input0: sqlServerDirectory,
+            input1: sqliteDirectory,
+            value0: "*.sql"
+        );
 
         // Assert — exact fixture set equality for every dialect.
         Assert.True(
@@ -165,10 +150,11 @@ public partial class LqlFileBasedTests
         // Arrange
         const string largeLqlCode = Data_LargeQuery_TranspilesCompleteShapeForEveryDialect_1;
 
-        var statementResult = LqlStatementConverter.ToStatement(largeLqlCode);
-        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
-        var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
-        Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
+        var sql = VerifyReusableWorkflow3(
+            input0: largeLqlCode,
+            input1: ToDialectSql,
+            input2: dialect
+        );
         ContainsAll(
             actual: sql,
             expected: ["SELECT", "JOIN", "GROUP BY", "ORDER BY"],
@@ -188,10 +174,11 @@ public partial class LqlFileBasedTests
         string? baseline = null;
         for (int i = 0; i < 1000; i++)
         {
-            var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-            var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
-            var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
-            Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
+            var sql = VerifyReusableWorkflow3(
+                input0: lqlCode,
+                input1: ToDialectSql,
+                input2: dialect
+            );
             ContainsAll(
                 actual: sql,
                 expected: ["users", "orders"],
@@ -207,5 +194,45 @@ public partial class LqlFileBasedTests
             }
         }
         Assert.NotNull(baseline);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static (HashSet<string>, HashSet<string>) VerifyReusableWorkflow1(
+        string input0,
+        string input1,
+        string value0
+    )
+    {
+        // Act
+        var lqlFiles = Directory
+            .GetFiles(input0, value0)
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToHashSet();
+
+        var postgreSqlFiles = Directory
+            .GetFiles(input1, "*.sql")
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToHashSet();
+
+        return (lqlFiles, postgreSqlFiles);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyReusableWorkflow3(
+        string input0,
+        Func<LqlStatement, string, Result<string, SqlError>> input1,
+        string input2
+    )
+    {
+        var statementResult = LqlStatementConverter.ToStatement(input0);
+        var statement = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statementResult)
+            .Value;
+        var sql = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: input1(arg1: statement, arg2: input2))
+            .Value;
+        Assert.False(string.IsNullOrWhiteSpace(sql), input2);
+
+        return sql;
     }
 }

@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
-
 namespace Nimblesite.Sync.Tests;
 
 public sealed partial class BatchManagerTests : IDisposable
@@ -10,14 +8,7 @@ public sealed partial class BatchManagerTests : IDisposable
     [Fact]
     public void FetchBatch_EmptyLog_ReturnsEmptyBatch()
     {
-        var result = BatchManager.FetchBatch(
-            0,
-            100,
-            (from, limit) => new SyncLogListOk(_db.FetchChanges(from, limit)),
-            _logger
-        );
-
-        var batch = TestDb.AssertSuccess(result);
+        var batch = VerifySharedChecks3(input0: _db, input1: _logger, value0: 0, value1: 100);
         Assert.Empty(batch.Changes);
         Assert.Equal(0, batch.FromVersion);
         Assert.Equal(0, batch.ToVersion);
@@ -44,14 +35,7 @@ public sealed partial class BatchManagerTests : IDisposable
             "2025-01-01T00:00:01.000Z"
         );
 
-        var result = BatchManager.FetchBatch(
-            0,
-            100,
-            (from, limit) => new SyncLogListOk(_db.FetchChanges(from, limit)),
-            _logger
-        );
-
-        var batch = TestDb.AssertSuccess(result);
+        var batch = VerifySharedChecks3(input0: _db, input1: _logger, value0: 0, value1: 100);
         Assert.Equal(2, batch.Changes.Count);
         Assert.Equal(0, batch.FromVersion);
         Assert.Equal(2, batch.ToVersion);
@@ -73,14 +57,7 @@ public sealed partial class BatchManagerTests : IDisposable
             );
         }
 
-        var result = BatchManager.FetchBatch(
-            0,
-            3,
-            (from, limit) => new SyncLogListOk(_db.FetchChanges(from, limit)),
-            _logger
-        );
-
-        var batch = TestDb.AssertSuccess(result);
+        var batch = VerifySharedChecks3(input0: _db, input1: _logger, value0: 0, value1: 3);
         Assert.Equal(3, batch.Changes.Count);
         Assert.True(batch.HasMore);
         Assert.Equal(3, batch.ToVersion);
@@ -89,26 +66,9 @@ public sealed partial class BatchManagerTests : IDisposable
     [Fact]
     public void FetchBatch_FromVersion_SkipsOlderEntries()
     {
-        for (var i = 1; i <= 5; i++)
-        {
-            _db.InsertSyncLogEntry(
-                "Person",
-                $"{{\"Id\":\"{i}\"}}",
-                "insert",
-                $"{{\"Id\":\"{i}\"}}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            );
-        }
+        VerifySyncLoopWorkflow1(input0: _db, value1: 5);
 
-        var result = BatchManager.FetchBatch(
-            3,
-            100,
-            (from, limit) => new SyncLogListOk(_db.FetchChanges(from, limit)),
-            _logger
-        );
-
-        var batch = TestDb.AssertSuccess(result);
+        var batch = VerifySharedChecks3(input0: _db, input1: _logger, value0: 3, value1: 100);
         Assert.Equal(2, batch.Changes.Count);
         Assert.Equal(4, batch.Changes[0].Version);
         Assert.Equal(5, batch.Changes[1].Version);
@@ -117,17 +77,7 @@ public sealed partial class BatchManagerTests : IDisposable
     [Fact]
     public void ProcessAllBatches_ProcessesMultipleBatches()
     {
-        for (var i = 1; i <= 10; i++)
-        {
-            _db.InsertSyncLogEntry(
-                "Person",
-                $"{{\"Id\":\"{i}\"}}",
-                "insert",
-                $"{{\"Id\":\"{i}\"}}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            );
-        }
+        VerifySyncLoopWorkflow1(input0: _db, value1: 10);
 
         var appliedBatches = new List<SyncBatch>();
         var lastVersion = 0L;
@@ -152,4 +102,40 @@ public sealed partial class BatchManagerTests : IDisposable
     }
 
     public void Dispose() => _db.Dispose();
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SyncBatch VerifySharedChecks3(
+        TestDb input0,
+        NullLogger input1,
+        int value0,
+        int value1
+    )
+    {
+        var result = BatchManager.FetchBatch(
+            value0,
+            value1,
+            (from, limit) => new SyncLogListOk(input0.FetchChanges(from, limit)),
+            input1
+        );
+
+        var batch = TestDb.AssertSuccess(result);
+
+        return batch;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow1(TestDb input0, int value1)
+    {
+        for (var i = 1; i <= value1; i++)
+        {
+            input0.InsertSyncLogEntry(
+                "Person",
+                $"{{\"Id\":\"{i}\"}}",
+                "insert",
+                $"{{\"Id\":\"{i}\"}}",
+                "origin-1",
+                "2025-01-01T00:00:00.000Z"
+            );
+        }
+    }
 }

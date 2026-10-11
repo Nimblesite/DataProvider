@@ -8,11 +8,6 @@ using Nimblesite.DataProvider.Migration.Core;
 using Npgsql;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
-using Xunit;
-using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
-    int,
-    Nimblesite.Sql.Model.SqlError
->;
 using ColumnsOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Core.DatabaseColumn>,
     Nimblesite.Sql.Model.SqlError
@@ -152,26 +147,24 @@ public sealed partial class GeneratedOperationsPlatformTests
 
         using (var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false))
         {
-            var first = await transaction
-                .InsertCustomerAsync(
-                    firstId.ToString(),
-                    "Alpha Customer",
-                    "alpha@example.test",
-                    "555-0001",
-                    "2024-01-01"
+            await VerifyReusableWorkflow5(
+                    input0: transaction,
+                    input1: firstId,
+                    value0: "Alpha Customer",
+                    value1: "alpha@example.test",
+                    value2: "555-0001",
+                    value3: "2024-01-01"
                 )
                 .ConfigureAwait(false);
-            Assert.Equal(1, Assert.IsType<AffectedRowsOk>(first).Value);
-            var second = await transaction
-                .InsertCustomerAsync(
-                    secondId.ToString(),
-                    "Beta Customer",
-                    "beta@example.test",
-                    "555-0002",
-                    "2024-02-02"
+            await VerifyReusableWorkflow5(
+                    input0: transaction,
+                    input1: secondId,
+                    value0: "Beta Customer",
+                    value1: "beta@example.test",
+                    value2: "555-0002",
+                    value3: "2024-02-02"
                 )
                 .ConfigureAwait(false);
-            Assert.Equal(1, Assert.IsType<AffectedRowsOk>(second).Value);
             await transaction.CommitAsync().ConfigureAwait(false);
         }
         Assert.Collection(
@@ -191,7 +184,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                     "2025-03-03"
                 )
                 .ConfigureAwait(false);
-            Assert.Equal(1, Assert.IsType<AffectedRowsOk>(updated).Value);
+            Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: updated).Value);
             var missing = await transaction
                 .UpdateCustomerAsync(
                     Guid.NewGuid().ToString(),
@@ -201,7 +194,7 @@ public sealed partial class GeneratedOperationsPlatformTests
                     "2025-04-04"
                 )
                 .ConfigureAwait(false);
-            Assert.Equal(0, Assert.IsType<AffectedRowsOk>(missing).Value);
+            Assert.Equal(0, global::Tests.Shared.ResultAssertions.ExactOk(actual: missing).Value);
             await transaction.CommitAsync().ConfigureAwait(false);
         }
         Assert.Collection(
@@ -221,22 +214,6 @@ public sealed partial class GeneratedOperationsPlatformTests
                 Tables = [CustomerTable(provider, schemaName)],
             }
         );
-
-    private static TableDefinition CustomerTable(string provider, string schemaName) =>
-        new()
-        {
-            Schema = schemaName,
-            Name = "Customer",
-            Columns =
-            [
-                IdColumn(provider, "Id"),
-                TextColumn("CustomerName"),
-                TextColumn("Email"),
-                TextColumn("Phone"),
-                TextColumn("CreatedDate"),
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["Id"] },
-        };
 
     private static void MigrateSchema(string provider, string output, SchemaDefinition schema)
     {
@@ -264,27 +241,11 @@ public sealed partial class GeneratedOperationsPlatformTests
         }
     }
 
-    private static ColumnDefinition TextColumn(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Text,
-            IsNullable = false,
-        };
-
     // The generated operations bind ids as strings: the Example schema they are generated
     // from declares text ids. PostgreSQL has no implicit text -> uuid assignment cast, so
     // the ids are text columns there; SQLite and SQL Server convert the strings to UUIDs.
     private static ColumnDefinition IdColumn(string provider, string name) =>
         provider == "postgres" ? TextColumn(name) : UuidColumn(name);
-
-    private static ColumnDefinition UuidColumn(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
 
     private static ImmutableArray<CustomerSnapshot> ReadCustomers(DbConnection connection)
     {
@@ -317,4 +278,20 @@ public sealed partial class GeneratedOperationsPlatformTests
         string Phone,
         string CreatedDate
     );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyReusableWorkflow5(
+        DbTransaction input0,
+        Guid input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        var first = await input0
+            .InsertCustomerAsync(input1.ToString(), value0, value1, value2, value3)
+            .ConfigureAwait(false);
+        Assert.Equal(1, global::Tests.Shared.ResultAssertions.ExactOk(actual: first).Value);
+    }
 }

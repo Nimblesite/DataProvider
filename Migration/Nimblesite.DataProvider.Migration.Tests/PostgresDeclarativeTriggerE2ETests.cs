@@ -1,5 +1,4 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
-using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -13,52 +12,28 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// must fail with the declared error message.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
 public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("trigger_e2e").ConfigureAwait(false);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override string DatabaseName => "trigger_e2e";
 
     private const string GuardYaml = Data_Shared_1;
 
     [Fact]
     public void PgTriggerGuard_BlocksDeleteOfLastOwner()
     {
-        ApplyGuardSchema();
-        var owner = Guid.NewGuid();
-        var tenant = Guid.NewGuid();
-        InsertMember(owner, tenant, "owner");
-        InsertMember(Guid.NewGuid(), tenant, "member");
-
-        var ex = Assert.Throws<PostgresException>(() => DeleteMember(owner));
-
-        Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
+        ArrangeOwnerAndAssertGuard(action: DeleteMember);
         Assert.Equal(2, CountMembers());
     }
 
     [Fact]
     public void PgTriggerGuard_AllowsDeleteWhenAnotherOwnerExists()
     {
-        ApplyGuardSchema();
-        var ownerA = Guid.NewGuid();
-        var tenant = Guid.NewGuid();
-        InsertMember(ownerA, tenant, "owner");
-        InsertMember(Guid.NewGuid(), tenant, "owner");
+        var ownerA = VerifyReusableWorkflow21(
+            input0: ApplyGuardSchema,
+            input1: InsertMember,
+            value1: "owner"
+        );
 
         DeleteMember(ownerA);
 
@@ -68,15 +43,7 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
     [Fact]
     public void PgTriggerGuard_BlocksDemoteOfLastOwner()
     {
-        ApplyGuardSchema();
-        var owner = Guid.NewGuid();
-        var tenant = Guid.NewGuid();
-        InsertMember(owner, tenant, "owner");
-        InsertMember(Guid.NewGuid(), tenant, "member");
-
-        var ex = Assert.Throws<PostgresException>(() => DemoteMember(owner));
-
-        Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
+        ArrangeOwnerAndAssertGuard(action: DemoteMember);
     }
 
     [Fact]
@@ -84,17 +51,11 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
     {
         ApplyGuardSchema();
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(
-                    current,
-                    SchemaYamlSerializer.FromYaml(GuardYaml),
-                    logger: _logger
-                )
-        ).Value;
+        var ops = PostgresTestDb.CalculateChanges(
+            Connection,
+            SchemaYamlSerializer.FromYaml(GuardYaml),
+            Logger
+        );
 
         Assert.Empty(ops);
     }
@@ -108,9 +69,9 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
         // be quoted on Postgres or mixed-case columns fold to lowercase and
         // every UPDATE/DELETE fails with 42703 at trigger-fire time.
         PostgresTestDb.ApplySchema(
-            _connection,
+            Connection,
             SchemaYamlSerializer.FromYaml(PascalCaseGuardYaml),
-            _logger
+            Logger
         );
         var ownerA = Guid.NewGuid();
         var ownerB = Guid.NewGuid();
@@ -144,9 +105,9 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
         );
 
         PostgresTestDb.ApplySchema(
-            _connection,
+            Connection,
             SchemaYamlSerializer.FromYaml(GuardYaml),
-            _logger,
+            Logger,
             allowDestructive: true
         );
 
@@ -154,7 +115,7 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
             1L,
             Assert.IsType<long>(
                 global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _connection,
+                    connection: Connection,
                     configure: command =>
                         command.CommandText =
                             "SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'zz_unmanaged_touch'"
@@ -172,7 +133,7 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
 
     private void Execute(string sql, Guid? id = null)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         if (id is { } value)
         {
@@ -184,7 +145,7 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
     private void InsertPascalMember(Guid id, Guid tenantId, string role)
     {
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: cmd =>
                 cmd.CommandText =
                     "INSERT INTO \"public\".\"TenantMembers\"(\"Id\", \"TenantId\", \"Role\") VALUES (@i, @t, @r)",
@@ -193,12 +154,12 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
     }
 
     private void ApplyGuardSchema() =>
-        PostgresTestDb.ApplySchema(_connection, SchemaYamlSerializer.FromYaml(GuardYaml), _logger);
+        PostgresTestDb.ApplySchema(Connection, SchemaYamlSerializer.FromYaml(GuardYaml), Logger);
 
     private void InsertMember(Guid id, Guid tenantId, string role)
     {
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: cmd =>
                 cmd.CommandText =
                     "INSERT INTO \"public\".\"tenant_members\"(id, tenant_id, role) VALUES (@i, @t, @r)",
@@ -206,35 +167,61 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
         );
     }
 
-    private void DeleteMember(Guid id)
+    private void DeleteMember(Guid id) =>
+        ExecuteById(sql: "DELETE FROM \"public\".\"tenant_members\" WHERE id = @i", id: id);
+
+    private void DemoteMember(Guid id) =>
+        ExecuteById(
+            sql: "UPDATE \"public\".\"tenant_members\" SET role = 'member' WHERE id = @i",
+            id: id
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ExecuteById(string sql, Guid id)
     {
         DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
-                cmd.CommandText = "DELETE FROM \"public\".\"tenant_members\" WHERE id = @i",
+            connection: Connection,
+            configure: cmd => cmd.CommandText = sql,
             parameters: () => [("@i", id)]
         );
     }
 
-    private void DemoteMember(Guid id)
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ArrangeOwnerAndAssertGuard(Action<Guid> action)
     {
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
-                cmd.CommandText =
-                    "UPDATE \"public\".\"tenant_members\" SET role = 'member' WHERE id = @i",
-            parameters: () => [("@i", id)]
+        var owner = VerifyReusableWorkflow21(
+            input0: ApplyGuardSchema,
+            input1: InsertMember,
+            value1: "member"
         );
+        var ex = Assert.Throws<PostgresException>(() => action(owner));
+        Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
     }
 
     private long CountMembers()
     {
         return Assert.IsType<long>(
             global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _connection,
+                connection: Connection,
                 configure: command =>
                     command.CommandText = "SELECT COUNT(*) FROM \"public\".\"tenant_members\""
             )
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Guid VerifyReusableWorkflow21(
+        Action input0,
+        Action<Guid, Guid, string> input1,
+        string value1
+    )
+    {
+        input0();
+        var owner = Guid.NewGuid();
+        var tenant = Guid.NewGuid();
+        input1(arg1: owner, arg2: tenant, arg3: "owner");
+        input1(arg1: Guid.NewGuid(), arg2: tenant, arg3: value1);
+        return owner;
     }
 }

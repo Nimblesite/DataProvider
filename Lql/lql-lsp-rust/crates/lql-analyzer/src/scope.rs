@@ -1,10 +1,11 @@
+use std::collections::HashMap;
+
 use antlr_rust::tree::{ParseTree, TerminalNode};
 use lql_parser::{
     parse_lql, ArgContextAttrs, ArgListContextAttrs, CteDefContextAttrs, ExprContextAttrs,
     FunctionCallContextAttrs, LetStmtContextAttrs, LqlParserContextType, PipeExprContextAttrs,
     ProgramContextAttrs, StatementContextAttrs, WithStmtContextAttrs,
 };
-use std::collections::HashMap;
 
 /// Tracks let-bindings and their scopes within an LQL document.
 #[derive(Debug, Clone, Default)]
@@ -62,6 +63,18 @@ impl ScopeMap {
     }
 }
 
+/// Collects a binding name and pipeline tables from a `let` or CTE statement.
+macro_rules! collect_binding {
+    ($stmt:expr, $scope:expr) => {
+        if let Some(ident) = $stmt.IDENT() {
+            add_ident_binding(&ident, $scope);
+        }
+        if let Some(pipe_expr) = $stmt.pipeExpr() {
+            collect_tables_from_pipe(&pipe_expr, $scope);
+        }
+    };
+}
+
 /// Build a ScopeMap from source using the ANTLR parse tree.
 /// Extracts let-bindings and table references from the grammar structure.
 pub fn build_scope(source: &str) -> ScopeMap {
@@ -69,26 +82,15 @@ pub fn build_scope(source: &str) -> ScopeMap {
     let mut scope = ScopeMap::new();
 
     for stmt in result.tree.statement_all() {
-        // Extract let bindings from letStmt nodes
+        // Extract let bindings and their table references from letStmt nodes.
         if let Some(let_stmt) = stmt.letStmt() {
-            if let Some(ident) = let_stmt.IDENT() {
-                add_ident_binding(&ident, &mut scope);
-            }
-            // Collect table references from the let statement's pipe expression
-            if let Some(pipe_expr) = let_stmt.pipeExpr() {
-                collect_tables_from_pipe(&pipe_expr, &mut scope);
-            }
+            collect_binding!(let_stmt, &mut scope);
         }
 
         // CTE names bind like `let` names; their bodies and the main pipeline reference tables.
         if let Some(with_stmt) = stmt.withStmt() {
             for cte in with_stmt.cteDef_all() {
-                if let Some(ident) = cte.IDENT() {
-                    add_ident_binding(&ident, &mut scope);
-                }
-                if let Some(pipe_expr) = cte.pipeExpr() {
-                    collect_tables_from_pipe(&pipe_expr, &mut scope);
-                }
+                collect_binding!(cte, &mut scope);
             }
             if let Some(pipe_expr) = with_stmt.pipeExpr() {
                 collect_tables_from_pipe(&pipe_expr, &mut scope);
@@ -295,75 +297,51 @@ fn collect_fn_calls_from_arg_list<'input>(
 mod tests {
     use super::*;
 
+    /// Returns `true` when `source` contains a call to `name`.
+    fn has_call(source: &str, name: &str) -> bool {
+        collect_function_calls(source)
+            .iter()
+            .any(|c| c.name == name)
+    }
+
     #[test]
     fn test_new_scope_is_empty() {
-        let scope = ScopeMap::new();
-        assert!(scope.binding_names().is_empty());
-        assert!(scope.table_names().is_empty());
+        crate::test_support::verify_scope_is_empty();
     }
 
     #[test]
     fn test_add_and_retrieve_binding() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("x".to_string(), 1, 4);
-        assert!(scope.has_binding("x"));
-        assert!(!scope.has_binding("y"));
-        let info = scope.get_binding("x").unwrap();
-        assert_eq!(info.name, "x");
-        assert_eq!(info.line, 1);
-        assert_eq!(info.col, 4);
+        crate::test_support::verify_scope_add_binding(1, 4);
     }
 
     #[test]
     fn test_binding_names() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("alpha".to_string(), 0, 0);
-        scope.add_binding("beta".to_string(), 1, 0);
-        let names = scope.binding_names();
-        assert_eq!(names.len(), 2);
-        assert!(names.contains(&"alpha"));
-        assert!(names.contains(&"beta"));
+        crate::test_support::verify_cross_module_test_binding_names("alpha", "beta");
     }
 
     #[test]
     fn test_add_table() {
-        let mut scope = ScopeMap::new();
-        scope.add_table("users".to_string());
-        scope.add_table("orders".to_string());
-        let tables = scope.table_names();
-        assert_eq!(tables.len(), 2);
-        assert!(tables.contains(&"users"));
-        assert!(tables.contains(&"orders"));
+        crate::test_support::verify_scope_add_tables(&["users", "orders"]);
     }
 
     #[test]
     fn test_add_duplicate_table_ignored() {
-        let mut scope = ScopeMap::new();
-        scope.add_table("users".to_string());
-        scope.add_table("users".to_string());
-        assert_eq!(scope.table_names().len(), 1);
+        crate::test_support::verify_scope_add_duplicate_table("users");
     }
 
     #[test]
     fn test_get_binding_not_found() {
-        let scope = ScopeMap::new();
-        assert!(scope.get_binding("nonexistent").is_none());
+        crate::test_support::verify_scope_get_binding_none("nonexistent");
     }
 
     #[test]
     fn test_binding_overwrites_previous() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("x".to_string(), 1, 0);
-        scope.add_binding("x".to_string(), 5, 0);
-        let info = scope.get_binding("x").unwrap();
-        assert_eq!(info.line, 5);
+        crate::test_support::verify_scope_overwrite_binding();
     }
 
     #[test]
     fn test_default_trait() {
-        let scope = ScopeMap::default();
-        assert!(scope.binding_names().is_empty());
-        assert!(scope.table_names().is_empty());
+        crate::test_support::verify_scope_default_trait();
     }
 
     // ── build_scope tests ──
@@ -385,12 +363,7 @@ mod tests {
 
     #[test]
     fn test_collect_function_calls_includes_cte_bodies_and_main_pipeline() {
-        let calls = collect_function_calls(
-            "with big as (orders |> filter(fn(o) => o.orders.total > 5)) big |> select(big.user_id)",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"filter"), "{names:?}");
-        assert!(names.contains(&"select"), "{names:?}");
+        verify_expanded_test_collect_function_calls_includes_cte_bodies_and_main_pipeline("with big as (orders |> filter(fn(o) => o.orders.total > 5)) big |> select(big.user_id)", "filter", "expected filter", "select", "expected select");
     }
 
     #[test]
@@ -408,14 +381,15 @@ mod tests {
 
     #[test]
     fn test_build_scope_table_reference() {
-        let scope = build_scope("users |> select(users.id)");
-        assert!(scope.table_names().contains(&"users"));
+        crate::test_support::verify_scope_has_table("users |> select(users.id)", "users");
     }
 
     #[test]
     fn test_build_scope_table_in_join() {
-        let scope = build_scope("users |> join(orders, on = users.id = orders.user_id)");
-        assert!(scope.table_names().contains(&"users"));
+        crate::test_support::verify_scope_has_table(
+            "users |> join(orders, on = users.id = orders.user_id)",
+            "users",
+        );
         // Note: 'orders' inside join args may or may not be detected depending
         // on ANTLR grammar parse of the arg list.
         // We just verify the function doesn't panic on join syntax.
@@ -431,26 +405,11 @@ mod tests {
     // ── collect_function_calls tests ──
 
     #[test]
-    fn test_collect_fn_calls_select() {
-        let calls = collect_function_calls("users |> select(users.id)");
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"select"));
-    }
-
-    #[test]
-    fn test_collect_fn_calls_filter() {
-        let calls = collect_function_calls("users |> filter(fn(r) => r.users.age > 18)");
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"filter"));
-    }
-
-    #[test]
-    fn test_collect_fn_calls_nested() {
-        let calls = collect_function_calls("users |> select(count(*) as cnt)");
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"select"));
-        // Note: nested function calls like count(*) may not be detected
-        // depending on how the ANTLR tree represents them inside aliases.
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_collect_fn_calls_select_cases() {
+        for &(input0, input1, input2) in named_cases(NAMED_CASES_2) {
+            verify_expanded_test_collect_fn_calls_select(input0, input1, input2);
+        }
     }
 
     #[test]
@@ -466,20 +425,20 @@ mod tests {
         // join(orders, on = ...) — the grammar routes "orders" through
         // columnAlias, not bare expr, so it may not be detected as a table.
         // This test ensures the table-collection code runs without panic.
-        let scope = build_scope(
+        crate::test_support::verify_scope_has_table(
             "users |> join(orders, on = users.id = orders.user_id) |> select(users.id)",
+            "users",
         );
-        let tables = scope.table_names();
-        assert!(tables.contains(&"users"));
     }
 
     #[test]
     fn test_build_scope_nested_pipe_in_union_arg() {
         // Union with a nested pipe expression in its argument list.
         // This exercises collect_tables_from_args -> pipeExpr branch.
-        let scope = build_scope("users |> union(orders |> select(orders.id))");
-        let tables = scope.table_names();
-        assert!(tables.contains(&"users"));
+        crate::test_support::verify_scope_has_table(
+            "users |> union(orders |> select(orders.id))",
+            "users",
+        );
         // orders may or may not be detected depending on grammar routing
     }
 
@@ -487,61 +446,36 @@ mod tests {
     fn test_build_scope_let_with_select() {
         let scope = build_scope("let result = users |> select(users.id, users.name)");
         assert!(scope.has_binding("result"));
-        let tables = scope.table_names();
-        assert!(tables.contains(&"users"));
+        crate::test_support::verify_scope_has_table(
+            "let result = users |> select(users.id, users.name)",
+            "users",
+        );
     }
 
     #[test]
     fn test_build_scope_multiple_statements_with_tables() {
         let scope = build_scope("let a = users |> select(users.id)\norders |> limit(10)");
         assert!(scope.has_binding("a"));
-        let tables = scope.table_names();
-        assert!(tables.contains(&"users"));
-        assert!(tables.contains(&"orders"));
+        crate::test_support::verify_scope_has_table(
+            "let a = users |> select(users.id)\norders |> limit(10)",
+            "users",
+        );
+        crate::test_support::verify_scope_has_table(
+            "let a = users |> select(users.id)\norders |> limit(10)",
+            "orders",
+        );
     }
 
     // ── collect_fn_calls_from_arg_list (via collect_function_calls) ──
 
     #[test]
-    fn test_collect_fn_calls_with_aggregates_in_select() {
-        // select(count(*) as cnt) — exercises collect_fn_calls_from_arg_list
-        // The arg routes through columnAlias which wraps functionCall.
-        let calls =
-            collect_function_calls("users |> select(count(*) as cnt, sum(users.total) as total)");
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"select"));
-        // count/sum may route through columnAlias->arithmeticExpr->functionCall
-        // which the code may or may not traverse. Just ensure no panic.
-    }
-
-    #[test]
-    fn test_collect_fn_calls_in_let_statement() {
-        let calls = collect_function_calls(
-            "let result = users |> filter(fn(r) => r.users.age > 18) |> select(users.id)",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"filter"));
-        assert!(names.contains(&"select"));
-    }
-
-    #[test]
-    fn test_collect_fn_calls_nested_pipe_in_union() {
-        // Union with a nested pipeline in the arg — exercises the
-        // arg.pipeExpr() branch in collect_fn_calls_from_arg_list.
-        let calls = collect_function_calls("users |> union(orders |> select(orders.id))");
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"union"));
-        assert!(names.contains(&"select"));
-    }
-
-    #[test]
-    fn test_collect_fn_calls_multiple_pipelines() {
-        let calls = collect_function_calls(
-            "let a = users |> select(users.id)\norders |> filter(fn(r) => r.orders.total > 100)",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"select"));
-        assert!(names.contains(&"filter"));
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_collect_fn_calls_in_let_statement_cases() {
+        for &(input0, input1, input2, input3, input4) in named_cases(NAMED_CASES_1) {
+            verify_expanded_test_collect_function_calls_includes_cte_bodies_and_main_pipeline(
+                input0, input1, input2, input3, input4,
+            );
+        }
     }
 
     #[test]
@@ -557,22 +491,17 @@ mod tests {
 
     #[test]
     fn test_collect_fn_calls_chained_pipeline() {
-        let calls = collect_function_calls(
-            "users |> group_by(users.role) |> having(fn(g) => count(*) > 5) |> select(users.role)",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"group_by"));
-        assert!(names.contains(&"having"));
-        assert!(names.contains(&"select"));
+        assert!(has_call("users |> group_by(users.role) |> having(fn(g) => count(*) > 5) |> select(users.role)", "group_by"), "expected group_by");
+        assert!(has_call("users |> group_by(users.role) |> having(fn(g) => count(*) > 5) |> select(users.role)", "having"), "expected having");
+        assert!(has_call("users |> group_by(users.role) |> having(fn(g) => count(*) > 5) |> select(users.role)", "select"), "expected select");
     }
 
     #[test]
-    fn test_collect_fn_calls_window_function() {
-        let calls = collect_function_calls(
-            "orders |> select(row_number() over (partition by orders.user_id order by orders.total desc))",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"select"));
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_collect_fn_calls_window_function_cases() {
+        for &(input0, input1, input2) in named_cases(NAMED_CASES_3) {
+            verify_expanded_test_collect_fn_calls_select(input0, input1, input2);
+        }
     }
 
     #[test]
@@ -586,23 +515,26 @@ mod tests {
         assert_eq!(info.col, 4);
     }
 
-    #[test]
-    fn test_collect_fn_calls_join_with_subquery() {
-        // Join with nested pipeline — exercises collect_fn_calls_from_arg_list
-        // with pipeExpr inside the arg list.
-        let calls = collect_function_calls(
-            "users |> join(orders |> filter(fn(r) => r.orders.status = 'active'), on = users.id = orders.user_id)",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"join"));
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_collect_fn_calls_select(input0: &str, input1: &str, input2: &str) {
+        assert!(has_call(input0, input1), "{}", input2);
     }
 
-    #[test]
-    fn test_collect_fn_calls_exists_subquery() {
-        let calls = collect_function_calls(
-            "users |> filter(fn(row) => exists(orders |> filter(fn(o) => o.orders.user_id = row.users.id)))",
-        );
-        let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
-        assert!(names.contains(&"filter"));
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_collect_function_calls_includes_cte_bodies_and_main_pipeline(
+        input0: &str,
+        input1: &str,
+        input2: &str,
+        input4: &str,
+        input5: &str,
+    ) {
+        assert!(has_call(input0, input1), "{}", input2);
+        assert!(has_call(input0, input4), "{}", input5);
     }
+
+    include!("scope_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }

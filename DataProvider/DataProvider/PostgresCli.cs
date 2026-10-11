@@ -21,7 +21,7 @@ namespace DataProvider;
 /// <see cref="BuildCommand"/> and attached to the root command by
 /// <c>Program.Main</c>.
 /// </summary>
-internal static class PostgresCli
+internal static partial class PostgresCli
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -34,24 +34,18 @@ internal static class PostgresCli
     /// </summary>
     public static Command BuildCommand()
     {
-        var projectDir = new Option<DirectoryInfo>(
-            "--project-dir",
+        var projectDir = CliOptions.Required<DirectoryInfo>(
+            name: "--project-dir",
             description: "Project directory containing sql files and DataProvider.json"
-        )
-        {
-            IsRequired = true,
-        };
-        var config = new Option<FileInfo>("--config", description: "Path to DataProvider.json")
-        {
-            IsRequired = true,
-        };
-        var outDir = new Option<DirectoryInfo>(
-            "--out",
+        );
+        var config = CliOptions.Required<FileInfo>(
+            name: "--config",
+            description: "Path to DataProvider.json"
+        );
+        var outDir = CliOptions.Required<DirectoryInfo>(
+            name: "--out",
             description: "Output directory for generated .g.cs files"
-        )
-        {
-            IsRequired = true,
-        };
+        );
         var offline = new Option<bool>(
             "--offline",
             description: "Run in offline mode without database connection (uses schema.yaml for metadata)"
@@ -229,14 +223,16 @@ internal static class PostgresCli
                         > colsError
                     )
                     {
-                        Console.WriteLine($"❌ {colsError.Value.Message}");
-                        Console.Error.WriteLine(
-                            $"{sqlPath}(1,1): error DP0001: {colsError.Value.Message}"
-                        );
-                        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                        var content =
-                            $"// Auto-generated due to SQL error in {sqlPath}\n#error {EscapeForPreprocessor(colsError.Value.Message)}\n";
-                        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                        await CliErrorWriter
+                            .ReportAsync(
+                                outDir,
+                                baseName,
+                                sqlPath,
+                                code: "DP0001",
+                                reason: "SQL error",
+                                message: colsError.Value.Message
+                            )
+                            .ConfigureAwait(false);
                         hadErrors = true;
                         continue;
                     }
@@ -258,30 +254,24 @@ internal static class PostgresCli
                     }
                     else if (genResult is Result<string, SqlError>.Error<string, SqlError> failure)
                     {
-                        Console.WriteLine($"❌ {failure.Value.Message}");
-                        Console.Error.WriteLine(
-                            $"{sqlPath}(1,1): error DP0002: {failure.Value.Message}"
-                        );
-                        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                        var content =
-                            $"// Auto-generated due to generation error in {sqlPath}\n#error {EscapeForPreprocessor(failure.Value.Message)}\n";
-                        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                        await CliErrorWriter
+                            .ReportAsync(
+                                outDir,
+                                baseName,
+                                sqlPath,
+                                code: "DP0002",
+                                reason: "generation error",
+                                message: failure.Value.Message
+                            )
+                            .ConfigureAwait(false);
                         hadErrors = true;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error processing {sqlPath}: {ex.Message}");
-                    var baseName = Path.GetFileNameWithoutExtension(sqlPath);
-                    if (baseName.EndsWith(".generated", StringComparison.OrdinalIgnoreCase))
-                    {
-                        baseName = baseName[..^".generated".Length];
-                    }
-                    var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-                    var content =
-                        $"// Auto-generated due to unexpected error in {sqlPath}\n#error {EscapeForPreprocessor(ex.Message)}\n";
-                    Console.Error.WriteLine($"{sqlPath}(1,1): error DP0003: {ex.Message}");
-                    await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
+                    await CliErrorWriter
+                        .ReportUnexpectedAsync(outDir, sqlPath, code: "DP0003", exception: ex)
+                        .ConfigureAwait(false);
                     hadErrors = true;
                 }
             }
@@ -396,17 +386,11 @@ internal static class PostgresCli
                 >(new SqlError("No columns found in SELECT clause"));
             }
 
-            return new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(columns.AsReadOnly());
+            return ColumnMetadataOk(columns);
         }
         catch (Exception ex)
         {
-            return new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(SqlError.FromException(ex));
+            return ColumnMetadataError(ex);
         }
     }
 
@@ -612,23 +596,7 @@ internal static class PostgresCli
         var columns = new List<DatabaseColumn>();
         await using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = """
-                SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
-                       COALESCE(c.is_identity, 'NO') as is_identity,
-                       CASE WHEN pk.column_name IS NOT NULL THEN 'YES' ELSE 'NO' END as is_pk
-                FROM information_schema.columns c
-                LEFT JOIN (
-                    SELECT kcu.column_name
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.key_column_usage kcu
-                        ON tc.constraint_name = kcu.constraint_name
-                    WHERE tc.table_schema = @schema
-                        AND tc.table_name = @table
-                        AND tc.constraint_type = 'PRIMARY KEY'
-                ) pk ON pk.column_name = c.column_name
-                WHERE c.table_schema = @schema AND c.table_name = @table
-                ORDER BY c.ordinal_position
-                """;
+            cmd.CommandText = global::DataProvider.PostgresCli.SqlSpecification1;
             _ = cmd.Parameters.AddWithValue("schema", table.Schema);
             _ = cmd.Parameters.AddWithValue("table", table.Name);
 
@@ -705,19 +673,9 @@ internal static class PostgresCli
     )
     {
         // Header
-        _ = sb.AppendLine("// <auto-generated />");
-        _ = sb.AppendLine("#nullable enable");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines: ["using Npgsql;", "using Outcome;", "using Nimblesite.Sql.Model;"]
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("namespace Generated;");
-        _ = sb.AppendLine();
-
-        // Extension class
-        _ = sb.AppendLine("/// <summary>");
+        AppendLines(builder: sb, lines: EmissionBlockLines24);
+        AppendLines(builder: sb, lines: EmissionLines1);
+        AppendLines(builder: sb, lines: EmissionBlockLines25);
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"/// Generated CRUD operations for {table.Name} table."
@@ -758,13 +716,13 @@ internal static class PostgresCli
         // Generate bulk INSERT method
         if (table.GenerateBulkInsert)
         {
-            GenerateBulkInsertMethod(sb, table, columns, pascalName);
+            GenerateBulkMethod(sb, table, columns, pascalName, upsert: false);
         }
 
         // Generate bulk UPSERT method
         if (table.GenerateBulkUpsert)
         {
-            GenerateBulkUpsertMethod(sb, table, columns, pascalName);
+            GenerateBulkMethod(sb, table, columns, pascalName, upsert: true);
         }
     }
 
@@ -783,67 +741,85 @@ internal static class PostgresCli
         // #13: keep snake_case parameter names so consumer named-argument
         // calls work).
         var insertable = columns.Where(c => !c.IsComputed).ToList();
-        var parameters = string.Join(", ", insertable.Select(c => $"{c.CSharpType} {c.Name}"));
 
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Inserts a row into {table.Name}. Returns inserted id or null on conflict."
+        EmitInsertOverload(
+            builder: sb,
+            table: table,
+            insertable: insertable,
+            pascalName: pascalName,
+            transaction: false
         );
-        _ = sb.AppendLine("    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<Guid?, SqlError>> Insert{pascalName}Async("
-        );
-        _ = sb.AppendLine("        this NpgsqlConnection conn,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-
-        EmitInsertSql(sb, table, insertable);
-        EmitCommandOpen(sb, transaction: false);
-        EmitParameterBindings(sb, insertable);
-        EmitInsertResult(sb);
 
         // Bug #16: also emit an IDbTransaction overload that delegates to
         // the same SQL via a NpgsqlCommand bound to the transaction's
         // connection. Matches the old SQLite.Cli shape so consumer code
         // calling tx.Insert{T}Async(...) keeps compiling.
-        GenerateInsertTransactionOverload(sb, table, insertable, pascalName);
+        EmitInsertOverload(
+            builder: sb,
+            table: table,
+            insertable: insertable,
+            pascalName: pascalName,
+            transaction: true
+        );
     }
 
     /// <summary>
-    /// Emits an `IDbTransaction` overload of an Insert method that
-    /// matches the old SQLite.Cli shape. Bug #16.
+    /// Emits a single Insert overload. The transaction overload matches the
+    /// old SQLite.Cli shape and shares the SQL and parameter bindings. Bug #16.
     /// </summary>
-    private static void GenerateInsertTransactionOverload(
-        StringBuilder sb,
+    private static void EmitInsertOverload(
+        StringBuilder builder,
         TableConfigItem table,
         List<DatabaseColumn> insertable,
-        string pascalName
+        string pascalName,
+        bool transaction
     )
     {
-        var parameters = string.Join(", ", insertable.Select(c => $"{c.CSharpType} {c.Name}"));
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// IDbTransaction overload of Insert{pascalName}Async."
-        );
-        _ = sb.AppendLine("    /// </summary>");
-        _ = sb.AppendLine(
+        var parameters = BuildTypedParameterList(columns: insertable);
+        var summary = transaction
+            ? $"    /// IDbTransaction overload of Insert{pascalName}Async."
+            : $"    /// Inserts a row into {table.Name}. Returns inserted id or null on conflict.";
+        _ = builder.AppendLine();
+        _ = builder.AppendLine("    /// <summary>");
+        _ = builder.AppendLine(summary);
+        _ = builder.AppendLine("    /// </summary>");
+        _ = builder.AppendLine(
             CultureInfo.InvariantCulture,
             $"    public static async Task<Result<Guid?, SqlError>> Insert{pascalName}Async("
         );
-        _ = sb.AppendLine("        this System.Data.IDbTransaction transaction,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-        EmitInsertSql(sb, table, insertable);
-        EmitTransactionGuard(sb, resultType: "Guid?");
-        EmitCommandOpen(sb, transaction: true);
-        EmitParameterBindings(sb, insertable);
-        EmitInsertResult(sb);
+        _ = builder.AppendLine(
+            transaction
+                ? "        this System.Data.IDbTransaction transaction,"
+                : "        this NpgsqlConnection conn,"
+        );
+        _ = builder.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
+        _ = builder.AppendLine("    {");
+        EmitInsertSql(builder, table, insertable);
+        if (transaction)
+        {
+            EmitTransactionGuard(builder, resultType: "Guid?");
+        }
+        EmitCommandOpen(builder, transaction: transaction);
+        EmitParameterBindings(builder, insertable);
+        EmitInsertResult(builder);
     }
+
+    private static string BuildTypedParameterList(IEnumerable<DatabaseColumn> columns) =>
+        string.Join(", ", columns.Select(c => $"{c.CSharpType} {c.Name}"));
+
+    private static string BuildVerbatimColumnList(IEnumerable<DatabaseColumn> columns) =>
+        string.Join(", ", columns.Select(c => $"\"\"{c.Name}\"\""));
+
+    private static string BuildNamedParameterList(IEnumerable<DatabaseColumn> columns) =>
+        string.Join(", ", columns.Select(c => $"@{c.Name}"));
+
+    private static string BuildColumnAssignmentList(
+        IEnumerable<DatabaseColumn> columns,
+        string separator
+    ) => string.Join(separator, columns.Select(c => $"\"\"{c.Name}\"\" = @{c.Name}"));
+
+    private static string BuildEscapedColumnList(IEnumerable<DatabaseColumn> columns) =>
+        string.Join(", ", columns.Select(c => $"\\\"{c.Name}\\\""));
 
     private static void EmitInsertSql(
         StringBuilder sb,
@@ -853,8 +829,8 @@ internal static class PostgresCli
     {
         // The generated SQL is a C# verbatim string; doubled quotes preserve
         // mixed-case identifiers. RETURNING must use the actual primary key.
-        var colNames = string.Join(", ", insertable.Select(c => $"\"\"{c.Name}\"\""));
-        var paramNames = string.Join(", ", insertable.Select(c => $"@{c.Name}"));
+        var colNames = BuildVerbatimColumnList(columns: insertable);
+        var paramNames = BuildNamedParameterList(columns: insertable);
         var returningClause =
             table.PrimaryKeyColumns.Count > 0
                 ? $"RETURNING \"\"{table.PrimaryKeyColumns[0]}\"\""
@@ -895,11 +871,8 @@ internal static class PostgresCli
         if (pkCols.Count == 0 || updateable.Count == 0)
             return;
         var allParams = pkCols.Concat(updateable).ToList();
-        var setClauses = string.Join(", ", updateable.Select(c => $"\"\"{c.Name}\"\" = @{c.Name}"));
-        var whereClauses = string.Join(
-            " AND ",
-            pkCols.Select(c => $"\"\"{c.Name}\"\" = @{c.Name}")
-        );
+        var setClauses = BuildColumnAssignmentList(columns: updateable, separator: ", ");
+        var whereClauses = BuildColumnAssignmentList(columns: pkCols, separator: " AND ");
         EmitWriteOverloads(
             builder: sb,
             operation: "Update",
@@ -927,20 +900,11 @@ internal static class PostgresCli
         foreach (var col in cols)
         {
             var paramName = col.Name;
-            if (col.IsNullable)
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", (object?){paramName} ?? DBNull.Value);"
-                );
-            }
-            else
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"{paramName}\", {paramName});"
-                );
-            }
+            var value = col.IsNullable ? $"(object?){paramName} ?? DBNull.Value" : paramName;
+            _ = sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"            cmd.Parameters.AddWithValue(\"{paramName}\", {value});"
+            );
         }
     }
 
@@ -990,24 +954,8 @@ internal static class PostgresCli
     private static void EmitNonQueryClose(StringBuilder sb)
     {
         _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "        }",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines2);
+        AppendLines(builder: sb, lines: EmissionLines3);
         _ = sb.AppendLine("        }");
         _ = sb.AppendLine("    }");
     }
@@ -1036,35 +984,73 @@ internal static class PostgresCli
         );
     }
 
-    private static void GenerateBulkInsertMethod(
+    private static void GenerateBulkMethod(
         StringBuilder sb,
         TableConfigItem table,
         List<DatabaseColumn> columns,
-        string pascalName
+        string pascalName,
+        bool upsert
     )
     {
         // Get insertable columns (exclude auto-generated ones)
         var insertable = columns.Where(c => !c.IsIdentity && !c.IsComputed).ToList();
-        if (insertable.Count == 0)
+        var pkCols = columns.Where(c => c.IsPrimaryKey).ToList();
+        if (insertable.Count == 0 || (upsert && pkCols.Count == 0))
             return;
 
         // Build tuple type for the IEnumerable parameter
-        var tupleType = string.Join(
-            ", ",
-            insertable.Select(c => $"{c.CSharpType} {ToPascalCase(c.Name)}")
-        );
+        var tupleType = BuildBulkTupleType(columns: insertable);
 
-        EmitBulkMethodPreamble(sb, table, pascalName, tupleType, upsert: false);
+        EmitBulkMethodPreamble(sb, table, pascalName, tupleType, upsert: upsert);
 
-        // BUG3 fix: quote every identifier in emitted INSERT so mixed-case
+        // BUG3 fix: quote every identifier in emitted SQL so mixed-case
         // columns (Id, ChapterNumber) round-trip. Bare idents were folded to
         // lowercase by PG and the statement failed with "column ... does not
         // exist". Matches SELECT path which already quotes.
-        var colNames = string.Join(", ", insertable.Select(c => $"\\\"{c.Name}\\\""));
+        var colNames = BuildEscapedColumnList(columns: insertable);
         EmitBulkValuesBuilder(sb, table, insertable, colNames);
-        _ = sb.AppendLine("        sql.Append(\" ON CONFLICT DO NOTHING\");");
+        EmitBulkConflictClause(sb: sb, pkCols: pkCols, insertable: insertable, upsert: upsert);
         EmitBulkCommandExecution(sb, insertable);
     }
+
+    private static void EmitBulkConflictClause(
+        StringBuilder sb,
+        List<DatabaseColumn> pkCols,
+        List<DatabaseColumn> insertable,
+        bool upsert
+    )
+    {
+        if (!upsert)
+        {
+            _ = sb.AppendLine("        sql.Append(\" ON CONFLICT DO NOTHING\");");
+            return;
+        }
+
+        var pkColNames = BuildEscapedColumnList(columns: pkCols);
+        var updateCols = insertable.Where(c => !c.IsPrimaryKey).ToList();
+        if (updateCols.Count > 0)
+        {
+            var updateSet = string.Join(
+                ", ",
+                updateCols.Select(c => $"\\\"{c.Name}\\\" = EXCLUDED.\\\"{c.Name}\\\"")
+            );
+            _ = sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"        sql.Append(\" ON CONFLICT ({pkColNames}) DO UPDATE SET {updateSet}\");"
+            );
+        }
+        else
+        {
+            // If all columns are PKs, just do nothing on conflict
+            _ = sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"        sql.Append(\" ON CONFLICT ({pkColNames}) DO NOTHING\");"
+            );
+        }
+    }
+
+    private static string BuildBulkTupleType(IEnumerable<DatabaseColumn> columns) =>
+        string.Join(", ", columns.Select(c => $"{c.CSharpType} {ToPascalCase(c.Name)}"));
 
     private static void EmitBulkMethodPreamble(
         StringBuilder sb,
@@ -1124,64 +1110,36 @@ internal static class PostgresCli
             $"        var batch = new List<({tupleType})>(batchSize);"
         );
         _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines: ["        try", "        {", "            foreach (var record in records)"]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            {",
-                "                batch.Add(record);",
-                "                if (batch.Count >= batchSize)",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines4);
+        AppendLines(builder: sb, lines: EmissionLines5);
         _ = sb.AppendLine("                {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                    var result = await ExecuteBulk{operation}{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
+        EmitBulkBatchResult(
+            sb: sb,
+            operation: operation,
+            pascalName: pascalName,
+            totalVariable: totalVariable,
+            indent: "                    ",
+            resultVariable: "result",
+            errorVariable: "err"
         );
-        _ = sb.AppendLine(
-            "                    if (result is Result<int, SqlError>.Error<int, SqlError> err)"
-        );
-        _ = sb.AppendLine("                        return err;");
-        _ = sb.AppendLine(
-            $"                    {totalVariable} += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
-        );
-        AppendLines(
-            builder: sb,
-            lines: ["                    batch.Clear();", "                }", "            }"]
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("            if (batch.Count > 0)");
-        _ = sb.AppendLine("            {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                var finalResult = await ExecuteBulk{operation}{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
-        );
-        _ = sb.AppendLine(
-            "                if (finalResult is Result<int, SqlError>.Error<int, SqlError> finalErr)"
-        );
-        _ = sb.AppendLine("                    return finalErr;");
-        _ = sb.AppendLine(
-            $"                    {totalVariable} += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
+        AppendLines(builder: sb, lines: EmissionLines6);
+        AppendLines(builder: sb, lines: EmissionBlockLines26);
+        EmitBulkBatchResult(
+            sb: sb,
+            operation: operation,
+            pascalName: pascalName,
+            totalVariable: totalVariable,
+            indent: "                ",
+            resultVariable: "finalResult",
+            errorVariable: "finalErr"
         );
         _ = sb.AppendLine("            }");
         _ = sb.AppendLine();
         _ = sb.AppendLine(
             $"            return new Result<int, SqlError>.Ok<int, SqlError>({totalVariable});"
         );
-        AppendLines(builder: sb, lines: ["        }", "        catch (Exception ex)", "        {"]);
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-                "        }",
-                "    }",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines7);
+        AppendLines(builder: sb, lines: EmissionLines8);
         _ = sb.AppendLine();
 
         // Generate batch execution helper
@@ -1191,44 +1149,43 @@ internal static class PostgresCli
         );
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        NpgsqlConnection conn,");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        List<({tupleType})> batch)");
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "    {",
-                "        if (batch.Count == 0)",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(0);",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines9);
         _ = sb.AppendLine();
+    }
+
+    private static void EmitBulkBatchResult(
+        StringBuilder sb,
+        string operation,
+        string pascalName,
+        string totalVariable,
+        string indent,
+        string resultVariable,
+        string errorVariable
+    )
+    {
+        _ = sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{indent}var {resultVariable} = await ExecuteBulk{operation}{pascalName}BatchAsync(conn, batch).ConfigureAwait(false);"
+        );
+        _ = sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"{indent}if ({resultVariable} is Result<int, SqlError>.Error<int, SqlError> {errorVariable})"
+        );
+        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"{indent}    return {errorVariable};");
+        _ = sb.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"                    {totalVariable} += ((Result<int, SqlError>.Ok<int, SqlError>){resultVariable}).Value;"
+        );
     }
 
     private static void EmitBulkCommandExecution(StringBuilder sb, List<DatabaseColumn> insertable)
     {
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("        await using var cmd = new NpgsqlCommand(sql.ToString(), conn);");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        for (int i = 0; i < batch.Count; i++)",
-                "        {",
-                "            var rec = batch[i];",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionBlockLines27);
+        AppendLines(builder: sb, lines: EmissionLines10);
         EmitBulkParameterBindings(sb, insertable);
         _ = sb.AppendLine("        }");
         _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "        return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "    }",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines11);
     }
 
     private static void EmitBulkParameterBindings(StringBuilder sb, List<DatabaseColumn> insertable)
@@ -1240,20 +1197,13 @@ internal static class PostgresCli
             // match the SQLite CLI output (which kept snake_case literally),
             // and so consumers that reference `rec.user_id` etc. keep working.
             var propName = col.Name;
-            if (col.IsNullable)
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"p\" + (i * {insertable.Count} + {i}), rec.{propName} ?? (object)DBNull.Value);"
-                );
-            }
-            else
-            {
-                _ = sb.AppendLine(
-                    CultureInfo.InvariantCulture,
-                    $"            cmd.Parameters.AddWithValue(\"p\" + (i * {insertable.Count} + {i}), rec.{propName});"
-                );
-            }
+            var value = col.IsNullable
+                ? $"rec.{propName} ?? (object)DBNull.Value"
+                : $"rec.{propName}";
+            _ = sb.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"            cmd.Parameters.AddWithValue(\"p\" + (i * {insertable.Count} + {i}), {value});"
+            );
         }
     }
 
@@ -1269,15 +1219,7 @@ internal static class PostgresCli
             $"        var sql = new System.Text.StringBuilder(\"INSERT INTO \\\"{table.Schema}\\\".\\\"{table.Name}\\\" ({colNames}) VALUES \");"
         );
         _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        for (int i = 0; i < batch.Count; i++)",
-                "        {",
-                "            if (i > 0) sql.Append(\", \");",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines12);
 
         // Build VALUES placeholders
         var placeholders = string.Join(
@@ -1289,61 +1231,6 @@ internal static class PostgresCli
             $"            sql.Append(\"({placeholders})\");"
         );
         _ = sb.AppendLine("        }");
-    }
-
-    private static void GenerateBulkUpsertMethod(
-        StringBuilder sb,
-        TableConfigItem table,
-        List<DatabaseColumn> columns,
-        string pascalName
-    )
-    {
-        // Get insertable columns (exclude auto-generated ones)
-        var insertable = columns.Where(c => !c.IsIdentity && !c.IsComputed).ToList();
-        var pkCols = columns.Where(c => c.IsPrimaryKey).ToList();
-
-        if (insertable.Count == 0 || pkCols.Count == 0)
-            return;
-
-        // Build tuple type for the IEnumerable parameter
-        var tupleType = string.Join(
-            ", ",
-            insertable.Select(c => $"{c.CSharpType} {ToPascalCase(c.Name)}")
-        );
-
-        EmitBulkMethodPreamble(sb, table, pascalName, tupleType, upsert: true);
-
-        // BUG3 fix: quote every identifier in emitted bulk-upsert SQL. Same
-        // reasoning as bulk insert above. Applies to the ON CONFLICT pk list
-        // and the EXCLUDED set clause.
-        var colNames = string.Join(", ", insertable.Select(c => $"\\\"{c.Name}\\\""));
-        var pkColNames = string.Join(", ", pkCols.Select(c => $"\\\"{c.Name}\\\""));
-        var updateCols = insertable.Where(c => !c.IsPrimaryKey).ToList();
-        var updateSet = string.Join(
-            ", ",
-            updateCols.Select(c => $"\\\"{c.Name}\\\" = EXCLUDED.\\\"{c.Name}\\\"")
-        );
-
-        EmitBulkValuesBuilder(sb, table, insertable, colNames);
-
-        // Add ON CONFLICT DO UPDATE clause
-        if (updateCols.Count > 0)
-        {
-            _ = sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"        sql.Append(\" ON CONFLICT ({pkColNames}) DO UPDATE SET {updateSet}\");"
-            );
-        }
-        else
-        {
-            // If all columns are PKs, just do nothing on conflict
-            _ = sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"        sql.Append(\" ON CONFLICT ({pkColNames}) DO NOTHING\");"
-            );
-        }
-
-        EmitBulkCommandExecution(sb, insertable);
     }
 
     /// <summary>
@@ -1367,31 +1254,13 @@ internal static class PostgresCli
             var c = sql[i];
 
             // Pass through single-quoted string literals.
-            if (c == '\'')
+            if (sql[i] is '\'' or '"')
             {
-                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
                     source: sql,
-                    sb: sb,
-                    i: i
+                    start: i,
+                    sql: sb
                 );
-                continue;
-            }
-
-            // Pass through already-quoted identifiers.
-            if (c == '"')
-            {
-                sb.Append(c);
-                i++;
-                while (i < sql.Length)
-                {
-                    sb.Append(sql[i]);
-                    if (sql[i] == '"')
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
                 continue;
             }
 
@@ -1420,10 +1289,10 @@ internal static class PostgresCli
                 {
                     var aliasStart = i;
                     i++;
-                    while (i < sql.Length && (char.IsLetterOrDigit(sql[i]) || sql[i] == '_'))
-                    {
-                        i++;
-                    }
+                    i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                        source: sql,
+                        start: i
+                    );
                     var alias = sql[aliasStart..i];
                     if (HasUppercaseAscii(alias))
                     {
@@ -1465,12 +1334,10 @@ internal static class PostgresCli
             if (sql[i] == '@')
             {
                 var start = i + 1;
-                while (
-                    start < sql.Length && (char.IsLetterOrDigit(sql[start]) || sql[start] == '_')
-                )
-                {
-                    start++;
-                }
+                start = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: sql,
+                    start: start
+                );
                 if (start > i + 1)
                 {
                     var paramName = sql[(i + 1)..start];
@@ -1549,19 +1416,29 @@ internal static class PostgresCli
                 );
             }
 
-            return new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(columns.AsReadOnly());
+            return ColumnMetadataOk(columns);
         }
         catch (Exception ex)
         {
-            return new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(SqlError.FromException(ex));
+            return ColumnMetadataError(ex);
         }
     }
+
+    private static Result<IReadOnlyList<DatabaseColumn>, SqlError> ColumnMetadataOk(
+        List<DatabaseColumn> columns
+    ) =>
+        new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
+            IReadOnlyList<DatabaseColumn>,
+            SqlError
+        >(columns.AsReadOnly());
+
+    private static Result<IReadOnlyList<DatabaseColumn>, SqlError> ColumnMetadataError(
+        Exception ex
+    ) =>
+        new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
+            IReadOnlyList<DatabaseColumn>,
+            SqlError
+        >(SqlError.FromException(ex));
 
     private static string MapPostgresTypeToCSharp(string pgType, bool isNullable) =>
         Nimblesite.DataProvider.Postgres.CodeGeneration.PostgresTypeMapper.MapPostgresTypeToCSharp(
@@ -1591,37 +1468,21 @@ internal static class PostgresCli
 
         // Header with all using statements at the top, then a file-scoped
         // `namespace Generated;` so consumers can `using Generated;`.
-        _ = sb.AppendLine("// <auto-generated />");
-        _ = sb.AppendLine("#nullable enable");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "using System;",
-                "using System.Threading.Tasks;",
-                "using System.Collections.Immutable;",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines: ["using Npgsql;", "using Outcome;", "using Nimblesite.Sql.Model;"]
-        );
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("namespace Generated;");
-        _ = sb.AppendLine();
+        AppendLines(builder: sb, lines: EmissionBlockLines28);
+        AppendLines(builder: sb, lines: EmissionLines13);
+        AppendLines(builder: sb, lines: EmissionLines1);
+        AppendLines(builder: sb, lines: EmissionBlockLines29);
 
         // Generate record type. Bug #15: emit a non-positional record with
         // per-property `{ get; init; }` declarations matching the old
         // SQLite.Cli shape. Per-property nullability comes from the
         // database column metadata (NOT NULL -> non-nullable type,
         // nullable -> `T?`).
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"/// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"/// Generated record for {fileName} query."
+        AppendXmlDoc(
+            builder: sb,
+            summary: $"Generated record for {fileName} query.",
+            indentation: ""
         );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"/// </summary>");
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"public record {recordName}");
         _ = sb.AppendLine("{");
         foreach (var col in columns)
@@ -1645,12 +1506,11 @@ internal static class PostgresCli
         _ = sb.AppendLine();
 
         // Generate extension method
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"/// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"/// Extension methods for {fileName} query."
+        AppendXmlDoc(
+            builder: sb,
+            summary: $"Extension methods for {fileName} query.",
+            indentation: ""
         );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"/// </summary>");
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"public static class {fileName}Extensions"
@@ -1664,9 +1524,7 @@ internal static class PostgresCli
         _ = sb.AppendLine();
 
         // Async method
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// <summary>");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// Executes the {fileName} query.");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// </summary>");
+        AppendXmlDoc(builder: sb, summary: $"Executes the {fileName} query.", indentation: "    ");
         _ = sb.Append(
             CultureInfo.InvariantCulture,
             $"    public static async Task<{resultType}> {fileName}Async(this NpgsqlConnection conn"
@@ -1680,10 +1538,7 @@ internal static class PostgresCli
             // (CheckResourceGrantAsync(resource_id: ...)) keep working.
             _ = sb.Append(CultureInfo.InvariantCulture, $", {paramType} {param}");
         }
-        _ = sb.AppendLine(")");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        try");
-        _ = sb.AppendLine("        {");
+        AppendLines(builder: sb, lines: EmissionBlockLines30);
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"            var results = ImmutableList.CreateBuilder<{recordName}>();"
@@ -1699,15 +1554,7 @@ internal static class PostgresCli
         }
 
         _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);",
-                "            while (await reader.ReadAsync().ConfigureAwait(false))",
-                "            {",
-            ]
-        );
+        AppendLines(builder: sb, lines: EmissionLines14);
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"                results.Add(Read{recordName}(reader));"
@@ -1718,14 +1565,12 @@ internal static class PostgresCli
             CultureInfo.InvariantCulture,
             $"            return new {okType}(results.ToImmutable());"
         );
-        AppendLines(builder: sb, lines: ["        }", "        catch (Exception ex)", "        {"]);
+        AppendLines(builder: sb, lines: EmissionLines7);
         _ = sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"            return new {errorType}(SqlError.FromException(ex));"
         );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
-        _ = sb.AppendLine();
+        AppendLines(builder: sb, lines: EmissionBlockLines31);
 
         // Reader method. Bug #15: use object initializer syntax to match
         // the non-positional record shape declared above.
@@ -1812,14 +1657,6 @@ internal static class PostgresCli
         return sb.ToString();
     }
 
-    private static string EscapeForPreprocessor(string message)
-    {
-        if (string.IsNullOrEmpty(message))
-            return string.Empty;
-        var oneLine = message.Replace('\r', ' ').Replace('\n', ' ');
-        return oneLine.Replace('"', '\'');
-    }
-
     // Implements [DP-CLI-SHARED-LINE-EMISSION].
     private static void AppendLines(
         StringBuilder builder,
@@ -1830,6 +1667,14 @@ internal static class PostgresCli
         {
             builder.AppendLine(value: line);
         }
+    }
+
+    // Implements [DP-CLI-SHARED-XML-DOC].
+    private static void AppendXmlDoc(StringBuilder builder, string summary, string indentation)
+    {
+        _ = builder.AppendLine(CultureInfo.InvariantCulture, $"{indentation}/// <summary>");
+        _ = builder.AppendLine(CultureInfo.InvariantCulture, $"{indentation}/// {summary}");
+        _ = builder.AppendLine(CultureInfo.InvariantCulture, $"{indentation}/// </summary>");
     }
 
     // Implements [DP-CLI-SHARED-WRITE-OVERLOADS].
@@ -1843,7 +1688,7 @@ internal static class PostgresCli
         System.Collections.Immutable.ImmutableArray<string> sqlLines
     )
     {
-        var parameters = string.Join(", ", columns.Select(c => $"{c.CSharpType} {c.Name}"));
+        var parameters = BuildTypedParameterList(columns: columns);
         foreach (var transaction in new[] { false, true })
         {
             builder.AppendLine();
@@ -1878,16 +1723,7 @@ internal static class PostgresCli
     {
         if (transaction)
         {
-            AppendLines(
-                builder: builder,
-                lines:
-                [
-                    "        if (transaction.Connection is not NpgsqlConnection conn)",
-                    "        {",
-                    "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
-                    "        }",
-                ]
-            );
+            AppendLines(builder: builder, lines: EmissionLines15);
             builder.AppendLine();
         }
         AppendLines(

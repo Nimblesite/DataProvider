@@ -1,19 +1,3 @@
-using Microsoft.Data.Sqlite;
-using TestRecordListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.TestRecord>,
-    Nimblesite.Sql.Model.SqlError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.TestRecord>,
-    Nimblesite.Sql.Model.SqlError
->;
-using TestRecordListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.TestRecord>,
-    Nimblesite.Sql.Model.SqlError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.TestRecord>,
-    Nimblesite.Sql.Model.SqlError
->;
-
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
@@ -56,21 +40,15 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             ]
         );
 
-        var result = _transaction.Query(
-            "SELECT Name, Value FROM TestTable ORDER BY Name",
-            [],
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
-        );
+        var result = QueryTestRecords(sql: "SELECT Name, Value FROM TestTable ORDER BY Name");
 
-        Assert.True(result is TestRecordListOk);
-        if (result is TestRecordListOk ok)
-        {
-            Assert.Equal(2, ok.Value.Count);
-            Assert.Equal("Test1", ok.Value[0].Name);
-            Assert.Equal(100, ok.Value[0].Value);
-            Assert.Equal("Test2", ok.Value[1].Name);
-            Assert.Equal(200, ok.Value[1].Value);
-        }
+        VerifyReusableWorkflow18(
+            input0: result,
+            value1: "Test1",
+            value3: 100,
+            value5: "Test2",
+            value7: 200
+        );
     }
 
     [Fact]
@@ -94,48 +72,31 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
         );
 
-        Assert.True(result is TestRecordListOk);
-        if (result is TestRecordListOk ok)
-        {
-            Assert.Equal(2, ok.Value.Count);
-            Assert.Equal("Beta", ok.Value[0].Name);
-            Assert.Equal(20, ok.Value[0].Value);
-            Assert.Equal("Gamma", ok.Value[1].Name);
-            Assert.Equal(30, ok.Value[1].Value);
-        }
+        VerifyReusableWorkflow18(
+            input0: result,
+            value1: "Beta",
+            value3: 20,
+            value5: "Gamma",
+            value7: 30
+        );
     }
 
     [Fact]
     public void Query_WithEmptyResult_ReturnsEmptyList()
     {
-        var result = _transaction.Query(
-            "SELECT Name, Value FROM TestTable WHERE 1=0",
-            [],
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
-        );
+        var result = QueryTestRecords(sql: "SELECT Name, Value FROM TestTable WHERE 1=0");
 
-        Assert.True(result is TestRecordListOk);
-        if (result is TestRecordListOk ok)
-        {
-            Assert.Empty(ok.Value);
-        }
+        ExtensionTestCases.ExpectOkEmpty<TestRecord, Sql.Model.SqlError>(actual: result);
     }
 
     [Fact]
     public void Query_WithSqlError_ReturnsFailure()
     {
-        var result = _transaction.Query(
-            "SELECT InvalidColumn FROM NonExistentTable",
-            [],
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
-        );
+        var result = QueryTestRecords(sql: "SELECT InvalidColumn FROM NonExistentTable");
 
-        Assert.True(result is TestRecordListError);
-        if (result is TestRecordListError err)
-        {
-            Assert.NotNull(err.Value.Message);
-            Assert.Contains("no such table", err.Value.Message);
-        }
+        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
+        Assert.NotNull(err.Message);
+        Assert.Contains("no such table", err.Message);
     }
 
     /// <inheritdoc/>
@@ -173,11 +134,8 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
         );
 
-        Assert.True(result is TestRecordListError);
-        if (result is TestRecordListError err)
-        {
-            Assert.Contains("null", err.Value.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
+        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -189,23 +147,20 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
         );
 
-        Assert.True(result is TestRecordListError);
-        if (result is TestRecordListError err)
-        {
-            Assert.Contains("null", err.Value.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
+        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Query_WithEmptySql_ReturnsError()
     {
-        var result = _transaction.Query(
-            "   ",
-            null,
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: _transaction.Query(
+                "   ",
+                null,
+                reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+            )
         );
-
-        Assert.True(result is TestRecordListError);
     }
 
     [Fact]
@@ -222,11 +177,7 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             null
         );
 
-        Assert.True(result is TestRecordListOk);
-        if (result is TestRecordListOk ok)
-        {
-            Assert.Empty(ok.Value);
-        }
+        ExtensionTestCases.ExpectOkEmpty<TestRecord, Sql.Model.SqlError>(actual: result);
     }
 
     [Fact]
@@ -238,11 +189,8 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             "INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)"
         );
 
-        Assert.True(result is IntError);
-        if (result is IntError err)
-        {
-            Assert.Contains("null", err.Value.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
+        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -250,20 +198,22 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     {
         var result = _transaction.Execute(null!);
 
-        Assert.True(result is IntError);
-        if (result is IntError err)
-        {
-            Assert.Contains("null", err.Value.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
+        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void Execute_WithEmptySql_ReturnsError()
-    {
-        var result = _transaction.Execute("   ");
-
-        Assert.True(result is IntError);
-    }
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Execute_WithEmptySql_ReturnsError_ContextCasesData))]
+    public void Execute_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
+        ExtensionTestCases.RunCase(
+            caseName: caseName,
+            caseBody: () =>
+                ExtensionTestCases.ExpectExecuteError(
+                    sql: value0,
+                    execute: sql => _transaction.Execute(sql)
+                )
+        );
 
     [Fact]
     public void Execute_WithValidSql_ReturnsRowsAffected()
@@ -273,19 +223,7 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             [new SqliteParameter("@name", "Delta"), new SqliteParameter("@value", 40)]
         );
 
-        Assert.True(result is IntOk);
-        if (result is IntOk ok)
-        {
-            Assert.Equal(1, ok.Value);
-        }
-    }
-
-    [Fact]
-    public void Execute_WithInvalidSql_ReturnsError()
-    {
-        var result = _transaction.Execute("INSERT INTO NonExistentTable (Name) VALUES ('Test')");
-
-        Assert.True(result is IntError);
+        VerifyReusableWorkflow16(input0: result, value0: 1);
     }
 
     [Fact]
@@ -306,13 +244,18 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
         Assert.False(result is NullableStringOk);
     }
 
-    [Fact]
-    public void Scalar_WithEmptySql_ReturnsError()
-    {
-        var result = _transaction.Scalar<string>("   ");
-
-        Assert.False(result is NullableStringOk);
-    }
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Scalar_WithEmptySql_ReturnsError_ContextCasesData))]
+    public void Scalar_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
+        ExtensionTestCases.RunCase(
+            caseName: caseName,
+            caseBody: () =>
+                ExtensionTestCases.ExpectScalarNotOk<string?>(
+                    sql: value0,
+                    scalar: sql => _transaction.Scalar<string>(sql)
+                )
+        );
 
     [Fact]
     public void Scalar_WithValidSql_ReturnsValue()
@@ -326,11 +269,7 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             "SELECT Name FROM TestTable ORDER BY Name LIMIT 1"
         );
 
-        Assert.True(result is NullableStringOk);
-        if (result is NullableStringOk ok)
-        {
-            Assert.Equal("Alpha", ok.Value);
-        }
+        VerifyReusableWorkflow3(input0: result, value0: "Alpha");
     }
 
     [Fact]
@@ -346,19 +285,7 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
             [new SqliteParameter("@minValue", 15)]
         );
 
-        Assert.True(result is NullableStringOk);
-        if (result is NullableStringOk ok)
-        {
-            Assert.Equal("Beta", ok.Value);
-        }
-    }
-
-    [Fact]
-    public void Scalar_WithInvalidSql_ReturnsError()
-    {
-        var result = _transaction.Scalar<string>("SELECT Name FROM NonExistentTable");
-
-        Assert.False(result is NullableStringOk);
+        VerifyReusableWorkflow3(input0: result, value0: "Beta");
     }
 
     /// <summary>
@@ -367,4 +294,53 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     /// <param name="Name">The name.</param>
     /// <param name="Value">The value.</param>
     internal sealed record TestRecord(string Name, int Value);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyScalarOk<T>(Result<T, Sql.Model.SqlError> input0, T value0) =>
+        global::Tests.Shared.ResultAssertions.VerifyOk(
+            actual: input0,
+            verify: ok => Assert.Equal(value0, ok.Value)
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private Result<IReadOnlyList<TestRecord>, Sql.Model.SqlError> QueryTestRecords(string sql) =>
+        _transaction.Query(
+            sql,
+            [],
+            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow3(
+        Result<string?, Sql.Model.SqlError> input0,
+        string value0
+    ) => VerifyScalarOk(input0: input0, value0: value0);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow16(
+        Result<int, Sql.Model.SqlError> input0,
+        int value0
+    ) => VerifyScalarOk(input0: input0, value0: value0);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow18(
+        Result<IReadOnlyList<TestRecord>, Sql.Model.SqlError> input0,
+        string value1,
+        int value3,
+        string value5,
+        int value7
+    )
+    {
+        global::Tests.Shared.ResultAssertions.VerifyOk(
+            actual: input0,
+            verify: ok =>
+            {
+                Assert.Equal(2, ok.Value.Count);
+                Assert.Equal(value1, ok.Value[0].Name);
+                Assert.Equal(value3, ok.Value[0].Value);
+                Assert.Equal(value5, ok.Value[1].Name);
+                Assert.Equal(value7, ok.Value[1].Value);
+            }
+        );
+    }
 }

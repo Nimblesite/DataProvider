@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -33,7 +35,7 @@ public sealed partial class SchemaDiffSupportTests
         var result = SchemaDiff.Calculate(schema, schema);
 
         Assert.True(result is OperationsResultOk);
-        Assert.Empty(((OperationsResultOk)result).Value);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -42,9 +44,9 @@ public sealed partial class SchemaDiffSupportTests
         var current = SupportSchema();
         var desired = current with { Functions = [] };
 
-        var safe = ((OperationsResultOk)SchemaDiff.Calculate(current, desired)).Value;
+        var safe = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
         var destructive = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desired, allowDestructive: true)
+            Ok(actual: SchemaDiff.Calculate(current, desired, allowDestructive: true))
         ).Value;
 
         Assert.DoesNotContain(safe, op => op is DropFunctionOperation);
@@ -63,7 +65,7 @@ public sealed partial class SchemaDiffSupportTests
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
 
         Assert.True(result is OperationsResultOk);
-        Assert.Contains(((OperationsResultOk)result).Value, op => op is RevokePrivilegesOperation);
+        Assert.Contains((Ok(actual: result)).Value, op => op is RevokePrivilegesOperation);
     }
 
     [Fact]
@@ -78,7 +80,7 @@ public sealed partial class SchemaDiffSupportTests
         var result = SchemaDiff.Calculate(current, desired);
 
         Assert.True(result is OperationsResultOk);
-        Assert.Empty(((OperationsResultOk)result).Value);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -90,65 +92,9 @@ public sealed partial class SchemaDiffSupportTests
             Grants = [Dataset_Calculate_MissingGrantRunAs_PreservesRunAsOnOperation_1()],
         };
 
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
         var grant = Assert.IsType<GrantPrivilegesOperation>(
-            Assert.Single(((OperationsResultOk)result).Value)
+            Assert.Single((Ok(read: () => SchemaDiff.Calculate(current, desired))).Value)
         );
         Assert.Equal("supabase_admin", grant.Grant.RunAs);
     }
-
-    private static SchemaDefinition SupportSchema() =>
-        SchemaTestData.Schema(
-            name: "support",
-            roles: [SchemaTestData.PostgresRole(name: "app_user", grantTo: ["postgres"])],
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "documents",
-                    columns:
-                    [
-                        SchemaTestData.Column(
-                            name: "id",
-                            type: PortableTypes.Uuid,
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
-                    rowLevelSecurity: new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            SchemaTestData.RlsPolicy(
-                                name: "documents_member",
-                                roles: ["app_user"],
-                                usingSql: "is_member()",
-                                withCheckSql: "is_member()"
-                            ),
-                        ],
-                    }
-                ),
-            ],
-            functions:
-            [
-                SchemaTestData.PostgresFunction(
-                    name: "is_member",
-                    returns: "boolean",
-                    securityDefiner: true,
-                    body: "SELECT true",
-                    executeRoles: ["app_user"]
-                ),
-            ],
-            grants:
-            [
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.AllTablesInSchema,
-                    privileges: ["SELECT", "INSERT"],
-                    roles: ["app_user"]
-                ),
-            ]
-        );
 }

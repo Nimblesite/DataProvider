@@ -1,5 +1,4 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -9,111 +8,24 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
-public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture
-            .CreateDatabaseAsync("migrate_schema_test")
-            .ConfigureAwait(false);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override string DatabaseName => "migrate_schema_test";
 
     /// <summary>
     /// Test schema definition for migration tests.
     /// </summary>
-    private static SchemaDefinition CreateTestSchema() =>
-        Schema
-            .Define("MigrateSchemaTest")
-            .Table(
-                "public",
-                "countries",
-                t =>
-                    t.Column(
-                            "id",
-                            PortableTypes.Uuid,
-                            c => c.PrimaryKey().Default("gen_random_uuid()")
-                        )
-                        .Column("name", PortableTypes.VarChar(100), c => c.NotNull())
-                        .Column("code", PortableTypes.VarChar(10), c => c.NotNull())
-                        .Unique("uq_countries_code", "code")
-            )
-            .Table(
-                "public",
-                "regions",
-                t =>
-                    t.Column(
-                            "id",
-                            PortableTypes.Uuid,
-                            c => c.PrimaryKey().Default("gen_random_uuid()")
-                        )
-                        .Column("name", PortableTypes.VarChar(100), c => c.NotNull())
-                        .Column("country_id", PortableTypes.Uuid, c => c.NotNull())
-                        .ForeignKey("country_id", "countries", "id", ForeignKeyAction.Cascade)
-                        .Index("idx_regions_country", "country_id")
-            )
-            .Table(
-                "public",
-                "suburbs",
-                t =>
-                    t.Column(
-                            "id",
-                            PortableTypes.Uuid,
-                            c => c.PrimaryKey().Default("gen_random_uuid()")
-                        )
-                        .Column("name", PortableTypes.VarChar(100), c => c.NotNull())
-                        .Column("region_id", PortableTypes.Uuid, c => c.NotNull())
-                        .ForeignKey("region_id", "regions", "id", ForeignKeyAction.Cascade)
-            )
-            .Table(
-                "public",
-                "venues",
-                t =>
-                    t.Column(
-                            "id",
-                            PortableTypes.Uuid,
-                            c => c.PrimaryKey().Default("gen_random_uuid()")
-                        )
-                        .Column("name", PortableTypes.VarChar(200), c => c.NotNull())
-                        .Column("suburb_id", PortableTypes.Uuid, c => c.NotNull())
-                        .Column("address", PortableTypes.VarChar(300))
-                        .ForeignKey("suburb_id", "suburbs", "id", ForeignKeyAction.Cascade)
-                        .Unique("uq_venues_name_suburb", "name", "suburb_id")
-            )
-            .Build();
-
     [Fact]
     public void MigrateSchema_FreshDatabase_CreatesAllTables()
     {
         // Arrange
-        var schema = CreateTestSchema();
         var tablesCreated = new List<string>();
 
         // Act
-        var result = PostgresDdlGenerator.MigrateSchema(
-            _connection,
-            schema,
-            onTableCreated: tablesCreated.Add
-        );
+        MigrateAndAssertCreated(tablesCreated: tablesCreated);
 
         // Assert
-        Assert.True(
-            result.Success,
-            $"Migration failed with errors: {string.Join(", ", result.Errors)}"
-        );
-        Assert.Equal(4, result.TablesCreated);
-        Assert.Empty(result.Errors);
         Assert.Contains("countries", tablesCreated);
         Assert.Contains("regions", tablesCreated);
         Assert.Contains("suburbs", tablesCreated);
@@ -130,16 +42,10 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         var schema = CreateTestSchema();
 
         // First migration
-        var firstResult = PostgresDdlGenerator.MigrateSchema(_connection, schema);
-        Assert.True(firstResult.Success);
+        MigrateAndAssertSuccess(schema: schema, expectedTablesCreated: 4);
 
         // Act - Run migration again
-        var secondResult = PostgresDdlGenerator.MigrateSchema(_connection, schema);
-
-        // Assert - Should succeed without errors (CREATE TABLE IF NOT EXISTS)
-        Assert.True(secondResult.Success);
-        Assert.Equal(4, secondResult.TablesCreated);
-        Assert.Empty(secondResult.Errors);
+        MigrateAndAssertSuccess(schema: schema, expectedTablesCreated: 4);
     }
 
     [Fact]
@@ -155,21 +61,12 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         Assert.False(TableExists("suburbs"));
         Assert.False(TableExists("venues"));
 
-        var schema = CreateTestSchema();
         var tablesCreated = new List<string>();
 
         // Act - Run migration on partially migrated database
-        var result = PostgresDdlGenerator.MigrateSchema(
-            _connection,
-            schema,
-            onTableCreated: tablesCreated.Add
-        );
+        MigrateAndAssertCreated(tablesCreated: tablesCreated);
 
         // Assert
-        Assert.True(result.Success, $"Migration failed: {string.Join(", ", result.Errors)}");
-        Assert.Equal(4, result.TablesCreated); // All 4 reported (IF NOT EXISTS)
-        Assert.Empty(result.Errors);
-
         // All tables should now exist
         AssertTestTablesExist();
     }
@@ -188,7 +85,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
 
         // Act
         var result = PostgresDdlGenerator.MigrateSchema(
-            _connection,
+            Connection,
             schemaWithBadFk,
             onTableFailed: (name, _) => failedTables.Add(name)
         );
@@ -214,7 +111,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
 
         // Act
         var result = PostgresDdlGenerator.MigrateSchema(
-            _connection,
+            Connection,
             schemaWithBadTable,
             onTableCreated: createdTables.Add,
             onTableFailed: (name, ex) => failedTables.Add((name, ex))
@@ -234,20 +131,12 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     {
         // Arrange - Create schema first
         var schema = CreateTestSchema();
-        var migrateResult = PostgresDdlGenerator.MigrateSchema(_connection, schema);
-        Assert.True(migrateResult.Success);
+        MigrateAndAssertSuccess(schema: schema, expectedTablesCreated: 4);
         Assert.True(TableExists("countries"));
         Assert.True(TableExists("venues"));
 
         // Act - Drop all tables in reverse order (respecting FK constraints)
-        var tables = schema.Tables.Reverse().ToList();
-        foreach (var table in tables)
-        {
-            ExecuteSql($"DROP TABLE IF EXISTS \"{table.Schema}\".\"{table.Name}\" CASCADE");
-        }
-
-        // Assert
-        Assert.False(TableExists("countries"));
+        VerifyReusableWorkflow29(input0: schema, input1: ExecuteSql, input2: TableExists);
         Assert.False(TableExists("regions"));
         Assert.False(TableExists("suburbs"));
         Assert.False(TableExists("venues"));
@@ -258,23 +147,13 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     {
         // Arrange - Create and drop schema
         var schema = CreateTestSchema();
-        _ = PostgresDdlGenerator.MigrateSchema(_connection, schema);
+        _ = PostgresDdlGenerator.MigrateSchema(Connection, schema);
 
         // Drop all tables
-        var tables = schema.Tables.Reverse().ToList();
-        foreach (var table in tables)
-        {
-            ExecuteSql($"DROP TABLE IF EXISTS \"{table.Schema}\".\"{table.Name}\" CASCADE");
-        }
-
-        Assert.False(TableExists("countries"));
+        VerifyReusableWorkflow29(input0: schema, input1: ExecuteSql, input2: TableExists);
 
         // Act - Migrate again
-        var result = PostgresDdlGenerator.MigrateSchema(_connection, schema);
-
-        // Assert
-        Assert.True(result.Success);
-        Assert.Equal(4, result.TablesCreated);
+        MigrateAndAssertSuccess(schema: schema, expectedTablesCreated: 4);
         AssertTestTablesExist();
     }
 
@@ -285,10 +164,9 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         var schema = CreateTestSchema();
 
         // Act
-        var result = PostgresDdlGenerator.MigrateSchema(_connection, schema);
+        MigrateAndAssertSuccess(schema: schema, expectedTablesCreated: 4);
 
         // Assert
-        Assert.True(result.Success);
         Assert.True(IndexExists("idx_regions_country"));
     }
 
@@ -299,11 +177,15 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         var emptySchema = Schema.Define("Empty").Build();
 
         // Act
-        var result = PostgresDdlGenerator.MigrateSchema(_connection, emptySchema);
+        MigrateAndAssertSuccess(schema: emptySchema, expectedTablesCreated: 0);
+    }
 
-        // Assert
+    // Implements [MIG-TEST-TABLE-ASSERTIONS].
+    private void MigrateAndAssertSuccess(SchemaDefinition schema, int expectedTablesCreated)
+    {
+        var result = PostgresDdlGenerator.MigrateSchema(Connection, schema);
         Assert.True(result.Success);
-        Assert.Equal(0, result.TablesCreated);
+        Assert.Equal(expectedTablesCreated, result.TablesCreated);
         Assert.Empty(result.Errors);
     }
 
@@ -316,33 +198,60 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         Assert.True(TableExists("venues"));
     }
 
-    private bool TableExists(string tableName)
+    private void MigrateAndAssertCreated(List<string> tablesCreated)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = Data_TableExists_1;
-        var param = cmd.CreateParameter();
-        param.ParameterName = "@tableName";
-        param.Value = tableName;
-        cmd.Parameters.Add(param);
-        return (bool)cmd.ExecuteScalar()!;
+        var result = PostgresDdlGenerator.MigrateSchema(
+            Connection,
+            CreateTestSchema(),
+            onTableCreated: tablesCreated.Add
+        );
+
+        Assert.True(
+            result.Success,
+            $"Migration failed with errors: {string.Join(", ", result.Errors)}"
+        );
+        Assert.Equal(4, result.TablesCreated);
+        Assert.Empty(result.Errors);
     }
 
-    private bool IndexExists(string indexName)
+    private bool TableExists(string tableName) =>
+        ScalarExists(sql: Data_TableExists_1, parameterName: "@tableName", value: tableName);
+
+    private bool IndexExists(string indexName) =>
+        ScalarExists(sql: Data_IndexExists_1, parameterName: "@indexName", value: indexName);
+
+    private bool ScalarExists(string sql, string parameterName, string value)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = Data_IndexExists_1;
-        var param = cmd.CreateParameter();
-        param.ParameterName = "@indexName";
-        param.Value = indexName;
-        cmd.Parameters.Add(param);
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = sql;
+        global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: parameterName, value: value);
         return (bool)cmd.ExecuteScalar()!;
     }
 
     private void ExecuteSql(string sql)
     {
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: command => command.CommandText = sql
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow29(
+        SchemaDefinition input0,
+        Action<string> input1,
+        Func<string, bool> input2
+    )
+    {
+        // Act - Drop all tables in reverse order (respecting FK constraints)
+        var tables = input0.Tables.Reverse().ToList();
+        foreach (var table in tables)
+        {
+            input1(obj: $"DROP TABLE IF EXISTS \"{table.Schema}\".\"{table.Name}\" CASCADE");
+        }
+
+        // Assert
+        Assert.False(input2(arg: "countries"));
     }
 }

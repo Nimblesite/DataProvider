@@ -1,7 +1,5 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
-using Nimblesite.Sql.Model;
-
 namespace Nimblesite.DataProvider.Tests;
 
 public partial class SQLiteContextE2ETests

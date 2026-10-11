@@ -164,3 +164,26 @@ current-culture comparison and explicit string comparison modes. Every original 
 Scalar-query tests share command creation, configuration, binding and execution.
 Their original conversions, assertions, SQL and parameter evaluation order remain
 at the call sites. The command is disposed after its scalar value is read.
+
+Result checks can evaluate a typed operation callback before checking its
+success/error variant. This consolidates repeated read/check sequences while
+preserving operation order, diagnostics and assertions. Implements [CI-TEST-SHARED-RESULT].
+
+### Shared temporary database cleanup [CI-TEST-SHARED-TEMP-CLEANUP]
+
+Database fixtures reuse file cleanup after disposing their connections. The
+original existence check, deletion attempt, ignored teardown failures and order
+of connection disposal and file cleanup are preserved.
+
+### Shared mapped payload assertions [CI-TEST-SHARED-MAPPED-PAYLOAD]
+
+Mapping scenarios share the exact success-type assertion and JSON document
+lifetime. Each scenario supplies its original payload assertions as a callback;
+field checks, expected values and scenario coverage remain explicit. HTTP and
+integration tests also share the three User-to-Customer table/key assertions,
+retaining each scenario's original primary-key substring.
+
+### Shared test imports [CI-TEST-SHARED-IMPORTS]
+
+Test projects declare common namespace imports and identical result aliases once.
+File-specific imports and aliases with differing targets retain their local scope.

@@ -1,5 +1,6 @@
-use crate::scope::{collect_function_calls, ScopeMap};
 use lql_parser::tokens::get_pipe_token_positions;
+
+use crate::scope::{collect_function_calls, ScopeMap};
 
 /// Diagnostic severity level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +97,23 @@ pub fn analyze(source: &str, scope: &ScopeMap) -> Vec<Diagnostic> {
     diagnostics
 }
 
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Pushes a warning diagnostic covering the two-character pipe operator.
+fn push_pipe_spacing_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    line: u32,
+    col: u32,
+    message: &str,
+) {
+    diagnostics.push(Diagnostic {
+        line,
+        col,
+        end_col: col + 2,
+        message: message.into(),
+        severity: DiagnosticSeverity::Warning,
+    });
+}
+
 /// Check pipe operator spacing using token positions from the lexer.
 fn check_pipe_spacing_from_tokens(source: &str, diagnostics: &mut Vec<Diagnostic>) {
     let lines: Vec<&str> = source.lines().collect();
@@ -113,25 +131,23 @@ fn check_pipe_spacing_from_tokens(source: &str, diagnostics: &mut Vec<Diagnostic
 
         // Check space before |>
         if col > 0 && bytes[col - 1] != b' ' && bytes[col - 1] != b'\t' {
-            diagnostics.push(Diagnostic {
-                line: pos.line,
-                col: pos.col,
-                end_col: pos.col + 2,
-                message: "Pipeline operator `|>` should be preceded by a space".into(),
-                severity: DiagnosticSeverity::Warning,
-            });
+            push_pipe_spacing_diagnostic(
+                diagnostics,
+                pos.line,
+                pos.col,
+                "Pipeline operator `|>` should be preceded by a space",
+            );
         }
 
         // Check space after |>
         let after = col + 2;
         if after < bytes.len() && bytes[after] != b' ' && bytes[after] != b'\t' {
-            diagnostics.push(Diagnostic {
-                line: pos.line,
-                col: pos.col,
-                end_col: pos.col + 2,
-                message: "Pipeline operator `|>` should be followed by a space".into(),
-                severity: DiagnosticSeverity::Warning,
-            });
+            push_pipe_spacing_diagnostic(
+                diagnostics,
+                pos.line,
+                pos.col,
+                "Pipeline operator `|>` should be followed by a space",
+            );
         }
     }
 }
@@ -171,28 +187,11 @@ mod tests {
     // ── analyze basics ──
 
     #[test]
-    fn test_analyze_empty_source() {
-        let diags = analyze("", &empty_scope());
-        assert!(diags.is_empty());
-    }
-
-    #[test]
-    fn test_analyze_clean_pipeline() {
-        let diags = analyze("users |> select(users.id)", &empty_scope());
-        // select is known, no pipe spacing issues
-        assert!(diags.is_empty());
-    }
-
-    #[test]
-    fn test_analyze_skips_comments() {
-        let diags = analyze("-- this is a comment\n-- another", &empty_scope());
-        assert!(diags.is_empty());
-    }
-
-    #[test]
-    fn test_analyze_skips_empty_lines() {
-        let diags = analyze("\n\n\n", &empty_scope());
-        assert!(diags.is_empty());
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_analyze_empty_source_cases() {
+        for &(input0,) in named_cases(NAMED_CASES_1) {
+            verify_expanded_test_analyze_empty_source(input0);
+        }
     }
 
     // ── pipe spacing ──
@@ -230,42 +229,28 @@ mod tests {
 
     #[test]
     fn test_pipe_with_tab_is_ok() {
-        let diags = analyze("users\t|>\tselect(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline operator"))
-            .collect();
-        assert!(pipe_diags.is_empty());
+        verify_expanded_test_pipe_with_tab_is_ok(
+            "users\t|>\tselect(users.id)",
+            "Pipeline operator",
+        );
     }
 
     #[test]
     fn test_pipe_at_start_of_line() {
-        let diags = analyze("|> select(users.id)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("preceded by"))
-            .collect();
-        assert!(pipe_diags.is_empty());
+        verify_expanded_test_pipe_with_tab_is_ok("|> select(users.id)", "preceded by");
     }
 
     #[test]
     fn test_pipe_at_end_of_line() {
-        let diags = analyze("users |>", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("followed by"))
-            .collect();
-        assert!(pipe_diags.is_empty());
+        verify_expanded_test_pipe_with_tab_is_ok("users |>", "followed by");
     }
 
     #[test]
     fn test_multiple_pipes_on_one_line() {
-        let diags = analyze("a |> filter(x) |> select(y)", &empty_scope());
-        let pipe_diags: Vec<_> = diags
-            .iter()
-            .filter(|d| d.message.contains("Pipeline operator"))
-            .collect();
-        assert!(pipe_diags.is_empty());
+        verify_expanded_test_pipe_with_tab_is_ok(
+            "a |> filter(x) |> select(y)",
+            "Pipeline operator",
+        );
     }
 
     // ── unknown functions (via ANTLR tree) ──
@@ -343,4 +328,20 @@ mod tests {
             .unwrap();
         assert_eq!(pipe_diag.line, 1);
     }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_pipe_with_tab_is_ok(input0: &str, input1: &str) {
+        crate::test_support::verify_no_diags_matching(input0, input1);
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_analyze_empty_source(input0: &str) {
+        crate::test_support::verify_analyze_empty_source(input0);
+    }
+
+    include!("diagnostics_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }

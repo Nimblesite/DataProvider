@@ -108,17 +108,9 @@ public sealed partial class ConfigurationTypesTests
         };
 
         // Act
-        var json = JsonSerializer.Serialize(
-            config,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-        );
-        var deserialized = JsonSerializer.Deserialize<DataProviderConfig>(
-            json,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-        );
+        var deserialized = JsonRoundTrip(config);
 
         // Assert
-        Assert.NotNull(deserialized);
         Assert.Single(deserialized.Tables);
         Assert.Equal("Invoice", deserialized.Tables[0].Name);
         Assert.Equal("main", deserialized.Tables[0].Schema);
@@ -179,17 +171,9 @@ public sealed partial class ConfigurationTypesTests
         var config = Dataset_GroupingConfig_JsonSerialization_WorksCorrectly_1();
 
         // Act
-        var json = JsonSerializer.Serialize(
-            config,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-        );
-        var deserialized = JsonSerializer.Deserialize<GroupingConfig>(
-            json,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-        );
+        var deserialized = JsonRoundTrip(config);
 
         // Assert
-        Assert.NotNull(deserialized);
         Assert.Equal("GetInvoices", deserialized.QueryName);
         Assert.Equal("ParentChild", deserialized.GroupingStrategy);
         Assert.Equal("Invoice", deserialized.ParentEntity.Name);
@@ -199,6 +183,19 @@ public sealed partial class ConfigurationTypesTests
         Assert.NotNull(deserialized.ChildEntity.ParentKeyColumns);
         Assert.Single(deserialized.ChildEntity.ParentKeyColumns);
         Assert.Contains("InvoiceId", deserialized.ChildEntity.ParentKeyColumns);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static T JsonRoundTrip<T>(T config)
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
+        var json = JsonSerializer.Serialize(config, options);
+        var deserialized = JsonSerializer.Deserialize<T>(json, options);
+        Assert.NotNull(deserialized);
+        return deserialized;
     }
 
     [Fact]

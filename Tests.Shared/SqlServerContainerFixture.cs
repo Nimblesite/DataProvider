@@ -1,7 +1,5 @@
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
-using Tests.Shared;
-
 namespace Nimblesite.TestSupport;
 
 public sealed record SqlServerContainerFixture : IAsyncLifetime
@@ -27,7 +25,7 @@ public sealed record SqlServerContainerFixture : IAsyncLifetime
         var name = $"migration_regression_{Interlocked.Increment(ref _databaseCounter)}";
         using var admin = new SqlConnection(container.GetConnectionString());
         await admin.OpenAsync().ConfigureAwait(false);
-        DatabaseCommands.Execute(
+        global::Tests.Shared.DatabaseCommands.Execute(
             connection: admin,
             configure: command =>
                 command.CommandText =

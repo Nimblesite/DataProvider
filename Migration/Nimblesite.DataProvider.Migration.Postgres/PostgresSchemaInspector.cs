@@ -28,13 +28,12 @@ public static partial class PostgresSchemaInspector
                 connection: connection,
                 configure: tablesCmd =>
                 {
-                    tablesCmd.CommandText = """
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = @schema 
-                    AND table_type = 'BASE TABLE'
-                    ORDER BY table_name
-                    """;
+                    tablesCmd.CommandText = global::Nimblesite
+                        .DataProvider
+                        .Migration
+                        .Postgres
+                        .PostgresPolicyCatalogNormalizer
+                        .SqlSpecification2;
                     tablesCmd.Parameters.AddWithValue("@schema", schemaName);
                 },
                 read: reader =>
@@ -114,31 +113,12 @@ public static partial class PostgresSchemaInspector
             PostgresCatalogQuery.Read(
                 connection: connection,
                 configure: colCmd =>
-                {
-                    colCmd.CommandText = """
-                    SELECT
-                        c.column_name,
-                        c.data_type,
-                        c.is_nullable,
-                        c.column_default,
-                        c.character_maximum_length,
-                        c.numeric_precision,
-                        c.numeric_scale,
-                        c.udt_name,
-                        a.atttypmod
-                    FROM information_schema.columns c
-                    LEFT JOIN pg_catalog.pg_namespace n
-                        ON n.nspname = c.table_schema
-                    LEFT JOIN pg_catalog.pg_class cls
-                        ON cls.relname = c.table_name AND cls.relnamespace = n.oid
-                    LEFT JOIN pg_catalog.pg_attribute a
-                        ON a.attrelid = cls.oid AND a.attname = c.column_name AND a.attnum > 0
-                    WHERE c.table_schema = @schema AND c.table_name = @table
-                    ORDER BY c.ordinal_position
-                    """;
-                    colCmd.Parameters.AddWithValue("@schema", schemaName);
-                    colCmd.Parameters.AddWithValue("@table", tableName);
-                },
+                    PostgresCatalogQuery.Configure(
+                        command: colCmd,
+                        sql: CatalogQuery_InspectTable_1,
+                        schema: schemaName,
+                        table: tableName
+                    ),
                 read: reader =>
                 {
                     var name = reader.GetString(0);
@@ -180,21 +160,12 @@ public static partial class PostgresSchemaInspector
             PostgresCatalogQuery.Read(
                 connection: connection,
                 configure: pkCmd =>
-                {
-                    pkCmd.CommandText = """
-                    SELECT kcu.column_name
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.key_column_usage kcu 
-                        ON tc.constraint_name = kcu.constraint_name 
-                        AND tc.table_schema = kcu.table_schema
-                    WHERE tc.table_schema = @schema 
-                    AND tc.table_name = @table 
-                    AND tc.constraint_type = 'PRIMARY KEY'
-                    ORDER BY kcu.ordinal_position
-                    """;
-                    pkCmd.Parameters.AddWithValue("@schema", schemaName);
-                    pkCmd.Parameters.AddWithValue("@table", tableName);
-                },
+                    PostgresCatalogQuery.Configure(
+                        command: pkCmd,
+                        sql: CatalogQuery_InspectTable_2,
+                        schema: schemaName,
+                        table: tableName
+                    ),
                 read: reader =>
                 {
                     pkColumns.Add(reader.GetString(0));
@@ -217,34 +188,12 @@ public static partial class PostgresSchemaInspector
             PostgresCatalogQuery.Read(
                 connection: connection,
                 configure: idxCmd =>
-                {
-                    idxCmd.CommandText = """
-                    SELECT
-                        i.relname AS index_name,
-                        ix.indisunique AS is_unique,
-                        pg_get_indexdef(ix.indexrelid) AS index_def,
-                        (SELECT array_agg(a.attname ORDER BY ord.n)
-                         FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)
-                         LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ord.attnum
-                         WHERE ord.attnum > 0) AS column_names,
-                        (SELECT bool_or(ord.attnum = 0)
-                         FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)) AS has_expressions
-                    FROM pg_class t
-                    JOIN pg_index ix ON t.oid = ix.indrelid
-                    JOIN pg_class i ON i.oid = ix.indexrelid
-                    JOIN pg_namespace n ON n.oid = t.relnamespace
-                    LEFT JOIN pg_constraint owned_constraint
-                        ON owned_constraint.conindid = ix.indexrelid
-                        AND owned_constraint.contype IN ('p', 'u')
-                    WHERE n.nspname = @schema
-                    AND t.relname = @table
-                    AND NOT ix.indisprimary
-                    AND owned_constraint.oid IS NULL
-                    ORDER BY i.relname
-                    """;
-                    idxCmd.Parameters.AddWithValue("@schema", schemaName);
-                    idxCmd.Parameters.AddWithValue("@table", tableName);
-                },
+                    PostgresCatalogQuery.Configure(
+                        command: idxCmd,
+                        sql: CatalogQuery_InspectTable_3,
+                        schema: schemaName,
+                        table: tableName
+                    ),
                 read: reader =>
                 {
                     var indexName = reader.GetString(0);
@@ -288,50 +237,12 @@ public static partial class PostgresSchemaInspector
             PostgresCatalogQuery.Read(
                 connection: connection,
                 configure: fkCmd =>
-                {
-                    fkCmd.CommandText = """
-                    SELECT
-                        constraint_record.conname,
-                        array_agg(source_column.attname::text ORDER BY keys.n),
-                        referenced_table.relname,
-                        referenced_schema.nspname,
-                        array_agg(referenced_column.attname::text ORDER BY keys.n),
-                        CASE constraint_record.confdeltype
-                            WHEN 'c' THEN 'CASCADE'
-                            WHEN 'n' THEN 'SET NULL'
-                            WHEN 'd' THEN 'SET DEFAULT'
-                            WHEN 'r' THEN 'RESTRICT'
-                            ELSE 'NO ACTION'
-                        END,
-                        CASE constraint_record.confupdtype
-                            WHEN 'c' THEN 'CASCADE'
-                            WHEN 'n' THEN 'SET NULL'
-                            WHEN 'd' THEN 'SET DEFAULT'
-                            WHEN 'r' THEN 'RESTRICT'
-                            ELSE 'NO ACTION'
-                        END
-                    FROM pg_constraint constraint_record
-                    JOIN pg_class source_table ON source_table.oid = constraint_record.conrelid
-                    JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
-                    JOIN pg_class referenced_table ON referenced_table.oid = constraint_record.confrelid
-                    JOIN pg_namespace referenced_schema ON referenced_schema.oid = referenced_table.relnamespace
-                    JOIN unnest(constraint_record.conkey, constraint_record.confkey)
-                        WITH ORDINALITY AS keys(source_attnum, referenced_attnum, n) ON true
-                    JOIN pg_attribute source_column
-                        ON source_column.attrelid = source_table.oid
-                        AND source_column.attnum = keys.source_attnum
-                    JOIN pg_attribute referenced_column
-                        ON referenced_column.attrelid = referenced_table.oid
-                        AND referenced_column.attnum = keys.referenced_attnum
-                    WHERE source_schema.nspname = @schema
-                    AND source_table.relname = @table
-                    AND constraint_record.contype = 'f'
-                    GROUP BY constraint_record.oid, referenced_table.relname, referenced_schema.nspname
-                    ORDER BY constraint_record.conname
-                    """;
-                    fkCmd.Parameters.AddWithValue("@schema", schemaName);
-                    fkCmd.Parameters.AddWithValue("@table", tableName);
-                },
+                    PostgresCatalogQuery.Configure(
+                        command: fkCmd,
+                        sql: CatalogQuery_InspectTable_4,
+                        schema: schemaName,
+                        table: tableName
+                    ),
                 read: reader =>
                 {
                     var constraintName = reader.GetString(0);
@@ -476,25 +387,12 @@ public static partial class PostgresSchemaInspector
         PostgresCatalogQuery.Read(
             connection: connection,
             configure: uniqueCmd =>
-            {
-                uniqueCmd.CommandText = """
-                SELECT
-                    c.conname,
-                    array_agg(a.attname ORDER BY keys.n) AS columns
-                FROM pg_constraint c
-                JOIN pg_class t ON t.oid = c.conrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                JOIN unnest(c.conkey) WITH ORDINALITY AS keys(attnum, n) ON true
-                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
-                WHERE n.nspname = @schema
-                AND t.relname = @table
-                AND c.contype = 'u'
-                GROUP BY c.conname
-                ORDER BY c.conname
-                """;
-                uniqueCmd.Parameters.AddWithValue("@schema", schemaName);
-                uniqueCmd.Parameters.AddWithValue("@table", tableName);
-            },
+                PostgresCatalogQuery.Configure(
+                    command: uniqueCmd,
+                    sql: CatalogQuery_InspectUniqueConstraints_5,
+                    schema: schemaName,
+                    table: tableName
+                ),
             read: reader =>
             {
                 uniqueConstraints.Add(
@@ -521,29 +419,12 @@ public static partial class PostgresSchemaInspector
         PostgresCatalogQuery.Read(
             connection: connection,
             configure: checkCmd =>
-            {
-                checkCmd.CommandText = """
-                SELECT
-                    c.conname,
-                    pg_get_expr(c.conbin, c.conrelid, true),
-                    COALESCE(array_length(c.conkey, 1), 0),
-                    column_ref.attname
-                FROM pg_constraint c
-                JOIN pg_class t ON t.oid = c.conrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                LEFT JOIN LATERAL (
-                    SELECT a.attname
-                    FROM unnest(c.conkey) AS keys(attnum)
-                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
-                ) AS column_ref ON COALESCE(array_length(c.conkey, 1), 0) = 1
-                WHERE n.nspname = @schema
-                AND t.relname = @table
-                AND c.contype = 'c'
-                ORDER BY c.conname
-                """;
-                checkCmd.Parameters.AddWithValue("@schema", schemaName);
-                checkCmd.Parameters.AddWithValue("@table", tableName);
-            },
+                PostgresCatalogQuery.Configure(
+                    command: checkCmd,
+                    sql: CatalogQuery_InspectCheckConstraints_6,
+                    schema: schemaName,
+                    table: tableName
+                ),
             read: reader =>
             {
                 var name = reader.GetString(0);
@@ -662,12 +543,7 @@ public static partial class PostgresSchemaInspector
         var forced = false;
         using (var enabledCmd = connection.CreateCommand())
         {
-            enabledCmd.CommandText = """
-                SELECT c.relrowsecurity, c.relforcerowsecurity
-                FROM pg_class c
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = @schema AND c.relname = @table
-                """;
+            enabledCmd.CommandText = CatalogQuery_InspectRls_7;
             enabledCmd.Parameters.AddWithValue("@schema", schemaName);
             enabledCmd.Parameters.AddWithValue("@table", tableName);
             using var reader = enabledCmd.ExecuteReader();
@@ -681,12 +557,7 @@ public static partial class PostgresSchemaInspector
         var policies = new List<RlsPolicyDefinition>();
         using (var polCmd = connection.CreateCommand())
         {
-            polCmd.CommandText = """
-                SELECT policyname, permissive, cmd, roles, qual, with_check
-                FROM pg_policies
-                WHERE schemaname = @schema AND tablename = @table
-                ORDER BY policyname
-                """;
+            polCmd.CommandText = CatalogQuery_InspectRls_8;
             polCmd.Parameters.AddWithValue("@schema", schemaName);
             polCmd.Parameters.AddWithValue("@table", tableName);
             using var reader = polCmd.ExecuteReader();

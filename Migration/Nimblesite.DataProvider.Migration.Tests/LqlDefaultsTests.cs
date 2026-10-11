@@ -1,5 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Tests.Shared;
+
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
@@ -54,82 +55,31 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     // BOOLEAN DEFAULTS - true/false across platforms
     // =========================================================================
 
-    [Fact]
-    public void LqlBoolean_True_WorksOnBothPlatforms()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(LqlBoolean_WorksOnBothPlatformsCases))]
+    public void LqlBoolean_WorksOnBothPlatforms(
+        Func<SchemaDefinition> input0,
+        string table,
+        string column,
+        string[] pgExpected,
+        string[] sqliteExpected,
+        bool pgValue,
+        long sqliteValue
+    )
     {
-        // Arrange - Same LQL schema for both platforms
-        var schema = Fixture_LqlBoolean_True_WorksOnBothPlatforms_1();
-
-        // Act - Apply to both databases
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // VERIFY DDL: Table structure is correct
-        var pgDdl = GetPostgresTableDdl(_pgConnection, "settings");
-        var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "settings");
-
-        // PostgreSQL: boolean column with DEFAULT true
-        ContainsAll(actual: pgDdl, expected: ["enabled", "DEFAULT true"]);
-
-        // SQLite: integer column with DEFAULT 1 (true = 1)
-        ContainsAll(actual: sqliteDdl, expected: ["[enabled]", "DEFAULT 1"]);
-
-        // VERIFY COLUMNS: Exactly 2 columns, no extras
-        var pgColumns = GetPostgresColumns(_pgConnection, "settings");
-        Assert.Equal(2, pgColumns.Count);
-        Assert.Contains("id", pgColumns);
-        Assert.Contains("enabled", pgColumns);
-
-        var sqliteColumns = GetSqliteColumns(_sqliteConnection, "settings");
-        Assert.Equal(2, sqliteColumns.Count);
-        Assert.Contains("id", sqliteColumns);
-        Assert.Contains("enabled", sqliteColumns);
-
-        // Insert without specifying 'enabled'
-        ExecutePg("INSERT INTO settings (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO settings (id) VALUES (1)");
-
-        // VERIFY RUNTIME: Defaults applied correctly
-        var pgValue = QueryPg<bool>("SELECT enabled FROM settings WHERE id = 1");
-        var sqliteValue = QuerySqlite<long>("SELECT enabled FROM settings WHERE id = 1");
-
-        Assert.True(pgValue); // Postgres: true
-        Assert.Equal(1, sqliteValue); // SQLite: 1 (represents true)
-    }
-
-    [Fact]
-    public void LqlBoolean_False_WorksOnBothPlatforms()
-    {
-        // Arrange
-        var schema = Fixture_LqlBoolean_False_WorksOnBothPlatforms_1();
-
-        // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // VERIFY DDL: Table structure is correct
-        var pgDdl = GetPostgresTableDdl(_pgConnection, "flags");
-        var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "flags");
-
-        // PostgreSQL: boolean column with DEFAULT false
-        ContainsAll(actual: pgDdl, expected: ["disabled", "DEFAULT false"]);
-
-        // SQLite: integer column with DEFAULT 0 (false = 0)
-        ContainsAll(actual: sqliteDdl, expected: ["[disabled]", "DEFAULT 0"]);
-
-        // VERIFY COLUMNS: Exactly 2 columns, no extras
-        Assert.Equal(2, GetPostgresColumns(_pgConnection, "flags").Count);
-        Assert.Equal(2, GetSqliteColumns(_sqliteConnection, "flags").Count);
-
-        ExecutePg("INSERT INTO flags (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO flags (id) VALUES (1)");
-
-        // VERIFY RUNTIME: Defaults applied correctly
-        var pgValue = QueryPg<bool>("SELECT disabled FROM flags WHERE id = 1");
-        var sqliteValue = QuerySqlite<long>("SELECT disabled FROM flags WHERE id = 1");
-
-        Assert.False(pgValue); // Postgres: false
-        Assert.Equal(0, sqliteValue); // SQLite: 0 (represents false)
+        var (pgDdl, sqliteDdl) = ReadBothDdl(input0: input0, tableName: table);
+        ContainsAll(actual: pgDdl, expected: [.. pgExpected]);
+        ContainsAll(actual: sqliteDdl, expected: [.. sqliteExpected]);
+        AssertBothColumnCount(tableName: table, expected: 2);
+        ExecutePg($"INSERT INTO {table} (id) VALUES (1)");
+        ExecuteSqlite($"INSERT INTO {table} (id) VALUES (1)");
+        AssertPgSqlite<bool, long>(
+            pgValue,
+            $"SELECT {column} FROM {table} WHERE id = 1",
+            sqliteValue,
+            $"SELECT {column} FROM {table} WHERE id = 1"
+        );
     }
 
     // =========================================================================
@@ -145,12 +95,13 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var beforeTest = DateTime.UtcNow.AddSeconds(-1);
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // VERIFY DDL: Default expressions are correctly translated
-        var pgDdl = GetPostgresTableDdl(_pgConnection, "events");
-        var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "events");
+        var (pgDdl, sqliteDdl) = VerifySharedContinuation6(
+            input0: _pgConnection,
+            input1: schema,
+            input2: _sqliteConnection,
+            value0: "events",
+            value1: "events"
+        );
 
         // PostgreSQL: now() translates to CURRENT_TIMESTAMP
         Assert.Contains("created_at", pgDdl);
@@ -186,18 +137,14 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlCurrentTimestamp_SameAsNow_BothPlatforms()
     {
         // Arrange
-        var schema = Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        var (pgValue, sqliteValue) = VerifyReusableWorkflow23(
+            input0: VerifySharedChecks3,
+            input1: Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1,
             value0: "INSERT INTO logs (id) VALUES (1)",
-            value1: "INSERT INTO logs (id) VALUES (1)"
+            value1: "INSERT INTO logs (id) VALUES (1)",
+            value2: "SELECT timestamp FROM logs WHERE id = 1",
+            value3: "SELECT timestamp FROM logs WHERE id = 1"
         );
-
-        // Assert - Should have valid timestamps
-        var pgValue = QueryPg<DateTime>("SELECT timestamp FROM logs WHERE id = 1");
-        var sqliteValue = QuerySqlite<string>("SELECT timestamp FROM logs WHERE id = 1");
 
         Assert.True(pgValue > DateTime.MinValue);
         Assert.False(string.IsNullOrEmpty(sqliteValue));
@@ -207,18 +154,14 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlCurrentDate_ReturnsDateOnly_BothPlatforms()
     {
         // Arrange
-        var schema = Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        var (pgValue, sqliteValue) = VerifyReusableWorkflow23(
+            input0: VerifySharedChecks3,
+            input1: Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1,
             value0: "INSERT INTO daily_records (id) VALUES (1)",
-            value1: "INSERT INTO daily_records (id) VALUES (1)"
+            value1: "INSERT INTO daily_records (id) VALUES (1)",
+            value2: "SELECT record_date FROM daily_records WHERE id = 1",
+            value3: "SELECT record_date FROM daily_records WHERE id = 1"
         );
-
-        // Assert
-        var pgValue = QueryPg<DateTime>("SELECT record_date FROM daily_records WHERE id = 1");
-        var sqliteValue = QuerySqlite<string>("SELECT record_date FROM daily_records WHERE id = 1");
 
         // Postgres: Date value
         Assert.Equal(DateTime.UtcNow.Date, pgValue.Date);
@@ -231,49 +174,56 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     // NUMERIC DEFAULTS - integers and decimals
     // =========================================================================
 
-    [Fact]
-    public void LqlNumericInteger_DefaultsCorrectly_BothPlatforms()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(LqlNumeric_SameValueBothPlatformsCases))]
+    public void LqlNumeric_SameValueBothPlatforms_ContextCases(
+        string caseName,
+        Func<SchemaDefinition> input0,
+        string insertSql,
+        string table,
+        string[] columns,
+        long[] expected
+    )
     {
-        // Arrange
-        var schema = Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
-            value0: "INSERT INTO counters (id) VALUES (1)",
-            value1: "INSERT INTO counters (id) VALUES (1)"
-        );
-
-        // Assert - Same integer values on both platforms
-        Assert.Equal(42, QueryPg<int>("SELECT count FROM counters WHERE id = 1"));
-        Assert.Equal(42, QuerySqlite<long>("SELECT count FROM counters WHERE id = 1"));
-
-        Assert.Equal(-100, QueryPg<int>("SELECT negative FROM counters WHERE id = 1"));
-        Assert.Equal(-100, QuerySqlite<long>("SELECT negative FROM counters WHERE id = 1"));
-
-        Assert.Equal(0, QueryPg<int>("SELECT zero FROM counters WHERE id = 1"));
-        Assert.Equal(0, QuerySqlite<long>("SELECT zero FROM counters WHERE id = 1"));
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        VerifySharedChecks3(input0: input0, value0: insertSql, value1: insertSql);
+        for (var i = 0; i < columns.Length; i++)
+        {
+            AssertPgSqliteLong(
+                expected: expected[i],
+                pgSql: $"SELECT {columns[i]} FROM {table} WHERE id = 1",
+                sqliteSql: $"SELECT {columns[i]} FROM {table} WHERE id = 1"
+            );
+        }
     }
 
     [Fact]
     public void LqlNumericDecimal_DefaultsCorrectly_BothPlatforms()
     {
         // Arrange
-        var schema = Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedChecks3(
+            input0: Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1,
             value0: "INSERT INTO prices (id) VALUES (1)",
             value1: "INSERT INTO prices (id) VALUES (1)"
         );
 
         // Assert - Same decimal values (within floating-point tolerance for SQLite)
-        Assert.Equal(99.99m, QueryPg<decimal>("SELECT amount FROM prices WHERE id = 1"));
-        Assert.Equal(99.99, QuerySqlite<double>("SELECT amount FROM prices WHERE id = 1"), 2);
+        VerifyReusableWorkflow4(
+            value0: 99.99m,
+            value1: "SELECT amount FROM prices WHERE id = 1",
+            value2: 99.99,
+            value3: "SELECT amount FROM prices WHERE id = 1",
+            value4: 2
+        );
 
-        Assert.Equal(0.0825m, QueryPg<decimal>("SELECT tax_rate FROM prices WHERE id = 1"));
-        Assert.Equal(0.0825, QuerySqlite<double>("SELECT tax_rate FROM prices WHERE id = 1"), 4);
+        VerifyReusableWorkflow4(
+            value0: 0.0825m,
+            value1: "SELECT tax_rate FROM prices WHERE id = 1",
+            value2: 0.0825,
+            value3: "SELECT tax_rate FROM prices WHERE id = 1",
+            value4: 4
+        );
 
         Assert.Equal(-10.50m, QueryPg<decimal>("SELECT discount FROM prices WHERE id = 1"));
         Assert.Equal(-10.50, QuerySqlite<double>("SELECT discount FROM prices WHERE id = 1"), 2);
@@ -287,28 +237,32 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlStringLiteral_DefaultsCorrectly_BothPlatforms()
     {
         // Arrange - Strings must be quoted with single quotes in LQL
-        var schema = Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1,
             value0: "INSERT INTO statuses (id) VALUES (1)",
             value1: "INSERT INTO statuses (id) VALUES (1)"
         );
 
         // Assert - Same string values on both platforms
-        Assert.Equal("active", QueryPg<string>("SELECT status FROM statuses WHERE id = 1"));
-        AssertDatabaseQueryValues(
+        VerifyCompletionWorkflow1(
+            input0: AssertDatabaseQueryValues,
             value0: "active",
             value1: "SELECT status FROM statuses WHERE id = 1",
-            value2: "uncategorized",
-            value3: "SELECT category FROM statuses WHERE id = 1",
+            value2: "active",
+            value3: "SELECT status FROM statuses WHERE id = 1",
             value4: "uncategorized",
-            value5: "SELECT category FROM statuses WHERE id = 1"
+            value5: "SELECT category FROM statuses WHERE id = 1",
+            value6: "uncategorized",
+            value7: "SELECT category FROM statuses WHERE id = 1"
         );
 
         Assert.Equal("", QueryPg<string>("SELECT empty FROM statuses WHERE id = 1"));
-        Assert.Equal("", QuerySqlite<string>("SELECT empty FROM statuses WHERE id = 1"));
+        AssertPgSqlite<string, string>(
+            "",
+            "SELECT empty FROM statuses WHERE id = 1",
+            "",
+            "SELECT empty FROM statuses WHERE id = 1"
+        );
     }
 
     // =========================================================================
@@ -319,15 +273,13 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlGenUuid_GeneratesValidUuid_BothPlatforms()
     {
         // Arrange
-        var schema = Fixture_LqlGenUuid_GeneratesValidUuid_BothPlatforms_1();
-
-        // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // VERIFY DDL: UUID generation is correctly translated
-        var pgDdl = GetPostgresTableDdl(_pgConnection, "entities");
-        var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "entities");
+        var (pgDdl, sqliteDdl) = VerifySharedPhase4(
+            input0: Fixture_LqlGenUuid_GeneratesValidUuid_BothPlatforms_1,
+            input1: _pgConnection,
+            input2: _sqliteConnection,
+            value0: "entities",
+            value1: "entities"
+        );
 
         // PostgreSQL: gen_uuid() translates to gen_random_uuid()
         Assert.Contains("id", pgDdl);
@@ -339,14 +291,10 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         // VERIFY COLUMNS: Exactly 2 columns
         var pgCols = GetPostgresColumns(_pgConnection, "entities");
-        Assert.Equal(2, pgCols.Count);
-        Assert.Contains("id", pgCols);
-        Assert.Contains("name", pgCols);
+        VerifySharedPhase7(input0: pgCols, value0: 2, value2: "name");
 
         var sqliteCols = GetSqliteColumns(_sqliteConnection, "entities");
-        Assert.Equal(2, sqliteCols.Count);
-        Assert.Contains("id", sqliteCols);
-        Assert.Contains("name", sqliteCols);
+        VerifySharedPhase7(input0: sqliteCols, value0: 2, value2: "name");
 
         // Insert without specifying UUID (let default generate it)
         ExecutePg("INSERT INTO entities (name) VALUES ('test1')");
@@ -377,11 +325,8 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlUuidAlias_SameAsGenUuid_BothPlatforms()
     {
         // Arrange - uuid() should work the same as gen_uuid()
-        var schema = Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1,
             value0: "INSERT INTO items (label) VALUES ('item1')",
             value1: "INSERT INTO items (label) VALUES ('item1')"
         );
@@ -403,15 +348,13 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlMultipleDefaults_AllWorkTogether_BothPlatforms()
     {
         // Arrange - Real-world scenario with multiple LQL defaults
-        var schema = Fixture_LqlMultipleDefaults_AllWorkTogether_BothPlatforms_1();
-
-        // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // VERIFY DDL: All defaults are correctly translated
-        var pgDdl = GetPostgresTableDdl(_pgConnection, "audit_records");
-        var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "audit_records");
+        var (pgDdl, sqliteDdl) = VerifySharedPhase4(
+            input0: Fixture_LqlMultipleDefaults_AllWorkTogether_BothPlatforms_1,
+            input1: _pgConnection,
+            input2: _sqliteConnection,
+            value0: "audit_records",
+            value1: "audit_records"
+        );
 
         // PostgreSQL DDL verification
         Assert.Contains("gen_random_uuid()", pgDdl.ToLowerInvariant()); // UUID
@@ -431,9 +374,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         // VERIFY COLUMNS: Exactly 7 columns with correct names
         var pgCols = GetPostgresColumns(_pgConnection, "audit_records");
-        Assert.Equal(7, pgCols.Count);
-        Assert.Contains("id", pgCols);
-        Assert.Contains("action", pgCols);
+        VerifySharedPhase7(input0: pgCols, value0: 7, value2: "action");
         Assert.Contains("is_success", pgCols);
         Assert.Contains("retry_count", pgCols);
         Assert.Contains("priority", pgCols);
@@ -513,20 +454,22 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlDefaults_Idempotent_BothPlatforms_1();
 
         // Act - Apply FIRST time
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // Capture DDL BEFORE second application
-        var pgDdlBefore = GetPostgresTableDdl(_pgConnection, "rerunnable");
-        var sqliteDdlBefore = GetSqliteTableDdl(_sqliteConnection, "rerunnable");
+        var (pgDdlBefore, sqliteDdlBefore) = VerifySharedContinuation6(
+            input0: _pgConnection,
+            input1: schema,
+            input2: _sqliteConnection,
+            value0: "rerunnable",
+            value1: "rerunnable"
+        );
 
         // Apply SECOND time
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        // Capture DDL AFTER second application
-        var pgDdlAfter = GetPostgresTableDdl(_pgConnection, "rerunnable");
-        var sqliteDdlAfter = GetSqliteTableDdl(_sqliteConnection, "rerunnable");
+        var (pgDdlAfter, sqliteDdlAfter) = VerifySharedContinuation6(
+            input0: _pgConnection,
+            input1: schema,
+            input2: _sqliteConnection,
+            value0: "rerunnable",
+            value1: "rerunnable"
+        );
 
         // ASSERT 1: DDL is IDENTICAL before and after (proves true idempotency)
         Assert.Equal(pgDdlBefore, pgDdlAfter);
@@ -536,17 +479,13 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         // PostgreSQL: Verify table exists with correct columns
         Assert.True(SchemaVerifier.PostgresTableExists(_pgConnection, "rerunnable", "public"));
         var pgColumns = GetPostgresColumns(_pgConnection, "rerunnable", "public");
-        Assert.Equal(3, pgColumns.Count); // id, active, count - NO EXTRA COLUMNS
-        Assert.Contains("id", pgColumns);
-        Assert.Contains("active", pgColumns);
+        VerifySharedPhase7(input0: pgColumns, value0: 3, value2: "active");
         Assert.Contains("count", pgColumns);
 
         // SQLite: Verify table exists with correct columns
         Assert.True(SchemaVerifier.SqliteTableExists(_sqliteConnection, "rerunnable"));
         var sqliteColumns = GetSqliteColumns(_sqliteConnection, "rerunnable");
-        Assert.Equal(3, sqliteColumns.Count); // id, active, count - NO EXTRA COLUMNS
-        Assert.Contains("id", sqliteColumns);
-        Assert.Contains("active", sqliteColumns);
+        VerifySharedPhase7(input0: sqliteColumns, value0: 3, value2: "active");
         Assert.Contains("count", sqliteColumns);
 
         // ASSERT 3: Defaults are CORRECT in DDL
@@ -580,55 +519,30 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     // =========================================================================
 
     [Fact]
-    public void LqlNumeric_LargeInteger_SameValueBothPlatforms()
-    {
-        // Arrange - Test large integer values (near int32 boundaries)
-        var schema = Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
-            value0: "INSERT INTO large_nums (id) VALUES (1)",
-            value1: "INSERT INTO large_nums (id) VALUES (1)"
-        );
-
-        // Assert - Same values on both platforms
-        Assert.Equal(2147483647, QueryPg<long>("SELECT big_pos FROM large_nums WHERE id = 1"));
-        Assert.Equal(2147483647, QuerySqlite<long>("SELECT big_pos FROM large_nums WHERE id = 1"));
-
-        Assert.Equal(-2147483648, QueryPg<long>("SELECT big_neg FROM large_nums WHERE id = 1"));
-        Assert.Equal(-2147483648, QuerySqlite<long>("SELECT big_neg FROM large_nums WHERE id = 1"));
-    }
-
-    [Fact]
     public void LqlNumeric_VerySmallDecimal_SameValueBothPlatforms()
     {
         // Arrange - Test precision with very small decimal values
-        var schema = Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1,
             value0: "INSERT INTO precision_test (id) VALUES (1)",
             value1: "INSERT INTO precision_test (id) VALUES (1)"
         );
 
         // Assert
-        Assert.Equal(0.00000001m, QueryPg<decimal>("SELECT tiny FROM precision_test WHERE id = 1"));
-        Assert.Equal(
-            0.00000001,
-            QuerySqlite<double>("SELECT tiny FROM precision_test WHERE id = 1"),
-            8
+        VerifyReusableWorkflow4(
+            value0: 0.00000001m,
+            value1: "SELECT tiny FROM precision_test WHERE id = 1",
+            value2: 0.00000001,
+            value3: "SELECT tiny FROM precision_test WHERE id = 1",
+            value4: 8
         );
 
-        Assert.Equal(
-            3.1415926535m,
-            QueryPg<decimal>("SELECT scientific FROM precision_test WHERE id = 1")
-        );
-        Assert.Equal(
-            3.1415926535,
-            QuerySqlite<double>("SELECT scientific FROM precision_test WHERE id = 1"),
-            10
+        VerifyReusableWorkflow4(
+            value0: 3.1415926535m,
+            value1: "SELECT scientific FROM precision_test WHERE id = 1",
+            value2: 3.1415926535,
+            value3: "SELECT scientific FROM precision_test WHERE id = 1",
+            value4: 10
         );
     }
 
@@ -636,40 +550,35 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlString_SpecialCharacters_SameValueBothPlatforms()
     {
         // Arrange - Test strings with special characters (escaped in LQL as SQL single quotes)
-        var schema = Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1,
             value0: "INSERT INTO special_strings (id) VALUES (1)",
             value1: "INSERT INTO special_strings (id) VALUES (1)"
         );
 
         // Assert - Same string values on both platforms
-        Assert.Equal(
-            "hello world",
-            QueryPg<string>("SELECT with_spaces FROM special_strings WHERE id = 1")
-        );
-        AssertDatabaseQueryValues(
+        VerifyCompletionWorkflow1(
+            input0: AssertDatabaseQueryValues,
             value0: "hello world",
             value1: "SELECT with_spaces FROM special_strings WHERE id = 1",
-            value2: "test123",
-            value3: "SELECT with_numbers FROM special_strings WHERE id = 1",
+            value2: "hello world",
+            value3: "SELECT with_spaces FROM special_strings WHERE id = 1",
             value4: "test123",
-            value5: "SELECT with_numbers FROM special_strings WHERE id = 1"
+            value5: "SELECT with_numbers FROM special_strings WHERE id = 1",
+            value6: "test123",
+            value7: "SELECT with_numbers FROM special_strings WHERE id = 1"
         );
 
-        Assert.Equal(
-            "foo-bar-baz",
-            QueryPg<string>("SELECT with_hyphen FROM special_strings WHERE id = 1")
-        );
-        AssertDatabaseQueryValues(
+        VerifyCompletionWorkflow1(
+            input0: AssertDatabaseQueryValues,
             value0: "foo-bar-baz",
             value1: "SELECT with_hyphen FROM special_strings WHERE id = 1",
-            value2: "snake_case_value",
-            value3: "SELECT with_underscore FROM special_strings WHERE id = 1",
+            value2: "foo-bar-baz",
+            value3: "SELECT with_hyphen FROM special_strings WHERE id = 1",
             value4: "snake_case_value",
-            value5: "SELECT with_underscore FROM special_strings WHERE id = 1"
+            value5: "SELECT with_underscore FROM special_strings WHERE id = 1",
+            value6: "snake_case_value",
+            value7: "SELECT with_underscore FROM special_strings WHERE id = 1"
         );
     }
 
@@ -677,27 +586,25 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     public void LqlBoolean_MultipleColumns_AllDefaultCorrectly()
     {
         // Arrange - Test multiple boolean defaults in various combinations
-        var schema = Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1,
             value0: "INSERT INTO feature_flags (id) VALUES (1)",
             value1: "INSERT INTO feature_flags (id) VALUES (1)"
         );
 
         // Assert - All flags match expected values
-        Assert.True(QueryPg<bool>("SELECT flag_a FROM feature_flags WHERE id = 1"));
-        Assert.Equal(1, QuerySqlite<long>("SELECT flag_a FROM feature_flags WHERE id = 1"));
-
-        Assert.False(QueryPg<bool>("SELECT flag_b FROM feature_flags WHERE id = 1"));
-        Assert.Equal(0, QuerySqlite<long>("SELECT flag_b FROM feature_flags WHERE id = 1"));
-
-        Assert.True(QueryPg<bool>("SELECT flag_c FROM feature_flags WHERE id = 1"));
-        Assert.Equal(1, QuerySqlite<long>("SELECT flag_c FROM feature_flags WHERE id = 1"));
-
-        Assert.False(QueryPg<bool>("SELECT flag_d FROM feature_flags WHERE id = 1"));
-        Assert.Equal(0, QuerySqlite<long>("SELECT flag_d FROM feature_flags WHERE id = 1"));
+        VerifyCompletionWorkflow2(
+            value1: "SELECT flag_a FROM feature_flags WHERE id = 1",
+            value3: "SELECT flag_a FROM feature_flags WHERE id = 1",
+            value5: "SELECT flag_b FROM feature_flags WHERE id = 1",
+            value7: "SELECT flag_b FROM feature_flags WHERE id = 1"
+        );
+        VerifyCompletionWorkflow2(
+            value1: "SELECT flag_c FROM feature_flags WHERE id = 1",
+            value3: "SELECT flag_c FROM feature_flags WHERE id = 1",
+            value5: "SELECT flag_d FROM feature_flags WHERE id = 1",
+            value7: "SELECT flag_d FROM feature_flags WHERE id = 1"
+        );
     }
 
     [Fact]
@@ -718,35 +625,18 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         }
 
         // Assert - All UUIDs are unique in Postgres
-        var pgDistinct = (long)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _pgConnection,
-                configure: command =>
-                    command.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test"
-            )!;
-
-        Assert.Equal(10, pgDistinct);
+        Assert.Equal(10, QueryPg<long>("SELECT COUNT(DISTINCT id) FROM uuid_test"));
 
         // Assert - All UUIDs are unique in SQLite
-        var sqliteDistinct = (long)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _sqliteConnection,
-                configure: command =>
-                    command.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test"
-            )!;
-
-        Assert.Equal(10, sqliteDistinct);
+        Assert.Equal(10, QuerySqlite<long>("SELECT COUNT(DISTINCT id) FROM uuid_test"));
     }
 
     [Fact]
     public void LqlTimestamp_AllTimeTypes_WorkBothPlatforms()
     {
         // Arrange - Test all time-related LQL functions
-        var schema = Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1();
-
-        // Act
-        ApplyBothSchemasAndReadDdl(
-            input0: schema,
+        VerifySharedContinuation2(
+            input0: Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1,
             value0: "INSERT INTO time_test (id) VALUES (1)",
             value1: "INSERT INTO time_test (id) VALUES (1)"
         );
@@ -787,12 +677,13 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         Func<SchemaOperation, string> generator
     )
     {
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(conn, "public", _logger)
-        ).Value;
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-        ).Value;
+        var operations = SqliteTestDb.CalculateChanges(
+            inspect: () =>
+                (Ok(actual: PostgresSchemaInspector.Inspect(conn, "public", _logger))).Value,
+            desired: schema,
+            allowDestructive: false,
+            logger: _logger
+        );
         _ = MigrationRunner.Apply(conn, operations, generator, MigrationOptions.Default, _logger);
     }
 
@@ -802,10 +693,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         Func<SchemaOperation, string> generator
     )
     {
-        var currentSchema = ((SchemaResultOk)SqliteSchemaInspector.Inspect(conn, _logger)).Value;
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-        ).Value;
+        var operations = SqliteTestDb.CalculateChanges(conn, schema, _logger);
         _ = MigrationRunner.Apply(conn, operations, generator, MigrationOptions.Default, _logger);
     }
 
@@ -825,22 +713,68 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         );
     }
 
-    private T QueryPg<T>(string sql)
+    private T QueryPg<T>(string sql) => Query<T>(connection: _pgConnection, sql: sql);
+
+    private T QuerySqlite<T>(string sql) => Query<T>(connection: _sqliteConnection, sql: sql);
+
+    private static T Query<T>(global::System.Data.Common.DbConnection connection, string sql)
     {
         return (T)
             global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _pgConnection,
+                connection: connection,
                 configure: command => command.CommandText = sql
             )!;
     }
 
-    private T QuerySqlite<T>(string sql)
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (string PgDdl, string SqliteDdl) ReadBothDdl(
+        Func<SchemaDefinition> input0,
+        string tableName
+    ) =>
+        VerifySharedPhase4(
+            input0: input0,
+            input1: _pgConnection,
+            input2: _sqliteConnection,
+            value0: tableName,
+            value1: tableName
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void AssertBothColumnCount(string tableName, int expected)
     {
-        return (T)
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _sqliteConnection,
-                configure: command => command.CommandText = sql
-            )!;
+        Assert.Equal(expected, GetPostgresColumns(_pgConnection, tableName).Count);
+        Assert.Equal(expected, GetSqliteColumns(_sqliteConnection, tableName).Count);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void AssertPgSqliteLong(long expected, string pgSql, string sqliteSql)
+    {
+        Assert.Equal(
+            expected,
+            Convert.ToInt64(
+                QueryPg<object>(pgSql),
+                System.Globalization.CultureInfo.InvariantCulture
+            )
+        );
+        Assert.Equal(
+            expected,
+            Convert.ToInt64(
+                QuerySqlite<object>(sqliteSql),
+                System.Globalization.CultureInfo.InvariantCulture
+            )
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void AssertPgSqlite<TPg, TSqlite>(
+        TPg pgExpected,
+        string pgSql,
+        TSqlite sqliteExpected,
+        string sqliteSql
+    )
+    {
+        Assert.Equal(pgExpected, QueryPg<TPg>(pgSql));
+        Assert.Equal(sqliteExpected, QuerySqlite<TSqlite>(sqliteSql));
     }
 
     // =========================================================================
@@ -859,9 +793,12 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     {
         // Query column info from information_schema and build a normalized DDL representation
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_GetPostgresTableDdl_1;
-        cmd.Parameters.AddWithValue("@schema", schema);
-        cmd.Parameters.AddWithValue("@table", tableName);
+        VerifyUnifiedWorkflow102(
+            input0: cmd,
+            input1: Data_GetPostgresTableDdl_1,
+            input2: schema,
+            input3: tableName
+        );
 
         var ddlParts = new List<string> { $"CREATE TABLE {schema}.{tableName} (" };
 
@@ -885,9 +822,12 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         // Get primary key info
         using var pkCmd = conn.CreateCommand();
-        pkCmd.CommandText = Data_GetPostgresTableDdl_2;
-        pkCmd.Parameters.AddWithValue("@schema", schema);
-        pkCmd.Parameters.AddWithValue("@table", tableName);
+        VerifyUnifiedWorkflow102(
+            input0: pkCmd,
+            input1: Data_GetPostgresTableDdl_2,
+            input2: schema,
+            input3: tableName
+        );
 
         var pkColumns = DatabaseCommands.ReadStrings(pkCmd);
 
@@ -927,9 +867,12 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     )
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_GetPostgresColumns_1;
-        cmd.Parameters.AddWithValue("@schema", schema);
-        cmd.Parameters.AddWithValue("@table", tableName);
+        VerifyUnifiedWorkflow102(
+            input0: cmd,
+            input1: Data_GetPostgresColumns_1,
+            input2: schema,
+            input3: tableName
+        );
 
         return DatabaseCommands.ReadStrings(cmd);
     }
@@ -974,5 +917,150 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         Assert.Equal(value2, QueryPg<string>(value3));
         Assert.Equal(value4, QuerySqlite<string>(value5));
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedChecks3(Func<SchemaDefinition> input0, string value0, string value1) =>
+        VerifySharedContinuation2(input0: input0, value0: value0, value1: value1);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyUnifiedWorkflow102(
+        NpgsqlCommand input0,
+        string input1,
+        string input2,
+        string input3
+    )
+    {
+        input0.CommandText = input1;
+        input0.Parameters.AddWithValue("@schema", input2);
+        input0.Parameters.AddWithValue("@table", input3);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedContinuation2(
+        Func<SchemaDefinition> input0,
+        string value0,
+        string value1
+    )
+    { // Arrange - Strings must be quoted with single quotes in LQL
+        var schema = input0();
+
+        // Act
+        ApplyBothSchemasAndReadDdl(input0: schema, value0: value0, value1: value1);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (string, string) VerifySharedContinuation6(
+        NpgsqlConnection input0,
+        SchemaDefinition input1,
+        SqliteConnection input2,
+        string value0,
+        string value1
+    )
+    {
+        // Act - Apply to both databases
+        ApplySchema(input0, input1, PostgresDdlGenerator.Generate);
+        ApplySchema(input2, input1, SqliteDdlGenerator.Generate);
+
+        // VERIFY DDL: Table structure is correct
+        var pgDdl = GetPostgresTableDdl(input0, value0);
+        var sqliteDdl = GetSqliteTableDdl(input2, value1);
+
+        return (pgDdl, sqliteDdl);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal (string, string) VerifySharedPhase4(
+        Func<SchemaDefinition> input0,
+        NpgsqlConnection input1,
+        SqliteConnection input2,
+        string value0,
+        string value1
+    )
+    { // Arrange - Same LQL schema for both platforms
+        var schema = input0();
+
+        // Act - Apply to both databases
+        var (pgDdl, sqliteDdl) = VerifySharedContinuation6(
+            input0: input1,
+            input1: schema,
+            input2: input2,
+            value0: value0,
+            value1: value1
+        );
+
+        return (pgDdl, sqliteDdl);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySharedPhase7(List<string> input0, int value0, string value2)
+    {
+        Assert.Equal(value0, input0.Count);
+        Assert.Contains("id", input0);
+        Assert.Contains(value2, input0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyReusableWorkflow4(
+        decimal value0,
+        string value1,
+        double value2,
+        string value3,
+        int value4
+    )
+    {
+        // Assert - Same decimal values (within floating-point tolerance for SQLite)
+        Assert.Equal(value0, QueryPg<decimal>(value1));
+        Assert.Equal(value2, QuerySqlite<double>(value3), value4);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (DateTime, string) VerifyReusableWorkflow23(
+        Action<Func<SchemaDefinition>, string, string> input0,
+        Func<SchemaDefinition> input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    { // Arrange
+        input0(arg1: input1, arg2: value0, arg3: value1);
+
+        // Assert - Should have valid timestamps
+        var pgValue = QueryPg<DateTime>(value2);
+        var sqliteValue = QuerySqlite<string>(value3);
+
+        return (pgValue, sqliteValue);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyCompletionWorkflow1(
+        Action<string, string, string, string, string, string> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4,
+        string value5,
+        string value6,
+        string value7
+    )
+    {
+        // Assert - Same string values on both platforms
+        Assert.Equal(value0, QueryPg<string>(value1));
+        input0(arg1: value2, arg2: value3, arg3: value4, arg4: value5, arg5: value6, arg6: value7);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyCompletionWorkflow2(
+        string value1,
+        string value3,
+        string value5,
+        string value7
+    )
+    {
+        // Assert - All flags match expected values
+        AssertPgSqlite<bool, long>(true, value1, 1L, value3);
+        AssertPgSqlite<bool, long>(false, value5, 0L, value7);
     }
 }

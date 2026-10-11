@@ -63,12 +63,14 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(actual: code, expected: [caseValue0, caseValue1, caseValue2, caseValue3]);
+        // Act
+        // Assert
+        SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
+            expected: [caseValue0, caseValue1, caseValue2, caseValue3]
+        );
     }
 
     [Fact]
@@ -90,12 +92,14 @@ public sealed partial class BulkOperationsTests
         var table = CreateTableWithIdentity();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(actual: code, expected: ["BulkInsertOrdersAsync", "CustomerId", "Total"]);
+        // Act
+        // Assert
+        var code = SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
+            expected: ["BulkInsertOrdersAsync", "CustomerId", "Total"]
+        );
         Assert.DoesNotContain("Id Id", code);
     }
 
@@ -116,12 +120,14 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(actual: code, expected: [caseValue0, caseValue1, caseValue2]);
+        // Act
+        // Assert
+        SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
+            expected: [caseValue0, caseValue1, caseValue2]
+        );
     }
 
     [Fact]
@@ -131,12 +137,13 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table, batchSize: 500);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        Assert.Contains("const int batchSize = 500;", code);
+        global::Tests.Shared.StringAssertions.SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table, batchSize: 500),
+            expected: ["const int batchSize = 500;"],
+            comparison: StringComparison.CurrentCulture
+        );
     }
 
     [Fact]
@@ -146,13 +153,12 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(
-            actual: code,
+        // Act
+        // Assert
+        SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkUpsertMethod(table),
             expected: ["BulkUpsertProductsAsync", "INSERT OR REPLACE INTO Products"]
         );
     }
@@ -164,17 +170,17 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(
-            table,
-            databaseType: "Postgres",
-            connectionType: "NpgsqlConnection"
-        );
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(
-            actual: code,
+        // Act
+        // Assert
+        SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateBulkUpsertMethod(
+                    table,
+                    databaseType: "Postgres",
+                    connectionType: "NpgsqlConnection"
+                ),
             expected: ["ON CONFLICT", "DO UPDATE SET", "EXCLUDED.", "NpgsqlCommand"]
         );
     }
@@ -186,12 +192,13 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "SQLite");
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        Assert.Contains("INSERT OR REPLACE INTO", code);
+        var code = global::Tests.Shared.StringAssertions.SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "SQLite"),
+            expected: ["INSERT OR REPLACE INTO"],
+            comparison: StringComparison.CurrentCulture
+        );
         Assert.DoesNotContain("ON CONFLICT", code);
     }
 
@@ -220,11 +227,9 @@ public sealed partial class BulkOperationsTests
         };
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
+        var code = Ok(read: () => DataAccessGenerator.GenerateBulkUpsertMethod(table)).Value;
         Assert.Empty(code);
     }
 
@@ -235,13 +240,12 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(
-            actual: code,
+        // Act
+        // Assert
+        SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkUpsertMethod(table),
             expected:
             [
                 "try",
@@ -259,27 +263,38 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres");
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(actual: code, expected: ["Id", "Name", "Price", "Category"]);
+        // Act
+        // Assert
+        SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres"),
+            expected: ["Id", "Name", "Price", "Category"]
+        );
     }
 
-    [Fact]
-    public void GenerateBulkInsertMethod_HandlesNullableTypes()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData5))]
+    public void GenerateBulkInsertMethod_HandlesNullableTypes_ScenarioCases(
+        string scenarioName,
+        System.String scenario0
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         // Arrange
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        Assert.Contains("?? (object)DBNull.Value", code);
+        global::Tests.Shared.StringAssertions.SqlFragments(
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
+            expected: [scenario0],
+            comparison: StringComparison.CurrentCulture
+        );
     }
 
     [Fact]
@@ -289,13 +304,13 @@ public sealed partial class BulkOperationsTests
         var table = CreateTestTable();
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres");
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(
-            actual: code,
+        // Act
+        // Assert
+        var code = SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres"),
             expected:
             [
                 "Name = EXCLUDED.Name",
@@ -304,21 +319,6 @@ public sealed partial class BulkOperationsTests
             ]
         );
         Assert.DoesNotContain("Id = EXCLUDED.Id", code);
-    }
-
-    [Fact]
-    public void GenerateBulkInsertMethod_UsesExtensionMethodPattern()
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
-        // Assert
-
-        var code = Ok(actual: result).Value;
-        Assert.Contains("this IDbTransaction transaction", code);
     }
 
     [Fact]
@@ -334,13 +334,13 @@ public sealed partial class BulkOperationsTests
         };
 
         // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres");
-
+        // Act
         // Assert
-
-        var code = Ok(actual: result).Value;
-        ContainsAll(
-            actual: code,
+        // Act
+        // Assert
+        SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateBulkUpsertMethod(table, databaseType: "Postgres"),
             expected:
             [
                 "ON CONFLICT (OrderId, ProductId)",

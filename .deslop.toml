@@ -11,9 +11,29 @@ exclude = [
   # Independent scenario datasets contain schema/configuration input, never runners
   # or assertions. Keep each scenario explicit to protect its test oracle.
   "**/Fixtures/*.Fixtures.cs",
+  # Independent SQL catalog query specifications are immutable data; reader,
+  # binding, projection and migration algorithms remain in the analysed files.
+  "**/*.CatalogQueryText.cs",
+  # Immutable SQL specifications; algorithms remain analysed.
+  "**/*.SqlSpecifications.cs",
+  # Immutable source-text templates, with rendering and control flow analysed.
+  "DataProvider/DataProvider/*.EmissionText.cs",
+  "DataProvider/Nimblesite.DataProvider.Core/CodeGeneration/*.EmissionText.cs",
+  # Rust scenario tables contain only names, inputs and expected values.
+  # Their runners and assertions stay analysed.
+  "Lql/lql-lsp-rust/crates/**/src/*case_inputs*.fixtures.rs",
+  # Independent Rust expectation arrays are data-only test oracles.
+  "Lql/lql-lsp-rust/crates/lql-analyzer/src/*expectations*.fixtures.rs",
+  "Lql/lql-lsp-rust/crates/lql-analyzer/src/*schema_data*.fixtures.rs",
+  "Lql/lql-lsp-rust/crates/lql-lsp/src/*schema_data*.fixtures.rs",
   # Fixed public model contracts contain declarations and data initialization only.
   # Their distinct exported types must retain their API and cannot share one type.
   "Migration/Nimblesite.DataProvider.Migration.Core/SchemaOperation.cs",
+  "Migration/Nimblesite.DataProvider.Migration.Core/SchemaDefinition.cs",
+  # Public configuration DTOs contain auto-properties and data defaults only.
+  # Their distinct serialized contracts stay intact; generators remain analysed.
+  "DataProvider/Nimblesite.DataProvider.Core/TableConfigItem.cs",
+  "DataProvider/Nimblesite.DataProvider.Core/QueryConfigItem.cs",
   "Lql/Nimblesite.Lql.Core/SelectDistinctStep.cs",
   "Lql/Nimblesite.Lql.Core/GroupByStep.cs",
   "Lql/Nimblesite.Lql.Core/SelectStep.cs",

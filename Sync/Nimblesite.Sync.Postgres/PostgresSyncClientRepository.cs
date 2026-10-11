@@ -55,21 +55,25 @@ public static class PostgresSyncClientRepository
     /// <returns>Minimum version or 0 if no clients.</returns>
     public static LongSyncResult GetMinVersion(NpgsqlConnection connection)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT COALESCE(MIN(last_sync_version), 0) FROM _sync_clients";
+        return SyncCommandExecution.Read<NpgsqlException, LongSyncResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "SELECT COALESCE(MIN(last_sync_version), 0) FROM _sync_clients",
+            parameters: () => [],
+            read: command =>
+            {
+                var result = command.ExecuteScalar();
+                var version = result is long v ? v : 0;
 
-            var result = cmd.ExecuteScalar();
-            var version = result is long v ? v : 0;
-
-            return new LongSyncOk(version);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new LongSyncError(
-                new SyncErrorDatabase($"Failed to get minimum sync version: {ex.Message}")
-            );
-        }
+                return new LongSyncOk(version);
+            },
+            failure: ex =>
+            {
+                return new LongSyncError(
+                    new SyncErrorDatabase($"Failed to get minimum sync version: {ex.Message}")
+                );
+            }
+        );
     }
 }

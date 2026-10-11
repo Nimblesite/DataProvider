@@ -230,4 +230,8 @@ internal static class SchemaTestData
         string? name = null,
         IReadOnlyList<string>? columns = null
     ) => new() { Name = name, Columns = columns ?? [] };
+
+    // Implements [CI-TEST-INDEPENDENT-SCHEMA-DATA].
+    internal static ColumnDefinition RequiredUuid(string name) =>
+        Column(type: PortableTypes.Uuid, name: name, isNullable: false);
 }

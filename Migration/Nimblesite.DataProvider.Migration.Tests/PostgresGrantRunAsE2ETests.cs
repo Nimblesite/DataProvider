@@ -31,13 +31,13 @@ public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture 
         );
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
-        var result = PostgresTestDb.TryApply(
-            connection: migrateConnection,
-            operations: NapAuthGrants(schema, owner, appUser, appAdmin),
-            logger: NullLogger.Instance
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: PostgresTestDb.TryApply(
+                connection: migrateConnection,
+                operations: NapAuthGrants(schema, owner, appUser, appAdmin),
+                logger: NullLogger.Instance
+            )
         );
-
-        Assert.True(result is MigrationApplyResultOk);
         Assert.True(HasSchemaPrivilege(connection, appUser, schema, "USAGE"));
         Assert.True(HasSchemaPrivilege(connection, appAdmin, schema, "USAGE"));
         Assert.True(HasTablePrivilege(connection, appUser, schema, "users", "SELECT"));

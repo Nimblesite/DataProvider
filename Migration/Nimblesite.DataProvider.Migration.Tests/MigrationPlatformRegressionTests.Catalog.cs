@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Data.Common;
-using System.Globalization;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -60,9 +59,12 @@ public sealed partial record MigrationPlatformRegressionTests
             Assert.Fail($"Missing {table}.{column} in {target.Provider}");
             return false;
         }
-        command.CommandText =
-            "SELECT is_nullable FROM information_schema.columns WHERE table_schema = @schema AND table_name = @table AND column_name = @column";
-        AddParameter(command, "@schema", target.Schema);
+        VerifyReusableWorkflow1(
+            input0: command,
+            input1: AddParameter,
+            input2: target,
+            value0: "SELECT is_nullable FROM information_schema.columns WHERE table_schema = @schema AND table_name = @table AND column_name = @column"
+        );
         AddParameter(command, "@table", table);
         AddParameter(command, "@column", column);
         var value = command.ExecuteScalar();
@@ -203,10 +205,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     private static void AddParameter(DbCommand command, string name, string value)
     {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
+        global::Tests.Shared.DatabaseCommands.Bind(command: command, name: name, value: value);
     }
 
     private sealed record ForeignKeySnapshot(
@@ -215,4 +214,16 @@ public sealed partial record MigrationPlatformRegressionTests
         string ReferencedColumn,
         string OnDelete
     );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow1(
+        DbCommand input0,
+        Action<DbCommand, string, string> input1,
+        MigrationTarget input2,
+        string value0
+    )
+    {
+        input0.CommandText = value0;
+        input1(arg1: input0, arg2: "@schema", arg3: input2.Schema);
+    }
 }

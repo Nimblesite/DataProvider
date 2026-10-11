@@ -1,5 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Postgres.Tests;
 
@@ -20,7 +21,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
         // Create schema
         var schemaResult = PostgresSyncSchema.CreateSchema(_conn);
-        Assert.IsType<BoolSyncOk>(schemaResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: schemaResult);
     }
 
     public Task DisposeAsync()
@@ -54,7 +55,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         );
 
         var insertResult = PostgresSyncLogRepository.Insert(_conn, entry);
-        Assert.IsType<BoolSyncOk>(insertResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: insertResult);
 
         var fetchResult = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
 
@@ -69,33 +70,22 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void FetchChanges_RespectsFromVersion()
     {
         // Insert 3 entries
-        for (var i = 1; i <= 3; i++)
-        {
-            var entry = new SyncLogEntry(
-                0,
-                "TestTable",
-                $"{{\"Id\":\"t{i}\"}}",
-                SyncOperation.Insert,
-                $"{{\"Id\":\"t{i}\",\"Name\":\"Test {i}\"}}",
-                "test-origin",
-                DateTime.UtcNow.ToString("O")
-            );
-            PostgresSyncLogRepository.Insert(_conn, entry);
-        }
-
-        // Fetch from version 0 - should get all 3
-        var all = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
-        var allList = ((SyncLogListOk)all).Value;
-        Assert.Equal(3, allList.Count);
+        VerifySyncLoopWorkflow1(
+            input0: VerifySharedChecks4,
+            input1: _conn,
+            value1: 3,
+            value3: 100,
+            value4: 3
+        );
 
         // Fetch from version 1 - should get 2
-        var from1 = PostgresSyncLogRepository.FetchChanges(_conn, 1, 100);
-        var from1List = ((SyncLogListOk)from1).Value;
+        // Fetch from version 1 - should get 2
+        var from1List = FetchLog(fromVersion: 1);
         Assert.Equal(2, from1List.Count);
 
         // Fetch from version 2 - should get 1
-        var from2 = PostgresSyncLogRepository.FetchChanges(_conn, 2, 100);
-        var from2List = ((SyncLogListOk)from2).Value;
+        // Fetch from version 2 - should get 1
+        var from2List = FetchLog(fromVersion: 2);
         Assert.Single(from2List);
     }
 
@@ -103,32 +93,28 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void FetchChanges_RespectsLimit()
     {
         // Insert 10 entries
-        for (var i = 1; i <= 10; i++)
-        {
-            var entry = new SyncLogEntry(
-                0,
-                "TestTable",
-                $"{{\"Id\":\"t{i}\"}}",
-                SyncOperation.Insert,
-                $"{{\"Id\":\"t{i}\",\"Name\":\"Test {i}\"}}",
-                "test-origin",
-                DateTime.UtcNow.ToString("O")
-            );
-            PostgresSyncLogRepository.Insert(_conn, entry);
-        }
-
-        var limited = PostgresSyncLogRepository.FetchChanges(_conn, 0, 5);
-        var list = ((SyncLogListOk)limited).Value;
-        Assert.Equal(5, list.Count);
+        VerifySyncLoopWorkflow1(
+            input0: VerifySharedChecks4,
+            input1: _conn,
+            value1: 10,
+            value3: 5,
+            value4: 5
+        );
     }
 
-    [Fact]
-    public void GetMaxVersion_EmptyLog_ReturnsZero()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentGetMaxVersion_EmptyLog_ReturnsZero_ContextCasesData))]
+    public void GetMaxVersion_EmptyLog_ReturnsZero_ContextCases(
+        string caseName,
+        global::System.Func<
+            global::Npgsql.NpgsqlConnection,
+            global::Outcome.Result<global::System.Int64, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
     {
-        var result = PostgresSyncLogRepository.GetMaxVersion(_conn);
-
-        var max = (Assert.IsType<LongSyncOk>(result)).Value;
-        Assert.Equal(0, max);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix1(input0: _conn, value0: value0);
     }
 
     [Fact]
@@ -137,41 +123,22 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Insert 3 entries
         for (var i = 1; i <= 3; i++)
         {
-            var entry = new SyncLogEntry(
-                0,
-                "TestTable",
-                $"{{\"Id\":\"t{i}\"}}",
-                SyncOperation.Insert,
-                $"{{\"Id\":\"t{i}\",\"Name\":\"Test {i}\"}}",
-                "test-origin",
-                DateTime.UtcNow.ToString("O")
-            );
-            PostgresSyncLogRepository.Insert(_conn, entry);
+            VerifySharedChecks4(input0: i, input1: _conn);
         }
 
-        var result = PostgresSyncLogRepository.GetMaxVersion(_conn);
-        var max = ((LongSyncOk)result).Value;
+        var max = (Ok(read: () => PostgresSyncLogRepository.GetMaxVersion(_conn))).Value;
         Assert.Equal(3, max);
-    }
-
-    [Fact]
-    public void GetLastServerVersion_NoState_ReturnsZero()
-    {
-        var result = PostgresSyncLogRepository.GetLastServerVersion(_conn);
-
-        var version = (Assert.IsType<LongSyncOk>(result)).Value;
-        Assert.Equal(0, version);
     }
 
     [Fact]
     public void UpdateLastServerVersion_And_Get_RoundTrips()
     {
         var updateResult = PostgresSyncLogRepository.UpdateLastServerVersion(_conn, 42);
-        Assert.IsType<BoolSyncOk>(updateResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: updateResult);
 
         var getResult = PostgresSyncLogRepository.GetLastServerVersion(_conn);
 
-        var version = (Assert.IsType<LongSyncOk>(getResult)).Value;
+        var version = (global::Tests.Shared.ResultAssertions.ExactOk(actual: getResult)).Value;
         Assert.Equal(42, version);
     }
 
@@ -182,8 +149,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         PostgresSyncLogRepository.UpdateLastServerVersion(_conn, 20);
         PostgresSyncLogRepository.UpdateLastServerVersion(_conn, 30);
 
-        var result = PostgresSyncLogRepository.GetLastServerVersion(_conn);
-        var version = ((LongSyncOk)result).Value;
+        var version = (Ok(read: () => PostgresSyncLogRepository.GetLastServerVersion(_conn))).Value;
         Assert.Equal(30, version);
     }
 
@@ -204,11 +170,10 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
                 DateTime.UtcNow.ToString("O")
             );
             var result = PostgresSyncLogRepository.Insert(_conn, entry);
-            Assert.IsType<BoolSyncOk>(result);
+            global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         }
 
-        var fetchResult = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
-        var list = ((SyncLogListOk)fetchResult).Value;
+        var list = FetchLog(fromVersion: 0);
         Assert.Equal(3, list.Count);
 
         Assert.Contains(list, e => e.Operation == SyncOperation.Insert);
@@ -232,19 +197,12 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     [Fact]
     public void Upsert_And_GetAll_RoundTrips()
     {
-        var client = new SyncClient(
-            "client-001",
-            10,
-            DateTime.UtcNow.ToString("O"),
-            DateTime.UtcNow.ToString("O")
-        );
+        var client = Client(origin: "client-001", version: 10);
 
         var upsertResult = PostgresSyncClientRepository.Upsert(_conn, client);
-        Assert.IsType<BoolSyncOk>(upsertResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: upsertResult);
 
-        var getResult = PostgresSyncClientRepository.GetAll(_conn);
-
-        var list = (Assert.IsType<SyncClientListOk>(getResult)).Value;
+        var list = GetAllClients();
         Assert.Single(list);
         Assert.Equal("client-001", list[0].OriginId);
         Assert.Equal(10, list[0].LastSyncVersion);
@@ -255,24 +213,16 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         var result = PostgresSyncClientRepository.GetByOrigin(_conn, "nonexistent");
 
-        var client = (Assert.IsType<SyncClientOk>(result)).Value;
+        var client = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Null(client);
     }
 
     [Fact]
     public void GetByOrigin_Found_ReturnsClient()
     {
-        var client = new SyncClient(
-            "client-002",
-            20,
-            DateTime.UtcNow.ToString("O"),
-            DateTime.UtcNow.ToString("O")
-        );
-        PostgresSyncClientRepository.Upsert(_conn, client);
+        VerifySharedChecks3(input0: _conn, value0: "client-002", value1: 20);
 
-        var result = PostgresSyncClientRepository.GetByOrigin(_conn, "client-002");
-
-        var found = (Assert.IsType<SyncClientOk>(result)).Value;
+        var found = GetClient("client-002");
         Assert.NotNull(found);
         Assert.Equal("client-002", found.OriginId);
         Assert.Equal(20, found.LastSyncVersion);
@@ -281,43 +231,27 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     [Fact]
     public void Upsert_UpdatesExisting()
     {
-        var client1 = new SyncClient(
-            "client-003",
-            10,
-            DateTime.UtcNow.ToString("O"),
-            DateTime.UtcNow.ToString("O")
-        );
-        PostgresSyncClientRepository.Upsert(_conn, client1);
+        VerifySharedChecks3(input0: _conn, value0: "client-003", value1: 10);
 
-        var client2 = new SyncClient(
-            "client-003",
-            50,
-            DateTime.UtcNow.ToString("O"),
-            DateTime.UtcNow.ToString("O")
-        );
-        PostgresSyncClientRepository.Upsert(_conn, client2);
+        VerifySharedChecks3(input0: _conn, value0: "client-003", value1: 50);
 
-        var result = PostgresSyncClientRepository.GetByOrigin(_conn, "client-003");
-        var found = ((SyncClientOk)result).Value!;
+        var found = (
+            Ok(read: () => PostgresSyncClientRepository.GetByOrigin(_conn, "client-003"))
+        ).Value!;
         Assert.Equal(50, found.LastSyncVersion);
     }
 
     [Fact]
     public void Delete_RemovesClient()
     {
-        var client = new SyncClient(
-            "client-004",
-            10,
-            DateTime.UtcNow.ToString("O"),
-            DateTime.UtcNow.ToString("O")
-        );
-        PostgresSyncClientRepository.Upsert(_conn, client);
+        VerifySharedChecks3(input0: _conn, value0: "client-004", value1: 10);
 
         var deleteResult = PostgresSyncClientRepository.Delete(_conn, "client-004");
-        Assert.IsType<BoolSyncOk>(deleteResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: deleteResult);
 
-        var getResult = PostgresSyncClientRepository.GetByOrigin(_conn, "client-004");
-        var found = ((SyncClientOk)getResult).Value;
+        var found = (
+            Ok(read: () => PostgresSyncClientRepository.GetByOrigin(_conn, "client-004"))
+        ).Value;
         Assert.Null(found);
     }
 
@@ -325,55 +259,24 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void Delete_NonExistent_Succeeds()
     {
         var result = PostgresSyncClientRepository.Delete(_conn, "nonexistent");
-        Assert.IsType<BoolSyncOk>(result);
-    }
-
-    [Fact]
-    public void GetMinVersion_NoClients_ReturnsZero()
-    {
-        var result = PostgresSyncClientRepository.GetMinVersion(_conn);
-
-        var min = (Assert.IsType<LongSyncOk>(result)).Value;
-        Assert.Equal(0, min);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
     }
 
     [Fact]
     public void GetMinVersion_WithClients_ReturnsMin()
     {
-        var clients = new[]
-        {
-            new SyncClient("c1", 100, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-            new SyncClient("c2", 50, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-            new SyncClient("c3", 75, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-        };
+        VerifySharedChecks5(input0: _conn, value5: 50, value9: 75);
 
-        foreach (var client in clients)
-        {
-            PostgresSyncClientRepository.Upsert(_conn, client);
-        }
-
-        var result = PostgresSyncClientRepository.GetMinVersion(_conn);
-        var min = ((LongSyncOk)result).Value;
+        var min = (Ok(read: () => PostgresSyncClientRepository.GetMinVersion(_conn))).Value;
         Assert.Equal(50, min);
     }
 
     [Fact]
     public void GetAll_OrderedByVersion()
     {
-        var clients = new[]
-        {
-            new SyncClient("c1", 100, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-            new SyncClient("c2", 25, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-            new SyncClient("c3", 50, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O")),
-        };
+        VerifySharedChecks5(input0: _conn, value5: 25, value9: 50);
 
-        foreach (var client in clients)
-        {
-            PostgresSyncClientRepository.Upsert(_conn, client);
-        }
-
-        var result = PostgresSyncClientRepository.GetAll(_conn);
-        var list = ((SyncClientListOk)result).Value;
+        var list = (Ok(read: () => PostgresSyncClientRepository.GetAll(_conn))).Value;
 
         // Should be ordered by last_sync_version ASC
         Assert.Equal("c2", list[0].OriginId); // 25
@@ -385,18 +288,19 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
     #region PostgresSyncSession Tests
 
-    [Fact]
-    public void EnableSuppression_Succeeds()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(EnableSuppression_Succeeds_ContextCasesData))]
+    public void EnableSuppression_Succeeds_ContextCases(
+        string caseName,
+        global::System.Func<
+            global::Npgsql.NpgsqlConnection,
+            global::Outcome.Result<global::System.Boolean, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
     {
-        var result = PostgresSyncSession.EnableSuppression(_conn);
-        Assert.IsType<BoolSyncOk>(result);
-    }
-
-    [Fact]
-    public void DisableSuppression_Succeeds()
-    {
-        var result = PostgresSyncSession.DisableSuppression(_conn);
-        Assert.IsType<BoolSyncOk>(result);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix2(input0: _conn, value0: value0);
     }
 
     [Fact]
@@ -404,7 +308,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         // Enable
         var enable = PostgresSyncSession.EnableSuppression(_conn);
-        Assert.IsType<BoolSyncOk>(enable);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: enable);
 
         // Verify it's enabled
         using var cmd = _conn.CreateCommand();
@@ -417,7 +321,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
         // Disable
         var disable = PostgresSyncSession.DisableSuppression(_conn);
-        Assert.IsType<BoolSyncOk>(disable);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: disable);
 
         // Verify it's disabled
         value = Convert.ToInt32(
@@ -435,17 +339,13 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void SetOriginId_And_GetOriginId_RoundTrips()
     {
         var setResult = PostgresSyncSchema.SetOriginId(_conn, "my-origin-123");
-        Assert.IsType<BoolSyncOk>(setResult);
-
-        var origin = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _conn,
-                configure: command =>
-                    command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'"
-            )
-            ?.ToString();
-
-        Assert.Equal("my-origin-123", origin);
+        VerifyDatabaseWorkflow1(
+            configure0: command =>
+                command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'",
+            input0: setResult,
+            input1: _conn,
+            value0: "my-origin-123"
+        );
     }
 
     [Fact]
@@ -476,8 +376,8 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
         var result = PostgresSyncSchema.GetOriginId(_conn);
 
-        Assert.IsType<StringSyncOk>(result);
-        Assert.Equal("test-origin-id", ((StringSyncOk)result).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        Assert.Equal("test-origin-id", (Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -486,8 +386,8 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Origin is empty by default from schema initialization
         var result = PostgresSyncSchema.GetOriginId(_conn);
 
-        Assert.IsType<StringSyncOk>(result);
-        Assert.Equal("", ((StringSyncOk)result).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        Assert.Equal("", (Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -509,16 +409,6 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         Assert.Equal("existing-origin", originId);
     }
 
-    [Fact]
-    public void CreateSchema_Idempotent()
-    {
-        // Schema already created in InitializeAsync
-        // Call again should succeed
-        var result = PostgresSyncSchema.CreateSchema(_conn);
-
-        Assert.IsType<BoolSyncOk>(result);
-    }
-
     #endregion
 
     #region PostgresChangeApplier Tests
@@ -527,23 +417,13 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void ApplyChange_Insert_CreatesRow()
     {
         // Create test table
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_ApplyChange_Insert_CreatesRow_1
+        var result = ApplyInsert(
+            createTableSql: Data_ApplyChange_Insert_CreatesRow_1,
+            table: "test_person",
+            pk: "{\"id\":\"p1\"}",
+            payload: "{\"id\":\"p1\",\"name\":\"Alice\"}"
         );
-
-        var entry = new SyncLogEntry(
-            1,
-            "test_person",
-            "{\"id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"id\":\"p1\",\"name\":\"Alice\"}",
-            "test-origin",
-            DateTime.UtcNow.ToString("O")
-        );
-
-        var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
 
         // Verify row exists
         var name = global::Tests
@@ -557,37 +437,39 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         Assert.Equal("Alice", name);
     }
 
-    [Fact]
-    public void ApplyChange_Update_UpdatesRow()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentCommentScenarioData2))]
+    public void ApplyChange_Update_UpdatesRow_CommentScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2,
+        System.String scenario3,
+        System.String scenario4,
+        System.String scenario5
+    )
     {
-        // Create and populate test table
+        Assert.False(string.IsNullOrEmpty(scenarioName)); // Create and populate test table
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command => command.CommandText = Data_ApplyChange_Update_UpdatesRow_1
+            configure: command => command.CommandText = scenario0
         );
 
-        var entry = new SyncLogEntry(
-            1,
-            "test_update",
-            "{\"id\":\"u1\"}",
-            SyncOperation.Update,
-            "{\"id\":\"u1\",\"name\":\"Updated\"}",
-            "test-origin",
-            DateTime.UtcNow.ToString("O")
+        var result = VerifySharedChecks1(
+            input0: _conn,
+            input1: Logger,
+            value1: scenario1,
+            value2: scenario2,
+            value3: SyncOperation.Update,
+            value4: scenario3
         );
-
-        var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
-
-        var name = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _conn,
-                configure: command =>
-                    command.CommandText = "SELECT name FROM test_update WHERE id = 'u1'"
-            )
-            ?.ToString();
-
-        Assert.Equal("Updated", name);
+        VerifyDatabaseWorkflow1(
+            configure0: command => command.CommandText = scenario4,
+            input0: result,
+            input1: _conn,
+            value0: scenario5
+        );
     }
 
     [Fact]
@@ -609,15 +491,12 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         );
 
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
 
-        var count = Convert.ToInt32(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _conn,
-                configure: command =>
-                    command.CommandText = "SELECT COUNT(*) FROM test_delete WHERE id = 'd1'"
-            ),
-            System.Globalization.CultureInfo.InvariantCulture
+        var count = global::Tests.Shared.DatabaseCommands.ScalarInt32(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = "SELECT COUNT(*) FROM test_delete WHERE id = 'd1'"
         );
 
         Assert.Equal(0, count);
@@ -626,90 +505,32 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     [Fact]
     public void ApplyChange_Insert_Upserts()
     {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_ApplyChange_Insert_Upserts_1
+        var result = ApplyInsert(
+            createTableSql: Data_ApplyChange_Insert_Upserts_1,
+            table: "test_upsert",
+            pk: "{\"id\":\"x1\"}",
+            payload: "{\"id\":\"x1\",\"name\":\"Upserted\"}"
         );
-
-        var entry = new SyncLogEntry(
-            1,
-            "test_upsert",
-            "{\"id\":\"x1\"}",
-            SyncOperation.Insert,
-            "{\"id\":\"x1\",\"name\":\"Upserted\"}",
-            "test-origin",
-            DateTime.UtcNow.ToString("O")
+        VerifyDatabaseWorkflow1(
+            configure0: command =>
+                command.CommandText = "SELECT name FROM test_upsert WHERE id = 'x1'",
+            input0: result,
+            input1: _conn,
+            value0: "Upserted"
         );
-
-        var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
-
-        var name = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _conn,
-                configure: command =>
-                    command.CommandText = "SELECT name FROM test_upsert WHERE id = 'x1'"
-            )
-            ?.ToString();
-
-        Assert.Equal("Upserted", name);
-    }
-
-    [Fact]
-    public void ApplyChange_Update_NonExistent_UpsertsViaInsert()
-    {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
-                command.CommandText = Data_ApplyChange_Update_NonExistent_UpsertsViaInsert_1
-        );
-
-        var entry = new SyncLogEntry(
-            1,
-            "test_update_upsert",
-            "{\"id\":\"new1\"}",
-            SyncOperation.Update,
-            "{\"id\":\"new1\",\"name\":\"NewRecord\"}",
-            "test-origin",
-            DateTime.UtcNow.ToString("O")
-        );
-
-        var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-        Assert.IsType<BoolSyncOk>(result);
-
-        var name = global::Tests
-            .Shared.DatabaseCommands.Scalar(
-                connection: _conn,
-                configure: command =>
-                    command.CommandText = "SELECT name FROM test_update_upsert WHERE id = 'new1'"
-            )
-            ?.ToString();
-
-        Assert.Equal("NewRecord", name);
     }
 
     [Fact]
     public void ApplyChange_ForeignKeyViolation_ReturnsFalse()
     {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
-                command.CommandText = Data_ApplyChange_ForeignKeyViolation_ReturnsFalse_1
+        var result = ApplyInsert(
+            createTableSql: Data_ApplyChange_ForeignKeyViolation_ReturnsFalse_1,
+            table: "test_child",
+            pk: "{\"id\":\"c1\"}",
+            payload: "{\"id\":\"c1\",\"parent_id\":\"nonexistent\"}"
         );
 
-        var entry = new SyncLogEntry(
-            1,
-            "test_child",
-            "{\"id\":\"c1\"}",
-            SyncOperation.Insert,
-            "{\"id\":\"c1\",\"parent_id\":\"nonexistent\"}",
-            "test-origin",
-            DateTime.UtcNow.ToString("O")
-        );
-
-        var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
-
-        var success = (Assert.IsType<BoolSyncOk>(result)).Value;
+        var success = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.False(success); // FK violation returns false for deferral
     }
 
@@ -726,7 +547,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         createCmd.ExecuteNonQuery();
 
         var result = PostgresTriggerGenerator.CreateTriggers(_conn, "test_trigger_table", Logger);
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
 
         // Verify triggers exist
         var triggerTypes = new[] { "insert", "update", "delete" };
@@ -749,10 +570,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     public void Triggers_LogInsert()
     {
         // Create and setup test table with triggers
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_Triggers_LogInsert_1
-        );
+        CreateTable(sql: Data_Triggers_LogInsert_1);
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_insert", Logger);
 
@@ -767,8 +585,8 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         insertCmd.ExecuteNonQuery();
 
         // Check sync log
-        var changes = PostgresSyncLogRepository.FetchChanges(_conn, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
+        // Check sync log
+        var list = (Ok(read: () => PostgresSyncLogRepository.FetchChanges(_conn, 0, 100))).Value;
         var insertEntry = list.FirstOrDefault(e =>
             e.TableName == "test_log_insert" && e.Operation == SyncOperation.Insert
         );
@@ -781,65 +599,26 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     [Fact]
     public void Triggers_LogUpdate()
     {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_Triggers_LogUpdate_1
+        var updateEntry = VerifyTriggerLog(
+            table: "test_log_update",
+            configure0: command => command.CommandText = Data_Triggers_LogUpdate_1,
+            configure1: command =>
+                command.CommandText = "UPDATE test_log_update SET name = 'After' WHERE id = 'tu1'",
+            operation: SyncOperation.Update
         );
-
-        PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_update", Logger);
-        PostgresSyncSession.DisableSuppression(_conn);
-        PostgresSyncSchema.SetOriginId(_conn, "trigger-test-origin");
-
-        // Get current max version
-        var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
-
-        // Update
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
-                command.CommandText = "UPDATE test_log_update SET name = 'After' WHERE id = 'tu1'"
-        );
-
-        // Check sync log
-        var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
-        var list = ((SyncLogListOk)changes).Value;
-        var updateEntry = list.FirstOrDefault(e =>
-            e.TableName == "test_log_update" && e.Operation == SyncOperation.Update
-        );
-
-        Assert.NotNull(updateEntry);
         Assert.Contains("After", updateEntry.Payload!);
     }
 
     [Fact]
     public void Triggers_LogDelete()
     {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_Triggers_LogDelete_1
+        var deleteEntry = VerifyTriggerLog(
+            table: "test_log_delete",
+            configure0: command => command.CommandText = Data_Triggers_LogDelete_1,
+            configure1: command =>
+                command.CommandText = "DELETE FROM test_log_delete WHERE id = 'td1'",
+            operation: SyncOperation.Delete
         );
-
-        PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_delete", Logger);
-        PostgresSyncSession.DisableSuppression(_conn);
-        PostgresSyncSchema.SetOriginId(_conn, "trigger-test-origin");
-
-        var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
-
-        // Delete
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
-                command.CommandText = "DELETE FROM test_log_delete WHERE id = 'td1'"
-        );
-
-        // Check sync log
-        var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
-        var list = ((SyncLogListOk)changes).Value;
-        var deleteEntry = list.FirstOrDefault(e =>
-            e.TableName == "test_log_delete" && e.Operation == SyncOperation.Delete
-        );
-
-        Assert.NotNull(deleteEntry);
         Assert.Contains("td1", deleteEntry.PkValue);
         Assert.Null(deleteEntry.Payload); // Tombstone has no payload
     }
@@ -847,10 +626,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     [Fact]
     public void Triggers_SuppressedWhenActive()
     {
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command => command.CommandText = Data_Triggers_SuppressedWhenActive_1
-        );
+        CreateTable(sql: Data_Triggers_SuppressedWhenActive_1);
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_suppression", Logger);
         PostgresSyncSchema.SetOriginId(_conn, "trigger-test-origin");
@@ -858,34 +634,28 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Enable suppression
         PostgresSyncSession.EnableSuppression(_conn);
 
-        var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
+        var maxBefore = (Ok(actual: PostgresSyncLogRepository.GetMaxVersion(_conn))).Value;
 
         // Insert while suppressed
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
+        var list = VerifySharedContinuation1(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO test_suppression (id, name) VALUES ('sup1', 'Suppressed')"
+                    "INSERT INTO test_suppression (id, name) VALUES ('sup1', 'Suppressed')",
+            input0: _conn,
+            input1: maxBefore
         );
-
-        // Check sync log - should be empty
-        var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
-        var list = ((SyncLogListOk)changes).Value;
         Assert.Empty(list);
 
         // Disable and insert
         PostgresSyncSession.DisableSuppression(_conn);
 
-        DatabaseCommands.Execute(
-            connection: _conn,
-            configure: command =>
+        var list2 = VerifySharedContinuation1(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO test_suppression (id, name) VALUES ('unsup1', 'NotSuppressed')"
+                    "INSERT INTO test_suppression (id, name) VALUES ('unsup1', 'NotSuppressed')",
+            input0: _conn,
+            input1: maxBefore
         );
-
-        // Check sync log - should have entry
-        var changes2 = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
-        var list2 = ((SyncLogListOk)changes2).Value;
         Assert.Single(list2);
     }
 
@@ -910,5 +680,285 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         Assert.True(PostgresSyncLogRepository.GetLastServerVersion(bare).IsError);
         Assert.True(PostgresSyncLogRepository.GetMaxVersion(bare).IsError);
         Assert.True(PostgresSyncLogRepository.UpdateLastServerVersion(bare, 5).IsError);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void CreateTable(string sql) =>
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command => command.CommandText = sql
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SyncClient Client(string origin, int version) =>
+        new(origin, version, DateTime.UtcNow.ToString("O"), DateTime.UtcNow.ToString("O"));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private List<SyncClient> GetAllClients() =>
+        [.. (Assert.IsType<SyncClientListOk>(PostgresSyncClientRepository.GetAll(_conn))).Value];
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private SyncClient? GetClient(string origin) =>
+        (Ok(read: () => PostgresSyncClientRepository.GetByOrigin(_conn, origin))).Value;
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private List<SyncLogEntry> FetchLog(long fromVersion) =>
+        [.. (Ok(read: () => PostgresSyncLogRepository.FetchChanges(_conn, fromVersion, 100))).Value];
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private Outcome.Result<bool, SyncError> ApplyInsert(
+        string createTableSql,
+        string table,
+        string pk,
+        string payload
+    ) =>
+        VerifyReusableWorkflow1(
+            configure0: command => command.CommandText = createTableSql,
+            input0: _conn,
+            input1: VerifySharedChecks1,
+            input2: Logger,
+            value0: table,
+            value1: pk,
+            value3: payload
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private SyncLogEntry VerifyTriggerLog(
+        string table,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure1,
+        SyncOperation operation
+    ) =>
+        VerifyReusableWorkflow2(
+            configure0: configure0,
+            configure1: configure1,
+            input0: _conn,
+            input1: Logger,
+            input2: VerifySharedContinuation1,
+            value0: table,
+            value2: table,
+            value3: operation
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyDatabaseWorkflow1(
+        Outcome.Result<bool, SyncError> input0,
+        NpgsqlConnection input1,
+        string value0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: input0);
+
+        var origin = global::Tests
+            .Shared.DatabaseCommands.Scalar(connection: input1, configure: configure0)
+            ?.ToString();
+
+        Assert.Equal(value0, origin);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Outcome.Result<bool, SyncError> VerifySharedChecks1(
+        NpgsqlConnection input0,
+        ILogger input1,
+        string value1,
+        string value2,
+        global::Nimblesite.Sync.Core.SyncOperation value3,
+        string value4
+    )
+    {
+        var entry = new SyncLogEntry(
+            1,
+            value1,
+            value2,
+            value3,
+            value4,
+            "test-origin",
+            DateTime.UtcNow.ToString("O")
+        );
+
+        var result = PostgresChangeApplier.ApplyChange(input0, entry, input1);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks3(NpgsqlConnection input0, string value0, int value1)
+    {
+        var client = new SyncClient(
+            value0,
+            value1,
+            DateTime.UtcNow.ToString("O"),
+            DateTime.UtcNow.ToString("O")
+        );
+        PostgresSyncClientRepository.Upsert(input0, client);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks4(int input0, NpgsqlConnection input1)
+    {
+        var entry = new SyncLogEntry(
+            0,
+            "TestTable",
+            $"{{\"Id\":\"t{input0}\"}}",
+            SyncOperation.Insert,
+            $"{{\"Id\":\"t{input0}\",\"Name\":\"Test {input0}\"}}",
+            "test-origin",
+            DateTime.UtcNow.ToString("O")
+        );
+        PostgresSyncLogRepository.Insert(input1, entry);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks5(NpgsqlConnection input0, int value5, int value9)
+    {
+        var clients = new[]
+        {
+            Client(origin: "c1", version: 100),
+            Client(origin: "c2", version: value5),
+            Client(origin: "c3", version: value9),
+        };
+
+        foreach (var client in clients)
+        {
+            PostgresSyncClientRepository.Upsert(input0, client);
+        }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static IReadOnlyList<SyncLogEntry> VerifySharedContinuation1(
+        NpgsqlConnection input0,
+        long input1,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        // Update
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        // Check sync log
+        // Check sync log
+        var list = (
+            Ok(read: () => PostgresSyncLogRepository.FetchChanges(input0, input1, 100))
+        ).Value;
+
+        return list;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Outcome.Result<bool, SyncError> VerifyReusableWorkflow1(
+        NpgsqlConnection input0,
+        Func<
+            NpgsqlConnection,
+            ILogger,
+            string,
+            string,
+            SyncOperation,
+            string,
+            Outcome.Result<bool, SyncError>
+        > input1,
+        ILogger input2,
+        string value0,
+        string value1,
+        string value3,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    { // Create test table
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        var result = input1(
+            arg1: input0,
+            arg2: input2,
+            arg3: value0,
+            arg4: value1,
+            arg5: SyncOperation.Insert,
+            arg6: value3
+        );
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SyncLogEntry VerifyReusableWorkflow2(
+        NpgsqlConnection input0,
+        ILogger input1,
+        Func<
+            NpgsqlConnection,
+            long,
+            Action<System.Data.Common.DbCommand>,
+            IReadOnlyList<SyncLogEntry>
+        > input2,
+        string value0,
+        string value2,
+        global::Nimblesite.Sync.Core.SyncOperation value3,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure1
+    )
+    {
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        PostgresTriggerGenerator.CreateTriggers(input0, value0, input1);
+        PostgresSyncSession.DisableSuppression(input0);
+        PostgresSyncSchema.SetOriginId(input0, "trigger-test-origin");
+
+        // Get current max version
+        var maxBefore = (Ok(actual: PostgresSyncLogRepository.GetMaxVersion(input0))).Value;
+
+        // Update
+        var list = input2(arg3: configure1, arg1: input0, arg2: maxBefore);
+        var updateEntry = list.FirstOrDefault(e => e.TableName == value2 && e.Operation == value3);
+
+        Assert.NotNull(updateEntry);
+
+        return updateEntry;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix1(
+        NpgsqlConnection input0,
+        global::System.Func<
+            global::Npgsql.NpgsqlConnection,
+            global::Outcome.Result<global::System.Int64, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
+    {
+        var result = value0(arg: input0);
+
+        var max = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
+        Assert.Equal(0, max);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix2(
+        NpgsqlConnection input0,
+        global::System.Func<
+            global::Npgsql.NpgsqlConnection,
+            global::Outcome.Result<global::System.Boolean, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
+    {
+        var result = value0(arg: input0);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow1(
+        Action<int, NpgsqlConnection> input0,
+        NpgsqlConnection input1,
+        int value1,
+        int value3,
+        int value4
+    )
+    { // Insert 3 entries
+        for (var i = 1; i <= value1; i++)
+        {
+            input0(i, input1);
+        }
+
+        // Fetch from version 0 - should get all 3
+        // Fetch from version 0 - should get all 3
+        var allList = (
+            Ok(read: () => PostgresSyncLogRepository.FetchChanges(input1, 0, value3))
+        ).Value;
+        Assert.Equal(value4, allList.Count);
     }
 }

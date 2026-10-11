@@ -122,32 +122,24 @@ public static class TriggerGenerator
         ILogger logger
     )
     {
-        logger.LogDebug("TRIGGER: Dropping triggers for table {Table}", tableName);
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = string.Format(
-                CultureInfo.InvariantCulture,
-                """
-                DROP TRIGGER IF EXISTS {0}_sync_insert;
-                DROP TRIGGER IF EXISTS {0}_sync_update;
-                DROP TRIGGER IF EXISTS {0}_sync_delete;
-                """,
-                tableName
-            );
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Dropped triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to drop triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to drop triggers: {ex.Message}")
-            );
-        }
+        return TriggerGenerationWorkflow.Drop<SqliteException>(
+            tableName: tableName,
+            logger: logger,
+            execute: () =>
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = string.Format(
+                    CultureInfo.InvariantCulture,
+                    """
+                    DROP TRIGGER IF EXISTS {0}_sync_insert;
+                    DROP TRIGGER IF EXISTS {0}_sync_update;
+                    DROP TRIGGER IF EXISTS {0}_sync_delete;
+                    """,
+                    tableName
+                );
+                cmd.ExecuteNonQuery();
+            }
+        );
     }
 
     /// <summary>
@@ -166,55 +158,35 @@ public static class TriggerGenerator
         string tableName
     )
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"PRAGMA table_info({tableName})";
-
-            var columns = new List<TriggerColumnInfo>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+        return SyncCommandExecution.Read<SqliteException, ColumnInfoListResult>(
+            connection: connection,
+            setSql: command => command.CommandText = $"PRAGMA table_info({tableName})",
+            parameters: () => [],
+            read: command =>
             {
-                // PRAGMA table_info pk column: 0=not PK, 1+=position in composite PK
-                // So any non-zero value means this column is part of the primary key
-                columns.Add(
-                    new TriggerColumnInfo(
-                        Name: reader.GetString(1),
-                        Type: reader.GetString(2),
-                        IsPrimaryKey: reader.GetInt32(5) > 0
+                return new ColumnInfoListOk(
+                    SyncCommandExecution.ReadRows<TriggerColumnInfo>(
+                        command: command,
+                        read: row => new TriggerColumnInfo(
+                            Name: row.GetString(1),
+                            Type: row.GetString(2),
+                            IsPrimaryKey: row.GetInt32(5) > 0
+                        )
                     )
                 );
+            },
+            failure: ex =>
+            {
+                return new ColumnInfoListError(
+                    new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
+                );
             }
-
-            return new ColumnInfoListOk(columns);
-        }
-        catch (SqliteException ex)
-        {
-            return new ColumnInfoListError(
-                new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
-            );
-        }
+        );
     }
 
     // Implements [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE].
     private static readonly CompositeFormat ChangeTriggerFormat = CompositeFormat.Parse(
-        format: """
-        CREATE TRIGGER {0}_sync_{3}
-        AFTER {4} ON {0}
-        WHEN (SELECT sync_active FROM _sync_session) = 0
-        BEGIN
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES (
-                '{0}',
-                json_object('{1}', NEW.{1}),
-                '{3}',
-                {2},
-                (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-            );
-        END;
-        """
+        format: global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification6
     );
 
     private static string GenerateChangeTrigger(
@@ -238,31 +210,17 @@ public static class TriggerGenerator
         );
 
     private static string GenerateDeleteTrigger(string tableName, string pkColumn) =>
-        string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_delete
-            AFTER DELETE ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', OLD.{1}),
-                    'delete',
-                    NULL,
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn
-        );
+        string.Format(CultureInfo.InvariantCulture, DeleteTriggerFormat, tableName, pkColumn);
 
     private static string BuildJsonObject(IReadOnlyList<string> columns, string prefix)
     {
         var pairs = columns.Select(c => $"'{c}', {prefix}.{c}");
         return $"json_object({string.Join(", ", pairs)})";
     }
+
+    // Implements [SYNC-TRIGGER-SHARED-GENERATION].
+    private static readonly global::System.Text.CompositeFormat DeleteTriggerFormat =
+        global::System.Text.CompositeFormat.Parse(
+            format: global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification7
+        );
 }

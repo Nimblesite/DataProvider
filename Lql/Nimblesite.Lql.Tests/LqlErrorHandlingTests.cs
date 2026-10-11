@@ -2,20 +2,11 @@ using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
-using Xunit;
 using static global::Tests.Shared.StringAssertions;
 using LqlStatementError = Outcome.Result<
     Nimblesite.Lql.Core.LqlStatement,
     Nimblesite.Sql.Model.SqlError
 >.Error<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using LqlStatementOk = Outcome.Result<
-    Nimblesite.Lql.Core.LqlStatement,
-    Nimblesite.Sql.Model.SqlError
->.Ok<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using SqlTextOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
-    string,
-    Nimblesite.Sql.Model.SqlError
->;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -35,26 +26,17 @@ public partial class LqlErrorHandlingTests
     public void WhitespaceOnlyInput_ShouldReturnError() =>
         ErrorContaining(lqlCode: "   \n\t   \n   ", expected: "whitespace");
 
-    [Fact]
-    public void InvalidSyntax_ShouldReturnError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData9))]
+    public void InvalidSyntax_ShouldReturnError_ScenarioCases(
+        string scenarioName,
+        System.String scenario0
+    )
     {
-        var position = SyntaxError(
-            lqlCode: """
-            users |> select(invalid syntax here
-            """
-        );
-        Assert.True(position.Line > 0);
-        Assert.True(position.Column >= 0);
-    }
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
 
-    [Fact]
-    public void InvalidCharacter_ShouldReturnLexerError()
-    {
-        var position = SyntaxError(
-            lqlCode: """
-            users |> select(users.id) #
-            """
-        );
+        var position = SyntaxError(lqlCode: scenario0);
         Assert.True(position.Line > 0);
         Assert.True(position.Column >= 0);
     }
@@ -78,7 +60,7 @@ public partial class LqlErrorHandlingTests
         Assert.NotNull(error.Position);
 
         var accepted = LqlStatementConverter.ToStatement($"{tableName} |> select(id, name)");
-        var statement = Assert.IsType<LqlStatementOk>(accepted).Value;
+        var statement = global::Tests.Shared.ResultAssertions.ExactOk(actual: accepted).Value;
         foreach (
             var result in new[]
             {
@@ -88,7 +70,7 @@ public partial class LqlErrorHandlingTests
             }
         )
         {
-            var sql = Assert.IsType<SqlTextOk>(result).Value;
+            var sql = global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
             ContainsAll(
                 actual: sql,
                 expected: [tableName, "SELECT", "FROM"],
@@ -116,7 +98,7 @@ public partial class LqlErrorHandlingTests
             users |> select(users.id, users.name)
             """
         );
-        var success = Assert.IsType<LqlStatementOk>(result);
+        var success = global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.NotNull(success.Value);
     }
 

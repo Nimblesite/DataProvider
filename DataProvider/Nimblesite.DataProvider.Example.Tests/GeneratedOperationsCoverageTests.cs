@@ -1,12 +1,5 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
-using Nimblesite.Sql.Model;
-using Outcome;
-using Xunit;
-using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
-    int,
-    Nimblesite.Sql.Model.SqlError
->;
 using AffectedRowsResult = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -86,15 +79,10 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Invoice LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var invoiceId = VerifySharedContinuation2(
+                    input0: tx,
+                    value0: "SELECT Id FROM Invoice LIMIT 1"
                 );
-                var invoices = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
-                var invoiceId = invoices.Value[0];
 
                 var result = await tx.InsertInvoiceLineAsync(
                         Guid.NewGuid().ToString(),
@@ -107,7 +95,10 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
                         "Test notes"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -120,18 +111,14 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Customer LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var customers = CoreCoverageTests.QueryStringList(
+                    transaction: tx,
+                    sql: "SELECT Id FROM Customer LIMIT 1"
                 );
-                var customers = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
 
                 var result = await tx.InsertAddressAsync(
                         Guid.NewGuid().ToString(),
-                        customers.Value[0],
+                        customers[0],
                         "100 Test St",
                         "TestCity",
                         "TS",
@@ -139,7 +126,10 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
                         "USA"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -152,25 +142,24 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Customer LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var customers = CoreCoverageTests.QueryStringList(
+                    transaction: tx,
+                    sql: "SELECT Id FROM Customer LIMIT 1"
                 );
-                var customers = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
 
                 var result = await tx.InsertOrdersAsync(
                         Guid.NewGuid().ToString(),
                         "ORD-TEST-001",
                         "2024-06-01",
-                        customers.Value[0],
+                        customers[0],
                         999.99,
                         "Pending"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -183,41 +172,37 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Orders LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var orders = CoreCoverageTests.QueryStringList(
+                    transaction: tx,
+                    sql: "SELECT Id FROM Orders LIMIT 1"
                 );
-                var orders = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
 
                 var result = await tx.InsertOrderItemAsync(
                         Guid.NewGuid().ToString(),
-                        orders.Value[0],
+                        orders[0],
                         "Test Widget",
                         5.0,
                         25.00,
                         125.00
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
 
     private async Task SetupSchema()
     {
-        await _connection.OpenAsync().ConfigureAwait(false);
-        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", _connection))
-        {
-            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
+        await VerifyUnifiedWorkflow102(input0: _connection).ConfigureAwait(false);
 
-        var createTablesScript = Data_SetupSchema_1;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await VerifyUnifiedWorkflow101(
+                configure: command => command.CommandText = Data_SetupSchema_1,
+                input1: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     // Implements [CI-DESLOP]: retain the result type and row-count assertions
@@ -233,7 +218,10 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
             .Transact(async transaction =>
             {
                 var result = await execute(transaction).ConfigureAwait(false);
-                Assert.Equal(expectedRows, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    expectedRows,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -242,12 +230,40 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
     {
         await SetupSchema().ConfigureAwait(false);
 
-        var insertScript = Data_SetupSchemaAndSeed_1;
-
-        using var insertCommand = new SqliteCommand(insertScript, _connection);
-        await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await VerifyUnifiedWorkflow101(
+                configure: command => command.CommandText = Data_SetupSchemaAndSeed_1,
+                input1: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     public void Dispose() =>
         CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyUnifiedWorkflow101(
+        Action<SqliteCommand> configure,
+        SqliteConnection input1
+    )
+    {
+        using var command = new SqliteCommand { Connection = input1 };
+        configure(command);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyUnifiedWorkflow102(
+        SqliteConnection input0
+    )
+    {
+        await input0.OpenAsync().ConfigureAwait(false);
+        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", input0))
+        {
+            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifySharedContinuation2(IDbTransaction input0, string value0) =>
+        CoreCoverageTests.QueryStringList(transaction: input0, sql: value0)[0];
 }

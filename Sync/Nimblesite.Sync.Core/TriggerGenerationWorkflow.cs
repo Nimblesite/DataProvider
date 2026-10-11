@@ -202,4 +202,28 @@ internal static class TriggerGenerationWorkflow
             new SyncErrorDatabase($"Table '{tableName}' has no primary key")
         );
     }
+
+    // Implements [SYNC-TRIGGER-SHARED-GENERATION].
+    internal static BoolSyncResult Drop<TException>(
+        string tableName,
+        ILogger logger,
+        Action execute
+    )
+        where TException : Exception
+    {
+        logger.LogDebug("TRIGGER: Dropping triggers for table {Table}", tableName);
+        try
+        {
+            execute();
+            logger.LogInformation("TRIGGER: Dropped triggers for table {Table}", tableName);
+            return new BoolSyncOk(true);
+        }
+        catch (TException ex)
+        {
+            logger.LogError(ex, "TRIGGER: Failed to drop triggers for {Table}", tableName);
+            return new BoolSyncError(
+                new SyncErrorDatabase($"Failed to drop triggers: {ex.Message}")
+            );
+        }
+    }
 }

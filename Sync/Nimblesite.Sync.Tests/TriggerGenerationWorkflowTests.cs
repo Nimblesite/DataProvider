@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using Microsoft.Extensions.Logging.Abstractions;
 using ColumnsError = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<string>,
     Nimblesite.Sync.Core.SyncError
@@ -9,10 +8,6 @@ using ColumnsOk = Outcome.Result<
     Nimblesite.Sync.Core.SyncError
 >.Ok<System.Collections.Generic.IReadOnlyList<string>, Nimblesite.Sync.Core.SyncError>;
 using StringSyncError = Outcome.Result<string, Nimblesite.Sync.Core.SyncError>.Error<
-    string,
-    Nimblesite.Sync.Core.SyncError
->;
-using StringSyncOk = Outcome.Result<string, Nimblesite.Sync.Core.SyncError>.Ok<
     string,
     Nimblesite.Sync.Core.SyncError
 >;
@@ -42,7 +37,7 @@ public sealed partial record TriggerGenerationWorkflowTests
     public void Generate_PreservesColumnOrderAndSelectsFirstPrimaryKey()
     {
         var result = Generate(columns: ["Name", "Id", "OtherId"]);
-        var sql = Assert.IsType<StringSyncOk>(@object: result).Value;
+        var sql = global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
         Assert.Equal(expected: "People|Name,Id,OtherId|Id", actual: sql);
     }
 
@@ -119,7 +114,10 @@ public sealed partial record TriggerGenerationWorkflowTests
         if (fails)
             Assert.Same(error, Assert.IsType<StringSyncError>(result).Value);
         else
-            Assert.Equal("People|Id,Name|Id", Assert.IsType<StringSyncOk>(result).Value);
+            global::Tests.Shared.ResultAssertions.EqualValue(
+                expected: "People|Id,Name|Id",
+                actual: result
+            );
     }
 
     [Theory]

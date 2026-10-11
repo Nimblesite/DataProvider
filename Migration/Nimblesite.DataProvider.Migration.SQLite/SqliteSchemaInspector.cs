@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.SQLite;
 /// <summary>
 /// Inspects SQLite database schema and returns a SchemaDefinition.
 /// </summary>
-public static class SqliteSchemaInspector
+public static partial class SqliteSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a SQLite database.
@@ -19,13 +19,7 @@ public static class SqliteSchemaInspector
 
             // Get all user tables
             using var tablesCmd = connection.CreateCommand();
-            tablesCmd.CommandText = """
-                SELECT name FROM sqlite_master 
-                WHERE type = 'table' 
-                AND name NOT LIKE 'sqlite_%'
-                AND name <> '__rls_context'
-                ORDER BY name
-                """;
+            tablesCmd.CommandText = CatalogQuery_Inspect_1;
 
             var tableNames = new List<string>();
             using (var reader = tablesCmd.ExecuteReader())
@@ -183,10 +177,12 @@ public static class SqliteSchemaInspector
                 {
                     // Expression index - get the full definition from sqlite_master
                     using var sqlCmd = connection.CreateCommand();
-                    sqlCmd.CommandText = """
-                        SELECT sql FROM sqlite_master
-                        WHERE type = 'index' AND name = @name
-                        """;
+                    sqlCmd.CommandText = global::Nimblesite
+                        .DataProvider
+                        .Migration
+                        .SQLite
+                        .SqliteSchemaInspector
+                        .SqlSpecification1;
                     sqlCmd.Parameters.AddWithValue("@name", indexName);
                     var sql = sqlCmd.ExecuteScalar() as string;
 

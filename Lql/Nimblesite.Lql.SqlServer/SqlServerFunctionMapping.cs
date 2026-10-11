@@ -24,32 +24,15 @@ public sealed class SqlServerFunctionMapping : FunctionMappingProviderBase
     /// </summary>
     /// <returns>Dictionary of function mappings</returns>
     private static ImmutableDictionary<string, FunctionMap> CreateFunctionMappings() =>
-        CommonFunctionMappings
-            .WithWindows()
-            .SetItems(
-                items: new Dictionary<string, FunctionMap>
-                {
-                    ["extract"] = new(
-                        "extract",
-                        "DATEPART",
-                        RequiresSpecialHandling: true,
-                        SpecialHandler: args => $"DATEPART({args[0]}, {args[1]})"
-                    ),
-                    ["date_trunc"] = new(
-                        "date_trunc",
-                        "DATETRUNC",
-                        RequiresSpecialHandling: true,
-                        SpecialHandler: args => $"DATETRUNC({args[0]}, {args[1]})"
-                    ),
-                    ["current_date"] = new(
-                        "current_date",
-                        "GETDATE",
-                        RequiresSpecialHandling: true,
-                        SpecialHandler: _ => "GETDATE()"
-                    ),
-                    ["length"] = new("length", "LEN"),
-                }
-            );
+        CommonFunctionMappings.WithDateFunctions(
+            extract: "DATEPART",
+            dateTrunc: "DATETRUNC",
+            currentDate: "GETDATE",
+            currentDateExpression: "GETDATE()",
+            length: "LEN",
+            extractHandler: args => $"DATEPART({args[0]}, {args[1]})",
+            dateTruncHandler: args => $"DATETRUNC({args[0]}, {args[1]})"
+        );
 
     /// <summary>
     /// Creates the SQL Server syntax mapping

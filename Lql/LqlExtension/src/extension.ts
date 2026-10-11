@@ -15,6 +15,17 @@ function log(msg: string): void {
   outputChannel.appendLine(`[LQL] ${msg}`);
 }
 
+/** Native LSP binary file name for the current platform. */
+function lspBinaryName(): string {
+  return process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
+}
+
+/** Report a fatal language-server error to the log and the user. */
+function reportFatal(logMessage: string, userMessage: string): void {
+  log(`ERROR: ${logMessage}`);
+  vscode.window.showErrorMessage(`LQL: ${userMessage}`);
+}
+
 /** Map platform/arch to the vsce target name used for bundled binaries. */
 function getVsceTarget(): string | undefined {
   const target = `${process.platform}-${process.arch}`;
@@ -96,8 +107,7 @@ function findPackagedBinary(context: vscode.ExtensionContext): string | undefine
   if (target === undefined) {
     return undefined;
   }
-  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
-  const candidate = path.join(context.extensionPath, "bin", target, binaryName);
+  const candidate = path.join(context.extensionPath, "bin", target, lspBinaryName());
   return fs.existsSync(candidate) ? candidate : undefined;
 }
 
@@ -106,7 +116,7 @@ function findPackagedBinary(context: vscode.ExtensionContext): string | undefine
  * adjacent to the extension install path. Used by dev / test / CI runs.
  */
 function findLocalCargoBuild(context: vscode.ExtensionContext, expectedVersion: string): string | undefined {
-  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
+  const binaryName = lspBinaryName();
   const extPath = context.extensionPath;
   const candidates = [
     path.join(extPath, "..", "lql-lsp-rust", "target", "release", binaryName),
@@ -133,8 +143,7 @@ async function downloadLspBinary(context: vscode.ExtensionContext): Promise<stri
   }
 
   const binDir = path.join(context.globalStorageUri.fsPath, "bin");
-  const binaryName = process.platform === "win32" ? "lql-lsp.exe" : "lql-lsp";
-  const binaryPath = path.join(binDir, binaryName);
+  const binaryPath = path.join(binDir, lspBinaryName());
 
   if (fs.existsSync(binaryPath)) {
     return binaryPath;
@@ -184,8 +193,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const customPath = config.get<string>("languageServer.path") ?? "";
   if (customPath !== "") {
     if (!fs.existsSync(customPath)) {
-      log(`ERROR: Custom LSP path does not exist: ${customPath}`);
-      vscode.window.showErrorMessage(`LQL: Custom language server path not found: ${customPath}`);
+      reportFatal(
+        `Custom LSP path does not exist: ${customPath}`,
+        `Custom language server path not found: ${customPath}`
+      );
       return;
     }
     serverBinary = customPath;
@@ -210,8 +221,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           log(`LSP binary (downloaded): ${serverBinary}`);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          log(`ERROR: ${message}`);
-          vscode.window.showErrorMessage(`LQL: Failed to download language server: ${message}`);
+          reportFatal(message, `Failed to download language server: ${message}`);
           return;
         }
       }

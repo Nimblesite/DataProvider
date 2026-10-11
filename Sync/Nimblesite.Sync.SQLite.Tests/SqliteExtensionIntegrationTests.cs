@@ -1,6 +1,5 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
-using Tests.Shared;
-using Xunit;
+
 using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -18,11 +17,9 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void GetAllSubscriptions_EmptyDatabase_ReturnsEmptyList()
     {
         // Act
-        var result = _db.GetAllSubscriptions();
-
+        // Act
         // Assert
-
-        var subscriptions = Ok(actual: result).Value;
+        var subscriptions = Ok(read: () => _db.GetAllSubscriptions()).Value;
         Assert.Empty(subscriptions);
     }
 
@@ -33,15 +30,12 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var subscription = Dataset_InsertSubscription_ValidSubscription_Succeeds_1();
 
         // Act
-        var result = _db.InsertSubscription(subscription);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: _db.InsertSubscription(subscription));
 
         // Verify
         var allSubs = _db.GetAllSubscriptions();
-        Assert.True(allSubs is SubscriptionListOk);
-        Assert.Single(((SubscriptionListOk)allSubs).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionListOk>(actual: allSubs);
+        Assert.Single((Ok(actual: allSubs)).Value);
     }
 
     [Fact]
@@ -54,11 +48,9 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         _db.InsertSubscription(sub2);
 
         // Act
-        var result = _db.GetAllSubscriptions();
-
+        // Act
         // Assert
-
-        var subscriptions = Ok(actual: result).Value;
+        var subscriptions = Ok(read: () => _db.GetAllSubscriptions()).Value;
         Assert.Equal(2, subscriptions.Count);
     }
 
@@ -72,11 +64,9 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         _db.InsertSubscription(productsSub);
 
         // Act
-        var result = _db.GetSubscriptionsByTable("Orders");
-
+        // Act
         // Assert
-
-        var subscriptions = Ok(actual: result).Value;
+        var subscriptions = Ok(read: () => _db.GetSubscriptionsByTable("Orders")).Value;
         Assert.Single(subscriptions);
         Assert.Equal("sub-orders", subscriptions[0].SubscriptionId);
     }
@@ -89,13 +79,10 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         _db.InsertSubscription(subscription);
 
         // Act
-        var result = _db.DeleteSubscription("sub-1");
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: _db.DeleteSubscription("sub-1"));
 
         var allSubs = _db.GetAllSubscriptions();
-        Assert.Empty(((SubscriptionListOk)allSubs).Value);
+        Assert.Empty((Ok(actual: allSubs)).Value);
     }
 
     [Fact]
@@ -118,12 +105,14 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.DeleteSubscriptionsByOrigin(origin1);
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(2, ((IntSyncOk)result).Value);
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow7(
+            input0: result,
+            value0: 2
+        );
 
         var remaining = _db.GetAllSubscriptions();
-        Assert.Single(((SubscriptionListOk)remaining).Value);
-        Assert.Equal("sub-3", ((SubscriptionListOk)remaining).Value[0].SubscriptionId);
+        Assert.Single((Ok(actual: remaining)).Value);
+        Assert.Equal("sub-3", (Ok(actual: remaining)).Value[0].SubscriptionId);
     }
 
     [Fact]
@@ -141,11 +130,13 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.DeleteExpiredSubscriptions("2025-07-01T00:00:00Z");
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(1, ((IntSyncOk)result).Value);
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow7(
+            input0: result,
+            value0: 1
+        );
 
         var remaining = _db.GetAllSubscriptions();
-        Assert.Equal(2, ((SubscriptionListOk)remaining).Value.Count);
+        Assert.Equal(2, (Ok(actual: remaining)).Value.Count);
     }
 
     #endregion
@@ -159,8 +150,10 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.GetOldestSyncLogVersion();
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow6(
+            input0: result,
+            value0: 0
+        );
     }
 
     [Fact]
@@ -178,30 +171,30 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.GetOldestSyncLogVersion();
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.True(((LongSyncOk)result).Value >= 1);
+        _ = global::Tests.Shared.ResultAssertions.Expected<LongSyncOk>(actual: result);
+        Assert.True((Ok(actual: result)).Value >= 1);
     }
 
     [Fact]
     public void PurgeTombstones_RemovesDeletesBeforeVersion()
     {
         // Arrange - Insert some entries
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_PurgeTombstones_RemovesDeletesBeforeVersion_1;
-        cmd.Parameters.AddWithValue("@origin", _originId);
-        cmd.Parameters.AddWithValue("@ts", Timestamp);
-        cmd.ExecuteNonQuery();
+        using var cmd = InsertLogEntryCommand(
+            Data_PurgeTombstones_RemovesDeletesBeforeVersion_1
+        );
 
         // Get current max version
-        var maxVersionResult = SyncLogRepository.GetMaxVersion(_db);
-        var maxVersion = ((LongSyncOk)maxVersionResult).Value;
+        // Get current max version
+        var maxVersion = (Ok(read: () => SyncLogRepository.GetMaxVersion(_db))).Value;
 
         // Act
         var result = _db.PurgeTombstones(maxVersion + 1);
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(1, ((IntSyncOk)result).Value); // One delete removed
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow7(
+            input0: result,
+            value0: 1
+        ); // One delete removed
 
         // Verify insert still exists
         cmd.CommandText = "SELECT COUNT(*) FROM _sync_log WHERE operation = 'insert'";
@@ -212,21 +205,18 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void PurgeSyncLog_RemovesAllBeforeVersion()
     {
         // Arrange
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_PurgeSyncLog_RemovesAllBeforeVersion_1;
-        cmd.Parameters.AddWithValue("@origin", _originId);
-        cmd.Parameters.AddWithValue("@ts", Timestamp);
-        cmd.ExecuteNonQuery();
+        using var cmd = InsertLogEntryCommand(Data_PurgeSyncLog_RemovesAllBeforeVersion_1);
 
-        var maxVersionResult = SyncLogRepository.GetMaxVersion(_db);
-        var maxVersion = ((LongSyncOk)maxVersionResult).Value;
+        var maxVersion = (Ok(read: () => SyncLogRepository.GetMaxVersion(_db))).Value;
 
         // Act
         var result = _db.PurgeSyncLog(maxVersion + 1);
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(2, ((IntSyncOk)result).Value);
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow7(
+            input0: result,
+            value0: 2
+        );
 
         cmd.CommandText = "SELECT COUNT(*) FROM _sync_log";
         Assert.Equal(0L, cmd.ExecuteScalar());
@@ -240,18 +230,20 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void InsertAndRetrieve_RecordSubscription_TypePreserved()
     {
         // Arrange
-        var subscription = Dataset_InsertAndRetrieve_RecordSubscription_TypePreserved_1();
-        var subs = InsertAndRetrieveSubscription(subscription: subscription);
-        Assert.Equal(SubscriptionType.Record, subs[0].Type);
+        VerifySavedSubscriptionType(
+            Dataset_InsertAndRetrieve_RecordSubscription_TypePreserved_1,
+            SubscriptionType.Record
+        );
     }
 
     [Fact]
     public void InsertAndRetrieve_QuerySubscription_TypePreserved()
     {
         // Arrange
-        var subscription = Dataset_InsertAndRetrieve_QuerySubscription_TypePreserved_1();
-        var subs = InsertAndRetrieveSubscription(subscription: subscription);
-        Assert.Equal(SubscriptionType.Query, subs[0].Type);
+        VerifySavedSubscriptionType(
+            Dataset_InsertAndRetrieve_QuerySubscription_TypePreserved_1,
+            SubscriptionType.Query
+        );
     }
 
     [Fact]
@@ -268,6 +260,28 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
 
     #endregion
 
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySavedSubscriptionType(
+        Func<SyncSubscription> dataset,
+        SubscriptionType expected
+    )
+    {
+        var subscription = dataset();
+        var subs = InsertAndRetrieveSubscription(subscription: subscription);
+        Assert.Equal(expected, subs[0].Type);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private SqliteCommand InsertLogEntryCommand(string sql)
+    {
+        var cmd = _db.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("@origin", _originId);
+        cmd.Parameters.AddWithValue("@ts", Timestamp);
+        cmd.ExecuteNonQuery();
+        return cmd;
+    }
+
     // Implements [SYNC-TEST-SUBSCRIPTION-ROUNDTRIP].
     private IReadOnlyList<SyncSubscription> InsertAndRetrieveSubscription(
         SyncSubscription subscription
@@ -275,7 +289,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     {
         _db.InsertSubscription(subscription);
         var result = _db.GetAllSubscriptions();
-        Assert.True(result is SubscriptionListOk);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionListOk>(actual: result);
         var subs = Assert.IsType<SubscriptionListOk>(result).Value;
         Assert.Single(subs);
         return subs;

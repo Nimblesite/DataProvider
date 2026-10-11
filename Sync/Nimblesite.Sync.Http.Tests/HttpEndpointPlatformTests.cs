@@ -28,90 +28,68 @@ public sealed partial record HttpEndpointPlatformTests
     [Theory]
     [MemberData(nameof(HttpStateAndPull_ReturnEmptyStateAndChangesInlineCases))]
     // Implements [SYNC-HTTP-PROVIDERS].
-    public async Task HttpStateAndPull_ReturnEmptyStateAndChanges(string provider)
-    {
-        var target = await CreateTargetAsync(provider).ConfigureAwait(true);
-        try
-        {
-            using var client = _factory.CreateClient();
-            var query =
-                $"dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}";
-            using var state = await client.GetAsync($"/sync/state?{query}").ConfigureAwait(true);
-            Assert.Equal(HttpStatusCode.OK, state.StatusCode);
-            Assert.Equal("application/json", state.Content.Headers.ContentType?.MediaType);
-            using var stateJson = JsonDocument.Parse(
-                await state.Content.ReadAsStringAsync().ConfigureAwait(true)
-            );
-            Assert.Equal(0L, stateJson.RootElement.GetProperty("maxVersion").GetInt64());
-
-            using var pull = await client
-                .GetAsync($"/sync/changes?fromVersion=0&batchSize=10&{query}")
-                .ConfigureAwait(true);
-            Assert.Equal(HttpStatusCode.OK, pull.StatusCode);
-            Assert.Equal("application/json", pull.Content.Headers.ContentType?.MediaType);
-            using var pullJson = JsonDocument.Parse(
-                await pull.Content.ReadAsStringAsync().ConfigureAwait(true)
-            );
-            Assert.Empty(pullJson.RootElement.GetProperty("changes").EnumerateArray());
-        }
-        finally
-        {
-            if (target.FilePath is not null)
+    public Task HttpStateAndPull_ReturnEmptyStateAndChanges(string provider) =>
+        WithTargetAsync(
+            provider,
+            async connectionString =>
             {
-                File.Delete(target.FilePath);
+                using var client = _factory.CreateClient();
+                var query =
+                    $"dbType={provider}&connectionString={Uri.EscapeDataString(connectionString)}";
+                using var stateJson = await GetJsonOkAsync(client, $"/sync/state?{query}")
+                    .ConfigureAwait(true);
+                Assert.Equal(0L, stateJson.RootElement.GetProperty("maxVersion").GetInt64());
+
+                using var pullJson = await GetJsonOkAsync(
+                        client,
+                        $"/sync/changes?fromVersion=0&batchSize=10&{query}"
+                    )
+                    .ConfigureAwait(true);
+                Assert.Empty(pullJson.RootElement.GetProperty("changes").EnumerateArray());
             }
-        }
-    }
+        );
 
     [Theory]
     [MemberData(nameof(HttpPush_AppliesChangeOnEveryProviderInlineCases))]
     // Implements [SYNC-HTTP-PROVIDERS].
-    public async Task HttpPush_AppliesChangeOnEveryProvider(string provider)
-    {
-        var target = await CreateTargetAsync(provider).ConfigureAwait(true);
-        try
-        {
-            using var client = _factory.CreateClient();
-            var id = Guid.Parse("47cb994e-3e7e-492b-9bc1-2e56dc556dcc");
-            var change = new
+    public Task HttpPush_AppliesChangeOnEveryProvider(string provider) =>
+        WithTargetAsync(
+            provider,
+            async connectionString =>
             {
-                Version = 1L,
-                TableName = "person",
-                PkValue = JsonSerializer.Serialize(new { id }),
-                Operation = "insert",
-                Payload = JsonSerializer.Serialize(
-                    new
-                    {
-                        id,
-                        name = "Ada",
-                        email = "ada@example.test",
-                    }
-                ),
-                Origin = "remote-origin",
-                Timestamp = "2024-01-01T00:00:00Z",
-            };
-            var request = new { Changes = new[] { change }, OriginId = "server-origin" };
-            using var content = new StringContent(
-                JsonSerializer.Serialize(request),
-                System.Text.Encoding.UTF8,
-                "application/json"
-            );
-            using var response = await client.PostAsync(
-                $"/sync/changes?dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}",
-                content
-            );
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
-            await AssertPersonAsync(provider, target.ConnectionString, id).ConfigureAwait(true);
-        }
-        finally
-        {
-            if (target.FilePath is not null)
-            {
-                File.Delete(target.FilePath);
+                using var client = _factory.CreateClient();
+                var id = Guid.Parse("47cb994e-3e7e-492b-9bc1-2e56dc556dcc");
+                var change = new
+                {
+                    Version = 1L,
+                    TableName = "person",
+                    PkValue = JsonSerializer.Serialize(new { id }),
+                    Operation = "insert",
+                    Payload = JsonSerializer.Serialize(
+                        new
+                        {
+                            id,
+                            name = "Ada",
+                            email = "ada@example.test",
+                        }
+                    ),
+                    Origin = "remote-origin",
+                    Timestamp = "2024-01-01T00:00:00Z",
+                };
+                var request = new { Changes = new[] { change }, OriginId = "server-origin" };
+                using var content = new StringContent(
+                    JsonSerializer.Serialize(request),
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                );
+                using var response = await client.PostAsync(
+                    $"/sync/changes?dbType={provider}&connectionString={Uri.EscapeDataString(connectionString)}",
+                    content
+                );
+                AssertJsonOk(response);
+                await AssertPersonAsync(provider, connectionString, id).ConfigureAwait(true);
             }
-        }
-    }
+        );
 
     private static async Task AssertPersonAsync(
         string provider,
@@ -137,14 +115,19 @@ public sealed partial record HttpEndpointPlatformTests
         Assert.False(reader.Read(), $"{provider} inserted more than one person");
     }
 
-    private Task<(string ConnectionString, string? FilePath)> CreateTargetAsync(
-        string provider,
-        bool tableChecks = false
-    ) =>
-        SyncDatabaseTargets.CreateAsync(
-            provider: provider,
-            postgres: _postgres,
-            sqlServer: _sqlServer,
-            tableChecks: tableChecks
-        );
+    private static void AssertJsonOk(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    private static async Task<JsonDocument> GetJsonOkAsync(HttpClient client, string url)
+    {
+        var response = await client.GetAsync(url).ConfigureAwait(true);
+        AssertJsonOk(response);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(true));
+    }
+
+    private static async Task<JsonDocument> ReadJsonDocumentAsync(HttpResponseMessage response) =>
+        JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(true));
 }

@@ -3,30 +3,32 @@
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use antlr_rust::atn::ATN;
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::char_stream::CharStream;
-use antlr_rust::dfa::DFA;
-use antlr_rust::error_listener::ErrorListener;
-use antlr_rust::int_stream::IntStream;
-use antlr_rust::lexer::{BaseLexer, Lexer, LexerRecog};
-use antlr_rust::lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator};
-use antlr_rust::parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext};
-use antlr_rust::recognizer::{Actions, Recognizer};
-use antlr_rust::rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext};
-use antlr_rust::token::*;
-use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
-use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::TokenSource;
+use std::{
+    cell::RefCell,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+    sync::Arc,
+};
 
-use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
-
-use std::cell::RefCell;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
+use antlr_rust::{
+    atn::ATN,
+    atn_deserializer::ATNDeserializer,
+    char_stream::CharStream,
+    dfa::DFA,
+    error_listener::ErrorListener,
+    int_stream::IntStream,
+    lazy_static,
+    lexer::{BaseLexer, Lexer, LexerRecog},
+    lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator},
+    parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext},
+    recognizer::{Actions, Recognizer},
+    rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext},
+    token::*,
+    token_factory::{CommonTokenFactory, TokenAware, TokenFactory},
+    vocabulary::{Vocabulary, VocabularyImpl},
+    PredictionContextCache, Tid, TidAble, TidExt, TokenSource,
+};
 
 pub const T__0: isize = 1;
 pub const T__1: isize = 2;

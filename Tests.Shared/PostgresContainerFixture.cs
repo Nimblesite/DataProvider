@@ -1,3 +1,4 @@
+using Testcontainers.PostgreSql;
 // Shared across all *.Tests projects via Compile Include from /DataProvider/Tests.Shared/.
 // This file exists ONCE on disk; each test assembly links it so the fixture lives once
 // per test-assembly run (xUnit collection fixture lifetime).
@@ -6,9 +7,7 @@
 // each test a freshly-created database inside that container. This replaces the old pattern
 // of one container per test method, which was burning ~3s per test on container churn.
 
-using System.Globalization;
 using System.Text;
-using Testcontainers.PostgreSql;
 
 namespace Nimblesite.TestSupport;
 
@@ -158,7 +157,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
         var counter = Interlocked.Increment(ref _databaseCounter);
         var prefix = SanitizeDbName(namePrefix);
         return string.Create(
-            CultureInfo.InvariantCulture,
+            System.Globalization.CultureInfo.InvariantCulture,
             $"{prefix[..Math.Min(prefix.Length, 30)]}_{_databaseRunId}_{counter:D5}"
         );
     }

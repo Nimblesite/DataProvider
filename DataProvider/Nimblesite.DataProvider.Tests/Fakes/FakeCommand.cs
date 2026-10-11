@@ -1,5 +1,4 @@
 using System.Data;
-using System.Data.Common;
 
 #pragma warning disable CA1515 // Make types internal
 #pragma warning disable CS8765 // Nullability of parameter doesn't match overridden member

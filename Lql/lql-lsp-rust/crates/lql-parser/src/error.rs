@@ -16,20 +16,21 @@ pub enum Severity {
 }
 
 impl ParseError {
-    pub fn error(message: impl Into<String>, span: Span) -> Self {
+    /// Builds a parse error with an explicit severity.
+    fn with_severity(message: impl Into<String>, span: Span, severity: Severity) -> Self {
         Self {
             message: message.into(),
             span,
-            severity: Severity::Error,
+            severity,
         }
     }
 
+    pub fn error(message: impl Into<String>, span: Span) -> Self {
+        Self::with_severity(message, span, Severity::Error)
+    }
+
     pub fn warning(message: impl Into<String>, span: Span) -> Self {
-        Self {
-            message: message.into(),
-            span,
-            severity: Severity::Warning,
-        }
+        Self::with_severity(message, span, Severity::Warning)
     }
 }
 

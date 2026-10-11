@@ -1,9 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
@@ -24,10 +22,7 @@ public sealed partial class SpecComplianceTests : IDisposable
 
     public SpecComplianceTests()
     {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
         CreateTestTable();
     }
 
@@ -56,7 +51,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         // Spec S5.4: Origin ID MUST be 36 characters (standard UUID format)
         var result = SyncSchema.GetOriginId(_db);
 
-        var originId = (Assert.IsType<StringSyncOk>(result)).Value;
+        var originId = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(36, originId.Length);
         Assert.True(Guid.TryParse(originId, out _));
     }
@@ -81,10 +76,7 @@ public sealed partial class SpecComplianceTests : IDisposable
     {
         // Spec S6.1: All timestamps MUST be ISO 8601 UTC with millisecond precision
         // Spec S6.2: MUST be UTC (Z suffix), MUST include milliseconds
-        InsertPerson("p1", "Alice", "alice@example.com");
-
-        var changes = FetchChanges(0);
-        Assert.Single(changes);
+        var changes = InsertAliceAndFetchSingle();
         var timestamp = changes[0].Timestamp;
 
         // Must end with Z (UTC)
@@ -127,10 +119,7 @@ public sealed partial class SpecComplianceTests : IDisposable
     public void Spec_S7_JsonPayload_ContainsAllColumns()
     {
         // Spec S7.3: Payloads generated with explicit column lists
-        InsertPerson("p1", "Alice", "alice@example.com");
-
-        var changes = FetchChanges(0);
-        Assert.Single(changes);
+        var changes = InsertAliceAndFetchSingle();
 
         var payload = changes[0].Payload!;
         ContainsAll(
@@ -162,13 +151,10 @@ public sealed partial class SpecComplianceTests : IDisposable
     {
         // Verify normal behavior - triggers log when suppression disabled
         var suppressionResult = SyncSessionManager.IsSuppressionActive(_db);
-        Assert.IsType<BoolSyncOk>(suppressionResult);
-        Assert.False(((BoolSyncOk)suppressionResult).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: suppressionResult);
+        Assert.False((Ok(actual: suppressionResult)).Value);
 
-        InsertPerson("p1", "Alice", "alice@example.com");
-
-        var changes = FetchChanges(0);
-        Assert.Single(changes);
+        _ = InsertAliceAndFetchSingle();
     }
 
     #endregion
@@ -186,20 +172,16 @@ public sealed partial class SpecComplianceTests : IDisposable
         cmd.ExecuteNonQuery();
 
         var result = TriggerGenerator.CreateTriggers(_db, "Product", TestLogger.L);
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
 
         // Verify triggers work by inserting/updating/deleting
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
+        global::Nimblesite.Sync.SQLite.Tests.SyncRepositoryIntegrationTests.VerifyReusableWorkflow8(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO Product (Id, Name, Price) VALUES ('prod1', 'Widget', 9.99)"
-        );
-
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
-                command.CommandText = "UPDATE Product SET Price = 19.99 WHERE Id = 'prod1'"
+                    "INSERT INTO Product (Id, Name, Price) VALUES ('prod1', 'Widget', 9.99)",
+            configure1: command =>
+                command.CommandText = "UPDATE Product SET Price = 19.99 WHERE Id = 'prod1'",
+            input0: _db
         );
 
         using var deleteCmd = _db.CreateCommand();
@@ -323,12 +305,12 @@ public sealed partial class SpecComplianceTests : IDisposable
 
         // Insert
         var insertResult = SubscriptionRepository.Insert(_db, sub);
-        Assert.IsType<BoolSyncOk>(insertResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: insertResult);
 
         // GetById
         var getResult = SubscriptionRepository.GetById(_db, sub.SubscriptionId);
 
-        var retrieved = (Assert.IsType<SubscriptionOk>(getResult)).Value;
+        var retrieved = (global::Tests.Shared.ResultAssertions.ExactOk(actual: getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(sub.TableName, retrieved!.TableName);
 
@@ -336,18 +318,18 @@ public sealed partial class SpecComplianceTests : IDisposable
         var byTableResult = SubscriptionRepository.GetByTable(_db, "Person");
         Assert.IsType<SubscriptionListOk>(byTableResult);
         Assert.Contains(
-            ((SubscriptionListOk)byTableResult).Value,
+            (Ok(actual: byTableResult)).Value,
             s => s.SubscriptionId == sub.SubscriptionId
         );
 
         // Delete
         var deleteResult = SubscriptionRepository.Delete(_db, sub.SubscriptionId);
-        Assert.IsType<BoolSyncOk>(deleteResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: deleteResult);
 
         // Verify deleted
         var afterDelete = SubscriptionRepository.GetById(_db, sub.SubscriptionId);
-        Assert.IsType<SubscriptionOk>(afterDelete);
-        Assert.Null(((SubscriptionOk)afterDelete).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: afterDelete);
+        Assert.Null((Ok(actual: afterDelete)).Value);
     }
 
     #endregion
@@ -371,7 +353,7 @@ public sealed partial class SpecComplianceTests : IDisposable
             NullLogger.Instance
         );
 
-        var applied = (Assert.IsType<BatchApplyResultOk>(result)).Value;
+        var applied = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(0, applied.AppliedCount); // Should skip own changes
     }
 
@@ -404,14 +386,7 @@ public sealed partial class SpecComplianceTests : IDisposable
             InsertPerson($"p{i}", $"Person{i}", $"p{i}@example.com");
         }
 
-        var batch = BatchManager.FetchBatch(
-            0,
-            10,
-            (from, size) => SyncLogRepository.FetchChanges(_db, from, size),
-            NullLogger.Instance
-        );
-
-        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
+        var batchData = VerifySharedChecks2(input0: _db, value1: 10);
         Assert.Equal(10, batchData.Changes.Count);
         Assert.True(batchData.HasMore);
     }
@@ -422,14 +397,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         // HasMore should be false when all changes fetched
         InsertPerson("p1", "Alice", "alice@example.com");
 
-        var batch = BatchManager.FetchBatch(
-            0,
-            100,
-            (from, size) => SyncLogRepository.FetchChanges(_db, from, size),
-            NullLogger.Instance
-        );
-
-        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
+        var batchData = VerifySharedChecks2(input0: _db, value1: 100);
         Assert.Single(batchData.Changes);
         Assert.False(batchData.HasMore);
     }
@@ -494,12 +462,12 @@ public sealed partial class SpecComplianceTests : IDisposable
 
         // Upsert (insert)
         var upsertResult = SyncClientRepository.Upsert(_db, client);
-        Assert.IsType<BoolSyncOk>(upsertResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: upsertResult);
 
         // GetByOrigin
         var getResult = SyncClientRepository.GetByOrigin(_db, client.OriginId);
 
-        var retrieved = (Assert.IsType<SyncClientOk>(getResult)).Value;
+        var retrieved = (global::Tests.Shared.ResultAssertions.ExactOk(actual: getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(100, retrieved!.LastSyncVersion);
 
@@ -511,14 +479,14 @@ public sealed partial class SpecComplianceTests : IDisposable
         SyncClientRepository.Upsert(_db, updated);
 
         var afterUpdate = SyncClientRepository.GetByOrigin(_db, client.OriginId);
-        Assert.Equal(200, ((SyncClientOk)afterUpdate).Value!.LastSyncVersion);
+        Assert.Equal(200, (Ok(actual: afterUpdate)).Value!.LastSyncVersion);
 
         // Delete
         var deleteResult = SyncClientRepository.Delete(_db, client.OriginId);
-        Assert.IsType<BoolSyncOk>(deleteResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: deleteResult);
 
         var afterDelete = SyncClientRepository.GetByOrigin(_db, client.OriginId);
-        Assert.Null(((SyncClientOk)afterDelete).Value);
+        Assert.Null((Ok(actual: afterDelete)).Value);
     }
 
     #endregion
@@ -552,21 +520,23 @@ public sealed partial class SpecComplianceTests : IDisposable
     [Fact]
     public void Spec_S14_ServerWins_AlwaysChoosesRemote()
     {
-        var local = Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_1();
-        var remote = Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_2();
-
-        var resolution = ConflictResolver.Resolve(local, remote, ConflictStrategy.ServerWins);
-        Assert.Equal(remote, resolution.Winner);
+        VerifyConflictWinner(
+            localFactory: Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_1,
+            remoteFactory: Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_2,
+            strategy: ConflictStrategy.ServerWins,
+            expectRemote: true
+        );
     }
 
     [Fact]
     public void Spec_S14_ClientWins_AlwaysChoosesLocal()
     {
-        var local = Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_1();
-        var remote = Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_2();
-
-        var resolution = ConflictResolver.Resolve(local, remote, ConflictStrategy.ClientWins);
-        Assert.Equal(local, resolution.Winner);
+        VerifyConflictWinner(
+            localFactory: Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_1,
+            remoteFactory: Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_2,
+            strategy: ConflictStrategy.ClientWins,
+            expectRemote: false
+        );
     }
 
     #endregion
@@ -598,20 +568,13 @@ public sealed partial class SpecComplianceTests : IDisposable
         // Batches now include hash for verification
         InsertPerson("p1", "Alice", "alice@example.com");
 
-        var batch = BatchManager.FetchBatch(
-            0,
-            100,
-            (from, size) => SyncLogRepository.FetchChanges(_db, from, size),
-            NullLogger.Instance
-        );
-
-        var batchData = (Assert.IsType<SyncBatchOk>(batch)).Value;
+        var batchData = VerifySharedChecks2(input0: _db, value1: 100);
         Assert.NotNull(batchData.Hash);
 
         // Verify the hash matches
         var verifyResult = BatchManager.VerifyBatchHash(batchData, NullLogger.Instance);
-        Assert.IsType<BoolSyncOk>(verifyResult);
-        Assert.True(((BoolSyncOk)verifyResult).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: verifyResult);
+        Assert.True((Ok(actual: verifyResult)).Value);
     }
 
     [Fact]
@@ -694,11 +657,13 @@ public sealed partial class SpecComplianceTests : IDisposable
         // Verify all spec-required tables exist
         var tables = GetTables();
 
-        Assert.Contains("_sync_state", tables);
-        Assert.Contains("_sync_session", tables);
-        Assert.Contains("_sync_log", tables);
-        Assert.Contains("_sync_clients", tables);
-        Assert.Contains("_sync_subscriptions", tables);
+        VerifyDatabaseWorkflow3(
+            input0: tables,
+            value0: "_sync_state",
+            value1: "_sync_session",
+            value2: "_sync_log",
+            value3: "_sync_clients"
+        );
     }
 
     [Fact]
@@ -706,13 +671,16 @@ public sealed partial class SpecComplianceTests : IDisposable
     {
         var columns = GetTableColumns("_sync_log");
 
-        Assert.Contains("version", columns);
-        Assert.Contains("table_name", columns);
-        Assert.Contains("pk_value", columns);
-        Assert.Contains("operation", columns);
-        Assert.Contains("payload", columns);
-        Assert.Contains("origin", columns);
-        Assert.Contains("timestamp", columns);
+        VerifyDatabaseWorkflow2(
+            input0: columns,
+            value0: "version",
+            value1: "table_name",
+            value2: "pk_value",
+            value3: "operation",
+            value4: "payload",
+            value5: "origin",
+            value6: "timestamp"
+        );
     }
 
     [Fact]
@@ -721,11 +689,12 @@ public sealed partial class SpecComplianceTests : IDisposable
         // Spec: origin_id, last_server_version, last_push_version initialized
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT key FROM _sync_state";
-        var keys = DatabaseCommands.ReadStrings(cmd);
-
-        Assert.Contains("origin_id", keys);
-        Assert.Contains("last_server_version", keys);
-        Assert.Contains("last_push_version", keys);
+        VerifySyncLoopWorkflow4(
+            input0: cmd,
+            value0: "origin_id",
+            value1: "last_server_version",
+            value2: "last_push_version"
+        );
     }
 
     #endregion
@@ -740,18 +709,49 @@ public sealed partial class SpecComplianceTests : IDisposable
         );
     }
 
-    private void InsertPerson(string id, string name, string email)
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyConflictWinner(
+        Func<SyncLogEntry> localFactory,
+        Func<SyncLogEntry> remoteFactory,
+        ConflictStrategy strategy,
+        bool expectRemote
+    )
+    {
+        var local = localFactory();
+        var remote = remoteFactory();
+        var resolution = ConflictResolver.Resolve(local, remote, strategy);
+        Assert.Equal(expectRemote ? remote : local, resolution.Winner);
+    }
+
+    private void ExecutePerson(string sql, string id, string name, string email)
     {
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
+        cmd.CommandText = sql;
         PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
-    private void UpdatePerson(string id, string name, string email)
+    private void InsertPerson(string id, string name, string email) =>
+        ExecutePerson(
+            sql: "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)",
+            id: id,
+            name: name,
+            email: email
+        );
+
+    private void UpdatePerson(string id, string name, string email) =>
+        ExecutePerson(
+            sql: "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id",
+            id: id,
+            name: name,
+            email: email
+        );
+
+    private List<SyncLogEntry> InsertAliceAndFetchSingle()
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id";
-        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
+        InsertPerson("p1", "Alice", "alice@example.com");
+        var changes = FetchChanges(0);
+        Assert.Single(changes);
+        return changes;
     }
 
     private void DeletePerson(string id)
@@ -774,7 +774,7 @@ public sealed partial class SpecComplianceTests : IDisposable
     {
         var result = SyncLogRepository.FetchChanges(_db, fromVersion, 1000);
         Assert.IsType<SyncLogListOk>(result);
-        return [.. ((SyncLogListOk)result).Value];
+        return [.. (Ok(actual: result)).Value];
     }
 
     private BoolSyncResult ApplySingleChange(SyncLogEntry entry) =>
@@ -782,15 +782,9 @@ public sealed partial class SpecComplianceTests : IDisposable
 
     private List<string> GetTables()
     {
-        var tables = new List<string>();
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table'";
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            tables.Add(reader.GetString(0));
-        }
-        return tables;
+        return DatabaseCommands.ReadStrings(cmd);
     }
 
     [SuppressMessage(
@@ -800,34 +794,99 @@ public sealed partial class SpecComplianceTests : IDisposable
     )]
     private List<string> GetTableColumns(string tableName)
     {
-        var columns = new List<string>();
         using var cmd = _db.CreateCommand();
 #pragma warning disable CA2100 // PRAGMA table_info is safe
         cmd.CommandText = $"PRAGMA table_info({tableName})";
 #pragma warning restore CA2100
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
-        return columns;
+        return DatabaseCommands.ReadStrings(cmd, ordinal: 1);
     }
 
     #endregion
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SyncBatch VerifySharedChecks2(SqliteConnection input0, int value1)
+    {
+        var batch = BatchManager.FetchBatch(
+            0,
+            value1,
+            (from, size) => SyncLogRepository.FetchChanges(input0, from, size),
+            NullLogger.Instance
+        );
+
+        var batchData = (global::Tests.Shared.ResultAssertions.ExactOk(actual: batch)).Value;
+
+        return batchData;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow4(
+        SqliteCommand input0,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var keys = DatabaseCommands.ReadStrings(input0);
+
+        global::Nimblesite.Sync.SQLite.Tests.SpecConformanceTests.VerifyReusableWorkflow1(
+            input0: keys,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyDatabaseWorkflow2(
+        List<string> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4,
+        string value5,
+        string value6
+    )
+    {
+        global::Nimblesite.Sync.SQLite.Tests.SpecConformanceTests.VerifyReusableWorkflow1(
+            input0: input0,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
+        global::Nimblesite.Sync.SQLite.Tests.TombstoneIntegrationTests.VerifySyncLoopWorkflow1(
+            input0: input0,
+            value0: value3,
+            value1: value4,
+            value2: value5,
+            value3: value6
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyDatabaseWorkflow3(
+        List<string> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        global::Nimblesite.Sync.SQLite.Tests.TombstoneIntegrationTests.VerifySyncLoopWorkflow1(
+            input0: input0,
+            value0: value0,
+            value1: value1,
+            value2: value2,
+            value3: value3
+        );
+        Assert.Contains("_sync_subscriptions", input0);
     }
 }

@@ -73,6 +73,7 @@ Implements `[CI-DESLOP]`. Read [docs](https://deslop.live/docs/for-ai/); report 
   ```csharp
   public abstract partial record Result<TSuccess, TFailure> { private Result() { } }
   ```
+
 - Use immutable records for data. Choose immutable collections such as `ImmutableList`, `FrozenSet`, or `ImmutableArray` instead of mutable `List<T>`.
 - Always declare result type aliases with `using`; do not write `new Result<string, SqlError>.Ok`.
 - Document all public members with XML documentation, except in test projects. Follow language-specific documentation rules below.
@@ -125,7 +126,6 @@ Every spec section must have a unique, hierarchical, non-numeric ID: `[GROUP-TOP
 - For bugs: write a test that fails because of the bug, verify that failure, fix the bug, then verify the test passes.
 - Prefer E2E/integration tests at the highest level: exercise the full integration with zero mocking. Unit tests are acceptable only when needed to isolate problems.
 - Never use Fluent Assertions.
-- Use the [FHIR specification](https://build.fhir.org/resourcelist.html) for medical data.
 - VS Code extension E2E tests must interact only through `vscode.commands.executeCommand`; never call provider methods directly.
 
 ## Logging standards
@@ -136,6 +136,7 @@ Every spec section must have a unique, hierarchical, non-numeric ID: `[GROUP-TOP
 - Servers: async/background database/file log writes; never block requests.
 - Never log PII (names, emails, addresses, phones, IPs) or secrets (keys, tokens, passwords, connection strings); record presence only.
 - Libraries: C# — `Microsoft.Extensions.Logging` + Serilog; Rust — `tracing` + `tracing-subscriber`; TypeScript — `pino`.
+
 ## Web and CSS
 
 - Minimize CSS classes and aggressively merge duplicates. Name classes after components, never sections.

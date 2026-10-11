@@ -189,8 +189,8 @@ public sealed partial record MigrationPlatformRegressionTests
             includeProjectForeignKey: true,
             includeObsoleteTable: true
         );
-        AssertRestoredCleanupSchema(target, original);
-        AssertUndisturbedCleanupSchema(target, original);
+        AssertCleanupSchema(target, original, allowDestructive: false);
+        AssertCleanupSchema(target, original, allowDestructive: true);
 
         var desired = ForeignKeyCleanupSchema(
             includeTenantForeignKey: keepTenantForeignKey,
@@ -199,8 +199,8 @@ public sealed partial record MigrationPlatformRegressionTests
         );
         AssertRemovedCleanupSchema(target, desired, keepTenantForeignKey, keepProjectForeignKey);
         AssertRemovedCleanupSchema(target, desired, keepTenantForeignKey, keepProjectForeignKey);
-        AssertRestoredCleanupSchema(target, original);
-        AssertRestoredCleanupSchema(target, original);
+        AssertCleanupSchema(target, original, allowDestructive: false);
+        AssertCleanupSchema(target, original, allowDestructive: false);
     }
 
     private static void AssertRemovedCleanupSchema(
@@ -218,9 +218,10 @@ public sealed partial record MigrationPlatformRegressionTests
             allowDestructive: true
         );
 
-    private static void AssertRestoredCleanupSchema(
+    private static void AssertCleanupSchema(
         MigrationTarget target,
-        SchemaDefinition original
+        SchemaDefinition original,
+        bool allowDestructive
     ) =>
         MigrateAndAssertCleanup(
             target,
@@ -228,20 +229,7 @@ public sealed partial record MigrationPlatformRegressionTests
             includeTenantForeignKey: true,
             includeProjectForeignKey: true,
             includeObsoleteTable: true,
-            allowDestructive: false
-        );
-
-    private static void AssertUndisturbedCleanupSchema(
-        MigrationTarget target,
-        SchemaDefinition original
-    ) =>
-        MigrateAndAssertCleanup(
-            target,
-            original,
-            includeTenantForeignKey: true,
-            includeProjectForeignKey: true,
-            includeObsoleteTable: true,
-            allowDestructive: true
+            allowDestructive: allowDestructive
         );
 
     private static void MigrateAndAssertCleanup(

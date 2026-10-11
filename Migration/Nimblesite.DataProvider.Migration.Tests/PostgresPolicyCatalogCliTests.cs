@@ -97,12 +97,14 @@ public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFix
 
     private static bool RejectDrift(NpgsqlConnection connection, SchemaDefinition desired)
     {
-        var live = Assert
-            .IsType<SchemaResultOk>(PostgresPolicyCatalogNormalizer.Inspect(connection: connection))
+        var live = global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: PostgresPolicyCatalogNormalizer.Inspect(connection: connection)
+            )
             .Value;
-        var normalized = Assert
-            .IsType<SchemaResultOk>(
-                PostgresPolicyCatalogNormalizer.Normalize(
+        var normalized = global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: PostgresPolicyCatalogNormalizer.Normalize(
                     connection: connection,
                     live: live,
                     desired: desired
@@ -151,9 +153,9 @@ public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFix
         Assert.Single(
             Assert
                 .Single(
-                    Assert
-                        .IsType<SchemaResultOk>(
-                            PostgresSchemaInspector.Inspect(connection: connection)
+                    global::Tests
+                        .Shared.ResultAssertions.ExactOk(
+                            actual: PostgresSchemaInspector.Inspect(connection: connection)
                         )
                         .Value.Tables
                 )

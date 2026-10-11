@@ -3,7 +3,6 @@ using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
 using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -32,23 +31,13 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Query(
-            sql: "SELECT Id, CustomerName, Email FROM Customer",
-            mapper: reader =>
-                (Id: reader.GetString(0), Name: reader.GetString(1), Email: reader.GetString(2))
+        var ok = Ok(read: () =>
+            _connection.Query(
+                sql: "SELECT Id, CustomerName, Email FROM Customer",
+                mapper: reader =>
+                    (Id: reader.GetString(0), Name: reader.GetString(1), Email: reader.GetString(2))
+            )
         );
-
-        Assert.True(
-            result
-                is Result<IReadOnlyList<(string Id, string Name, string Email)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string Name, string Email)>,
-                    SqlError
-                >
-        );
-        var ok = (Result<IReadOnlyList<(string Id, string Name, string Email)>, SqlError>.Ok<
-            IReadOnlyList<(string Id, string Name, string Email)>,
-            SqlError
-        >)result;
         Assert.Equal(2, ok.Value.Count);
     }
 
@@ -57,19 +46,13 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Query(
-            sql: "SELECT Id, CustomerName FROM Customer WHERE CustomerName = @name",
-            parameters: [new SqliteParameter("@name", "Acme Corp")],
-            mapper: reader => reader.GetString(1)
+        var ok = Ok(read: () =>
+            _connection.Query(
+                sql: "SELECT Id, CustomerName FROM Customer WHERE CustomerName = @name",
+                parameters: [new SqliteParameter("@name", "Acme Corp")],
+                mapper: reader => reader.GetString(1)
+            )
         );
-
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Ok<IReadOnlyList<string>, SqlError>
-        );
-        var ok = (Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >)result;
         Assert.Single(ok.Value);
         Assert.Equal("Acme Corp", ok.Value[0]);
     }
@@ -78,12 +61,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     public void Query_WithNullConnection_ReturnsError()
     {
         IDbConnection? nullConnection = null;
-
-        var result = nullConnection!.Query<string>(sql: "SELECT 1");
-
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: nullConnection!.Query<string>(sql: "SELECT 1"));
     }
 
     [Fact]
@@ -93,9 +71,7 @@ public sealed partial class CoreCoverageTests : IDisposable
 
         var result = _connection.Query<string>(sql: "");
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     [Fact]
@@ -108,9 +84,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             mapper: reader => reader.GetString(0)
         );
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     [Fact]
@@ -118,15 +92,9 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Query<string>(sql: "SELECT Id FROM Customer", mapper: null);
-
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Ok<IReadOnlyList<string>, SqlError>
+        var ok = Ok(read: () =>
+            _connection.Query<string>(sql: "SELECT Id FROM Customer", mapper: null)
         );
-        var ok = (Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >)result;
         Assert.Empty(ok.Value);
     }
 
@@ -139,11 +107,11 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Execute(
-            sql: "UPDATE Customer SET Email = 'updated@test.com' WHERE CustomerName = 'Acme Corp'"
+        var ok = Ok(read: () =>
+            _connection.Execute(
+                sql: "UPDATE Customer SET Email = 'updated@test.com' WHERE CustomerName = 'Acme Corp'"
+            )
         );
-
-        var ok = Ok(actual: result);
         Assert.Equal(1, ok.Value);
     }
 
@@ -161,37 +129,31 @@ public sealed partial class CoreCoverageTests : IDisposable
             ]
         );
 
-        Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+        _ = Ok(actual: result);
     }
 
     [Fact]
     public void Execute_WithNullConnection_ReturnsError()
     {
         IDbConnection? nullConnection = null;
-
-        var result = nullConnection!.Execute(sql: "DELETE FROM Customer");
-
-        Assert.True(result is Result<int, SqlError>.Error<int, SqlError>);
+        _ = Error(actual: nullConnection!.Execute(sql: "DELETE FROM Customer"));
     }
 
-    [Fact]
-    public async Task Execute_WithEmptySql_ReturnsError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData1))]
+    public async Task Execute_WithEmptySql_ReturnsError_ScenarioCases(
+        string scenarioName,
+        System.String scenario1
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Execute(sql: "   ");
+        var result = _connection.Execute(sql: scenario1);
 
-        Assert.True(result is Result<int, SqlError>.Error<int, SqlError>);
-    }
-
-    [Fact]
-    public async Task Execute_WithInvalidSql_ReturnsError()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        var result = _connection.Execute(sql: "INSERT INTO NonExistentTable VALUES (1)");
-
-        Assert.True(result is Result<int, SqlError>.Error<int, SqlError>);
+        _ = Error(actual: result);
     }
 
     #endregion
@@ -203,9 +165,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer");
-
-        var ok = Ok(actual: result);
+        var ok = Ok(read: () => _connection.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer"));
         Assert.Equal(2L, ok.Value);
     }
 
@@ -214,12 +174,12 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Scalar<object>(
-            sql: "SELECT COUNT(*) FROM Customer WHERE CustomerName = @name",
-            parameters: [new SqliteParameter("@name", "Acme Corp")]
+        var ok = Ok(read: () =>
+            _connection.Scalar<object>(
+                sql: "SELECT COUNT(*) FROM Customer WHERE CustomerName = @name",
+                parameters: [new SqliteParameter("@name", "Acme Corp")]
+            )
         );
-
-        var ok = Ok(actual: result);
         Assert.Equal(1L, ok.Value);
     }
 
@@ -227,30 +187,24 @@ public sealed partial class CoreCoverageTests : IDisposable
     public void Scalar_WithNullConnection_ReturnsError()
     {
         IDbConnection? nullConnection = null;
-
-        var result = nullConnection!.Scalar<object>(sql: "SELECT 1");
-
-        Assert.True(result is Result<object?, SqlError>.Error<object?, SqlError>);
+        _ = Error(actual: nullConnection!.Scalar<object>(sql: "SELECT 1"));
     }
 
-    [Fact]
-    public async Task Scalar_WithEmptySql_ReturnsError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData2))]
+    public async Task Scalar_WithEmptySql_ReturnsError_ScenarioCases(
+        string scenarioName,
+        System.String scenario1
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         await SetupDatabase().ConfigureAwait(false);
 
-        var result = _connection.Scalar<object>(sql: "");
+        var result = _connection.Scalar<object>(sql: scenario1);
 
-        Assert.True(result is Result<object?, SqlError>.Error<object?, SqlError>);
-    }
-
-    [Fact]
-    public async Task Scalar_WithInvalidSql_ReturnsError()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        var result = _connection.Scalar<object>(sql: "SELECT FROM INVALID");
-
-        Assert.True(result is Result<object?, SqlError>.Error<object?, SqlError>);
+        _ = Error(actual: result);
     }
 
     #endregion
@@ -269,9 +223,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             reader => reader.GetString(0)
         );
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     [Fact]
@@ -285,9 +237,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             reader => reader.GetString(0)
         );
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     [Fact]
@@ -302,9 +252,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             reader => reader.GetString(0)
         );
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     [Fact]
@@ -315,9 +263,7 @@ public sealed partial class CoreCoverageTests : IDisposable
 
         var result = _connection.GetRecords<string>(statement, stmt => stmt.ToSQLite(), null!);
 
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: result);
     }
 
     #endregion
@@ -335,17 +281,12 @@ public sealed partial class CoreCoverageTests : IDisposable
                 var insertResult = tx.Execute(
                     sql: "INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES ('cust-3', 'Test Corp', 'test@test.com', '555-0300', '2024-03-01')"
                 );
-                Assert.True(insertResult is Result<int, SqlError>.Ok<int, SqlError>);
+                _ = Ok(actual: insertResult);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
 
-        var result = _connection.Query(
-            sql: "SELECT COUNT(*) FROM Customer",
-            mapper: reader => reader.GetInt64(0)
-        );
-        var ok = (Result<IReadOnlyList<long>, SqlError>.Ok<IReadOnlyList<long>, SqlError>)result;
-        Assert.Equal(3L, ok.Value[0]);
+        VerifySharedChecks1(input0: _connection, value2: 3L);
     }
 
     [Fact]
@@ -366,79 +307,67 @@ public sealed partial class CoreCoverageTests : IDisposable
 
         Assert.Equal("success", result);
 
-        var countResult = _connection.Query(
-            sql: "SELECT COUNT(*) FROM Customer",
-            mapper: reader => reader.GetInt64(0)
-        );
-        var ok = (Result<IReadOnlyList<long>, SqlError>.Ok<
-            IReadOnlyList<long>,
-            SqlError
-        >)countResult;
-        Assert.Equal(3L, ok.Value[0]);
+        VerifySharedChecks1(input0: _connection, value2: 3L);
     }
 
-    [Fact]
-    public async Task Transact_OnException_RollsBack()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: both rollback facts keep their
+    // original names as case labels and share one exception/rollback workflow.
+    [Theory]
+    [InlineData(
+        "Transact_OnException_RollsBack",
+        false,
+        "INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES ('cust-rollback', 'Rollback Corp', 'roll@test.com', '555-0500', '2024-05-01')"
+    )]
+    [InlineData(
+        "Transact_WithReturnValue_OnException_RollsBack",
+        true,
+        "INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES ('cust-rb2', 'Rollback2 Corp', 'rb2@test.com', null, '2024-06-01')"
+    )]
+    public async Task Transact_OnException_RollsBack(
+        string caseName,
+        bool withReturnValue,
+        string insertSql
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
         await SetupDatabase().ConfigureAwait(false);
 
         await Assert
             .ThrowsAsync<InvalidOperationException>(async () =>
             {
-                await _connection
-                    .Transact(async tx =>
-                    {
-                        tx.Execute(
-                            sql: "INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES ('cust-rollback', 'Rollback Corp', 'roll@test.com', '555-0500', '2024-05-01')"
-                        );
-                        await Task.CompletedTask.ConfigureAwait(false);
-                        throw new InvalidOperationException("Simulated failure");
-                    })
-                    .ConfigureAwait(false);
+                if (withReturnValue)
+                {
+                    await _connection
+                        .Transact<string>(async tx =>
+                        {
+                            await ThrowAfterInsert(transaction: tx, sql: insertSql)
+                                .ConfigureAwait(false);
+                            return string.Empty;
+                        })
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await _connection
+                        .Transact(async tx =>
+                            await ThrowAfterInsert(transaction: tx, sql: insertSql)
+                                .ConfigureAwait(false)
+                        )
+                        .ConfigureAwait(false);
+                }
             })
             .ConfigureAwait(false);
 
-        var countResult = _connection.Query(
-            sql: "SELECT COUNT(*) FROM Customer",
-            mapper: reader => reader.GetInt64(0)
-        );
-        var ok = (Result<IReadOnlyList<long>, SqlError>.Ok<
-            IReadOnlyList<long>,
-            SqlError
-        >)countResult;
-        Assert.Equal(2L, ok.Value[0]);
+        VerifySharedChecks1(input0: _connection, value2: 2L);
     }
 
-    [Fact]
-    public async Task Transact_WithReturnValue_OnException_RollsBack()
+    // Implements [CI-TEST-SHARED-SCENARIOS]: shared insert-then-fail body for the
+    // rollback facts, preserving the exact insert statement and failure ordering.
+    private static async Task ThrowAfterInsert(IDbTransaction transaction, string sql)
     {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await Assert
-            .ThrowsAsync<InvalidOperationException>(async () =>
-            {
-                await _connection
-                    .Transact<string>(async tx =>
-                    {
-                        tx.Execute(
-                            sql: "INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES ('cust-rb2', 'Rollback2 Corp', 'rb2@test.com', null, '2024-06-01')"
-                        );
-                        await Task.CompletedTask.ConfigureAwait(false);
-                        throw new InvalidOperationException("Simulated failure");
-                    })
-                    .ConfigureAwait(false);
-            })
-            .ConfigureAwait(false);
-
-        var countResult = _connection.Query(
-            sql: "SELECT COUNT(*) FROM Customer",
-            mapper: reader => reader.GetInt64(0)
-        );
-        var ok = (Result<IReadOnlyList<long>, SqlError>.Ok<
-            IReadOnlyList<long>,
-            SqlError
-        >)countResult;
-        Assert.Equal(2L, ok.Value[0]);
+        transaction.Execute(sql: sql);
+        await Task.CompletedTask.ConfigureAwait(false);
+        throw new InvalidOperationException("Simulated failure");
     }
 
     #endregion
@@ -453,22 +382,12 @@ public sealed partial class CoreCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var result = tx.Query(
-                    sql: "SELECT CustomerName FROM Customer ORDER BY CustomerName",
-                    mapper: reader => reader.GetString(0)
+                var ok = Ok(
+                    actual: QueryStrings(
+                        transaction: tx,
+                        sql: "SELECT CustomerName FROM Customer ORDER BY CustomerName"
+                    )
                 );
-
-                Assert.True(
-                    result
-                        is Result<IReadOnlyList<string>, SqlError>.Ok<
-                            IReadOnlyList<string>,
-                            SqlError
-                        >
-                );
-                var ok = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)result;
                 Assert.Equal(2, ok.Value.Count);
                 Assert.Equal("Acme Corp", ok.Value[0]);
                 await Task.CompletedTask.ConfigureAwait(false);
@@ -484,23 +403,13 @@ public sealed partial class CoreCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var result = tx.Query(
-                    sql: "SELECT CustomerName FROM Customer WHERE Email = @email",
-                    parameters: [new SqliteParameter("@email", "contact@acme.com")],
-                    mapper: reader => reader.GetString(0)
+                var ok = Ok(read: () =>
+                    tx.Query(
+                        sql: "SELECT CustomerName FROM Customer WHERE Email = @email",
+                        parameters: [new SqliteParameter("@email", "contact@acme.com")],
+                        mapper: reader => reader.GetString(0)
+                    )
                 );
-
-                Assert.True(
-                    result
-                        is Result<IReadOnlyList<string>, SqlError>.Ok<
-                            IReadOnlyList<string>,
-                            SqlError
-                        >
-                );
-                var ok = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)result;
                 Assert.Single(ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -511,12 +420,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     public void TransactionQuery_WithNullTransaction_ReturnsError()
     {
         IDbTransaction? nullTx = null;
-
-        var result = nullTx!.Query<string>(sql: "SELECT 1");
-
-        Assert.True(
-            result is Result<IReadOnlyList<string>, SqlError>.Error<IReadOnlyList<string>, SqlError>
-        );
+        _ = Error(actual: nullTx!.Query<string>(sql: "SELECT 1"));
     }
 
     [Fact]
@@ -528,13 +432,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             .Transact(async tx =>
             {
                 var result = tx.Query<string>(sql: "");
-                Assert.True(
-                    result
-                        is Result<IReadOnlyList<string>, SqlError>.Error<
-                            IReadOnlyList<string>,
-                            SqlError
-                        >
-                );
+                _ = Error(actual: result);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
@@ -548,11 +446,11 @@ public sealed partial class CoreCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var result = tx.Execute(
-                    sql: "UPDATE Customer SET Phone = '555-9999' WHERE CustomerName = 'Acme Corp'"
+                var ok = Ok(read: () =>
+                    tx.Execute(
+                        sql: "UPDATE Customer SET Phone = '555-9999' WHERE CustomerName = 'Acme Corp'"
+                    )
                 );
-
-                var ok = Ok(actual: result);
                 Assert.Equal(1, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -575,7 +473,7 @@ public sealed partial class CoreCoverageTests : IDisposable
                         new SqliteParameter("@name", "Tech Solutions"),
                     ]
                 );
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
+                _ = Ok(actual: result);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
@@ -585,10 +483,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     public void TransactionExecute_WithNullTransaction_ReturnsError()
     {
         IDbTransaction? nullTx = null;
-
-        var result = nullTx!.Execute(sql: "DELETE FROM Customer");
-
-        Assert.True(result is Result<int, SqlError>.Error<int, SqlError>);
+        _ = Error(actual: nullTx!.Execute(sql: "DELETE FROM Customer"));
     }
 
     [Fact]
@@ -600,7 +495,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             .Transact(async tx =>
             {
                 var result = tx.Execute(sql: "  ");
-                Assert.True(result is Result<int, SqlError>.Error<int, SqlError>);
+                _ = Error(actual: result);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
@@ -614,9 +509,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var result = tx.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer");
-
-                var ok = Ok(actual: result);
+                var ok = Ok(read: () => tx.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer"));
                 Assert.Equal(2L, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -631,12 +524,12 @@ public sealed partial class CoreCoverageTests : IDisposable
         await _connection
             .Transact(async tx =>
             {
-                var result = tx.Scalar<object>(
-                    sql: "SELECT COUNT(*) FROM Customer WHERE CustomerName = @name",
-                    parameters: [new SqliteParameter("@name", "Acme Corp")]
+                var ok = Ok(read: () =>
+                    tx.Scalar<object>(
+                        sql: "SELECT COUNT(*) FROM Customer WHERE CustomerName = @name",
+                        parameters: [new SqliteParameter("@name", "Acme Corp")]
+                    )
                 );
-
-                var ok = Ok(actual: result);
                 Assert.Equal(1L, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -647,10 +540,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     public void TransactionScalar_WithNullTransaction_ReturnsError()
     {
         IDbTransaction? nullTx = null;
-
-        var result = nullTx!.Scalar<object>(sql: "SELECT 1");
-
-        Assert.True(result is Result<object?, SqlError>.Error<object?, SqlError>);
+        _ = Error(actual: nullTx!.Scalar<object>(sql: "SELECT 1"));
     }
 
     [Fact]
@@ -662,7 +552,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             .Transact(async tx =>
             {
                 var result = tx.Scalar<object>(sql: "");
-                Assert.True(result is Result<object?, SqlError>.Error<object?, SqlError>);
+                _ = Error(actual: result);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
@@ -797,15 +687,12 @@ public sealed partial class CoreCoverageTests : IDisposable
     {
         await _connection.OpenAsync().ConfigureAwait(false);
 
-        var createTablesScript = Data_SetupDatabase_1;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-
-        var insertScript = Data_SetupDatabase_2;
-
-        using var insertCommand = new SqliteCommand(insertScript, _connection);
-        await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await VerifySharedPhase1(
+                configure0: command => command.CommandText = Data_SetupDatabase_1,
+                configure1: command => command.CommandText = Data_SetupDatabase_2,
+                input0: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     public void Dispose() => DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
@@ -830,5 +717,60 @@ public sealed partial class CoreCoverageTests : IDisposable
             }
 #pragma warning restore CA1031
         }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks1(SqliteConnection input0, long value2)
+    {
+        var ok = Ok(read: () =>
+            input0.Query(sql: "SELECT COUNT(*) FROM Customer", mapper: reader => reader.GetInt64(0))
+        );
+        Assert.Equal(value2, ok.Value[0]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: one-column string projection for a
+    // transaction receiver, shared by every generated-operation lookup.
+    internal static Result<IReadOnlyList<string>, SqlError> QueryStrings(
+        IDbTransaction transaction,
+        string sql
+    ) => transaction.Query(sql: sql, mapper: reader => reader.GetString(0));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: unwraps the one-column projection value.
+    internal static IReadOnlyList<string> QueryStringList(IDbTransaction transaction, string sql) =>
+        Ok(actual: QueryStrings(transaction: transaction, sql: sql)).Value;
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: two-column identifier projection for a
+    // transaction receiver, shared by every generated update/lookup pair.
+    internal static (string Id, string Reference) SelectIdAndReference(
+        IDbTransaction transaction,
+        string sql
+    ) =>
+        Ok(read: () =>
+            transaction.Query(
+                sql: sql,
+                mapper: reader => (Id: reader.GetString(0), Reference: reader.GetString(1))
+            )
+        ).Value[0];
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifySharedPhase1(
+        SqliteConnection input0,
+        global::System.Action<global::Microsoft.Data.Sqlite.SqliteCommand> configure0,
+        global::System.Action<global::Microsoft.Data.Sqlite.SqliteCommand> configure1
+    )
+    {
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow101(
+                configure: configure0,
+                input1: input0
+            )
+            .ConfigureAwait(false);
+
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow101(
+                configure: configure1,
+                input1: input0
+            )
+            .ConfigureAwait(false);
     }
 }

@@ -48,13 +48,10 @@ internal static class QualifierRewriter
     )
     {
         var end = start;
-        while (
-            end < expression.Length
-            && (char.IsLetterOrDigit(expression[end]) || expression[end] == '_')
-        )
-        {
-            end++;
-        }
+        end = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+            source: expression,
+            start: end
+        );
         var identifier = expression[start..end];
         var qualifies = end < expression.Length && expression[end] == '.';
         if (qualifies && qualifiers.TryGetValue(identifier, out var replacement))
@@ -66,16 +63,24 @@ internal static class QualifierRewriter
         return end;
     }
 
-    private static int CopyQuoted(string expression, int start, StringBuilder sql)
+    // Implements [LQL-SHARED-QUOTED-TOKEN].
+    internal static int CopySqlQuoted(string source, int start, StringBuilder sql) =>
+        source[start] == '\''
+            ? CopyStringLiteral(source: source, sb: sql, i: start)
+            : CopyQuoted(source: source, start: start, sql: sql, close: '"');
+
+    private static int CopyQuoted(string expression, int start, StringBuilder sql) =>
+        CopyQuoted(source: expression, start: start, sql: sql, close: expression[start]);
+
+    internal static int CopyQuoted(string source, int start, StringBuilder sql, char close)
     {
-        var quote = expression[start];
         var end = start + 1;
-        while (end < expression.Length && expression[end] != quote)
+        while (end < source.Length && source[end] != close)
         {
             end++;
         }
-        end = Math.Min(end + 1, expression.Length);
-        sql.Append(expression, start, end - start);
+        end = Math.Min(end + 1, source.Length);
+        sql.Append(source, start, end - start);
         return end;
     }
 
@@ -88,27 +93,34 @@ internal static class QualifierRewriter
     // Implements [LQL-SHARED-LITERAL-COPY].
     internal static int CopyStringLiteral(string source, StringBuilder sb, int i)
     {
-        sb.Append(source[i]);
-        i++;
-        while (i < source.Length)
+        var end = StringLiteralEnd(source: source, index: i + 1);
+        sb.Append(source, i, end - i);
+        return end;
+    }
+
+    private static int StringLiteralEnd(string source, int index)
+    {
+        while (index < source.Length)
         {
-            sb.Append(source[i]);
-            if (source[i] == '\'')
+            if (source[index] == '\'')
             {
-                if (i + 1 < source.Length && source[i + 1] == '\'')
+                if (index + 1 == source.Length || source[index + 1] != '\'')
                 {
-                    sb.Append(source[i + 1]);
-                    i += 2;
-                    continue;
+                    return index + 1;
                 }
-
-                i++;
-                break;
+                index++;
             }
-
-            i++;
+            index++;
         }
+        return index;
+    }
 
-        return i;
+    // Implements [LQL-SHARED-IDENTIFIER-END].
+    internal static int IdentifierEnd(string source, int start)
+    {
+        var end = start;
+        while (end < source.Length && (char.IsLetterOrDigit(source[end]) || source[end] == '_'))
+            end++;
+        return end;
     }
 }

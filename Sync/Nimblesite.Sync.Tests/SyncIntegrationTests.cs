@@ -2,7 +2,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Tests.Shared;
 
 namespace Nimblesite.Sync.Tests;
@@ -39,11 +38,15 @@ public sealed partial class SyncIntegrationTests : IDisposable
         InsertPerson(_serverDb, "p2", "Bob");
 
         // Sync: Pull from server to client
-        var pullResult = PullChanges(_serverDb, _clientDb, ClientOrigin);
-
-        Assert.True(pullResult > 0);
-        Assert.Equal("Alice", GetPersonName(_clientDb, "p1"));
-        Assert.Equal("Bob", GetPersonName(_clientDb, "p2"));
+        PullToClient();
+        VerifyReusableWorkflow1(
+            input0: GetPersonName,
+            input1: _clientDb,
+            value0: "Alice",
+            value1: "p1",
+            value2: "Bob",
+            value3: "p2"
+        );
     }
 
     [Fact]
@@ -57,9 +60,7 @@ public sealed partial class SyncIntegrationTests : IDisposable
         UpdatePerson(_serverDb, "p1", "Alice Updated");
 
         // Sync again
-        var pullResult = PullChanges(_serverDb, _clientDb, ClientOrigin);
-
-        Assert.True(pullResult > 0);
+        PullToClient();
         Assert.Equal("Alice Updated", GetPersonName(_clientDb, "p1"));
     }
 
@@ -75,9 +76,7 @@ public sealed partial class SyncIntegrationTests : IDisposable
         DeletePerson(_serverDb, "p1");
 
         // Sync again
-        var pullResult = PullChanges(_serverDb, _clientDb, ClientOrigin);
-
-        Assert.True(pullResult > 0);
+        PullToClient();
         Assert.Null(GetPersonName(_clientDb, "p1"));
     }
 
@@ -88,9 +87,7 @@ public sealed partial class SyncIntegrationTests : IDisposable
         InsertPerson(_clientDb, "p1", "Charlie");
 
         // Push from client to server
-        var pushResult = PushChanges(_clientDb, _serverDb, ServerOrigin);
-
-        Assert.True(pushResult > 0);
+        PushToServer();
         Assert.Equal("Charlie", GetPersonName(_serverDb, "p1"));
     }
 
@@ -110,10 +107,22 @@ public sealed partial class SyncIntegrationTests : IDisposable
         PushChanges(_clientDb, _serverDb, ServerOrigin);
 
         // Both should have both records
-        Assert.Equal("Alice", GetPersonName(_serverDb, "p1"));
-        Assert.Equal("Bob", GetPersonName(_serverDb, "p2"));
-        Assert.Equal("Alice", GetPersonName(_clientDb, "p1"));
-        Assert.Equal("Bob", GetPersonName(_clientDb, "p2"));
+        VerifyReusableWorkflow1(
+            input0: GetPersonName,
+            input1: _serverDb,
+            value0: "Alice",
+            value1: "p1",
+            value2: "Bob",
+            value3: "p2"
+        );
+        VerifyReusableWorkflow1(
+            input0: GetPersonName,
+            input1: _clientDb,
+            value0: "Alice",
+            value1: "p1",
+            value2: "Bob",
+            value3: "p2"
+        );
     }
 
     [Fact]
@@ -124,9 +133,7 @@ public sealed partial class SyncIntegrationTests : IDisposable
         InsertChild(_serverDb, "child1", "parent1", "Child One");
 
         // Pull to client - should handle FK order via defer/retry
-        var pullResult = PullChanges(_serverDb, _clientDb, ClientOrigin);
-
-        Assert.True(pullResult > 0);
+        PullToClient();
         Assert.Equal("Parent One", GetParentName(_clientDb, "parent1"));
         Assert.Equal("Child One", GetChildName(_clientDb, "child1"));
     }
@@ -169,8 +176,14 @@ public sealed partial class SyncIntegrationTests : IDisposable
         );
 
         Assert.Equal(50, pullResult);
-        Assert.Equal("Person 1", GetPersonName(_clientDb, "p1"));
-        Assert.Equal("Person 50", GetPersonName(_clientDb, "p50"));
+        VerifyReusableWorkflow1(
+            input0: GetPersonName,
+            input1: _clientDb,
+            value0: "Person 1",
+            value1: "p1",
+            value2: "Person 50",
+            value3: "p50"
+        );
     }
 
     [Fact]
@@ -194,35 +207,34 @@ public sealed partial class SyncIntegrationTests : IDisposable
 
     private static SqliteConnection CreateSyncDatabase(string originId, string dbPath)
     {
-        var conn = new SqliteConnection($"Data Source={dbPath}");
-        conn.Open();
-
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: command =>
-                command.CommandText = SqlData_CreateSyncDatabase_1(originId: originId)
+        var conn = VerifyReusableWorkflow10(
+            configure0: command =>
+                command.CommandText = SqlData_CreateSyncDatabase_1(originId: originId),
+            input0: dbPath
         );
 
         return conn;
     }
 
-    private static void InsertPerson(SqliteConnection db, string id, string name)
+    private static void ExecutePerson(SqliteConnection db, string sql, string id, string name)
     {
         DatabaseCommands.Execute(
             connection: db,
-            configure: cmd => cmd.CommandText = "INSERT INTO Person (Id, Name) VALUES ($id, $name)",
+            configure: cmd => cmd.CommandText = sql,
             parameters: () => [("$id", id), ("$name", name)]
         );
     }
 
-    private static void UpdatePerson(SqliteConnection db, string id, string name)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd => cmd.CommandText = "UPDATE Person SET Name = $name WHERE Id = $id",
-            parameters: () => [("$id", id), ("$name", name)]
+    internal static void InsertPerson(SqliteConnection db, string id, string name) =>
+        ExecutePerson(
+            db: db,
+            sql: "INSERT INTO Person (Id, Name) VALUES ($id, $name)",
+            id: id,
+            name: name
         );
-    }
+
+    private static void UpdatePerson(SqliteConnection db, string id, string name) =>
+        ExecutePerson(db: db, sql: "UPDATE Person SET Name = $name WHERE Id = $id", id: id, name: name);
 
     private static void DeletePerson(SqliteConnection db, string id)
     {
@@ -233,36 +245,24 @@ public sealed partial class SyncIntegrationTests : IDisposable
         );
     }
 
-    private static string? GetPersonName(SqliteConnection db, string id)
-    {
-        return global::Tests.Shared.DatabaseCommands.Scalar(
+    private static string? GetName(SqliteConnection db, string table, string id) =>
+        global::Tests.Shared.DatabaseCommands.Scalar(
                 connection: db,
                 configure: command =>
-                    command.CommandText = "SELECT Name FROM Person WHERE Id = $id",
+                    command.CommandText = $"SELECT Name FROM {table} WHERE Id = $id",
                 parameters: () => [("$id", id)]
             ) as string;
-    }
 
-    private static void InsertParent(SqliteConnection db, string id, string name)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd => cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)",
-            parameters: () => [("$id", id), ("$name", name)]
-        );
-    }
+    private static string? GetPersonName(SqliteConnection db, string id) =>
+        GetName(db, "Person", id);
 
-    private static string? GetParentName(SqliteConnection db, string id)
-    {
-        return global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: db,
-                configure: command =>
-                    command.CommandText = "SELECT Name FROM Parent WHERE Id = $id",
-                parameters: () => [("$id", id)]
-            ) as string;
-    }
+    internal static void InsertParent(SqliteConnection db, string id, string name) =>
+        ExecutePerson(db: db, sql: "INSERT INTO Parent (Id, Name) VALUES ($id, $name)", id: id, name: name);
 
-    private static void InsertChild(SqliteConnection db, string id, string parentId, string name)
+    private static string? GetParentName(SqliteConnection db, string id) =>
+        GetName(db, "Parent", id);
+
+    internal static void InsertChild(SqliteConnection db, string id, string parentId, string name)
     {
         DatabaseCommands.Execute(
             connection: db,
@@ -273,23 +273,14 @@ public sealed partial class SyncIntegrationTests : IDisposable
         );
     }
 
-    private static string? GetChildName(SqliteConnection db, string id)
-    {
-        return global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: db,
-                configure: command => command.CommandText = "SELECT Name FROM Child WHERE Id = $id",
-                parameters: () => [("$id", id)]
-            ) as string;
-    }
+    private static string? GetChildName(SqliteConnection db, string id) =>
+        GetName(db, "Child", id);
 
     private static int GetSyncLogCount(SqliteConnection db)
     {
-        return Convert.ToInt32(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: db,
-                configure: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log"
-            ),
-            System.Globalization.CultureInfo.InvariantCulture
+        return global::Tests.Shared.DatabaseCommands.ScalarInt32(
+            connection: db,
+            configure: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log"
         );
     }
 
@@ -326,6 +317,22 @@ public sealed partial class SyncIntegrationTests : IDisposable
         cmd.Parameters.AddWithValue("$active", active ? 1 : 0);
         cmd.ExecuteNonQuery();
     }
+
+    private void PullToClient() =>
+        VerifyReusableWorkflow2(
+            input0: PullChanges,
+            input1: _serverDb,
+            input2: _clientDb,
+            value0: ClientOrigin
+        );
+
+    private void PushToServer() =>
+        VerifyReusableWorkflow2(
+            input0: PushChanges,
+            input1: _clientDb,
+            input2: _serverDb,
+            value0: ServerOrigin
+        );
 
     private int PullChanges(
         SqliteConnection source,
@@ -425,49 +432,29 @@ public sealed partial class SyncIntegrationTests : IDisposable
 
     private static void ApplyInsert(SqliteConnection db, SyncLogEntry entry)
     {
-        var payload = System.Text.Json.JsonSerializer.Deserialize<
-            Dictionary<string, System.Text.Json.JsonElement>
-        >(entry.Payload!);
-
-        using var cmd = db.CreateCommand();
-
-        switch (entry.TableName)
-        {
-            case "Person":
-                cmd.CommandText = "INSERT OR REPLACE INTO Person (Id, Name) VALUES ($id, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-            case "Parent":
-                cmd.CommandText = "INSERT OR REPLACE INTO Parent (Id, Name) VALUES ($id, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-            case "Child":
-                cmd.CommandText =
-                    "INSERT OR REPLACE INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$parentId", payload["ParentId"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-        }
-
-        cmd.ExecuteNonQuery();
+        VerifyUnifiedWorkflow101(
+            input0: entry,
+            input1: db,
+            value10: "INSERT OR REPLACE INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)",
+            value13: "$parentId"
+        );
     }
 
     private static void ApplyUpdate(SqliteConnection db, SyncLogEntry entry) =>
         // For simplicity, treat update same as insert (upsert)
         ApplyInsert(db, entry);
 
-    private static void ApplyDelete(SqliteConnection db, SyncLogEntry entry)
+    internal static void ApplyDelete(SqliteConnection db, SyncLogEntry entry)
     {
-        var pk = System.Text.Json.JsonSerializer.Deserialize<
-            Dictionary<string, System.Text.Json.JsonElement>
-        >(entry.PkValue);
+        var pk = Assert.IsType<Dictionary<string, System.Text.Json.JsonElement>>(
+            System.Text.Json.JsonSerializer.Deserialize<
+                Dictionary<string, System.Text.Json.JsonElement>
+            >(entry.PkValue)
+        );
 
         using var cmd = db.CreateCommand();
         cmd.CommandText = $"DELETE FROM {entry.TableName} WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", pk!["Id"].GetString());
+        cmd.Parameters.AddWithValue("$id", pk["Id"].GetString());
         cmd.ExecuteNonQuery();
     }
 
@@ -497,27 +484,85 @@ public sealed partial class SyncIntegrationTests : IDisposable
     {
         _serverDb.Dispose();
         _clientDb.Dispose();
-        if (File.Exists(_serverDbPath))
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _serverDbPath);
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _clientDbPath);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyUnifiedWorkflow101(
+        SyncLogEntry input0,
+        SqliteConnection input1,
+        string value10,
+        string value13
+    )
+    {
+        var payload = Assert.IsType<Dictionary<string, System.Text.Json.JsonElement>>(
+            System.Text.Json.JsonSerializer.Deserialize<
+                Dictionary<string, System.Text.Json.JsonElement>
+            >(Assert.IsType<string>(input0.Payload))
+        );
+
+        using var cmd = input1.CreateCommand();
+
+        switch (input0.TableName)
         {
-            try
-            {
-                File.Delete(_serverDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
+            case "Person":
+            case "Parent":
+                cmd.CommandText =
+                    $"INSERT OR REPLACE INTO {input0.TableName} (Id, Name) VALUES ($id, $name)";
+                cmd.Parameters.AddWithValue("$id", payload["Id"].GetString());
+                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
+                break;
+            case "Child":
+                cmd.CommandText = value10;
+                cmd.Parameters.AddWithValue("$id", payload["Id"].GetString());
+                cmd.Parameters.AddWithValue(value13, payload["ParentId"].GetString());
+                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
+                break;
         }
-        if (File.Exists(_clientDbPath))
-        {
-            try
-            {
-                File.Delete(_clientDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+
+        cmd.ExecuteNonQuery();
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow1(
+        Func<SqliteConnection, string, string?> input0,
+        SqliteConnection input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        Assert.Equal(value0, input0(arg1: input1, arg2: value1));
+        Assert.Equal(value2, input0(arg1: input1, arg2: value3));
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyReusableWorkflow2(
+        Func<SqliteConnection, SqliteConnection, string, int> input0,
+        SqliteConnection input1,
+        SqliteConnection input2,
+        global::System.String value0
+    )
+    {
+        // Sync: Pull from server to client
+        var pullResult = input0(arg1: input1, arg2: input2, arg3: value0);
+
+        Assert.True(pullResult > 0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SqliteConnection VerifyReusableWorkflow10(
+        string input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        var conn = new SqliteConnection($"Data Source={input0}");
+        conn.Open();
+
+        DatabaseCommands.Execute(connection: conn, configure: configure0);
+
+        return conn;
     }
 }

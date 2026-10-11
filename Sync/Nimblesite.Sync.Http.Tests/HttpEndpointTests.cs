@@ -3,6 +3,7 @@
 using System.Net;
 using System.Text.Json;
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -45,9 +46,7 @@ public sealed partial class HttpEndpointTests : IClassFixture<SyncApiWebApplicat
         var response = await _client.GetAsync("/health");
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Healthy", content);
+        await AssertStatusAndBodyContains(response, HttpStatusCode.OK, "Healthy");
     }
 
     #endregion
@@ -126,16 +125,14 @@ public sealed partial class HttpEndpointTests : IClassFixture<SyncApiWebApplicat
         );
 
         // Act - using temp file path (test expects BadRequest before connection is used)
-        var tempDbPath = Path.Combine(Path.GetTempPath(), $"temp_test_{Guid.NewGuid()}.db");
+        var tempDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("temp_test");
         var response = await _client.PostAsync(
             $"/sync/changes?dbType=sqlite&connectionString=Data Source={Uri.EscapeDataString(tempDbPath)}",
             content
         );
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("10000", body);
+        await AssertStatusAndBodyContains(response, HttpStatusCode.BadRequest, "10000");
     }
 
     #endregion
@@ -194,6 +191,17 @@ public sealed partial class HttpEndpointTests : IClassFixture<SyncApiWebApplicat
     }
 
     #endregion
+
+    private static async Task AssertStatusAndBodyContains(
+        HttpResponseMessage response,
+        HttpStatusCode status,
+        string expected
+    )
+    {
+        Assert.Equal(status, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains(expected, body);
+    }
 }
 
 /// <summary>
@@ -210,14 +218,13 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.Create("sync_test");
 
         // Initialize sync schema
-        SyncSchema.CreateSchema(_connection);
-        SyncSchema.SetOriginId(_connection, _originId);
+        global::Tests.Shared.TempSqliteDatabase.InitializeSync(
+            connection: _connection,
+            origin: _originId
+        );
 
         // Create test table with triggers
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_Shared_1
-        );
+        CrossDatabaseSyncTests.ExecuteSql(_connection, Data_Shared_1);
 
         TriggerGenerator.CreateTriggers(_connection, "Person", NullLogger.Instance);
     }
@@ -237,8 +244,8 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
     {
         // Verify origin ID is set
         var result = SyncSchema.GetOriginId(_connection);
-        Assert.IsType<StringSyncOk>(result);
-        Assert.Equal(_originId, ((StringSyncOk)result).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        Assert.Equal(_originId, (Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -259,45 +266,35 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         Assert.Equal(SyncOperation.Insert, list[0].Operation);
     }
 
-    [Fact]
-    public void Update_CreatesChangelog()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Update_CreatesChangelog_ContextCasesData))]
+    public void Update_CreatesChangelog_ContextCases(
+        string caseName,
+        string value0,
+        string value1,
+        global::Nimblesite.Sync.Core.SyncOperation value2
+    )
     {
-        // Arrange
-        var list = InsertAndFetchLogEntries(
-            value0: "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Bob', 'bob@test.com')",
-            value1: "UPDATE Person SET Name = 'Bob Updated' WHERE Id = 'p2'"
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix1(
+            input0: InsertAndFetchLogEntries,
+            value0: value0,
+            value1: value1,
+            value2: value2
         );
-        Assert.Equal(SyncOperation.Update, list[1].Operation);
-    }
-
-    [Fact]
-    public void Delete_CreatesTombstone()
-    {
-        // Arrange
-        var list = InsertAndFetchLogEntries(
-            value0: "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Charlie', 'charlie@test.com')",
-            value1: "DELETE FROM Person WHERE Id = 'p3'"
-        );
-        Assert.Equal(SyncOperation.Delete, list[1].Operation);
     }
 
     [Fact]
     public void TriggerSuppression_PreventsLogging()
     {
         // Act - insert with suppression enabled
-        SyncSessionManager.EnableSuppression(_connection);
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
+        global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow7(
+            configure0: cmd =>
                 cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('suppressed', 'Suppressed', 's@test.com')"
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('suppressed', 'Suppressed', 's@test.com')",
+            input0: _connection
         );
-        SyncSessionManager.DisableSuppression(_connection);
-
-        // Assert - no changes logged
-        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
-        Assert.Empty(list);
     }
 
     [Fact]
@@ -315,27 +312,21 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         );
 
         // Act - apply with suppression
-        SyncSessionManager.EnableSuppression(_connection);
-        var result = ChangeApplierSQLite.ApplyChange(_connection, incomingEntry);
-        SyncSessionManager.DisableSuppression(_connection);
+        var result = CrossDatabaseSyncTests.ApplyChangeWithSuppression(_connection, incomingEntry);
 
         // Assert - change applied but not logged
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
 
-        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
+        var list = (Ok(read: () => SyncLogRepository.FetchChanges(_connection, 0, 100))).Value;
         Assert.Empty(list);
 
         // Verify data exists
         Assert.Equal(
             "Incoming",
-            global::Tests
-                .Shared.DatabaseCommands.Scalar(
-                    connection: _connection,
-                    configure: command =>
-                        command.CommandText = "SELECT Name FROM Person WHERE Id = 'incoming1'"
-                )
-                ?.ToString()
+            CrossDatabaseSyncTests.ScalarString(
+                _connection,
+                "SELECT Name FROM Person WHERE Id = 'incoming1'"
+            )
         );
     }
 
@@ -348,16 +339,24 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         DatabaseCommands.Execute(connection: _connection, configure: cmd => cmd.CommandText = value0);
 
         // Act
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd => cmd.CommandText = value1
+        var list = global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifySharedPhase1(
+            configure0: cmd => cmd.CommandText = value1,
+            input0: _connection
         );
-
-        // Assert
-        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
         Assert.Equal(2, list.Count);
 
         return list;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private void ExerciseProjectionCaseMatrix1(
+        Func<string, string, IReadOnlyList<SyncLogEntry>> input0,
+        string value0,
+        string value1,
+        global::Nimblesite.Sync.Core.SyncOperation value2
+    )
+    { // Arrange
+        var list = input0(arg1: value0, arg2: value1);
+        Assert.Equal(value2, list[1].Operation);
     }
 }

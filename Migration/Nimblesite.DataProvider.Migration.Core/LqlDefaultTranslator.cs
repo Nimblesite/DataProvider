@@ -121,39 +121,30 @@ public static partial class LqlDefaultTranslator
     }
 
     private static string ToPostgresFunction(string functionName, string[] args) =>
-        functionName switch
-        {
-            "lower" => $"lower({string.Join(", ", args)})",
-            "upper" => $"upper({string.Join(", ", args)})",
-            "coalesce" => $"COALESCE({string.Join(", ", args)})",
-            "length" => $"length({string.Join(", ", args)})",
-            "substring" => args.Length >= 3
-                ? $"substring({args[0]} from {args[1]} for {args[2]})"
-                : $"substring({string.Join(", ", args)})",
-            "trim" => $"trim({string.Join(", ", args)})",
-            "concat" => $"concat({string.Join(", ", args)})",
-            "abs" => $"abs({string.Join(", ", args)})",
-            "round" => $"round({string.Join(", ", args)})",
-            _ => $"{functionName}({string.Join(", ", args)})",
-        };
+        FormatDefaultFunction(functionName: functionName, args: args, sqlite: false);
 
     private static string ToSqliteFunction(string functionName, string[] args) =>
-        functionName switch
-        {
-            "lower" => $"lower({string.Join(", ", args)})",
-            "upper" => $"upper({string.Join(", ", args)})",
-            "coalesce" => $"coalesce({string.Join(", ", args)})",
-            "length" => $"length({string.Join(", ", args)})",
-            "substring" => args.Length >= 3
-                ? $"substr({args[0]}, {args[1]}, {args[2]})"
-                : $"substr({string.Join(", ", args)})",
-            "trim" => $"trim({string.Join(", ", args)})",
-            "concat" => args.Length > 0 ? string.Join(" || ", args) : "''",
-            "abs" => $"abs({string.Join(", ", args)})",
-            "round" => $"round({string.Join(", ", args)})",
-            _ => $"{functionName}({string.Join(", ", args)})",
-        };
+        FormatDefaultFunction(functionName: functionName, args: args, sqlite: true);
 
     [GeneratedRegex(@"^(?<func>\w+)\s*\((?<args>.*)\)$", RegexOptions.Singleline)]
     private static partial Regex FunctionCallRegex();
+
+    // Implements [MIG-DEFAULT-SHARED-FUNCTION-FORMATTING].
+    private static string FormatDefaultFunction(string functionName, string[] args, bool sqlite) =>
+        functionName switch
+        {
+            "coalesce" => FormatCall(functionName: sqlite ? "coalesce" : "COALESCE", args: args),
+            "substring" => args.Length >= 3
+                ? (
+                    sqlite
+                        ? $"substr({args[0]}, {args[1]}, {args[2]})"
+                        : $"substring({args[0]} from {args[1]} for {args[2]})"
+                )
+                : FormatCall(functionName: sqlite ? "substr" : "substring", args: args),
+            "concat" when sqlite => args.Length > 0 ? string.Join(" || ", args) : "''",
+            _ => FormatCall(functionName: functionName, args: args),
+        };
+
+    private static string FormatCall(string functionName, string[] args) =>
+        $"{functionName}({string.Join(", ", args)})";
 }

@@ -1,5 +1,4 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
-using Tests.Shared;
 
 namespace Nimblesite.Sync.Integration.Tests;
 
@@ -15,19 +14,11 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert with NULL email
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-null', 'Null Email User', NULL)"
+        var mappedEntry = InsertAndMapFirst(
+            source,
+            mappingConfig,
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-null', 'Null Email User', NULL)"
         );
-
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
-        var entry = changesList[0];
-
-        var success = MapSuccessfully(entry: entry, mappingConfig: mappingConfig);
-        var mappedEntry = success.Entries[0];
 
         Assert.Contains("name", mappedEntry.MappedPayload);
         Assert.Contains("Null Email User", mappedEntry.MappedPayload);
@@ -54,33 +45,9 @@ public sealed partial class HttpMappingSyncTests
             ("u-special", "Ñoño Español", "nono@españa.es"),
         };
 
-        foreach (var (id, name, email) in unicodeNames)
-        {
-            using var cmd = source.CreateCommand();
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
-            cmd.Parameters.Clear();
+        InsertUsers(source, unicodeNames);
 
-            var pId = cmd.CreateParameter();
-            pId.ParameterName = "@id";
-            pId.Value = id;
-            cmd.Parameters.Add(pId);
-
-            var pName = cmd.CreateParameter();
-            pName.ParameterName = "@name";
-            pName.Value = name;
-            cmd.Parameters.Add(pName);
-
-            var pEmail = cmd.CreateParameter();
-            pEmail.ParameterName = "@email";
-            pEmail.Value = email;
-            cmd.Parameters.Add(pEmail);
-
-            cmd.ExecuteNonQuery();
-        }
-
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList = FetchAllChanges(source);
 
         foreach (var entry in changesList)
         {
@@ -127,33 +94,9 @@ public sealed partial class HttpMappingSyncTests
             ("u-html", "<script>alert('XSS')</script>", "xss@example.com"),
         };
 
-        foreach (var (id, name, email) in specialCases)
-        {
-            using var cmd = source.CreateCommand();
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
-            cmd.Parameters.Clear();
+        InsertUsers(source, specialCases);
 
-            var pId = cmd.CreateParameter();
-            pId.ParameterName = "@id";
-            pId.Value = id;
-            cmd.Parameters.Add(pId);
-
-            var pName = cmd.CreateParameter();
-            pName.ParameterName = "@name";
-            pName.Value = name;
-            cmd.Parameters.Add(pName);
-
-            var pEmail = cmd.CreateParameter();
-            pEmail.ParameterName = "@email";
-            pEmail.Value = email;
-            cmd.Parameters.Add(pEmail);
-
-            cmd.ExecuteNonQuery();
-        }
-
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList = FetchAllChanges(source);
 
         foreach (var entry in changesList)
         {
@@ -171,14 +114,11 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert with empty string (not NULL)
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-empty', 'Empty Email', '')"
+        var mappedEntry = InsertAndMapFirst(
+            source,
+            mappingConfig,
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-empty', 'Empty Email', '')"
         );
-
-        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("email", mappedEntry.MappedPayload);
         // Empty string should be ""
@@ -201,20 +141,19 @@ public sealed partial class HttpMappingSyncTests
             cmd.CommandText =
                 "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
 
-            var pId = cmd.CreateParameter();
-            pId.ParameterName = "@id";
-            pId.Value = "u-long";
-            cmd.Parameters.Add(pId);
+            global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@id", value: "u-long");
 
-            var pName = cmd.CreateParameter();
-            pName.ParameterName = "@name";
-            pName.Value = longName;
-            cmd.Parameters.Add(pName);
+            global::Tests.Shared.DatabaseCommands.Bind(
+                command: cmd,
+                name: "@name",
+                value: longName
+            );
 
-            var pEmail = cmd.CreateParameter();
-            pEmail.ParameterName = "@email";
-            pEmail.Value = "long@example.com";
-            cmd.Parameters.Add(pEmail);
+            global::Tests.Shared.DatabaseCommands.Bind(
+                command: cmd,
+                name: "@email",
+                value: "long@example.com"
+            );
 
             cmd.ExecuteNonQuery();
         }
@@ -238,14 +177,11 @@ public sealed partial class HttpMappingSyncTests
 
         var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-const', 'Constant Test', 'const@example.com')"
+        var mappedEntry = InsertAndMapFirst(
+            source,
+            mappingConfig,
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-const', 'Constant Test', 'const@example.com')"
         );
-
-        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("status", mappedEntry.MappedPayload);
         Assert.Contains("active", mappedEntry.MappedPayload);
@@ -269,14 +205,11 @@ public sealed partial class HttpMappingSyncTests
             ["FullName", "EmailAddress", "PasswordHash", "SecurityStamp", "CreatedAt"]
         );
 
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-excl', 'Excluded', 'excl@example.com')"
+        var mappedEntry = InsertAndMapFirst(
+            source,
+            mappingConfig,
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-excl', 'Excluded', 'excl@example.com')"
         );
-
-        var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         // PK should still be there
         Assert.Contains("customer_id", mappedEntry.TargetPkValue);
@@ -305,20 +238,19 @@ public sealed partial class HttpMappingSyncTests
             cmd.CommandText =
                 "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
 
-            var pId = cmd.CreateParameter();
-            pId.ParameterName = "@id";
-            pId.Value = "u-json";
-            cmd.Parameters.Add(pId);
+            global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@id", value: "u-json");
 
-            var pName = cmd.CreateParameter();
-            pName.ParameterName = "@name";
-            pName.Value = jsonLikeName;
-            cmd.Parameters.Add(pName);
+            global::Tests.Shared.DatabaseCommands.Bind(
+                command: cmd,
+                name: "@name",
+                value: jsonLikeName
+            );
 
-            var pEmail = cmd.CreateParameter();
-            pEmail.ParameterName = "@email";
-            pEmail.Value = "json@example.com";
-            cmd.Parameters.Add(pEmail);
+            global::Tests.Shared.DatabaseCommands.Bind(
+                command: cmd,
+                name: "@email",
+                value: "json@example.com"
+            );
 
             cmd.ExecuteNonQuery();
         }

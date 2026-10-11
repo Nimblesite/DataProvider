@@ -126,89 +126,27 @@ public static class SyncCoordinator
 
         try
         {
-            var startVersion = lastSyncedVersion;
-            var totalApplied = 0;
-            var currentVersion = startVersion;
-            var batchNumber = 0;
-
-            while (true)
-            {
-                batchNumber++;
-                logger.LogDebug(
-                    "PULL: Fetching batch {BatchNumber} from version {Version}",
-                    batchNumber,
-                    currentVersion
-                );
-
-                var batchResult = BatchManager.FetchBatch(
-                    currentVersion,
-                    config.BatchSize,
-                    fetchRemoteChanges,
-                    logger
-                );
-
-                if (batchResult is SyncBatchError batchFailure)
-                {
-                    logger.LogError("PULL: Batch fetch failed: {Error}", batchFailure.Value);
-                    return new PullResultError(batchFailure.Value);
-                }
-
-                var batch = ((SyncBatchOk)batchResult).Value;
-
-                if (batch.Changes.Count == 0)
-                {
-                    logger.LogDebug("PULL: No more changes to pull");
-                    break;
-                }
-
-                logger.LogInformation(
-                    "PULL: Batch {BatchNumber} contains {Count} changes, versions {From}-{To}, hasMore={HasMore}",
-                    batchNumber,
-                    batch.Changes.Count,
-                    batch.FromVersion,
-                    batch.ToVersion,
-                    batch.HasMore
-                );
-
-                var applyResult = ChangeApplier.ApplyBatch(
-                    batch,
-                    myOriginId,
-                    config.MaxRetryPasses,
-                    applyLocalChange,
-                    logger
-                );
-
-                if (applyResult is BatchApplyResultError applyFailure)
-                {
-                    logger.LogError("PULL: Batch apply failed: {Error}", applyFailure.Value);
-                    return new PullResultError(applyFailure.Value);
-                }
-
-                var applied = ((BatchApplyResultOk)applyResult).Value;
-                totalApplied += applied.AppliedCount;
-                currentVersion = applied.ToVersion;
-                updateLastSyncedVersion(currentVersion);
-
-                logger.LogDebug(
-                    "PULL: Applied {Count} changes, updated version to {Version}",
-                    applied.AppliedCount,
-                    currentVersion
-                );
-
-                if (!batch.HasMore)
-                {
-                    break;
-                }
-            }
-
-            logger.LogInformation(
-                "PULL: Complete. Applied {Total} changes, version {From}->{To}",
-                totalApplied,
-                startVersion,
-                currentVersion
+            return RunBatches<PullResultResult>(
+                pulling: true,
+                startVersion: lastSyncedVersion,
+                config: config,
+                fetchChanges: fetchRemoteChanges,
+                applyBatch: batch =>
+                    ChangeApplier.ApplyBatch(
+                        batch: batch,
+                        myOriginId: myOriginId,
+                        maxRetryPasses: config.MaxRetryPasses,
+                        applyChange: applyLocalChange,
+                        logger: logger
+                    ),
+                updateVersion: updateLastSyncedVersion,
+                logger: logger,
+                complete: (total, from, to) =>
+                    new PullResultOk(
+                        new PullResult(ChangesApplied: total, FromVersion: from, ToVersion: to)
+                    ),
+                failure: error => new PullResultError(error)
             );
-
-            return new PullResultOk(new PullResult(totalApplied, startVersion, currentVersion));
         }
         finally
         {
@@ -242,83 +180,21 @@ public static class SyncCoordinator
             config.BatchSize
         );
 
-        var startVersion = lastPushedVersion;
-        var totalPushed = 0;
-        var currentVersion = startVersion;
-        var batchNumber = 0;
-
-        while (true)
-        {
-            batchNumber++;
-            logger.LogDebug(
-                "PUSH: Fetching batch {BatchNumber} from version {Version}",
-                batchNumber,
-                currentVersion
-            );
-
-            var batchResult = BatchManager.FetchBatch(
-                currentVersion,
-                config.BatchSize,
-                fetchLocalChanges,
-                logger
-            );
-
-            if (batchResult is SyncBatchError batchFailure)
-            {
-                logger.LogError("PUSH: Batch fetch failed: {Error}", batchFailure.Value);
-                return new PushResultError(batchFailure.Value);
-            }
-
-            var batch = ((SyncBatchOk)batchResult).Value;
-
-            if (batch.Changes.Count == 0)
-            {
-                logger.LogDebug("PUSH: No more changes to push");
-                break;
-            }
-
-            logger.LogInformation(
-                "PUSH: Batch {BatchNumber} contains {Count} changes, versions {From}-{To}, hasMore={HasMore}",
-                batchNumber,
-                batch.Changes.Count,
-                batch.FromVersion,
-                batch.ToVersion,
-                batch.HasMore
-            );
-
-            logger.LogDebug("PUSH: Sending {Count} changes to remote", batch.Changes.Count);
-            var sendResult = sendToRemote([.. batch.Changes]);
-
-            if (sendResult is BoolSyncError sendFailure)
-            {
-                logger.LogError("PUSH: Send to remote failed: {Error}", sendFailure.Value);
-                return new PushResultError(sendFailure.Value);
-            }
-
-            totalPushed += batch.Changes.Count;
-            currentVersion = batch.ToVersion;
-            updateLastPushedVersion(currentVersion);
-
-            logger.LogDebug(
-                "PUSH: Sent {Count} changes, updated version to {Version}",
-                batch.Changes.Count,
-                currentVersion
-            );
-
-            if (!batch.HasMore)
-            {
-                break;
-            }
-        }
-
-        logger.LogInformation(
-            "PUSH: Complete. Pushed {Total} changes, version {From}->{To}",
-            totalPushed,
-            startVersion,
-            currentVersion
+        return RunBatches<PushResultResult>(
+            pulling: false,
+            startVersion: lastPushedVersion,
+            config: config,
+            fetchChanges: fetchLocalChanges,
+            applyBatch: batch =>
+                SendBatch(batch: batch, sendToRemote: sendToRemote, logger: logger),
+            updateVersion: updateLastPushedVersion,
+            logger: logger,
+            complete: (total, from, to) =>
+                new PushResultOk(
+                    new PushResult(ChangesPushed: total, FromVersion: from, ToVersion: to)
+                ),
+            failure: error => new PushResultError(error)
         );
-
-        return new PushResultOk(new PushResult(totalPushed, startVersion, currentVersion));
     }
 
     /// <summary>
@@ -417,5 +293,118 @@ public static class SyncCoordinator
         );
 
         return new SyncResultOk(new SyncResult(pull, push));
+    }
+
+    // Implements [SYNC-COORDINATOR-SHARED-BATCHES].
+    private static TResult RunBatches<TResult>(
+        bool pulling,
+        long startVersion,
+        BatchConfig config,
+        Func<long, int, SyncLogListResult> fetchChanges,
+        Func<SyncBatch, BatchApplyResultResult> applyBatch,
+        Action<long> updateVersion,
+        ILogger logger,
+        Func<int, long, long, TResult> complete,
+        Func<SyncError, TResult> failure
+    )
+    {
+        var phase = pulling ? "PULL" : "PUSH";
+        var total = 0;
+        var currentVersion = startVersion;
+        var batchNumber = 0;
+        while (true)
+        {
+            batchNumber++;
+            logger.LogDebug(
+                "{Phase}: Fetching batch {BatchNumber} from version {Version}",
+                phase,
+                batchNumber,
+                currentVersion
+            );
+            var fetched = BatchManager.FetchBatch(
+                fromVersion: currentVersion,
+                batchSize: config.BatchSize,
+                fetchChanges: fetchChanges,
+                logger: logger
+            );
+            if (fetched is SyncBatchError(var fetchError))
+            {
+                logger.LogError("{Phase}: Batch fetch failed: {Error}", phase, fetchError);
+                return failure(fetchError);
+            }
+            if (fetched is not SyncBatchOk(var batch))
+            {
+                // Result has only the two generated variants.
+                return failure(new SyncErrorDatabase(Message: "Unexpected batch result"));
+            }
+            if (batch.Changes.Count == 0)
+            {
+                logger.LogDebug(
+                    "{Phase}: No more changes to {Operation}",
+                    phase,
+                    pulling ? "pull" : "push"
+                );
+                break;
+            }
+            logger.LogInformation(
+                "{Phase}: Batch {BatchNumber} contains {Count} changes, versions {From}-{To}, hasMore={HasMore}",
+                phase,
+                batchNumber,
+                batch.Changes.Count,
+                batch.FromVersion,
+                batch.ToVersion,
+                batch.HasMore
+            );
+            var processed = applyBatch(batch);
+            if (processed is BatchApplyResultError(var applyError))
+            {
+                if (pulling)
+                    logger.LogError("PULL: Batch apply failed: {Error}", applyError);
+                else
+                    logger.LogError("PUSH: Send to remote failed: {Error}", applyError);
+                return failure(applyError);
+            }
+            if (processed is not BatchApplyResultOk(var applied))
+                return failure(new SyncErrorDatabase(Message: "Unexpected batch apply result"));
+            total += applied.AppliedCount;
+            currentVersion = applied.ToVersion;
+            updateVersion(currentVersion);
+            logger.LogDebug(
+                "{Phase}: {Operation} {Count} changes, updated version to {Version}",
+                phase,
+                pulling ? "Applied" : "Sent",
+                applied.AppliedCount,
+                currentVersion
+            );
+            if (!batch.HasMore)
+                break;
+        }
+        logger.LogInformation(
+            "{Phase}: Complete. {Operation} {Total} changes, version {From}->{To}",
+            phase,
+            pulling ? "Applied" : "Pushed",
+            total,
+            startVersion,
+            currentVersion
+        );
+        return complete(total, startVersion, currentVersion);
+    }
+
+    private static BatchApplyResultResult SendBatch(
+        SyncBatch batch,
+        Func<IReadOnlyList<SyncLogEntry>, BoolSyncResult> sendToRemote,
+        ILogger logger
+    )
+    {
+        logger.LogDebug("PUSH: Sending {Count} changes to remote", batch.Changes.Count);
+        return sendToRemote([.. batch.Changes]) is BoolSyncError(var error)
+            ? new BatchApplyResultError(error)
+            : new BatchApplyResultOk(
+                new BatchApplyResult(
+                    AppliedCount: batch.Changes.Count,
+                    DeferredCount: 0,
+                    ToVersion: batch.ToVersion
+                )
+            );
     }
 }

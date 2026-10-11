@@ -1166,6 +1166,9 @@ retains its current and desired schemas, additive/destructive option, logger, an
 operation assertions. The successful Outcome case is sealed, so the shared exact
 type assertion preserves the former `result is OperationsResultOk` checks.
 Destructive-cleanup cases remain individually runnable in a partial fixture.
+Non-destructive table, column, and index removal cases share one theory. Each
+original scenario name and pair of schemas remains explicit in its data row;
+the runner applies the original non-destructive diff and empty-result assertion.
 
 ### Shared users schema fixture [MIG-TEST-USER-FIXTURE]
 
@@ -1204,3 +1207,50 @@ collection inputs remain direct model constructions.
 Schema inspectors share command creation, reader iteration, and disposal. Every
 catalog query, parameter binding, row projection, and error boundary is retained
 in its inspector. Readers are disposed before commands.
+
+### Shared YAML field emission [MIG-YAML-SHARED-FIELD-EMISSION]
+
+The writer uses one key/string emission operation and a generic default-value guard for string, boolean and integer fields. String sequences reuse the generic sequence writer; emission order, scalar styles and omission rules stay unchanged.
+
+The reflection-free writer shares named mapping headers and default-value checks
+for string, boolean and numeric scalar fields. Original field order, omitted
+semantic defaults and scalar styles remain unchanged.
+
+### Shared PostgreSQL schema setup [MIG-TEST-PG-SCHEMA-WORKFLOW]
+
+Schema scenarios share factory evaluation, initial schema inspection, diff
+application and the original successful-application assertion.
+
+### Shared index conversion workflow [MIG-TEST-SHARED-INDEX-CONVERSION]
+
+Column-to-expression and expression-to-column scenarios share initial migration,
+upgrade calculation, operation checks and upgrade application. Each keeps its own
+schemas, verification query and final expression-presence assertion.
+
+### [MIG-TEST-SHARED-INSPECT-DIFF]
+
+Migration cases share guarded schema difference calculation while preserving inspection, destructive options, logger, operation assertions, and application.
+
+## [MIG-VERIFY-SHARED-OBJECT-MATCHING]
+
+Schema verification uses one ordered expected-object lookup and missing-object workflow. Object-specific drift checks and mismatch text remain in their respective verifier callbacks.
+
+## [MIG-CATALOG-INDEPENDENT-QUERY-DATA]
+
+Independent catalog SELECT specifications are immutable constants in data-only partial files. Command binding, readers and row projections remain in the inspectors. Query text, including whitespace, is preserved.
+
+## [MIG-TEST-SHARED-TENANT-SESSION]
+
+Tenant policy scenarios share session settings, document counting, inserts and seed setup. The setting namespace, optional membership role, generated identifiers, transaction scope and assertion order remain scenario-specific.
+
+### Shared default-expression function formatting [MIG-DEFAULT-SHARED-FUNCTION-FORMATTING]
+
+PostgreSQL and SQLite default-expression translation uses one function-call formatter. Ordinary functions and unknown names retain their original spelling and argument separators. COALESCE casing, substring syntax and SQLite concatenation retain their existing dialect behavior.
+
+### Shared SQLite policy triggers [RLS-SQLITE-SHARED-POLICY-TRIGGERS]
+
+INSERT, UPDATE and DELETE policies share the applicability check and trigger-emission operation. INSERT and UPDATE retain NEW-row WITH CHECK predicates; DELETE retains OLD-row USING predicates. Trigger ordering, names and emitted SQL remain unchanged.
+
+### Shared managed SQLite trigger reads [MIG-SQLITE-SHARED-MANAGED-TRIGGER-READS]
+
+Trigger-name and trigger-definition inspection share command creation, table/pattern parameter binding and reader iteration. Each operation retains its original catalog SQL, row projection, returned list type and resource lifetime.

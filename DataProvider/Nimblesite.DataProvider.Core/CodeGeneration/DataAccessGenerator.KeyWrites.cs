@@ -34,10 +34,8 @@ public static partial class DataAccessGenerator
         bool delete
     )
     {
-        if (table == null)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("table cannot be null")
-            );
+        if (CodeGenerationGuards.RequirePresent(value: table, name: nameof(table)) is { } error)
+            return error;
 
         IReadOnlyList<DatabaseColumn> updateableColumns = delete ? [] : table.UpdateableColumns;
         var primaryKeyColumns = table.PrimaryKeyColumns;
@@ -72,13 +70,10 @@ public static partial class DataAccessGenerator
         sb.AppendLine("    {");
 
         // Generate UPDATE SQL with double-quoted identifiers (see the INSERT generator)
-        var setClause = string.Join(
-            ", ",
-            updateableColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
-        );
-        var whereClause = string.Join(
-            " AND ",
-            primaryKeyColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
+        var setClause = BuildQualifiedAssignmentList(columns: updateableColumns, separator: ", ");
+        var whereClause = BuildQualifiedAssignmentList(
+            columns: primaryKeyColumns,
+            separator: " AND "
         );
 
         var sql = delete
@@ -94,4 +89,9 @@ public static partial class DataAccessGenerator
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
+
+    private static string BuildQualifiedAssignmentList(
+        IEnumerable<DatabaseColumn> columns,
+        string separator
+    ) => string.Join(separator, columns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}"));
 }

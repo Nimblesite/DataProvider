@@ -29,15 +29,9 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
                 },
             ]
         );
-        var desired = Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_2(
-            current: current
-        );
-
-        var ops = SchemaDiffAssertions.Diff(
-            current: current,
-            desired: desired,
-            destructive: false,
-            logger: NullLogger.Instance
+        var ops = VerifySharedStep5(
+            input0: Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_2,
+            input1: current
         );
         Assert.Contains(
             ops,
@@ -136,15 +130,21 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
         Assert.DoesNotContain(ops, op => op is AddCheckConstraintOperation);
     }
 
-    private static TableDefinition BaseUsageEventsTable() =>
-        SchemaTestData.Table(
-            schema: "public",
-            name: "usage_events",
-            columns:
-            [
-                SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
-                SchemaTestData.Column(name: "kind", type: PortableTypes.Text, isNullable: false),
-            ],
-            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifySharedStep5(
+        Func<SchemaDefinition, SchemaDefinition> input0,
+        SchemaDefinition input1
+    )
+    {
+        var desired = input0(input1);
+
+        var ops = SchemaDiffAssertions.Diff(
+            current: input1,
+            desired: desired,
+            destructive: false,
+            logger: NullLogger.Instance
         );
+
+        return ops;
+    }
 }

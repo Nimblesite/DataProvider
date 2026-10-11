@@ -33,7 +33,7 @@ using SyncClientResult = Outcome.Result<
 namespace Nimblesite.Sync.Core;
 
 // Implements [SYNC-CLIENT-SHARED-STORAGE].
-internal static class SyncClientStorage
+internal static partial class SyncClientStorage
 {
     internal static SyncClientListResult GetAll<TException>(
         DbConnection connection,
@@ -44,11 +44,7 @@ internal static class SyncClientStorage
         try
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT origin_id, last_sync_version, last_sync_timestamp, created_at
-                FROM _sync_clients
-                ORDER BY last_sync_version ASC
-                """;
+            cmd.CommandText = global::Nimblesite.Sync.Core.SyncClientStorage.SqlSpecification1;
             var clients = new List<SyncClient>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -73,11 +69,7 @@ internal static class SyncClientStorage
         try
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT origin_id, last_sync_version, last_sync_timestamp, created_at
-                FROM _sync_clients
-                WHERE origin_id = @originId
-                """;
+            cmd.CommandText = global::Nimblesite.Sync.Core.SyncClientStorage.SqlSpecification2;
             Bind(command: cmd, name: "@originId", value: originId);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read())
@@ -106,13 +98,7 @@ internal static class SyncClientStorage
         try
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                INSERT INTO _sync_clients (origin_id, last_sync_version, last_sync_timestamp, created_at)
-                VALUES (@originId, @lastVersion, @lastTimestamp, @createdAt)
-                ON CONFLICT(origin_id) DO UPDATE SET
-                    last_sync_version = @lastVersion,
-                    last_sync_timestamp = @lastTimestamp
-                """;
+            cmd.CommandText = global::Nimblesite.Sync.Core.SyncClientStorage.SqlSpecification3;
             Bind(command: cmd, name: "@originId", value: client.OriginId);
             Bind(command: cmd, name: "@lastVersion", value: client.LastSyncVersion);
             Bind(command: cmd, name: "@lastTimestamp", value: client.LastSyncTimestamp);

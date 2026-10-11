@@ -27,10 +27,6 @@ global using OrderListOk = Outcome.Result<
     System.Collections.Immutable.ImmutableList<Generated.Order>,
     Nimblesite.Sql.Model.SqlError
 >.Ok<System.Collections.Immutable.ImmutableList<Generated.Order>, Nimblesite.Sql.Model.SqlError>;
-global using OrderReadOnlyListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Generated.Order>,
-    Nimblesite.Sql.Model.SqlError
->.Ok<System.Collections.Generic.IReadOnlyList<Generated.Order>, Nimblesite.Sql.Model.SqlError>;
 global using StringSqlError = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Error<
     string,
     Nimblesite.Sql.Model.SqlError

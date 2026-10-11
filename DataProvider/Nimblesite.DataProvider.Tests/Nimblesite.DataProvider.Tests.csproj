@@ -52,6 +52,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+    <Compile
+      Include="../../Tests.Shared/CodeGenerationTestDoubles.cs"
+      Link="Shared/CodeGenerationTestDoubles.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/ExtensionTestCases.cs"
+      Link="Shared/ExtensionTestCases.cs"
+    />
   </ItemGroup>
   <ItemGroup>
     <Compile

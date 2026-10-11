@@ -8,7 +8,7 @@ namespace Nimblesite.DataProvider.Core.CodeGeneration;
 /// <summary>
 /// Pure transformation functions for generating grouped query code
 /// </summary>
-internal static class GroupingTransformations
+internal static partial class GroupingTransformations
 {
     /// <summary>
     /// Generates the grouping method that transforms flat results into parent-child structure
@@ -21,15 +21,14 @@ internal static class GroupingTransformations
         GroupingConfig groupingConfig
     )
     {
-        if (string.IsNullOrWhiteSpace(fileName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("fileName cannot be null or empty")
-            );
-
-        if (groupingConfig == null)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("groupingConfig cannot be null")
-            );
+        if (
+            CodeGenerationGuards.ValidateGroupingMethod(
+                fileName: fileName,
+                groupingConfig: groupingConfig
+            ) is
+            { } error
+        )
+            return error;
 
         var sb = new StringBuilder();
 
@@ -37,75 +36,40 @@ internal static class GroupingTransformations
             CultureInfo.InvariantCulture,
             $"    private static ImmutableList<{groupingConfig.ParentEntity.Name}> GroupResults(ImmutableList<{fileName}Raw> rawResults)"
         );
-        sb.AppendLine("    {");
-        sb.AppendLine("        // Group raw results by parent key columns");
-        sb.AppendLine("        var parentGroups = rawResults");
-        sb.AppendLine("            .GroupBy(r => new { ");
+        global::Nimblesite.DataProvider.Core.CodeGeneration.ModelGenerator.AppendSourceLines(
+            builder: sb,
+            lines: EmissionBlockLines15
+        );
 
         // Generate grouping key based on parent key columns
-        for (int i = 0; i < groupingConfig.ParentEntity.KeyColumns.Count; i++)
-        {
-            var keyColumn = groupingConfig.ParentEntity.KeyColumns[i];
-            var isLast = i == groupingConfig.ParentEntity.KeyColumns.Count - 1;
-            var comma = isLast ? "" : ",";
-            sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"                {keyColumn} = r.{keyColumn}{comma}"
-            );
-        }
+        ModelGenerator.AppendIndexedLines(
+            builder: sb,
+            count: groupingConfig.ParentEntity.KeyColumns.Count,
+            render: (i, comma) =>
+                $"                {groupingConfig.ParentEntity.KeyColumns[i]} = r.{groupingConfig.ParentEntity.KeyColumns[i]}{comma}"
+        );
 
-        sb.AppendLine("            })");
-        sb.AppendLine("            .ToList();");
-        sb.AppendLine();
+        global::Nimblesite.DataProvider.Core.CodeGeneration.ModelGenerator.AppendSourceLines(
+            builder: sb,
+            lines: EmissionBlockLines16
+        );
         sb.AppendLine(
             CultureInfo.InvariantCulture,
             $"        var result = new List<{groupingConfig.ParentEntity.Name}>();"
         );
-        sb.AppendLine("        foreach (var group in parentGroups)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var firstItem = group.First();");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            var parent = new {groupingConfig.ParentEntity.Name}("
+        global::Nimblesite.DataProvider.Core.CodeGeneration.ModelGenerator.AppendSourceLines(
+            builder: sb,
+            lines: EmissionBlockLines17
         );
-
-        // Generate parent properties
-        for (int i = 0; i < groupingConfig.ParentEntity.Columns.Count; i++)
-        {
-            var column = groupingConfig.ParentEntity.Columns[i];
-            var isLast = i == groupingConfig.ParentEntity.Columns.Count - 1;
-            var comma = isLast ? "" : ",";
-            sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"                firstItem.{column}{comma}"
-            );
-        }
-        // Ensure comma between last parent arg and child collection argument
-        sb.AppendLine("                ,");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                group.Select(item => new {groupingConfig.ChildEntity.Name}("
+        // Generate parent and child constructor arguments
+        ModelGenerator.AppendGroupedConstruction(
+            builder: sb,
+            parentName: groupingConfig.ParentEntity.Name,
+            parentColumns: groupingConfig.ParentEntity.Columns,
+            childName: groupingConfig.ChildEntity.Name,
+            childColumns: groupingConfig.ChildEntity.Columns
         );
-
-        // Generate child properties
-        for (int i = 0; i < groupingConfig.ChildEntity.Columns.Count; i++)
-        {
-            var column = groupingConfig.ChildEntity.Columns[i];
-            var isLast = i == groupingConfig.ChildEntity.Columns.Count - 1;
-            var comma = isLast ? "" : ",";
-            sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"                    item.{column}{comma}"
-            );
-        }
-        sb.AppendLine("                )).ToList()");
-        sb.AppendLine("            );");
-        sb.AppendLine("            result.Add(parent);");
-        sb.AppendLine("        }");
-        sb.AppendLine("        return result.ToImmutableList();");
-        sb.AppendLine("    }");
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
+        return ModelGenerator.CompleteResult(builder: sb, tail: EmissionBlockLines18);
     }
 
     /// <summary>
@@ -129,42 +93,27 @@ internal static class GroupingTransformations
         string connectionType = "SqliteConnection"
     )
     {
-        if (string.IsNullOrWhiteSpace(className))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("className cannot be null or empty")
-            );
-
-        if (string.IsNullOrWhiteSpace(methodName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("methodName cannot be null or empty")
-            );
-
-        if (string.IsNullOrWhiteSpace(sql))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("sql cannot be null or empty")
-            );
-
-        if (columns == null || columns.Count == 0)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("columns cannot be null or empty")
-            );
-
-        if (groupingConfig == null)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("groupingConfig cannot be null")
-            );
+        if (
+            CodeGenerationGuards.ValidateGroupedQueryGeneration(
+                className: className,
+                methodName: methodName,
+                sql: sql,
+                columns: columns,
+                groupingConfig: groupingConfig
+            ) is
+            { } error
+        )
+            return error;
 
         var parameterList = DataAccessGenerator.GenerateParameterList(parameters);
         var sb = new StringBuilder();
 
         // Generate extension class with XML docs
-        sb.AppendLine("/// <summary>");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"/// Extension methods for '{methodName}' grouped query."
+        ModelGenerator.AppendXmlDocHeader(
+            builder: sb,
+            summary: $"Extension methods for '{methodName}' grouped query.",
+            declaration: $"public static partial class {className}"
         );
-        sb.AppendLine("/// </summary>");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"public static partial class {className}");
         sb.AppendLine("{");
 
         // Generate method that returns grouped results
@@ -200,12 +149,10 @@ internal static class GroupingTransformations
             CultureInfo.InvariantCulture,
             $"        const string sql = @\"{sql.Replace("\"", "\"\"", StringComparison.Ordinal)}\";"
         );
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            var rawResults = ImmutableList.CreateBuilder<{methodName}Raw>();"
+        ModelGenerator.AppendBlockAndLine(
+            builder: sb,
+            block: EmissionBlockLines19,
+            line: $"            var rawResults = ImmutableList.CreateBuilder<{methodName}Raw>();"
         );
         sb.AppendLine();
 
@@ -228,56 +175,37 @@ internal static class GroupingTransformations
             }
         }
 
-        sb.AppendLine();
-        sb.AppendLine(
-            "                using (var reader = await command.ExecuteReaderAsync().ConfigureAwait(false))"
-        );
-        sb.AppendLine("                {");
-        sb.AppendLine("                    while (await reader.ReadAsync().ConfigureAwait(false))");
-        sb.AppendLine("                    {");
-
         // Generate raw record constructor using real column metadata
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                        var item = new {methodName}Raw("
+        ModelGenerator.AppendBlockAndLine(
+            builder: sb,
+            block: EmissionBlockLines20,
+            line: $"                        var item = new {methodName}Raw("
         );
 
-        for (int i = 0; i < columns.Count; i++)
-        {
-            var column = columns[i];
-            var isLast = i == columns.Count - 1;
-            var comma = isLast ? "" : ",";
-
-            sb.AppendLine(
-                CultureInfo.InvariantCulture,
-                $"                            reader.IsDBNull({i}) ? ({column.CSharpType}){(column.IsNullable ? "null" : "default")} : ({column.CSharpType})reader.GetValue({i}){comma}"
-            );
-        }
-
-        sb.AppendLine("                        );");
-        sb.AppendLine("                        rawResults.Add(item);");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            // Group the raw results into parent-child structure");
-        sb.AppendLine("            var grouped = GroupResults(rawResults.ToImmutable());");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            return new Result<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>.Ok<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>(grouped);"
+        ModelGenerator.AppendIndexedLines(
+            builder: sb,
+            count: columns.Count,
+            render: (i, comma) =>
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"                            reader.IsDBNull({i}) ? ({columns[i].CSharpType}){(columns[i].IsNullable ? "null" : "default")} : ({columns[i].CSharpType})reader.GetValue({i}){comma}"
+                )
         );
-        sb.AppendLine("        }");
-        sb.AppendLine("        catch (Exception ex)");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            return new Result<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>.Error<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>(new SqlError(\"Database error\", ex));"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
 
-        // Add the grouping method
-        sb.AppendLine();
+        ModelGenerator.AppendBlockAndLine(
+            builder: sb,
+            block: EmissionBlockLines21,
+            line: $"            return new Result<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>.Ok<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>(grouped);"
+        );
+        ModelGenerator.AppendBlockAndLine(
+            builder: sb,
+            block: EmissionBlockLines22,
+            line: $"            return new Result<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>.Error<ImmutableList<{groupingConfig.ParentEntity.Name}>, SqlError>(new SqlError(\"Database error\", ex));"
+        );
+        global::Nimblesite.DataProvider.Core.CodeGeneration.ModelGenerator.AppendSourceLines(
+            builder: sb,
+            lines: EmissionBlockLines23
+        );
         var groupingMethodResult = GenerateGroupingMethod(methodName, groupingConfig);
         if (groupingMethodResult is Result<string, SqlError>.Ok<string, SqlError> groupingSuccess)
         {

@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 using BodyError = Outcome.Result<
@@ -83,12 +84,12 @@ public sealed partial class PostgresFunctionBodyLqlTests
             Dataset_Generate_CreateFunction_BodyLqlCurrentSetting_EmitsDollarQuotedSqlBody_1()
         );
 
-        ContainsAll(
-            actual: ddl,
-            expected: ["AS $function$", "SELECT current_setting('app.tenant_id', true)::uuid"],
-            comparison: StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: ddl,
+            value0: "AS $function$",
+            value1: "SELECT current_setting('app.tenant_id', true)::uuid",
+            value3: "bodyLql"
         );
-        Assert.DoesNotContain("bodyLql", ddl, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -118,40 +119,43 @@ public sealed partial class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations()
     {
-        var current = Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1();
-        var desired = current with
-        {
-            Functions = [Dataset_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1()],
-        };
-
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
-        Assert.Empty(((OperationsResultOk)result).Value);
+        var result = VerifySharedChecks6(
+            input0: Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1,
+            input1: Dataset_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1
+        );
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction()
     {
-        var current = Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1();
-        var desired = current with
-        {
-            Functions = [Dataset_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1()],
-        };
-
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
-        Assert.Contains(
-            ((OperationsResultOk)result).Value,
-            op => op is CreateOrReplaceFunctionOperation
+        var result = VerifySharedChecks6(
+            input0: Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1,
+            input1: Dataset_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1
         );
+        Assert.Contains((Ok(actual: result)).Value, op => op is CreateOrReplaceFunctionOperation);
     }
 
     private static string Body(string bodyLql)
     {
         var result = LqlFunctionBodyTranspiler.TranslatePostgresBody(bodyLql, "public.test");
         Assert.True(result is BodyOk, result is BodyError e ? e.Value.Message : "expected Ok");
-        return ((BodyOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Outcome.Result<
+        IReadOnlyList<SchemaOperation>,
+        MigrationError
+    > VerifySharedChecks6(Func<SchemaDefinition> input0, Func<PostgresFunctionDefinition> input1)
+    {
+        var current = input0();
+        var desired = current with { Functions = [input1()] };
+
+        var result = SchemaDiff.Calculate(current, desired);
+
+        Assert.True(result is OperationsResultOk);
+
+        return result;
     }
 }

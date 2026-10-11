@@ -116,19 +116,17 @@ public sealed partial class SyncStateTests
     }
 
     [Fact]
-    public void SyncOperation_HasCorrectValues()
+    public void EnumTypes_HaveCorrectValues()
     {
         Assert.Equal(SyncOperation.Insert, (SyncOperation)0);
         Assert.Equal(SyncOperation.Update, (SyncOperation)1);
         Assert.Equal(SyncOperation.Delete, (SyncOperation)2);
-    }
-
-    [Fact]
-    public void SubscriptionType_HasCorrectValues()
-    {
         Assert.Equal(SubscriptionType.Record, (SubscriptionType)0);
         Assert.Equal(SubscriptionType.Table, (SubscriptionType)1);
         Assert.Equal(SubscriptionType.Query, (SubscriptionType)2);
+        Assert.Equal(ConflictStrategy.LastWriteWins, (ConflictStrategy)0);
+        Assert.Equal(ConflictStrategy.ServerWins, (ConflictStrategy)1);
+        Assert.Equal(ConflictStrategy.ClientWins, (ConflictStrategy)2);
     }
 
     [Fact]
@@ -136,10 +134,12 @@ public sealed partial class SyncStateTests
     {
         var sub = Dataset_SyncSubscription_CreatesCorrectRecord_1();
 
-        Assert.Equal("sub-1", sub.SubscriptionId);
-        Assert.Equal("origin-1", sub.OriginId);
-        Assert.Equal(SubscriptionType.Table, sub.Type);
-        Assert.Equal("Person", sub.TableName);
+        VerifyReusableWorkflow3(
+            input0: sub,
+            value0: "sub-1",
+            value2: SubscriptionType.Table,
+            value3: "Person"
+        );
         Assert.Null(sub.Filter);
         Assert.Equal("2024-01-01T00:00:00Z", sub.CreatedAt);
         Assert.Equal("2024-12-31T00:00:00Z", sub.ExpiresAt);
@@ -157,23 +157,17 @@ public sealed partial class SyncStateTests
     }
 
     [Fact]
-    public void PullResult_CreatesCorrectRecord()
+    public void PullAndPushResult_CreateCorrectRecords()
     {
-        var result = new PullResult(10, 0, 100);
+        var pull = new PullResult(10, 0, 100);
+        Assert.Equal(10, pull.ChangesApplied);
+        Assert.Equal(0, pull.FromVersion);
+        Assert.Equal(100, pull.ToVersion);
 
-        Assert.Equal(10, result.ChangesApplied);
-        Assert.Equal(0, result.FromVersion);
-        Assert.Equal(100, result.ToVersion);
-    }
-
-    [Fact]
-    public void PushResult_CreatesCorrectRecord()
-    {
-        var result = new PushResult(5, 0, 50);
-
-        Assert.Equal(5, result.ChangesPushed);
-        Assert.Equal(0, result.FromVersion);
-        Assert.Equal(50, result.ToVersion);
+        var push = new PushResult(5, 0, 50);
+        Assert.Equal(5, push.ChangesPushed);
+        Assert.Equal(0, push.FromVersion);
+        Assert.Equal(50, push.ToVersion);
     }
 
     [Fact]
@@ -245,14 +239,20 @@ public sealed partial class SyncStateTests
         Assert.Equal("abc123hash", batch.Hash);
     }
 
-    [Fact]
-    public void ConflictStrategy_HasCorrectValues()
-    {
-        Assert.Equal(ConflictStrategy.LastWriteWins, (ConflictStrategy)0);
-        Assert.Equal(ConflictStrategy.ServerWins, (ConflictStrategy)1);
-        Assert.Equal(ConflictStrategy.ClientWins, (ConflictStrategy)2);
-    }
-
     private static IReadOnlyList<SyncLogEntry> SingleInsertChange() =>
         new List<SyncLogEntry> { new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS") };
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow3(
+        SyncSubscription input0,
+        string value0,
+        global::Nimblesite.Sync.Core.SubscriptionType value2,
+        string value3
+    )
+    {
+        Assert.Equal(value0, input0.SubscriptionId);
+        Assert.Equal("origin-1", input0.OriginId);
+        Assert.Equal(value2, input0.Type);
+        Assert.Equal(value3, input0.TableName);
+    }
 }

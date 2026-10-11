@@ -105,6 +105,12 @@ module TestFixtures =
 // E2E TESTS - Comprehensive tests for the F# Type Provider
 // =============================================================================
 
+// Implements [LQL-FSHARP-SHARED-SQL-ASSERTIONS].
+let private verifySqlContains (sql: string) (expected: string list) : unit =
+    let upper = sql.ToUpperInvariant()
+    for needle in expected do
+        Assert.Contains(needle, upper)
+
 [<Collection("TypeProvider")>]
 type TypeProviderCompileTimeValidationTests() =
 
@@ -119,49 +125,37 @@ type TypeProviderCompileTimeValidationTests() =
 
     [<Fact>]
     member _.``Type provider generates correct SQL for column selection``() =
-        let sql = SelectColumns.Sql.ToUpperInvariant()
-        Assert.Contains("SELECT", sql)
-        Assert.Contains("USERS", sql)
+        verifySqlContains SelectColumns.Sql [ "SELECT"; "USERS" ]
 
     [<Fact>]
     member _.``Type provider generates SQL with alias``() =
-        let sql = SelectWithAlias.Sql
-        Assert.Contains("AS", sql.ToUpperInvariant())
+        verifySqlContains SelectWithAlias.Sql [ "AS" ]
 
 [<Collection("TypeProvider")>]
 type TypeProviderFilterTests() =
 
     [<Fact>]
     member _.``Filter query generates WHERE clause``() =
-        let sql = FilterSimple.Sql.ToUpperInvariant()
-        Assert.Contains("WHERE", sql)
+        verifySqlContains FilterSimple.Sql [ "WHERE" ]
 
     [<Fact>]
     member _.``Complex filter with AND generates correct SQL``() =
-        let sql = FilterComplex.Sql.ToUpperInvariant()
-        Assert.Contains("WHERE", sql)
-        Assert.Contains("AND", sql)
+        verifySqlContains FilterComplex.Sql [ "WHERE"; "AND" ]
 
     [<Fact>]
     member _.``Filter with OR generates correct SQL``() =
-        let sql = FilterOr.Sql.ToUpperInvariant()
-        Assert.Contains("WHERE", sql)
-        Assert.Contains("OR", sql)
+        verifySqlContains FilterOr.Sql [ "WHERE"; "OR" ]
 
 [<Collection("TypeProvider")>]
 type TypeProviderJoinTests() =
 
     [<Fact>]
     member _.``Simple join generates JOIN clause``() =
-        let sql = JoinSimple.Sql.ToUpperInvariant()
-        Assert.Contains("JOIN", sql)
-        Assert.Contains("ON", sql)
+        verifySqlContains JoinSimple.Sql [ "JOIN"; "ON" ]
 
     [<Fact>]
     member _.``Left join generates LEFT JOIN clause``() =
-        let sql = JoinLeft.Sql.ToUpperInvariant()
-        Assert.Contains("LEFT", sql)
-        Assert.Contains("JOIN", sql)
+        verifySqlContains JoinLeft.Sql [ "LEFT"; "JOIN" ]
 
     [<Fact>]
     member _.``Multiple joins are chained correctly``() =
@@ -175,57 +169,45 @@ type TypeProviderAggregationTests() =
 
     [<Fact>]
     member _.``Group by generates GROUP BY clause``() =
-        let sql = GroupBy.Sql.ToUpperInvariant()
-        Assert.Contains("GROUP BY", sql)
-        Assert.Contains("COUNT", sql)
+        verifySqlContains GroupBy.Sql [ "GROUP BY"; "COUNT" ]
 
     [<Fact>]
     member _.``Multiple aggregates work correctly``() =
-        let sql = Aggregates.Sql.ToUpperInvariant()
-        Assert.Contains("SUM", sql)
-        Assert.Contains("AVG", sql)
+        verifySqlContains Aggregates.Sql [ "SUM"; "AVG" ]
 
     [<Fact>]
     member _.``Having clause generates HAVING``() =
-        let sql = Having.Sql.ToUpperInvariant()
-        Assert.Contains("HAVING", sql)
+        verifySqlContains Having.Sql [ "HAVING" ]
 
 [<Collection("TypeProvider")>]
 type TypeProviderOrderingTests() =
 
     [<Fact>]
     member _.``Order by generates ORDER BY clause``() =
-        let sql = OrderBy.Sql.ToUpperInvariant()
-        Assert.Contains("ORDER BY", sql)
+        verifySqlContains OrderBy.Sql [ "ORDER BY" ]
 
     [<Fact>]
     member _.``Order by desc includes DESC``() =
-        let sql = OrderByDesc.Sql.ToUpperInvariant()
-        Assert.Contains("DESC", sql)
+        verifySqlContains OrderByDesc.Sql [ "DESC" ]
 
     [<Fact>]
     member _.``Limit generates LIMIT clause``() =
-        let sql = Limit.Sql.ToUpperInvariant()
-        Assert.Contains("LIMIT", sql)
+        verifySqlContains Limit.Sql [ "LIMIT" ]
 
     [<Fact>]
     member _.``Offset generates OFFSET clause``() =
-        let sql = Offset.Sql.ToUpperInvariant()
-        Assert.Contains("OFFSET", sql)
+        verifySqlContains Offset.Sql [ "OFFSET" ]
 
 [<Collection("TypeProvider")>]
 type TypeProviderArithmeticTests() =
 
     [<Fact>]
     member _.``Basic arithmetic in select``() =
-        let sql = ArithmeticBasic.Sql
-        Assert.Contains("*", sql) // multiplication
+        verifySqlContains ArithmeticBasic.Sql [ "*" ] // multiplication
 
     [<Fact>]
     member _.``Complex arithmetic with multiple operators``() =
-        let sql = ArithmeticComplex.Sql
-        Assert.Contains("+", sql)
-        Assert.Contains("-", sql)
+        verifySqlContains ArithmeticComplex.Sql [ "+"; "-" ]
 
 [<Collection("TypeProvider")>]
 type TypeProviderE2EExecutionTests() =

@@ -335,10 +335,10 @@ public sealed class PostgreSqlContext : ISqlContext
             {
                 var start = i;
                 i++;
-                while (i < sql.Length && (char.IsLetterOrDigit(sql[i]) || sql[i] == '_'))
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: sql,
+                    start: i
+                );
                 var ident = sql[start..i];
 
                 // Skip if this identifier is the FROM/JOIN declaration of
@@ -720,30 +720,13 @@ public sealed class PostgreSqlContext : ISqlContext
         {
             var c = expression[i];
 
-            if (c == '\'')
+            if (expression[i] is '\'' or '"')
             {
-                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
                     source: expression,
-                    sb: sb,
-                    i: i
+                    start: i,
+                    sql: sb
                 );
-                continue;
-            }
-
-            if (c == '"')
-            {
-                sb.Append(c);
-                i++;
-                while (i < expression.Length)
-                {
-                    sb.Append(expression[i]);
-                    if (expression[i] == '"')
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
                 continue;
             }
 
@@ -751,13 +734,10 @@ public sealed class PostgreSqlContext : ISqlContext
             {
                 var start = i;
                 i++;
-                while (
-                    i < expression.Length
-                    && (char.IsLetterOrDigit(expression[i]) || expression[i] == '_')
-                )
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: expression,
+                    start: i
+                );
                 var firstIdent = expression[start..i];
 
                 if (i < expression.Length && expression[i] == '.')
@@ -769,16 +749,10 @@ public sealed class PostgreSqlContext : ISqlContext
                     )
                     {
                         var tailEnd = tailStart + 1;
-                        while (
-                            tailEnd < expression.Length
-                            && (
-                                char.IsLetterOrDigit(expression[tailEnd])
-                                || expression[tailEnd] == '_'
-                            )
-                        )
-                        {
-                            tailEnd++;
-                        }
+                        tailEnd = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                            source: expression,
+                            start: tailEnd
+                        );
                         var tailIdent = expression[tailStart..tailEnd];
 
                         // Bug #24: also quote the prefix when it needs

@@ -96,6 +96,15 @@ pub trait AiCompletionProvider: Send + Sync {
     async fn complete(&self, context: &AiCompletionContext) -> Vec<CompletionItem>;
 }
 
+/// Reads a string field from `value`, falling back to `default`.
+fn json_string(value: &serde_json::Value, key: &str, default: &str) -> String {
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or(default)
+        .to_string()
+}
+
 impl AiConfig {
     /// Parse AI provider configuration from the `aiProvider` key in initializationOptions.
     pub fn from_json(value: &serde_json::Value) -> Option<Self> {
@@ -103,11 +112,7 @@ impl AiConfig {
         Some(AiConfig {
             provider: obj.get("provider")?.as_str()?.to_string(),
             endpoint: obj.get("endpoint")?.as_str()?.to_string(),
-            model: obj
-                .get("model")
-                .and_then(|v| v.as_str())
-                .unwrap_or("default")
-                .to_string(),
+            model: json_string(value, "model", "default"),
             api_key: obj.get("apiKey").and_then(|v| v.as_str()).map(String::from),
             timeout_ms: obj
                 .get("timeoutMs")
@@ -214,11 +219,7 @@ impl OllamaProvider {
                     .get("insertText")
                     .and_then(|v| v.as_str())
                     .map(String::from);
-                let detail = item
-                    .get("detail")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("AI suggestion")
-                    .to_string();
+                let detail = json_string(item, "detail", "AI suggestion");
                 Some(ai_completion(
                     label,
                     detail,
@@ -367,6 +368,71 @@ mod tests {
         }
     }
 
+    /// Spawns a one-shot HTTP server responding with `body` and returns its endpoint URL.
+    async fn stub_endpoint(body: String) -> String {
+        use tokio::{io::AsyncWriteExt, net::TcpListener};
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                use tokio::io::AsyncReadExt;
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        format!("http://{addr}/api/generate")
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Builds an Ollama [`AiConfig`] with the given endpoint, model, and timeout.
+    fn ollama_config(endpoint: &str, model: &str, timeout_ms: u64) -> AiConfig {
+        AiConfig {
+            provider: "ollama".to_string(),
+            endpoint: endpoint.to_string(),
+            model: model.to_string(),
+            api_key: None,
+            timeout_ms,
+            enabled: true,
+        }
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Builds an [`AiCompletionContext`] at line 0 with the given details.
+    fn context(
+        document_text: &str,
+        column: u32,
+        line_prefix: &str,
+        file_uri: &str,
+        available_tables: Vec<String>,
+        schema_description: &str,
+    ) -> AiCompletionContext {
+        AiCompletionContext {
+            document_text: document_text.to_string(),
+            line: 0,
+            column,
+            line_prefix: line_prefix.to_string(),
+            word_prefix: String::new(),
+            file_uri: file_uri.to_string(),
+            available_tables,
+            schema_description: schema_description.to_string(),
+        }
+    }
+
+    /// Builds an Ollama provider pointed at `endpoint` using the test defaults.
+    fn ollama_provider(endpoint: String) -> OllamaProvider {
+        OllamaProvider::new(&ollama_config(&endpoint, "m", 5000), "ref".to_string())
+    }
+
     // ── AiConfig::from_json ────────────────────────────────────────────
     #[test]
     fn parse_full_config() {
@@ -466,16 +532,14 @@ mod tests {
     // ── OllamaProvider::build_prompt ───────────────────────────────────
     #[test]
     fn build_prompt_without_schema() {
-        let ctx = AiCompletionContext {
-            document_text: "users |> select(users.id)".to_string(),
-            line: 0,
-            column: 25,
-            line_prefix: "users |> select(users.id)".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///test.lql".to_string(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = context(
+            "users |> select(users.id)",
+            25,
+            "users |> select(users.id)",
+            "file:///test.lql",
+            vec![],
+            "",
+        );
         let prompt = OllamaProvider::build_prompt(&ctx);
         assert!(prompt.contains("line 1"));
         assert!(prompt.contains("column 26"));
@@ -485,16 +549,14 @@ mod tests {
 
     #[test]
     fn build_prompt_with_schema() {
-        let ctx = AiCompletionContext {
-            document_text: "users |>".to_string(),
-            line: 0,
-            column: 8,
-            line_prefix: "users |>".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///test.lql".to_string(),
-            available_tables: vec!["users".to_string()],
-            schema_description: "users(id uuid PK NOT NULL, name text)".to_string(),
-        };
+        let ctx = context(
+            "users |>",
+            8,
+            "users |>",
+            "file:///test.lql",
+            vec!["users".to_string()],
+            "users(id uuid PK NOT NULL, name text)",
+        );
         let prompt = OllamaProvider::build_prompt(&ctx);
         assert!(prompt.contains("Database schema"));
         assert!(prompt.contains("users(id uuid PK NOT NULL"));
@@ -513,19 +575,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_json_with_markdown_fences() {
-        let response = "```json\n[{\"label\": \"filter\", \"insertText\": \"filter($0)\"}]\n```";
-        let items = OllamaProvider::parse_response(response);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].label, "filter");
-    }
-
-    #[test]
-    fn parse_json_with_plain_fences() {
-        let response = "```\n[{\"label\": \"join\"}]\n```";
-        let items = OllamaProvider::parse_response(response);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].label, "join");
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn parse_json_with_markdown_fences_cases() {
+        for &(input0, input1) in named_cases(NAMED_CASES_1) {
+            verify_expanded_parse_json_with_markdown_fences(input0, input1);
+        }
     }
 
     #[test]
@@ -538,14 +592,6 @@ mod tests {
     fn parse_invalid_json() {
         let items = OllamaProvider::parse_response("not json at all");
         assert!(items.is_empty());
-    }
-
-    #[test]
-    fn parse_missing_label_skipped() {
-        let response = r#"[{"insertText": "foo"}, {"label": "valid"}]"#;
-        let items = OllamaProvider::parse_response(response);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].label, "valid");
     }
 
     #[test]
@@ -570,14 +616,7 @@ mod tests {
     // ── OllamaProvider::new ────────────────────────────────────────────
     #[test]
     fn ollama_provider_new_stores_fields() {
-        let config = AiConfig {
-            provider: "ollama".to_string(),
-            endpoint: "http://localhost:11434/api/generate".to_string(),
-            model: "qwen2.5-coder:1.5b".to_string(),
-            api_key: None,
-            timeout_ms: 2000,
-            enabled: true,
-        };
+        let config = ollama_config("http://localhost:11434/api/generate", "qwen2.5-coder:1.5b", 2000);
         let provider = OllamaProvider::new(&config, "LQL reference text".to_string());
         assert_eq!(provider.endpoint, "http://localhost:11434/api/generate");
         assert_eq!(provider.model, "qwen2.5-coder:1.5b");
@@ -598,16 +637,7 @@ mod tests {
     #[tokio::test]
     async fn test_provider_returns_items() {
         let provider = TestAiProvider;
-        let ctx = AiCompletionContext {
-            document_text: "users |>".to_string(),
-            line: 0,
-            column: 8,
-            line_prefix: "users |>".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///test.lql".to_string(),
-            available_tables: vec![],
-            schema_description: String::new(),
-        };
+        let ctx = context("users |>", 8, "users |>", "file:///test.lql", vec![], "");
         let items = provider.complete(&ctx).await;
         assert!(items.len() >= 3);
         assert!(items.iter().any(|i| i.label == "ai_suggest_filter"));
@@ -618,16 +648,14 @@ mod tests {
     #[tokio::test]
     async fn test_provider_with_tables() {
         let provider = TestAiProvider;
-        let ctx = AiCompletionContext {
-            document_text: "".to_string(),
-            line: 0,
-            column: 0,
-            line_prefix: "".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///test.lql".to_string(),
-            available_tables: vec!["users".to_string(), "orders".to_string()],
-            schema_description: String::new(),
-        };
+        let ctx = context(
+            "",
+            0,
+            "",
+            "file:///test.lql",
+            vec!["users".to_string(), "orders".to_string()],
+            "",
+        );
         let items = provider.complete(&ctx).await;
         assert!(items.iter().any(|i| i.label == "ai_query_users"));
         assert!(items.iter().any(|i| i.label == "ai_query_orders"));
@@ -636,16 +664,7 @@ mod tests {
     #[tokio::test]
     async fn test_provider_with_schema_description() {
         let provider = TestAiProvider;
-        let ctx = AiCompletionContext {
-            document_text: "".to_string(),
-            line: 0,
-            column: 0,
-            line_prefix: "".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///test.lql".to_string(),
-            available_tables: vec![],
-            schema_description: "users(id uuid PK)".to_string(),
-        };
+        let ctx = context("", 0, "", "file:///test.lql", vec![], "users(id uuid PK)");
         let items = provider.complete(&ctx).await;
         assert!(items.iter().any(|i| i.label == "ai_schema_context"));
     }
@@ -654,14 +673,10 @@ mod tests {
     async fn test_provider_with_prefix_filter() {
         let provider = TestAiProvider;
         let ctx = AiCompletionContext {
-            document_text: "".to_string(),
-            line: 0,
-            column: 0,
             line_prefix: "ai_s".to_string(),
             word_prefix: "ai_s".to_string(),
             file_uri: "file:///test.lql".to_string(),
-            available_tables: vec![],
-            schema_description: String::new(),
+            ..empty_context()
         };
         let items = provider.complete(&ctx).await;
         for item in &items {
@@ -687,25 +702,18 @@ mod tests {
         // Port 1 (tcpmux) is reserved and refuses connections — this exercises
         // the request-error branch at line 250-251 of ai.rs without depending
         // on any external service.
-        let config = AiConfig {
-            provider: "ollama".to_string(),
-            endpoint: "http://127.0.0.1:1/api/generate".to_string(),
-            model: "test-model".to_string(),
-            api_key: None,
-            timeout_ms: 1000,
-            enabled: true,
-        };
-        let provider = OllamaProvider::new(&config, "ref".to_string());
-        let ctx = AiCompletionContext {
-            document_text: "users |> ".to_string(),
-            line: 0,
-            column: 9,
-            line_prefix: "users |> ".to_string(),
-            word_prefix: "".to_string(),
-            file_uri: "file:///x.lql".to_string(),
-            available_tables: vec!["users".to_string()],
-            schema_description: "users(id uuid PK)".to_string(),
-        };
+        let provider = OllamaProvider::new(
+            &ollama_config("http://127.0.0.1:1/api/generate", "test-model", 1000),
+            "ref".to_string(),
+        );
+        let ctx = context(
+            "users |> ",
+            9,
+            "users |> ",
+            "file:///x.lql",
+            vec!["users".to_string()],
+            "users(id uuid PK)",
+        );
 
         let items = provider.complete(&ctx).await;
         assert!(
@@ -716,44 +724,10 @@ mod tests {
 
     #[tokio::test]
     async fn ollama_complete_returns_empty_on_non_json_body() {
-        // Hit a plain HTTP service that returns non-JSON — this exercises
-        // the response.json() error branch (line 254-256). Use httpbin's
-        // /html endpoint via a local stub: spin up a one-shot tokio server
-        // that returns text/plain. Avoids external network dependence by
-        // binding to 127.0.0.1:0 and serving a minimal HTTP response.
-        use tokio::io::AsyncWriteExt;
-        use tokio::net::TcpListener;
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let endpoint = format!("http://{addr}/api/generate");
-
-        tokio::spawn(async move {
-            if let Ok((mut stream, _)) = listener.accept().await {
-                // Drain request headers (don't bother parsing the body)
-                let mut buf = [0u8; 1024];
-                use tokio::io::AsyncReadExt;
-                let _ = stream.read(&mut buf).await;
-                let body = "not valid json at all";
-                let resp = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(resp.as_bytes()).await;
-                let _ = stream.shutdown().await;
-            }
-        });
-
-        let config = AiConfig {
-            provider: "ollama".to_string(),
-            endpoint,
-            model: "m".to_string(),
-            api_key: None,
-            timeout_ms: 5000,
-            enabled: true,
-        };
-        let provider = OllamaProvider::new(&config, "ref".to_string());
+        // A plain HTTP service that returns non-JSON exercises the
+        // response.json() error branch.
+        let endpoint = stub_endpoint("not valid json at all".to_string()).await;
+        let provider = ollama_provider(endpoint);
         let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.is_empty(), "non-JSON body must yield empty");
@@ -761,40 +735,10 @@ mod tests {
 
     #[tokio::test]
     async fn ollama_complete_returns_empty_when_response_field_missing() {
-        // Server returns valid JSON but no "response" field — exercises
-        // the response-field-missing branch (line 259-261).
-        use tokio::io::AsyncWriteExt;
-        use tokio::net::TcpListener;
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let endpoint = format!("http://{addr}/api/generate");
-
-        tokio::spawn(async move {
-            if let Ok((mut stream, _)) = listener.accept().await {
-                use tokio::io::AsyncReadExt;
-                let mut buf = [0u8; 1024];
-                let _ = stream.read(&mut buf).await;
-                let body = r#"{"other_field": "no response key here"}"#;
-                let resp = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(resp.as_bytes()).await;
-                let _ = stream.shutdown().await;
-            }
-        });
-
-        let config = AiConfig {
-            provider: "ollama".to_string(),
-            endpoint,
-            model: "m".to_string(),
-            api_key: None,
-            timeout_ms: 5000,
-            enabled: true,
-        };
-        let provider = OllamaProvider::new(&config, "ref".to_string());
+        // Server returns valid JSON but no "response" field.
+        let endpoint =
+            stub_endpoint(r#"{"other_field": "no response key here"}"#.to_string()).await;
+        let provider = ollama_provider(endpoint);
         let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.is_empty());
@@ -802,44 +746,26 @@ mod tests {
 
     #[tokio::test]
     async fn ollama_complete_parses_completions_when_response_field_present() {
-        // Server returns Ollama-shaped JSON with a "response" field that is
-        // a JSON-array string of completions — covers the success path
-        // (line 264 -> parse_response).
-        use tokio::io::AsyncWriteExt;
-        use tokio::net::TcpListener;
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let endpoint = format!("http://{addr}/api/generate");
-
-        tokio::spawn(async move {
-            if let Ok((mut stream, _)) = listener.accept().await {
-                use tokio::io::AsyncReadExt;
-                let mut buf = [0u8; 1024];
-                let _ = stream.read(&mut buf).await;
-                let inner = r#"[{"label":"foo","insertText":"foo()","detail":"AI"}]"#;
-                let body = serde_json::json!({ "response": inner }).to_string();
-                let resp = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(resp.as_bytes()).await;
-                let _ = stream.shutdown().await;
-            }
-        });
-
-        let config = AiConfig {
-            provider: "ollama".to_string(),
-            endpoint,
-            model: "m".to_string(),
-            api_key: None,
-            timeout_ms: 5000,
-            enabled: true,
-        };
-        let provider = OllamaProvider::new(&config, "ref".to_string());
+        // Server returns Ollama-shaped JSON with a JSON-array "response" field.
+        let inner = r#"[{"label":"foo","insertText":"foo()","detail":"AI"}]"#;
+        let endpoint = stub_endpoint(serde_json::json!({ "response": inner }).to_string()).await;
+        let provider = ollama_provider(endpoint);
         let ctx = empty_context();
         let items = provider.complete(&ctx).await;
         assert!(items.iter().any(|i| i.label == "foo"), "should parse foo");
     }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_parse_json_with_markdown_fences(input0: &str, input1: &str) {
+        let response = input0;
+        let items = OllamaProvider::parse_response(response);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].label, input1);
+    }
+
+    include!("ai_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }

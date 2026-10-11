@@ -1,7 +1,5 @@
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
-using System.Globalization;
-using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -13,131 +11,20 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// actually enforce row-level access at runtime.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
-public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture)
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("rls_e2e").ConfigureAwait(false);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
-
-    private static SchemaDefinition BuildOwnerIsolationSchema() =>
-        SchemaTestData.Schema(
-            name: "rls_test",
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "documents",
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                        SchemaTestData.Column(
-                            name: "owner_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "title",
-                            type: new VarCharType(200),
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
-                    rowLevelSecurity: new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            SchemaTestData.RlsPolicy(
-                                name: "owner_isolation",
-                                operations: [RlsOperation.All],
-                                usingLql: "owner_id = current_user_id()::uuid",
-                                withCheckLql: "owner_id = current_user_id()::uuid"
-                            ),
-                        ],
-                    }
-                ),
-            ]
-        );
-
-    private static SchemaDefinition BuildGroupMembershipSchema() =>
-        SchemaTestData.Schema(
-            name: "rls_group_test",
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "user_group_memberships",
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                        SchemaTestData.Column(
-                            name: "user_id",
-                            type: new VarCharType(450),
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "group_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
-                ),
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "documents",
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                        SchemaTestData.Column(
-                            name: "group_id",
-                            type: new UuidType(),
-                            isNullable: false
-                        ),
-                        SchemaTestData.Column(
-                            name: "title",
-                            type: new VarCharType(200),
-                            isNullable: false
-                        ),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
-                    rowLevelSecurity: new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            SchemaTestData.RlsPolicy(
-                                name: "group_read_access",
-                                operations: [RlsOperation.Select],
-                                usingLql: Data_BuildGroupMembershipSchema_1
-                            ),
-                        ],
-                    }
-                ),
-            ]
-        );
+    protected override string DatabaseName => "rls_e2e";
 
     private const string AppRole = "rls_app_role";
 
     private void ApplyAndForceRls(SchemaDefinition desired, params string[] tableNames)
     {
-        PostgresTestDb.ApplySchema(_connection, desired, _logger);
+        PostgresTestDb.ApplySchema(Connection, desired, Logger);
 
         // Testcontainers postgres connects as a superuser with BYPASSRLS.
         // To exercise policies we need a non-bypassrls role and grant CRUD.
-        using (var roleCmd = _connection.CreateCommand())
+        using (var roleCmd = Connection.CreateCommand())
         {
             roleCmd.CommandText = SqlData_ApplyAndForceRls_1();
             roleCmd.ExecuteNonQuery();
@@ -145,7 +32,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
 
         foreach (var tableName in tableNames)
         {
-            using var grantCmd = _connection.CreateCommand();
+            using var grantCmd = Connection.CreateCommand();
             grantCmd.CommandText =
                 $"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE \"public\".\"{tableName}\" TO {AppRole}";
             grantCmd.ExecuteNonQuery();
@@ -176,7 +63,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         Assert.True(
             (bool)
                 global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _connection,
+                    connection: Connection,
                     configure: command => command.CommandText = Data_EnableRls_TableHasRlsEnabled_1
                 )!
         );
@@ -193,52 +80,18 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         var bobDoc = Guid.NewGuid();
 
         // Alice inserts her doc.
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetAppRoleAndUser(_connection, tx, alice);
-            DatabaseCommands.Execute(
-                connection: _connection,
-                configure: ins =>
-                {
-                    ins.Transaction = tx;
-                    ins.CommandText =
-                        "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'alice')";
-                },
-                parameters: () => [("@i", aliceDoc), ("@o", alice)]
-            );
-            tx.Commit();
-        }
+        InsertDocumentAsAppRole(user: alice, docId: aliceDoc, title: "alice");
 
         // Bob inserts his doc.
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetAppRoleAndUser(_connection, tx, bob);
-            DatabaseCommands.Execute(
-                connection: _connection,
-                configure: ins =>
-                {
-                    ins.Transaction = tx;
-                    ins.CommandText =
-                        "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'bob')";
-                },
-                parameters: () => [("@i", bobDoc), ("@o", bob)]
-            );
-            tx.Commit();
-        }
+        InsertDocumentAsAppRole(user: bob, docId: bobDoc, title: "bob");
 
         // Bob selects -> sees only Bob's doc.
-        using (var tx = _connection.BeginTransaction())
+        using (var tx = Connection.BeginTransaction())
         {
-            SetAppRoleAndUser(_connection, tx, bob);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT id FROM \"public\".\"documents\"";
+            SetAppRoleAndUser(Connection, tx, bob);
+            using var sel = CommandWith(tx, "SELECT id FROM \"public\".\"documents\"");
             using var reader = sel.ExecuteReader();
-            var rows = new List<Guid>();
-            while (reader.Read())
-            {
-                rows.Add(reader.GetGuid(0));
-            }
+            var rows = VerifyReusableWorkflow22(input0: reader);
             Assert.Single(rows);
             Assert.Equal(bobDoc, rows[0]);
         }
@@ -253,12 +106,12 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         var bob = Guid.NewGuid();
 
         // Alice tries to insert a doc owned by Bob -> WITH CHECK fails.
-        using var tx = _connection.BeginTransaction();
-        SetAppRoleAndUser(_connection, tx, alice);
-        using var ins = _connection.CreateCommand();
-        ins.Transaction = tx;
-        ins.CommandText =
-            "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'evil')";
+        using var tx = Connection.BeginTransaction();
+        SetAppRoleAndUser(Connection, tx, alice);
+        using var ins = CommandWith(
+            tx,
+            "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'evil')"
+        );
         ins.Parameters.AddWithValue("@i", Guid.NewGuid());
         ins.Parameters.AddWithValue("@o", bob);
 
@@ -281,17 +134,11 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         InsertDocument(visibleDoc, visibleGroup, "visible");
         InsertDocument(hiddenDoc, hiddenGroup, "hidden");
 
-        using var tx = _connection.BeginTransaction();
-        SetAppRoleAndUser(_connection, tx, alice);
-        using var sel = _connection.CreateCommand();
-        sel.Transaction = tx;
-        sel.CommandText = "SELECT id FROM \"public\".\"documents\" ORDER BY title";
+        using var tx = Connection.BeginTransaction();
+        SetAppRoleAndUser(Connection, tx, alice);
+        using var sel = CommandWith(tx, "SELECT id FROM \"public\".\"documents\" ORDER BY title");
         using var reader = sel.ExecuteReader();
-        var rows = new List<Guid>();
-        while (reader.Read())
-        {
-            rows.Add(reader.GetGuid(0));
-        }
+        var rows = VerifyReusableWorkflow22(input0: reader);
 
         Assert.Single(rows);
         Assert.Equal(visibleDoc, rows[0]);
@@ -302,9 +149,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
     {
         ApplyAndForceRls(BuildOwnerIsolationSchema(), "documents");
 
-        var inspected = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var inspected = PostgresTestDb.Inspect(Connection, Logger);
 
         var table = inspected.Tables.Single(t => t.Name == "documents");
         Assert.NotNull(table.RowLevelSecurity);
@@ -318,9 +163,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
     {
         ApplyAndForceRls(BuildOwnerIsolationSchema(), "documents");
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var current = PostgresTestDb.Inspect(Connection, Logger);
         var desiredPlus = BuildOwnerIsolationSchema() with
         {
             Tables =
@@ -333,7 +176,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         };
 
         var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desiredPlus, logger: _logger)
+            (OperationsResultOk)SchemaDiff.Calculate(current, desiredPlus, logger: Logger)
         ).Value;
 
         var creates = ops.OfType<CreateRlsPolicyOperation>().ToList();
@@ -346,9 +189,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
     {
         ApplyAndForceRls(BuildOwnerIsolationSchema(), "documents");
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var current = PostgresTestDb.Inspect(Connection, Logger);
         var desiredEmpty = BuildOwnerIsolationSchema() with
         {
             Tables =
@@ -362,7 +203,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
 
         var ops = (
             (OperationsResultOk)
-                SchemaDiff.Calculate(current, desiredEmpty, allowDestructive: true, logger: _logger)
+                SchemaDiff.Calculate(current, desiredEmpty, allowDestructive: true, logger: Logger)
         ).Value;
 
         Assert.Contains(
@@ -371,9 +212,36 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         );
     }
 
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void InsertDocumentAsAppRole(Guid user, Guid docId, string title)
+    {
+        using var tx = Connection.BeginTransaction();
+        VerifyReusableWorkflow16(
+            configure0: ins =>
+            {
+                ins.Transaction = tx;
+                ins.CommandText =
+                    $"INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, '{title}')";
+            },
+            input0: SetAppRoleAndUser,
+            input1: Connection,
+            input2: tx,
+            input3: user,
+            input4: docId
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private NpgsqlCommand CommandWith(NpgsqlTransaction tx, string sql)
+    {
+        var command = Connection.CreateCommand();
+        PostgresTestDb.VerifyReusableWorkflow8(input0: command, input1: tx, value0: sql);
+        return command;
+    }
+
     private void InsertGroupMembership(Guid userId, Guid groupId)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText =
             "INSERT INTO \"public\".\"user_group_memberships\"(id, user_id, group_id) VALUES (@id, @user, @group)";
         cmd.Parameters.AddWithValue("@id", Guid.NewGuid());
@@ -385,11 +253,42 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
     private void InsertDocument(Guid id, Guid groupId, string title)
     {
         DatabaseCommands.Execute(
-            connection: _connection,
+            connection: Connection,
             configure: cmd =>
                 cmd.CommandText =
                     "INSERT INTO \"public\".\"documents\"(id, group_id, title) VALUES (@id, @group, @title)",
             parameters: () => [("@id", id), ("@group", groupId), ("@title", title)]
         );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow16(
+        Action<NpgsqlConnection, NpgsqlTransaction, Guid> input0,
+        NpgsqlConnection input1,
+        NpgsqlTransaction input2,
+        Guid input3,
+        Guid input4,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        input0(arg1: input1, arg2: input2, arg3: input3);
+        DatabaseCommands.Execute(
+            connection: input1,
+            configure: configure0,
+            parameters: () => [("@i", input4), ("@o", input3)]
+        );
+        input2.Commit();
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static List<Guid> VerifyReusableWorkflow22(NpgsqlDataReader input0)
+    {
+        var rows = new List<Guid>();
+        while (input0.Read())
+        {
+            rows.Add(input0.GetGuid(0));
+        }
+
+        return rows;
     }
 }

@@ -7,10 +7,7 @@ global using IntError = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Error
     Nimblesite.Sql.Model.SqlError
 >;
 // Result type aliases for tests
-global using IntOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
-    int,
-    Nimblesite.Sql.Model.SqlError
->;
+
 global using NullableStringOk = Outcome.Result<string?, Nimblesite.Sql.Model.SqlError>.Ok<
     string?,
     Nimblesite.Sql.Model.SqlError

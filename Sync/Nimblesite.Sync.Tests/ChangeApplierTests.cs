@@ -1,6 +1,5 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging.Abstractions;
 using Tests.Shared;
 
 namespace Nimblesite.Sync.Tests;

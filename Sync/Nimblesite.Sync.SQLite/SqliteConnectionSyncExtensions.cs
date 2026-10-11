@@ -26,32 +26,31 @@ public static class SqliteConnectionSyncExtensions
         string tableName
     )
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-                FROM _sync_subscriptions
-                WHERE table_name = @tableName
-                """;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
-
-            var subscriptions = new List<SyncSubscription>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+        return SyncCommandExecution.Read<SqliteException, SubscriptionListResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification22,
+            parameters: () => [("@tableName", tableName)],
+            read: command =>
             {
-                subscriptions.Add(SubscriptionRepository.ReadSubscription(reader: reader));
+                return new SubscriptionListOk(
+                    SyncCommandExecution.ReadRows<SyncSubscription>(
+                        command: command,
+                        read: row => SubscriptionRepository.ReadSubscription(reader: row)
+                    )
+                );
+            },
+            failure: ex =>
+            {
+                return new SubscriptionListError(
+                    new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
+                );
             }
-
-            return new SubscriptionListOk(subscriptions);
-        }
-        catch (SqliteException ex)
-        {
-            return new SubscriptionListError(
-                new SyncErrorDatabase($"Failed to get subscriptions: {ex.Message}")
-            );
-        }
+        );
     }
 
     /// <summary>
@@ -113,11 +112,11 @@ public static class SqliteConnectionSyncExtensions
         SyncCommandExecution.WriteCount<SqliteException>(
             connection: connection,
             setSql: command =>
-                command.CommandText = """
-                DELETE FROM _sync_log
-                WHERE operation = 'delete'
-                  AND version < @belowVersion
-                """,
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification23,
             parameters: () => [("@belowVersion", belowVersion)],
             failurePrefix: "Failed to purge tombstones"
         );

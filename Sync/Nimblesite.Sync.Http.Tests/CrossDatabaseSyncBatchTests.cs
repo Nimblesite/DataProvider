@@ -64,10 +64,10 @@ public sealed partial class CrossDatabaseSyncTests
         PostgresSyncSession.EnableSuppression(postgres);
         foreach (var entry in batch)
         {
-            Assert.Equal("Person", entry.TableName);
-            Assert.Equal(SyncOperation.Insert, entry.Operation);
-            Assert.Equal(originId, entry.Origin);
-            Assert.IsType<BoolSyncOk>(PostgresChangeApplier.ApplyChange(postgres, entry, _logger));
+            CrossDatabaseSyncTests.AssertPersonInsert(entry, originId);
+            global::Tests.Shared.ResultAssertions.ExactOk(
+                actual: PostgresChangeApplier.ApplyChange(postgres, entry, _logger)
+            );
         }
         PostgresSyncSession.DisableSuppression(postgres);
     }

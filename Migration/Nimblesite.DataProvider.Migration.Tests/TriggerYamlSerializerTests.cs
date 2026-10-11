@@ -55,10 +55,18 @@ public sealed partial class TriggerYamlSerializerTests
     [Fact]
     public void Triggers_Absent_DoNotAppearInYaml()
     {
-        var schema = Fixture_Triggers_Absent_DoNotAppearInYaml_1();
+        var yaml = VerifyCrossClassChecks6(input0: Fixture_Triggers_Absent_DoNotAppearInYaml_1);
+
+        Assert.DoesNotContain("triggers", yaml, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static global::System.String VerifyCrossClassChecks6(Func<SchemaDefinition> input0)
+    {
+        var schema = input0();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
-        Assert.DoesNotContain("triggers", yaml, StringComparison.Ordinal);
+        return yaml;
     }
 }

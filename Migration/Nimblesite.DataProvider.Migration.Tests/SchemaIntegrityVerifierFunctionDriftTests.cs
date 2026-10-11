@@ -1,12 +1,4 @@
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
-using System.Collections.Immutable;
-using SchemaIntegrityOk = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -18,41 +10,31 @@ public sealed partial class SchemaIntegrityVerifierFunctionDriftTests
         var live = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1();
         var desired = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2();
 
-        var mismatches = Verify(live: live, desired: desired);
+        var mismatches = SchemaIntegrityVerifierIssue59Tests.Verify(live: live, desired: desired);
 
-        Assert.Contains(
-            "public.current_tenant_id(text): returns expected uuid but found text",
-            mismatches
+        VerifyReusableWorkflow2(
+            input0: mismatches,
+            value0: "public.current_tenant_id(text): returns expected uuid but found text",
+            value1: "public.current_tenant_id(text): language expected sql but found plpgsql"
         );
-        Assert.Contains(
-            "public.current_tenant_id(text): language expected sql but found plpgsql",
-            mismatches
-        );
-        Assert.Contains(
-            "public.current_tenant_id(text): volatility expected stable but found volatile",
-            mismatches
-        );
-        Assert.Contains(
-            "public.current_tenant_id(text): security definer expected True but found False",
-            mismatches
+        VerifyReusableWorkflow2(
+            input0: mismatches,
+            value0: "public.current_tenant_id(text): volatility expected stable but found volatile",
+            value1: "public.current_tenant_id(text): security definer expected True but found False"
         );
         Assert.Contains("public.current_tenant_id(text): function body drifted", mismatches);
         Assert.Equal(5, mismatches.Length);
-        Assert.Empty(Verify(live: desired, desired: desired));
+        Assert.Empty(SchemaIntegrityVerifierIssue59Tests.Verify(live: desired, desired: desired));
     }
 
-    private static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow2(
+        System.Collections.Immutable.ImmutableArray<string> input0,
+        string value0,
+        string value1
+    )
     {
-        var result = SchemaIntegrityVerifier.Verify(
-            live: live,
-            desired: desired,
-            logger: NullLogger.Instance
-        );
-
-        Assert.True(
-            result is SchemaIntegrityOk,
-            "Expected schema integrity verification to succeed."
-        );
-        return ((SchemaIntegrityOk)result).Value;
+        Assert.Contains(value0, input0);
+        Assert.Contains(value1, input0);
     }
 }

@@ -1,5 +1,3 @@
-using Nimblesite.Sql.Model;
-
 namespace Nimblesite.DataProvider.Tests;
 
 // Implements [CON-SHARED-CORE]. Targets DummyParameterValues, the resolver

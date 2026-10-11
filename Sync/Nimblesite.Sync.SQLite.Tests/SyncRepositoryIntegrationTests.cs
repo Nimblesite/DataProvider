@@ -1,7 +1,5 @@
 // Implements [CI-TEST-SHARED-COMMAND].
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
+
 using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -22,10 +20,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
 
     public SyncRepositoryIntegrationTests()
     {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
 
         // Create test table with triggers
         DatabaseCommands.Execute(
@@ -44,8 +39,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetAll(_db);
 
         // Assert
-        Assert.True(result is SyncClientListOk);
-        Assert.Empty(((SyncClientListOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncClientListOk>(actual: result);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -55,13 +50,10 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var client = new SyncClient("client-1", 100, Timestamp, Timestamp);
 
         // Act
-        var result = SyncClientRepository.Upsert(_db, client);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: SyncClientRepository.Upsert(_db, client));
 
         var allClients = SyncClientRepository.GetAll(_db);
-        Assert.Single(((SyncClientListOk)allClients).Value);
+        Assert.Single((Ok(actual: allClients)).Value);
     }
 
     [Fact]
@@ -74,13 +66,9 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var client2 = new SyncClient("client-1", 200, "2025-02-01T00:00:00Z", Timestamp);
 
         // Act
-        var result = SyncClientRepository.Upsert(_db, client2);
+        global::Tests.Shared.ResultAssertions.Ok(actual: SyncClientRepository.Upsert(_db, client2));
 
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        var retrieved = SyncClientRepository.GetByOrigin(_db, "client-1");
-        var client = ((SyncClientOk)retrieved).Value;
+        var client = (Ok(read: () => SyncClientRepository.GetByOrigin(_db, "client-1"))).Value;
         Assert.NotNull(client);
         Assert.Equal(200, client.LastSyncVersion);
     }
@@ -93,11 +81,9 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         SyncClientRepository.Upsert(_db, client);
 
         // Act
-        var result = SyncClientRepository.GetByOrigin(_db, "client-1");
-
+        // Act
         // Assert
-
-        var retrieved = Ok(actual: result).Value;
+        var retrieved = Ok(read: () => SyncClientRepository.GetByOrigin(_db, "client-1")).Value;
         Assert.NotNull(retrieved);
         Assert.Equal("client-1", retrieved.OriginId);
         Assert.Equal(100, retrieved.LastSyncVersion);
@@ -110,8 +96,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetByOrigin(_db, "nonexistent");
 
         // Assert
-        Assert.True(result is SyncClientOk);
-        Assert.Null(((SyncClientOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncClientOk>(actual: result);
+        Assert.Null((Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -121,34 +107,38 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         SyncClientRepository.Upsert(_db, new SyncClient("client-1", 100, Timestamp, Timestamp));
 
         // Act
-        var result = SyncClientRepository.Delete(_db, "client-1");
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SyncClientRepository.Delete(_db, "client-1")
+        );
 
         var retrieved = SyncClientRepository.GetByOrigin(_db, "client-1");
-        Assert.Null(((SyncClientOk)retrieved).Value);
+        Assert.Null((Ok(actual: retrieved)).Value);
     }
 
     [Fact]
     public void SyncClientRepository_Delete_NonExistingClient_StillSucceeds()
     {
         // Act
-        var result = SyncClientRepository.Delete(_db, "nonexistent");
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SyncClientRepository.Delete(_db, "nonexistent")
+        );
     }
 
-    [Fact]
-    public void SyncClientRepository_GetMinVersion_EmptyDatabase_ReturnsZero()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(SyncClientRepository_GetMinVersion_EmptyDatabase_ReturnsZero_ContextCasesData)
+    )]
+    public void SyncClientRepository_GetMinVersion_EmptyDatabase_ReturnsZero_ContextCases(
+        string caseName,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::Outcome.Result<global::System.Int64, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
     {
-        // Act
-        var result = SyncClientRepository.GetMinVersion(_db);
-
-        // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix1(input0: _db, input1: VerifyReusableWorkflow6, value0: value0);
     }
 
     [Fact]
@@ -163,8 +153,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetMinVersion(_db);
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(100, ((LongSyncOk)result).Value);
+        VerifyReusableWorkflow6(input0: result, value0: 100);
     }
 
     [Fact]
@@ -179,11 +168,10 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.DeleteMultiple(_db, ["client-1", "client-2"]);
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(2, ((IntSyncOk)result).Value);
+        VerifyReusableWorkflow7(input0: result, value0: 2);
 
         var remaining = SyncClientRepository.GetAll(_db);
-        Assert.Single(((SyncClientListOk)remaining).Value);
+        Assert.Single((Ok(actual: remaining)).Value);
     }
 
     #endregion
@@ -197,27 +185,15 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
 
         // Assert
-        Assert.True(result is SyncLogListOk);
-        Assert.Empty(((SyncLogListOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncLogListOk>(actual: result);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void SyncLogRepository_FetchChanges_WithEntries_ReturnsEntries()
     {
         // Arrange - Insert via user table to trigger logging
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
-                command.CommandText =
-                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
-        );
-
-        // Act
-        var result = SyncLogRepository.FetchChanges(_db, 0, 100);
-
-        // Assert
-
-        var entries = Ok(actual: result).Value;
+        var entries = VerifyReusableWorkflow10(configure0: InsertAlice, input0: _db);
         Assert.Single(entries);
         Assert.Equal("Person", entries[0].TableName);
     }
@@ -226,107 +202,56 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_FetchChanges_RespectsBatchSize()
     {
         // Arrange
-        for (var i = 0; i < 10; i++)
-        {
-            DatabaseCommands.Execute(
-                connection: _db,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
-            );
-        }
+        VerifySyncLoopWorkflow2(input0: _db, value1: 10);
 
         // Act
         var result = SyncLogRepository.FetchChanges(_db, 0, 5);
 
         // Assert
-        Assert.True(result is SyncLogListOk);
-        Assert.Equal(5, ((SyncLogListOk)result).Value.Count);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncLogListOk>(actual: result);
+        Assert.Equal(5, (Ok(actual: result)).Value.Count);
     }
 
     [Fact]
     public void SyncLogRepository_FetchChanges_FromVersion_FiltersCorrectly()
     {
         // Arrange
-        for (var i = 0; i < 5; i++)
-        {
-            DatabaseCommands.Execute(
-                connection: _db,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
-            );
-        }
+        VerifySyncLoopWorkflow2(input0: _db, value1: 5);
 
         // Get the max version
-        var maxResult = SyncLogRepository.GetMaxVersion(_db);
-        var maxVersion = ((LongSyncOk)maxResult).Value;
+        // Get the max version
+        var maxVersion = (Ok(read: () => SyncLogRepository.GetMaxVersion(_db))).Value;
 
         // Act - Fetch from version 3
         var result = SyncLogRepository.FetchChanges(_db, maxVersion - 2, 100);
 
         // Assert
-        Assert.True(result is SyncLogListOk);
-        Assert.Equal(2, ((SyncLogListOk)result).Value.Count);
-    }
-
-    [Fact]
-    public void SyncLogRepository_GetMaxVersion_EmptyLog_ReturnsZero()
-    {
-        // Act
-        var result = SyncLogRepository.GetMaxVersion(_db);
-
-        // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SyncLogListOk>(actual: result);
+        Assert.Equal(2, (Ok(actual: result)).Value.Count);
     }
 
     [Fact]
     public void SyncLogRepository_GetMaxVersion_WithEntries_ReturnsMax()
     {
         // Arrange
-        for (var i = 0; i < 5; i++)
-        {
-            DatabaseCommands.Execute(
-                connection: _db,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
-            );
-        }
+        VerifySyncLoopWorkflow2(input0: _db, value1: 5);
 
         // Act
         var result = SyncLogRepository.GetMaxVersion(_db);
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.True(((LongSyncOk)result).Value >= 5);
+        _ = global::Tests.Shared.ResultAssertions.Expected<LongSyncOk>(actual: result);
+        Assert.True((Ok(actual: result)).Value >= 5);
     }
 
     [Fact]
     public void SyncLogRepository_Insert_LogsUpdate()
     {
         // Arrange
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
-                command.CommandText =
-                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
-        );
-
-        var versionAfterInsert = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;
-
-        // Act - Update
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
+        var entries = VerifyPersonMutation(
+            command =>
                 command.CommandText = "UPDATE Person SET Name = 'Alice Updated' WHERE Id = 'p1'"
         );
-
-        // Assert
-        var result = SyncLogRepository.FetchChanges(_db, versionAfterInsert, 100);
-        var entries = ((SyncLogListOk)result).Value;
-        Assert.Single(entries);
         Assert.Equal(SyncOperation.Update, entries[0].Operation);
     }
 
@@ -334,137 +259,62 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_Delete_LogsTombstone()
     {
         // Arrange
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
-                command.CommandText =
-                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
+        var entries = VerifyPersonMutation(
+            command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
         );
-
-        var versionAfterInsert = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;
-
-        // Act - Delete
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
-        );
-
-        // Assert
-        var result = SyncLogRepository.FetchChanges(_db, versionAfterInsert, 100);
-        var entries = ((SyncLogListOk)result).Value;
-        Assert.Single(entries);
         Assert.Equal(SyncOperation.Delete, entries[0].Operation);
         Assert.Null(entries[0].Payload); // Tombstone has no payload
-    }
-
-    [Fact]
-    public void SyncLogRepository_GetLastServerVersion_Default_ReturnsZero()
-    {
-        // Act
-        var result = SyncLogRepository.GetLastServerVersion(_db);
-
-        // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
     }
 
     [Fact]
     public void SyncLogRepository_UpdateLastServerVersion_UpdatesValue()
     {
         // Act
-        var updateResult = SyncLogRepository.UpdateLastServerVersion(_db, 100);
-
-        // Assert
-        Assert.True(updateResult is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SyncLogRepository.UpdateLastServerVersion(_db, 100)
+        );
 
         var getResult = SyncLogRepository.GetLastServerVersion(_db);
-        Assert.True(getResult is LongSyncOk);
-        Assert.Equal(100, ((LongSyncOk)getResult).Value);
-    }
-
-    [Fact]
-    public void SyncLogRepository_GetMinVersion_EmptyLog_ReturnsZero()
-    {
-        // Act
-        var result = SyncLogRepository.GetMinVersion(_db);
-
-        // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
+        VerifyReusableWorkflow6(input0: getResult, value0: 100);
     }
 
     [Fact]
     public void SyncLogRepository_GetMinVersion_WithEntries_ReturnsMin()
     {
         // Arrange
-        for (var i = 0; i < 5; i++)
-        {
-            DatabaseCommands.Execute(
-                connection: _db,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Age) VALUES ('min{i}', 'Person {i}', {20 + i})"
-            );
-        }
+        InsertPeople(_db, 5, "min");
 
         // Act
         var result = SyncLogRepository.GetMinVersion(_db);
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.True(((LongSyncOk)result).Value >= 1);
-    }
-
-    [Fact]
-    public void SyncLogRepository_GetEntryCount_EmptyLog_ReturnsZero()
-    {
-        // Act
-        var result = SyncLogRepository.GetEntryCount(_db);
-
-        // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(0, ((LongSyncOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<LongSyncOk>(actual: result);
+        Assert.True((Ok(actual: result)).Value >= 1);
     }
 
     [Fact]
     public void SyncLogRepository_GetEntryCount_WithEntries_ReturnsCount()
     {
         // Arrange
-        for (var i = 0; i < 5; i++)
-        {
-            DatabaseCommands.Execute(
-                connection: _db,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Age) VALUES ('cnt{i}', 'Person {i}', {20 + i})"
-            );
-        }
+        InsertPeople(_db, 5, "cnt");
 
         // Act
         var result = SyncLogRepository.GetEntryCount(_db);
 
         // Assert
-        Assert.True(result is LongSyncOk);
-        Assert.Equal(5, ((LongSyncOk)result).Value);
+        VerifyReusableWorkflow6(input0: result, value0: 5);
     }
 
     [Fact]
     public void SyncLogRepository_FetchChanges_ContainsAllFields()
     {
         // Arrange
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
+        var entries = VerifyReusableWorkflow10(
+            configure0: command =>
                 command.CommandText =
-                    "INSERT INTO Person (Id, Name, Age) VALUES ('fld1', 'Alice', 30)"
+                    "INSERT INTO Person (Id, Name, Age) VALUES ('fld1', 'Alice', 30)",
+            input0: _db
         );
-
-        // Act
-        var result = SyncLogRepository.FetchChanges(_db, 0, 100);
-
-        // Assert
-
-        var entries = Ok(actual: result).Value;
         Assert.NotEmpty(entries);
 
         var entry = entries[^1];
@@ -488,8 +338,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetAll(_db);
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        Assert.Empty(((SubscriptionListOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionListOk>(actual: result);
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -499,13 +349,12 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var subscription = Dataset_SubscriptionRepository_Insert_ValidSubscription_Succeeds_1();
 
         // Act
-        var result = SubscriptionRepository.Insert(_db, subscription);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SubscriptionRepository.Insert(_db, subscription)
+        );
 
         var all = SubscriptionRepository.GetAll(_db);
-        Assert.Single(((SubscriptionListOk)all).Value);
+        Assert.Single((Ok(actual: all)).Value);
     }
 
     [Fact]
@@ -517,11 +366,9 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         SubscriptionRepository.Insert(_db, subscription);
 
         // Act
-        var result = SubscriptionRepository.GetById(_db, "sub-1");
-
+        // Act
         // Assert
-
-        var retrieved = Ok(actual: result).Value;
+        var retrieved = Ok(read: () => SubscriptionRepository.GetById(_db, "sub-1")).Value;
         Assert.NotNull(retrieved);
         Assert.Equal("sub-1", retrieved.SubscriptionId);
     }
@@ -533,29 +380,24 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetById(_db, "nonexistent");
 
         // Assert
-        Assert.True(result is SubscriptionOk);
-        Assert.Null(((SubscriptionOk)result).Value);
+        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionOk>(actual: result);
+        Assert.Null((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void SubscriptionRepository_GetByTable_FiltersCorrectly()
     {
         // Arrange
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_1()
-        );
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_2()
+        VerifyReusableWorkflow14(
+            input0: _db,
+            input1: Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_1,
+            input2: Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_2
         );
 
         // Act
-        var result = SubscriptionRepository.GetByTable(_db, "Person");
-
+        // Act
         // Assert
-
-        var subs = Ok(actual: result).Value;
+        var subs = Ok(read: () => SubscriptionRepository.GetByTable(_db, "Person")).Value;
         Assert.Single(subs);
         Assert.Equal("sub-1", subs[0].SubscriptionId);
     }
@@ -566,21 +408,15 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         var origin1 = "origin-1";
         var origin2 = "origin-2";
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_1(origin1: origin1)
-        );
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_2(origin2: origin2)
+        InsertSubscriptions(
+            () => Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_1(origin1: origin1),
+            () => Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_2(origin2: origin2)
         );
 
         // Act
-        var result = SubscriptionRepository.GetByOrigin(_db, origin1);
-
+        // Act
         // Assert
-
-        var subs = Ok(actual: result).Value;
+        var subs = Ok(read: () => SubscriptionRepository.GetByOrigin(_db, origin1)).Value;
         Assert.Single(subs);
         Assert.Equal("sub-1", subs[0].SubscriptionId);
     }
@@ -595,13 +431,12 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         );
 
         // Act
-        var result = SubscriptionRepository.Delete(_db, "sub-1");
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: SubscriptionRepository.Delete(_db, "sub-1")
+        );
 
         var all = SubscriptionRepository.GetAll(_db);
-        Assert.Empty(((SubscriptionListOk)all).Value);
+        Assert.Empty((Ok(actual: all)).Value);
     }
 
     [Fact]
@@ -609,53 +444,41 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     {
         // Arrange
         var origin1 = "origin-1";
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_1(origin1: origin1)
-        );
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_2(origin1: origin1)
-        );
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_3()
+        InsertSubscriptions(
+            () => Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_1(origin1: origin1),
+            () => Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_2(origin1: origin1),
+            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_3
         );
 
         // Act
         var result = SubscriptionRepository.DeleteByOrigin(_db, origin1);
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(2, ((IntSyncOk)result).Value);
+        VerifyReusableWorkflow7(input0: result, value0: 2);
 
         var remaining = SubscriptionRepository.GetAll(_db);
-        Assert.Single(((SubscriptionListOk)remaining).Value);
+        Assert.Single((Ok(actual: remaining)).Value);
     }
 
     [Fact]
     public void SubscriptionRepository_DeleteExpired_RemovesExpiredOnly()
     {
         // Arrange
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_1()
-        );
-        SubscriptionRepository.Insert(
-            _db,
-            Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_2()
+        VerifyReusableWorkflow14(
+            input0: _db,
+            input1: Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_1,
+            input2: Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_2
         );
 
         // Act
         var result = SubscriptionRepository.DeleteExpired(_db, "2025-07-01T00:00:00Z");
 
         // Assert
-        Assert.True(result is IntSyncOk);
-        Assert.Equal(1, ((IntSyncOk)result).Value);
+        VerifyReusableWorkflow7(input0: result, value0: 1);
 
         var remaining = SubscriptionRepository.GetAll(_db);
-        Assert.Single(((SubscriptionListOk)remaining).Value);
-        Assert.Equal("sub-active", ((SubscriptionListOk)remaining).Value[0].SubscriptionId);
+        Assert.Single((Ok(actual: remaining)).Value);
+        Assert.Equal("sub-active", (Ok(actual: remaining)).Value[0].SubscriptionId);
     }
 
     #endregion
@@ -680,25 +503,18 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void TombstoneManager_PurgeTombstones_RemovesOldDeletes()
     {
         // Arrange - Insert and delete to create tombstones
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command =>
-                command.CommandText = "INSERT INTO Person (Id, Name) VALUES ('p1', 'Alice')"
-        );
-
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
+        VerifyReusableWorkflow8(
+            configure0: command =>
+                command.CommandText = "INSERT INTO Person (Id, Name) VALUES ('p1', 'Alice')",
+            configure1: command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'",
+            input0: _db
         );
 
         // Get version
-        var maxVersion = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;
+        var maxVersion = (Ok(actual: SyncLogRepository.GetMaxVersion(_db))).Value;
 
         // Use extension method to purge tombstones
-        var result = _db.PurgeTombstones(maxVersion + 1);
-
-        // Assert
-        Assert.True(result is IntSyncOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: _db.PurgeTombstones(maxVersion + 1));
         // Should have purged at least the delete tombstone
     }
 
@@ -706,17 +522,141 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SyncLogEntry> VerifyReusableWorkflow3(
+        SqliteConnection input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure1
+    )
+    { // Arrange
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        var versionAfterInsert = (Ok(actual: SyncLogRepository.GetMaxVersion(input0))).Value;
+
+        // Act - Update
+        DatabaseCommands.Execute(connection: input0, configure: configure1);
+
+        // Assert
+        // Assert
+        var entries = (
+            Ok(read: () => SyncLogRepository.FetchChanges(input0, versionAfterInsert, 100))
+        ).Value;
+        Assert.Single(entries);
+
+        return entries;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow6(Outcome.Result<long, SyncError> input0, int value0)
+    {
+        // Assert
+        _ = global::Tests.Shared.ResultAssertions.Expected<LongSyncOk>(actual: input0);
+        Assert.Equal(value0, (Ok(actual: input0)).Value);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow7(Outcome.Result<int, SyncError> input0, int value0)
+    {
+        // Assert
+        _ = global::Tests.Shared.ResultAssertions.Expected<IntSyncOk>(actual: input0);
+        Assert.Equal(value0, (Ok(actual: input0)).Value);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow8(
+        SqliteConnection input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure1
+    )
+    { // Arrange - Insert and delete to create tombstones
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        DatabaseCommands.Execute(connection: input0, configure: configure1);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SyncLogEntry> VerifyReusableWorkflow10(
+        SqliteConnection input0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    { // Arrange - Insert via user table to trigger logging
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        // Act
+        // Act
+        // Assert
+        var entries = Ok(read: () => SyncLogRepository.FetchChanges(input0, 0, 100)).Value;
+
+        return entries;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow14(
+        SqliteConnection input0,
+        Func<SyncSubscription> input1,
+        Func<SyncSubscription> input2
+    )
+    { // Arrange
+        SubscriptionRepository.Insert(input0, input1());
+        SubscriptionRepository.Insert(input0, input2());
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix1(
+        SqliteConnection input0,
+        Action<Outcome.Result<long, SyncError>, int> input1,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::Outcome.Result<global::System.Int64, global::Nimblesite.Sync.Core.SyncError>
+        > value0
+    )
+    { // Act
+        var result = value0(arg: input0);
+
+        // Assert
+        input1(arg1: result, arg2: 0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void InsertSubscriptions(params Func<SyncSubscription>[] subscriptions)
+    {
+        foreach (var subscription in subscriptions)
+            SubscriptionRepository.Insert(_db, subscription());
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<SyncLogEntry> VerifyPersonMutation(
+        global::System.Action<global::System.Data.Common.DbCommand> configure1
+    ) => VerifyReusableWorkflow3(configure0: InsertAlice, configure1: configure1, input0: _db);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void InsertAlice(global::System.Data.Common.DbCommand command) =>
+        command.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)";
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void InsertPeople(SqliteConnection db, int count, string prefix)
+    {
+        for (var i = 0; i < count; i++)
         {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
+            DatabaseCommands.Execute(
+                connection: db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('{prefix}{i}', 'Person {i}', {20 + i})"
+            );
         }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow2(SqliteConnection input0, int value1)
+    { // Arrange
+        InsertPeople(input0, value1, "p");
     }
 }

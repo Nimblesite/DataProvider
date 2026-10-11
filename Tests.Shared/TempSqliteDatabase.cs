@@ -2,8 +2,31 @@ namespace Tests.Shared;
 
 // Implements [CI-TEST-SHARED-TEMP-SQLITE]. One isolated on-disk SQLite database
 // per fixture, with the temp file path retained for cleanup and DDL assertions.
-internal static class TempSqliteDatabase
+internal static partial class TempSqliteDatabase
 {
+    // Implements [CI-TEST-SHARED-TEMP-CLEANUP].
+    internal static void DeleteIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception exception)
+                when (exception
+                        is IOException
+                            or UnauthorizedAccessException
+                            or ArgumentException
+                            or NotSupportedException
+                            or System.Security.SecurityException
+                )
+            {
+                // Preserve existing teardown behavior when a file remains locked.
+            }
+        }
+    }
+
     internal static string PathFor(string prefix) =>
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{prefix}_{Guid.NewGuid():N}.db");
 

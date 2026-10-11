@@ -117,11 +117,15 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        return SQLite
-            .SyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-            .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
+        return WithConnection(
+            create: () => new SqliteConnection(connectionString),
+            run: conn =>
+            {
+                return SQLite
+                    .SyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
+            }
+        );
     }
 
     private static List<SyncLogEntry> FetchChangesFromPostgres(
@@ -131,11 +135,15 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        return Postgres
-            .PostgresSyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-            .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
+        return WithConnection(
+            create: () => new NpgsqlConnection(connectionString),
+            run: conn =>
+            {
+                return Postgres
+                    .PostgresSyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
+            }
+        );
     }
 
     private static int ApplyChangesToSqlite(
@@ -145,25 +153,31 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
+        return WithConnection(
+            create: () => new SqliteConnection(connectionString),
+            run: conn =>
+            {
+                SQLite.SyncSessionManager.EnableSuppression(conn);
 
-        SQLite.SyncSessionManager.EnableSuppression(conn);
-
-        try
-        {
-            return ApplyChangesCore(
-                changes: changes,
-                originId: originId,
-                applyChange: entry =>
-                    SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
-                        is Outcome.Result<bool, SyncError>.Ok<bool, SyncError> { Value: true }
-            );
-        }
-        finally
-        {
-            SQLite.SyncSessionManager.DisableSuppression(conn);
-        }
+                try
+                {
+                    return ApplyChangesCore(
+                        changes: changes,
+                        originId: originId,
+                        applyChange: entry =>
+                            SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
+                                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                {
+                                    Value: true
+                                }
+                    );
+                }
+                finally
+                {
+                    SQLite.SyncSessionManager.DisableSuppression(conn);
+                }
+            }
+        );
     }
 
     private static int ApplyChangesToPostgres(
@@ -173,25 +187,31 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
+        return WithConnection(
+            create: () => new NpgsqlConnection(connectionString),
+            run: conn =>
+            {
+                Postgres.PostgresSyncSession.EnableSuppression(conn);
 
-        Postgres.PostgresSyncSession.EnableSuppression(conn);
-
-        try
-        {
-            return ApplyChangesCore(
-                changes: changes,
-                originId: originId,
-                applyChange: entry =>
-                    Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
-                        is Outcome.Result<bool, SyncError>.Ok<bool, SyncError> { Value: true }
-            );
-        }
-        finally
-        {
-            Postgres.PostgresSyncSession.DisableSuppression(conn);
-        }
+                try
+                {
+                    return ApplyChangesCore(
+                        changes: changes,
+                        originId: originId,
+                        applyChange: entry =>
+                            Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
+                                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                {
+                                    Value: true
+                                }
+                    );
+                }
+                finally
+                {
+                    Postgres.PostgresSyncSession.DisableSuppression(conn);
+                }
+            }
+        );
     }
 
     private static int ApplyChangesCore(
@@ -230,10 +250,14 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        var result = SQLite.SyncClientRepository.Upsert(conn, client);
-        return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
+        return WithConnection(
+            create: () => new SqliteConnection(connectionString),
+            run: conn =>
+            {
+                var result = SQLite.SyncClientRepository.Upsert(conn, client);
+                return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
+            }
+        );
     }
 
     private static bool UpsertClientPostgres(
@@ -242,31 +266,49 @@ public static class SyncHelpers
         ILogger logger
     )
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        var result = Postgres.PostgresSyncClientRepository.Upsert(conn, client);
-        return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
+        return WithConnection(
+            create: () => new NpgsqlConnection(connectionString),
+            run: conn =>
+            {
+                var result = Postgres.PostgresSyncClientRepository.Upsert(conn, client);
+                return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
+            }
+        );
     }
 
     private static long GetMaxVersionSqlite(string connectionString, ILogger logger)
     {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        return SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
+        return WithConnection(
+            create: () => new SqliteConnection(connectionString),
+            run: conn =>
+            {
+                return SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
+            }
+        );
     }
 
     private static long GetMaxVersionPostgres(string connectionString, ILogger logger)
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        return Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
+        return WithConnection(
+            create: () => new NpgsqlConnection(connectionString),
+            run: conn =>
+            {
+                return Postgres
+                    .PostgresSyncLogRepository.GetMaxVersion(conn)
+                    .Match(ok => ok, _ => 0);
+            }
+        );
     }
 
     private static T WithSqlServer<T>(string connectionString, Func<SqlConnection, T> run)
     {
-        using var connection = new SqlConnection(connectionString);
-        connection.Open();
-        return run(connection);
+        return WithConnection(
+            create: () => new SqlConnection(connectionString),
+            run: connection =>
+            {
+                return run(connection);
+            }
+        );
     }
 
     private static int ApplyChangesToSqlServer(
@@ -311,4 +353,16 @@ public static class SyncHelpers
                 }
             }
         );
+
+    // Implements [SYNC-HTTP-SHARED-CONNECTION-LIFETIME].
+    private static TResult WithConnection<TConnection, TResult>(
+        Func<TConnection> create,
+        Func<TConnection, TResult> run
+    )
+        where TConnection : global::System.Data.Common.DbConnection
+    {
+        using var connection = create();
+        connection.Open();
+        return run(arg: connection);
+    }
 }

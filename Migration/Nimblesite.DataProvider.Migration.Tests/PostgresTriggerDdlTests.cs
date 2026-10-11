@@ -9,7 +9,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Generator-level tests for PostgreSQL trigger guard DDL emission rules
 /// that do not need a live database.
 /// </summary>
-public sealed class PostgresTriggerDdlTests
+public sealed partial class PostgresTriggerDdlTests
 {
     [Fact]
     public void PgTriggerDdl_DollarTagCollision_PicksAlternateTag()
@@ -66,13 +66,4 @@ public sealed class PostgresTriggerDdlTests
 
         Assert.Contains("63-byte", ex.Message, StringComparison.Ordinal);
     }
-
-    private static TriggerDefinition Guard() =>
-        new()
-        {
-            Name = "assert_not_last_owner",
-            Events = [TriggerEvent.Delete],
-            RaiseWhenLql = "old.role = 'owner'",
-            ErrorMessage = "cannot remove the last owner of a tenant",
-        };
 }

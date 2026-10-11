@@ -2,10 +2,7 @@ global using Microsoft.Extensions.Logging;
 global using Microsoft.Extensions.Logging.Abstractions;
 global using Nimblesite.Sync.Core;
 // Type aliases for Result types in tests
-global using BatchApplyResultOk = Outcome.Result<
-    Nimblesite.Sync.Core.BatchApplyResult,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.BatchApplyResult, Nimblesite.Sync.Core.SyncError>;
+
 global using BoolSyncError = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Error<
     bool,
     Nimblesite.Sync.Core.SyncError
@@ -49,10 +46,6 @@ global using SubscriptionOk = Outcome.Result<
     Nimblesite.Sync.Core.SyncSubscription?,
     Nimblesite.Sync.Core.SyncError
 >.Ok<Nimblesite.Sync.Core.SyncSubscription?, Nimblesite.Sync.Core.SyncError>;
-global using SyncBatchOk = Outcome.Result<
-    Nimblesite.Sync.Core.SyncBatch,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.SyncBatch, Nimblesite.Sync.Core.SyncError>;
 global using SyncClientListOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
     Nimblesite.Sync.Core.SyncError

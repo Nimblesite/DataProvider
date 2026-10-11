@@ -1,8 +1,6 @@
 using System.Collections;
-using System.Data.Common;
 using System.Diagnostics;
 using System.Text.Json;
-using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Tests;
 

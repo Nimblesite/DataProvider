@@ -99,65 +99,54 @@ public sealed partial class SchemaTypesTests
         Assert.Equal(3, table.Columns.Count);
     }
 
-    [Fact]
-    public void DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_ContextCasesData))]
+    public void DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_ContextCases(
+        string caseName,
+        Func<List<DatabaseColumn>> input1,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Core.DatabaseTable,
+            global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Core.DatabaseColumn>
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
     {
-        // Arrange
-        var columns = Dataset_DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_1()
-            .AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
-
-        // Act
-        var primaryKeyColumns = table.PrimaryKeyColumns;
-
-        // Assert
-        Assert.Equal(2, primaryKeyColumns.Count);
-        Assert.Contains(primaryKeyColumns, c => c.Name == "Id");
-        Assert.Contains(primaryKeyColumns, c => c.Name == "SecondaryId");
-        Assert.DoesNotContain(primaryKeyColumns, c => c.Name == "Name");
-        Assert.DoesNotContain(primaryKeyColumns, c => c.Name == "Amount");
-    }
-
-    [Fact]
-    public void DatabaseTable_InsertableColumns_ExcludesIdentityAndComputed()
-    {
-        // Arrange
-        var columns = Dataset_DatabaseTable_InsertableColumns_ExcludesIdentityAndComputed_1()
-            .AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
-
-        // Act
-        var insertableColumns = table.InsertableColumns;
-
-        // Assert
-        Assert.Equal(2, insertableColumns.Count);
-        Assert.Contains(insertableColumns, c => c.Name == "Name");
-        Assert.Contains(insertableColumns, c => c.Name == "Amount");
-        Assert.DoesNotContain(insertableColumns, c => c.Name == "Id");
-        Assert.DoesNotContain(insertableColumns, c => c.Name == "ComputedField");
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix1(
+            input0: VerifyReusableWorkflow7,
+            input1: input1,
+            input2: VerifyReusableWorkflow14,
+            value0: value0,
+            value1: value1,
+            value2: value2,
+            value3: value3,
+            value4: value4
+        );
     }
 
     [Fact]
     public void DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed()
     {
         // Arrange
-        var columns =
-            Dataset_DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed_1()
-                .AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
+        var table = VerifyReusableWorkflow7(
+            input0: Dataset_DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed_1
+        );
 
         // Act
         var updateableColumns = table.UpdateableColumns;
 
         // Assert
-        Assert.Equal(2, updateableColumns.Count);
-        Assert.Contains(updateableColumns, c => c.Name == "Name");
-        Assert.Contains(updateableColumns, c => c.Name == "Amount");
-        Assert.DoesNotContain(updateableColumns, c => c.Name == "Id");
-        Assert.DoesNotContain(updateableColumns, c => c.Name == "CategoryId");
+        VerifyReusableWorkflow14(
+            input0: updateableColumns,
+            value1: "Name",
+            value2: "Amount",
+            value3: "Id",
+            value4: "CategoryId"
+        );
         Assert.DoesNotContain(updateableColumns, c => c.Name == "ComputedField");
     }
 
@@ -205,9 +194,9 @@ public sealed partial class SchemaTypesTests
     public void DatabaseTable_ComputedProperties_AreReadOnly()
     {
         // Arrange
-        var columns = Dataset_DatabaseTable_ComputedProperties_AreReadOnly_1().AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
+        var table = VerifyReusableWorkflow7(
+            input0: Dataset_DatabaseTable_ComputedProperties_AreReadOnly_1
+        );
 
         // Act
         var primaryKeys = table.PrimaryKeyColumns;
@@ -218,5 +207,56 @@ public sealed partial class SchemaTypesTests
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(primaryKeys);
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(insertable);
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(updateable);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static DatabaseTable VerifyReusableWorkflow7(Func<List<DatabaseColumn>> input0)
+    { // Arrange
+        var columns = input0().AsReadOnly();
+
+        var table = new DatabaseTable { Columns = columns };
+
+        return table;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow14(
+        IReadOnlyList<DatabaseColumn> input0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        // Assert
+        Assert.Equal(2, input0.Count);
+        Assert.Contains(input0, c => c.Name == value1);
+        Assert.Contains(input0, c => c.Name == value2);
+        Assert.DoesNotContain(input0, c => c.Name == value3);
+        Assert.DoesNotContain(input0, c => c.Name == value4);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix1(
+        Func<Func<List<DatabaseColumn>>, DatabaseTable> input0,
+        Func<List<DatabaseColumn>> input1,
+        Action<IReadOnlyList<DatabaseColumn>, string, string, string, string> input2,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Core.DatabaseTable,
+            global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Core.DatabaseColumn>
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    { // Arrange
+        var table = input0(arg: input1);
+
+        // Act
+        var primaryKeyColumns = value0(arg: table);
+
+        // Assert
+        input2(arg1: primaryKeyColumns, arg2: value1, arg3: value2, arg4: value3, arg5: value4);
     }
 }

@@ -41,4 +41,7 @@
   <ItemGroup>
     <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+  </ItemGroup>
 </Project>

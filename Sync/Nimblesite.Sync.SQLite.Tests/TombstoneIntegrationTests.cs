@@ -1,9 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -45,10 +42,13 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
-        Assert.Contains("origin_id", columns);
-        Assert.Contains("last_sync_version", columns);
-        Assert.Contains("last_sync_timestamp", columns);
-        Assert.Contains("created_at", columns);
+        VerifySyncLoopWorkflow1(
+            input0: columns,
+            value0: "origin_id",
+            value1: "last_sync_version",
+            value2: "last_sync_timestamp",
+            value3: "created_at"
+        );
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         );
 
         // Assert
-        Assert.IsType<IntSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Equal(200, purgedVersion); // Called with minimum version
     }
 
@@ -260,15 +260,12 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         );
 
         // Retrieve
-        var storedVersion = Convert.ToInt64(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: _serverDb,
-                configure: command =>
-                    command.CommandText =
-                        "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin",
-                parameters: () => [("$origin", _clientOrigin)]
-            ),
-            CultureInfo.InvariantCulture
+        var storedVersion = global::Tests.Shared.DatabaseCommands.ScalarInt64(
+            connection: _serverDb,
+            configure: command =>
+                command.CommandText =
+                    "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin",
+            parameters: () => [("$origin", _clientOrigin)]
         );
 
         // Assert
@@ -301,10 +298,7 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
 
     private static SqliteConnection CreateSyncDatabase(string dbPath, string originId)
     {
-        var conn = new SqliteConnection($"Data Source={dbPath}");
-        conn.Open();
-        SyncSchema.CreateSchema(conn);
-        SyncSchema.SetOriginId(conn, originId);
+        var conn = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: dbPath, origin: originId);
         return conn;
     }
 
@@ -339,32 +333,31 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
     public void Dispose()
     {
         _serverDb.Dispose();
-        _clientDb.Dispose();
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _clientDb,
+            input1: _serverDbPath
+        );
 
-        if (File.Exists(_serverDbPath))
-        {
-            try
-            {
-                File.Delete(_serverDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
-
-        if (File.Exists(_clientDbPath))
-        {
-            try
-            {
-                File.Delete(_clientDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _clientDbPath);
     }
 
     #endregion
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow1(
+        List<string> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        // Assert: All spec columns exist
+        global::Nimblesite.Sync.SQLite.Tests.SpecConformanceTests.VerifyReusableWorkflow1(
+            input0: input0,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
+        Assert.Contains(value3, input0);
+    }
 }

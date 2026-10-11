@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -12,7 +14,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresSupportReadbackE2ETests(PostgresContainerFixture fixture)
     : IAsyncLifetime
 {
     private NpgsqlConnection? _connection;
@@ -51,10 +53,7 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
             logger: _logger
         );
 
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: apply);
 
         var inspected = Inspect(connection);
         var secondDiff = Diff(inspected, desired);
@@ -100,61 +99,10 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
     }
 
     private SchemaDefinition Inspect(NpgsqlConnection connection) =>
-        ((SchemaResultOk)PostgresSchemaInspector.Inspect(connection, "public", _logger)).Value;
+        (Ok(actual: PostgresSchemaInspector.Inspect(connection, "public", _logger))).Value;
 
     private IReadOnlyList<SchemaOperation> Diff(
         SchemaDefinition current,
         SchemaDefinition desired
-    ) => ((OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)).Value;
-
-    private static SchemaDefinition SupportSchema() =>
-        SchemaTestData.Schema(
-            name: "support_readback",
-            roles:
-            [
-                SchemaTestData.PostgresRole(name: "nap_app_user", login: false, bypassRls: false),
-            ],
-            functions:
-            [
-                SchemaTestData.PostgresFunction(
-                    schema: "public",
-                    name: "current_tenant_id",
-                    returns: "uuid",
-                    language: "sql",
-                    volatility: "stable",
-                    securityDefiner: true,
-                    body: "SELECT current_setting('app.tenant_id', true)::uuid",
-                    executeRoles: ["nap_app_user"],
-                    revokePublicExecute: true
-                ),
-            ],
-            grants:
-            [
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.Schema,
-                    privileges: ["USAGE"],
-                    roles: ["nap_app_user"]
-                ),
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.Table,
-                    objectName: "documents",
-                    privileges: ["SELECT"],
-                    roles: ["nap_app_user"]
-                ),
-            ],
-            tables:
-            [
-                SchemaTestData.Table(
-                    schema: "public",
-                    name: "documents",
-                    columns:
-                    [
-                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
-                    ],
-                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
-                ),
-            ]
-        );
+    ) => (Ok(actual: SchemaDiff.Calculate(current, desired, logger: _logger))).Value;
 }

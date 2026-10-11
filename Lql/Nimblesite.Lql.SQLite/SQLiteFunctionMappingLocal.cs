@@ -53,14 +53,9 @@ public sealed class SQLiteFunctionMappingLocal : FunctionMappingProviderBase
     /// </summary>
     /// <returns>The SQLite syntax mapping</returns>
     private static SqlSyntaxMapping CreateSyntaxMapping() =>
-        new(
-            LimitClause: "LIMIT {0}",
-            OffsetClause: "OFFSET {0}",
-            DateCurrentFunction: "datetime('now')",
-            DateAddFunction: "datetime({2}, '+{0} {1}')",
-            StringLengthFunction: "LENGTH",
-            StringConcatOperator: "||",
-            IdentifierQuoteChar: "\"",
-            SupportsBoolean: false
+        CommonFunctionMappings.LimitSyntax(
+            currentDate: "datetime('now')",
+            dateAdd: "datetime({2}, '+{0} {1}')",
+            supportsBoolean: false
         );
 }

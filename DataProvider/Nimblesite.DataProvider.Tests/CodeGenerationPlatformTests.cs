@@ -1,10 +1,7 @@
 using System.Collections;
-using System.Data.Common;
 using System.Reflection;
 using Nimblesite.DataProvider.SQLite;
 using Nimblesite.DataProvider.SqlServer;
-using Nimblesite.Sql.Model;
-using Tests.Shared;
 using static global::Tests.Shared.ResultAssertions;
 using CodeOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
     string,
@@ -180,56 +177,24 @@ public sealed partial record QueryBuilderPlatformE2ETests
             source: Ok(actual: source, message: source.ToString()).Value
         );
         using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(true);
-        Assert.Equal(
-            1,
-            await InvokeCrudAsync(
-                    assembly: assembly,
-                    transaction: transaction,
-                    operation: "Insert",
-                    name: "Generated O'Brien 雪"
-                )
-                .ConfigureAwait(true)
-        );
-        Assert.Equal(
-            1,
-            await InvokeCrudAsync(
-                    assembly: assembly,
-                    transaction: transaction,
-                    operation: "Update",
-                    name: "Changed"
-                )
-                .ConfigureAwait(true)
-        );
-        Assert.Equal(
-            1,
-            await InvokeCrudAsync(
-                    assembly: assembly,
-                    transaction: transaction,
-                    operation: "Delete",
-                    name: "Changed"
-                )
-                .ConfigureAwait(true)
-        );
-        Assert.Equal(
-            1,
-            await InvokeCrudAsync(
-                    assembly: assembly,
-                    transaction: transaction,
-                    operation: "Insert",
-                    name: "Changed"
-                )
-                .ConfigureAwait(true)
-        );
-        await transaction.CommitAsync().ConfigureAwait(true);
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM products WHERE name = 'Changed'";
-        Assert.Equal(
-            1L,
-            Convert.ToInt64(
-                await command.ExecuteScalarAsync().ConfigureAwait(true),
-                System.Globalization.CultureInfo.InvariantCulture
+        await VerifyUnifiedWorkflow101(
+                input0: assembly,
+                input1: transaction,
+                value1: "Insert",
+                value2: "Generated O'Brien 雪",
+                value5: "Update"
             )
-        );
+            .ConfigureAwait(false);
+        await VerifyUnifiedWorkflow101(
+                input0: assembly,
+                input1: transaction,
+                value1: "Delete",
+                value2: "Changed",
+                value5: "Insert"
+            )
+            .ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(true);
+        await VerifyReusableWorkflow20(input0: connection, value1: 1L).ConfigureAwait(false);
     }
 
     private static async Task AssertGeneratedDeleteAsync(DbConnection connection, string provider)
@@ -271,15 +236,7 @@ public sealed partial record QueryBuilderPlatformE2ETests
                 )
                 .ConfigureAwait(true)
         );
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM products WHERE name = 'Changed'";
-        Assert.Equal(
-            0L,
-            Convert.ToInt64(
-                await command.ExecuteScalarAsync().ConfigureAwait(true),
-                System.Globalization.CultureInfo.InvariantCulture
-            )
-        );
+        await VerifyReusableWorkflow20(input0: connection, value1: 0L).ConfigureAwait(false);
     }
 
     private static async Task<object?> InvokeCrudAsync(
@@ -330,5 +287,53 @@ public sealed partial record QueryBuilderPlatformE2ETests
                 arguments: arguments
             )
             .ConfigureAwait(true);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyUnifiedWorkflow101(
+        Assembly input0,
+        DbTransaction input1,
+        string value1,
+        string value2,
+        string value5
+    )
+    {
+        Assert.Equal(
+            1,
+            await InvokeCrudAsync(
+                    assembly: input0,
+                    transaction: input1,
+                    operation: value1,
+                    name: value2
+                )
+                .ConfigureAwait(true)
+        );
+        Assert.Equal(
+            1,
+            await InvokeCrudAsync(
+                    assembly: input0,
+                    transaction: input1,
+                    operation: value5,
+                    name: "Changed"
+                )
+                .ConfigureAwait(true)
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyReusableWorkflow20(
+        DbConnection input0,
+        long value1
+    )
+    {
+        using var command = input0.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM products WHERE name = 'Changed'";
+        Assert.Equal(
+            value1,
+            Convert.ToInt64(
+                await command.ExecuteScalarAsync().ConfigureAwait(true),
+                System.Globalization.CultureInfo.InvariantCulture
+            )
+        );
     }
 }

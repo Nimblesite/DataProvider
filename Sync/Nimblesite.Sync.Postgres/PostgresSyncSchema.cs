@@ -101,19 +101,23 @@ public static class PostgresSyncSchema
     /// <returns>Origin ID or database error.</returns>
     public static StringSyncResult GetOriginId(NpgsqlConnection connection)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'";
-            var result = cmd.ExecuteScalar();
-            return new StringSyncOk(result?.ToString() ?? "");
-        }
-        catch (NpgsqlException ex)
-        {
-            return new StringSyncError(
-                new SyncErrorDatabase($"Failed to get origin ID: {ex.Message}")
-            );
-        }
+        return SyncCommandExecution.Read<NpgsqlException, StringSyncResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'",
+            parameters: () => [],
+            read: command =>
+            {
+                var result = command.ExecuteScalar();
+                return new StringSyncOk(result?.ToString() ?? "");
+            },
+            failure: ex =>
+            {
+                return new StringSyncError(
+                    new SyncErrorDatabase($"Failed to get origin ID: {ex.Message}")
+                );
+            }
+        );
     }
 
     /// <summary>
@@ -126,10 +130,11 @@ public static class PostgresSyncSchema
         SyncCommandExecution.Write<NpgsqlException>(
             connection: connection,
             setSql: command =>
-                command.CommandText = """
-                INSERT INTO _sync_state (key, value) VALUES ('origin_id', @originId)
-                ON CONFLICT (key) DO UPDATE SET value = @originId
-                """,
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .Postgres
+                    .PostgresSyncLogRepository
+                    .SqlSpecification7,
             parameters: () => [("@originId", originId)],
             failurePrefix: "Failed to set origin ID"
         );

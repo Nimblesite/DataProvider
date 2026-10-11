@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
@@ -20,36 +19,30 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_NullPayload_ReturnsNullMappedPayload()
     {
-        var mapping = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1();
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2();
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
-        Assert.Null(success.Entries[0].MappedPayload);
+        _ = ExpectNullMappedPayload(
+            mapping: Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1,
+            entry: Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2
+        );
     }
 
     [Fact]
     public void MappingEngine_EmptyColumnMappings_PassthroughPayload()
     {
         var mapping = Dataset_MappingEngine_EmptyColumnMappings_PassthroughPayload_1();
-        var success = ApplyMappingToEntry(
+        var payload = VerifySharedChecks4(
             input0: mapping,
             value0: "Source",
-            value1: """{"Id":"1"}""",
             value2: """{"Id":"1","Name":"Test","Value":123}"""
         );
-        var payload = success.Entries[0].MappedPayload!;
         ContainsAll(actual: payload, expected: ["Name", "Test", "Value"]);
     }
 
     [Fact]
     public void MappingEngine_LqlWithMissingSourceColumn_FallsBack()
     {
-        var columnMappings = Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1();
-
-        var mapping = Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_2(
-            columnMappings: columnMappings
+        var mapping = global::Nimblesite.Sync.Tests.MappingEngineTests.VerifyCrossClassChecks1(
+            input0: Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1,
+            input1: Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_2
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -63,18 +56,15 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_MixedTransformTypes_AllApplied()
     {
-        var columnMappings = Dataset_MappingEngine_MixedTransformTypes_AllApplied_1();
-
-        var mapping = Dataset_MappingEngine_MixedTransformTypes_AllApplied_2(
-            columnMappings: columnMappings
+        var mapping = global::Nimblesite.Sync.Tests.MappingEngineTests.VerifyCrossClassChecks1(
+            input0: Dataset_MappingEngine_MixedTransformTypes_AllApplied_1,
+            input1: Dataset_MappingEngine_MixedTransformTypes_AllApplied_2
         );
-        var success = ApplyMappingToEntry(
+        var payload = VerifySharedChecks4(
             input0: mapping,
             value0: "Source",
-            value1: """{"Id":"1"}""",
             value2: """{"Id":"1","Name":"Alice","Email":"ALICE@TEST.COM","Status":"active"}"""
         );
-        var payload = success.Entries[0].MappedPayload!;
         ContainsAll(actual: payload, expected: ["Alice", "alice@test.com", "mobile-app", "active"]); // Direct
     }
 
@@ -85,13 +75,11 @@ public sealed partial class LqlMappingCornerCaseTests
         {
             ExcludedColumns = ["Password", "Salt", "SecurityToken", "InternalNotes"],
         };
-        var success = ApplyMappingToEntry(
+        var payload = VerifySharedChecks4(
             input0: mapping,
             value0: "User",
-            value1: """{"Id":"1"}""",
             value2: """{"Id":"1","Name":"Alice","Email":"a@test.com","Password":"secret123","Salt":"xyz","SecurityToken":"abc","InternalNotes":"admin notes","PublicBio":"Hello!"}"""
         );
-        var payload = success.Entries[0].MappedPayload!;
 
         ContainsAll(actual: payload, expected: ["Name", "Email", "PublicBio"]);
         Assert.DoesNotContain("Password", payload);
@@ -121,13 +109,10 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_MultiTarget_AllTargetsReceiveTransformedData()
     {
-        var targets = Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1();
-
-        var mapping = Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_2() with
-        {
-            IsMultiTarget = true,
-            Targets = targets,
-        };
+        var mapping = global::Nimblesite.Sync.Tests.MappingEngineTests.VerifyCrossClassChecks2(
+            input0: Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1,
+            input1: Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_2
+        );
         var success = ApplyMappingToEntry(
             input0: mapping,
             value0: "User",
@@ -155,13 +140,11 @@ public sealed partial class LqlMappingCornerCaseTests
         var columnMappings = Dataset_E2E_FullAddressNormalization_1();
 
         var mapping = Fixture_E2E_FullAddressNormalization_1(columnMappings: columnMappings);
-        var success = ApplyMappingToEntry(
+        var payload = VerifySharedChecks4(
             input0: mapping,
             value0: "RawAddress",
-            value1: """{"Id":"1"}""",
             value2: """{"Id":"1","street":"  123 Main St  ","city":"  springfield  ","state":"il","zip":"62701-1234"}"""
         );
-        var payload = success.Entries[0].MappedPayload!;
 
         ContainsAll(actual: payload, expected: ["123 Main St", "SPRINGFIELD", "IL", "62701"]); // First 5 chars of zip
         Assert.DoesNotContain("-1234", payload); // ZIP+4 removed
@@ -203,6 +186,18 @@ public sealed partial class LqlMappingCornerCaseTests
     #endregion
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
+    private MappingSuccess ExpectNullMappedPayload(
+        Func<TableMapping> mapping,
+        Func<SyncLogEntry> entry
+    )
+    {
+        var config = MappingTestData.Strict(mappings: [mapping()]);
+        var success = Expected<MappingSuccess>(entry: entry(), config: config, logger: _logger);
+        Assert.Null(success.Entries[0].MappedPayload);
+        return success;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
     private global::Nimblesite.Sync.Core.MappingSuccess ApplyMappingToEntry(
         global::Nimblesite.Sync.Core.TableMapping input0,
         string value0,
@@ -217,5 +212,19 @@ public sealed partial class LqlMappingCornerCaseTests
         var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
 
         return success;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string VerifySharedChecks4(TableMapping input0, string value0, string value2)
+    {
+        var success = ApplyMappingToEntry(
+            input0: input0,
+            value0: value0,
+            value1: """{"Id":"1"}""",
+            value2: value2
+        );
+        var payload = Assert.IsType<string>(@object: success.Entries[0].MappedPayload);
+
+        return payload;
     }
 }

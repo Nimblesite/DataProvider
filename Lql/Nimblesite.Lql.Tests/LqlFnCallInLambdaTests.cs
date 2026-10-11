@@ -3,7 +3,6 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
@@ -23,8 +22,8 @@ public sealed partial class LqlFnCallInLambdaTests
 {
     private static string[] ToAllDialects(string lql)
     {
-        var parsed = Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(
-            LqlStatementConverter.ToStatement(lql)
+        var parsed = global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: LqlStatementConverter.ToStatement(lql)
         );
         return
         [
@@ -35,7 +34,7 @@ public sealed partial class LqlFnCallInLambdaTests
     }
 
     private static string Sql(Result<string, SqlError> result) =>
-        Assert.IsType<Result<string, SqlError>.Ok<string, SqlError>>(result).Value;
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
 
     [Fact]
     public void Lambda_BareFnCall_NoArgs_PassesThrough()
@@ -84,14 +83,19 @@ public sealed partial class LqlFnCallInLambdaTests
         }
     }
 
-    [Fact]
-    public void Lambda_BareFnCall_NestedFnCallArg_PassesThrough()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentCommentScenarioData1))]
+    public void Lambda_BareFnCall_NestedFnCallArg_PassesThrough_CommentScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2,
+        System.String scenario3
+    )
     {
-        foreach (
-            var sql in ToAllDialects(
-                "t |> filter(fn(x) => is_member(app_user_id(), app_tenant_id()))"
-            )
-        )
+        Assert.False(string.IsNullOrEmpty(scenarioName));
+        foreach (var sql in ToAllDialects(scenario0))
         {
             // Outer fn is emitted via ProcessFnCallExprToSql (lowercase preserved).
             // Nested fn args go through ExtractFunctionCall which uppercases the
@@ -99,45 +103,7 @@ public sealed partial class LqlFnCallInLambdaTests
             // so APP_USER_ID() and app_user_id() resolve to the same function.
             ContainsAll(
                 actual: sql,
-                expected: ["is_member(", "APP_USER_ID()", "APP_TENANT_ID()"],
-                comparison: StringComparison.Ordinal
-            );
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void Lambda_AndCombinationWithBareFnCall_ParsesAndEmits()
-    {
-        // The right-hand side of AND is a bare fn call -- must not raise
-        // 'Unsupported expr type in comparison'.
-        foreach (
-            var sql in ToAllDialects(
-                "t |> filter(fn(x) => x.id = '00000000-0000-0000-0000-000000000000' and is_member('u', x.tenant_id))"
-            )
-        )
-        {
-            ContainsAll(
-                actual: sql,
-                expected: ["AND", "is_member(", "00000000-0000-0000-0000-000000000000"],
-                comparison: StringComparison.Ordinal
-            );
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void Lambda_OrCombinationWithBareFnCall_ParsesAndEmits()
-    {
-        foreach (
-            var sql in ToAllDialects(
-                "t |> filter(fn(x) => x.id = '00000000-0000-0000-0000-000000000000' or is_member('u', x.tenant_id))"
-            )
-        )
-        {
-            ContainsAll(
-                actual: sql,
-                expected: ["OR", "is_member(", "00000000-0000-0000-0000-000000000000"],
+                expected: [scenario1, scenario2, scenario3],
                 comparison: StringComparison.Ordinal
             );
             Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
@@ -149,12 +115,12 @@ public sealed partial class LqlFnCallInLambdaTests
     {
         foreach (var sql in ToAllDialects("t |> filter(fn(x) => some_fn(other_col))"))
         {
-            ContainsAll(
-                actual: sql,
-                expected: ["some_fn(", "other_col"],
-                comparison: StringComparison.Ordinal
+            global::Nimblesite.Lql.Tests.LqlDialectE2ETests.VerifyLifetimePhase1(
+                input0: sql,
+                value0: "some_fn(",
+                value1: "other_col",
+                value3: "WHERE"
             );
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("some_fn()", sql, StringComparison.Ordinal);
         }
     }

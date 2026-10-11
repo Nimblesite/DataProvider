@@ -1,6 +1,4 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
-using Tests.Shared;
-using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Integration.Tests;
 
@@ -16,46 +14,27 @@ public sealed partial class HttpMappingSyncTests
     public void Mapping_TransformsColumnsFromUserToCustomer()
     {
         // Arrange - Source and target with DIFFERENT schemas
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
-
-        using var source = CreateSourceDb(sourceOrigin);
-        using var target = CreateTargetDb(targetOrigin);
+        using var source = CreateSourceDb(Guid.NewGuid().ToString());
+        using var target = CreateTargetDb(Guid.NewGuid().ToString());
 
         // Define the mapping configuration
-        var columnMappings = Dataset_Mapping_TransformsColumnsFromUserToCustomer_1();
-
-        var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
-
-        // Act - Insert in source with SOURCE schema columns
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp, CreatedAt)
-                VALUES ('u1', 'Alice Smith', 'alice@example.com', 'secret123', 'stamp-xyz', '2024-01-15');
-                """
+        var mappingConfig = UserToCustomerConfig(
+            Dataset_Mapping_TransformsColumnsFromUserToCustomer_1(),
+            ["PasswordHash", "SecurityStamp"]
         );
 
-        // Fetch changes from source
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-
-        var changesList = Ok(actual: changes, message: $"FetchChanges failed: {changes}").Value;
-        Assert.Single(changesList);
-
-        // Apply mapping to transform the entry
-        var entry = changesList[0];
-        var success = MapSuccessfully(entry: entry, mappingConfig: mappingConfig);
-        Assert.Single(success.Entries);
-
-        var mappedEntry = success.Entries[0];
+        // Act - Insert in source with SOURCE schema columns and map the change
+        var mappedEntry = InsertAndMapFirst(
+            source,
+            mappingConfig,
+            """
+            INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp, CreatedAt)
+            VALUES ('u1', 'Alice Smith', 'alice@example.com', 'secret123', 'stamp-xyz', '2024-01-15');
+            """
+        );
 
         // Target table name changed
-        Assert.Equal("customer", mappedEntry.TargetTable);
-
-        // Primary key column renamed: Id -> customer_id
-        Assert.Contains("customer_id", mappedEntry.TargetPkValue);
-        Assert.Contains("u1", mappedEntry.TargetPkValue);
+        global::Tests.Shared.MappingAssertions.Customer(mapped: mappedEntry, pkSubstring: "u1");
         Assert.DoesNotContain("\"Id\"", mappedEntry.TargetPkValue);
 
         // Payload transformed: FullName -> name, EmailAddress -> email
@@ -83,29 +62,22 @@ public sealed partial class HttpMappingSyncTests
     public void FullSync_WithMapping_TransformsAndApplies()
     {
         // Arrange
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var targetOrigin = Guid.NewGuid().ToString();
+        using var source = CreateSourceDb(Guid.NewGuid().ToString());
+        using var target = CreateTargetDb(Guid.NewGuid().ToString());
 
-        using var source = CreateSourceDb(sourceOrigin);
-        using var target = CreateTargetDb(targetOrigin);
-
-        var columnMappings = Dataset_FullSync_WithMapping_TransformsAndApplies_1();
-
-        var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
-
-        // Insert in source
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp)
-                VALUES ('u2', 'Bob Johnson', 'bob@example.com', 'hash123', 'stamp-abc');
-                """
+        var mappingConfig = UserToCustomerConfig(
+            Dataset_FullSync_WithMapping_TransformsAndApplies_1(),
+            ["PasswordHash", "SecurityStamp"]
         );
 
-        // Fetch changes
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        // Insert in source and fetch changes
+        var changesList = ExecuteAndFetchAll(
+            source,
+            """
+            INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp)
+            VALUES ('u2', 'Bob Johnson', 'bob@example.com', 'hash123', 'stamp-abc');
+            """
+        );
 
         // Transform and apply
         PostgresSyncSession.EnableSuppression(target);
@@ -150,14 +122,12 @@ public sealed partial class HttpMappingSyncTests
     public void MultiTargetMapping_OneSourceToManyTargets()
     {
         // Arrange
-        var sourceOrigin = Guid.NewGuid().ToString();
-        var dbPath = Path.Combine(Path.GetTempPath(), $"multi_target_{Guid.NewGuid()}.db");
+        var dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("multi_target");
         _sqliteDbPaths.Add(dbPath);
-        using var source = new SqliteConnection($"Data Source={dbPath}");
-        source.Open();
-
-        SyncSchema.CreateSchema(source);
-        SyncSchema.SetOriginId(source, sourceOrigin);
+        using var source = global::Tests.Shared.TempSqliteDatabase.OpenSync(
+            path: dbPath,
+            origin: Guid.NewGuid().ToString()
+        );
 
         // Use SalesOrder instead of Order (reserved word in SQL)
         using (var cmd = source.CreateCommand())
@@ -175,24 +145,17 @@ public sealed partial class HttpMappingSyncTests
 
         var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
 
-        // Insert order
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO SalesOrder (Id, CustomerId, Total, CreatedAt)
-                VALUES ('o1', 'c123', 249.99, '2024-01-15T10:30:00Z');
-                """
+        // Insert order and fetch changes
+        var changesList = ExecuteAndFetchAll(
+            source,
+            """
+            INSERT INTO SalesOrder (Id, CustomerId, Total, CreatedAt)
+            VALUES ('o1', 'c123', 249.99, '2024-01-15T10:30:00Z');
+            """
         );
 
-        // Fetch changes
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
-        Assert.Single(changesList);
-
         // Apply mapping
-        var entry = changesList[0];
-        var success = MapSuccessfully(entry: entry, mappingConfig: mappingConfig);
+        var success = MapSuccessfully(entry: changesList[0], mappingConfig: mappingConfig);
         Assert.Equal(2, success.Entries.Count);
 
         // OrderHeader entry
@@ -219,37 +182,30 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO User (Id, FullName, EmailAddress)
-                VALUES ('u3', 'Original Name', 'original@example.com');
-                """
+        ExecuteSql(
+            source,
+            """
+            INSERT INTO User (Id, FullName, EmailAddress)
+            VALUES ('u3', 'Original Name', 'original@example.com');
+            """
         );
 
-        var insertChanges = SyncLogRepository.FetchChanges(source, 0, 100);
-        var insertVersion = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);
+        var insertVersion = FetchAllChanges(source).Max(e => e.Version);
 
         // Update
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = """
-                UPDATE User SET FullName = 'Updated Name', EmailAddress = 'updated@example.com'
-                WHERE Id = 'u3';
-                """;
-            cmd.ExecuteNonQuery();
-        }
-
-        // Fetch update
-        var updateChanges = SyncLogRepository.FetchChanges(source, insertVersion, 100);
-        var updateList = ((SyncLogListOk)updateChanges).Value;
-        Assert.Single(updateList);
-        Assert.Equal(SyncOperation.Update, updateList[0].Operation);
+        ExecuteSql(
+            source,
+            """
+            UPDATE User SET FullName = 'Updated Name', EmailAddress = 'updated@example.com'
+            WHERE Id = 'u3';
+            """
+        );
 
         // Apply mapping to update
-        var success = MapSuccessfully(entry: updateList[0], mappingConfig: mappingConfig);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapSingle(
+            FetchSingleOperation(source, insertVersion, SyncOperation.Update),
+            mappingConfig
+        );
 
         Assert.Contains("name", mappedEntry.MappedPayload);
         Assert.Contains("Updated Name", mappedEntry.MappedPayload);
@@ -264,40 +220,26 @@ public sealed partial class HttpMappingSyncTests
     public void DeleteOperation_MapsPrimaryKeyCorrectly()
     {
         // Arrange
-        var sourceOrigin = Guid.NewGuid().ToString();
-        using var source = CreateSourceDb(sourceOrigin);
+        using var source = CreateSourceDb(Guid.NewGuid().ToString());
 
         var mappingConfig = UserToCustomerConfig([], []);
 
         // Insert then delete
-        DatabaseCommands.Execute(
-            connection: source,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u4', 'Delete Me', 'd@x.com')"
+        ExecuteSql(
+            source,
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u4', 'Delete Me', 'd@x.com')"
         );
 
-        var insertChanges = SyncLogRepository.FetchChanges(source, 0, 100);
-        var insertVersion = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);
-
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = "DELETE FROM User WHERE Id = 'u4'";
-            cmd.ExecuteNonQuery();
-        }
-
-        var deleteChanges = SyncLogRepository.FetchChanges(source, insertVersion, 100);
-        var deleteList = ((SyncLogListOk)deleteChanges).Value;
-        Assert.Single(deleteList);
-        Assert.Equal(SyncOperation.Delete, deleteList[0].Operation);
+        var insertVersion = FetchAllChanges(source).Max(e => e.Version);
+        ExecuteSql(source, "DELETE FROM User WHERE Id = 'u4'");
 
         // Apply mapping to delete
-        var success = MapSuccessfully(entry: deleteList[0], mappingConfig: mappingConfig);
-        var mappedEntry = success.Entries[0];
+        var mappedEntry = MapSingle(
+            FetchSingleOperation(source, insertVersion, SyncOperation.Delete),
+            mappingConfig
+        );
 
-        Assert.Equal("customer", mappedEntry.TargetTable);
-        Assert.Contains("customer_id", mappedEntry.TargetPkValue);
-        Assert.Contains("u4", mappedEntry.TargetPkValue);
+        global::Tests.Shared.MappingAssertions.Customer(mapped: mappedEntry, pkSubstring: "u4");
         Assert.Null(mappedEntry.MappedPayload); // Delete has no payload
     }
 
@@ -319,17 +261,12 @@ public sealed partial class HttpMappingSyncTests
         );
 
         // Find push mapping
-        var foundPush = MappingEngine.FindMapping("User", config, MappingDirection.Push);
-        Assert.NotNull(foundPush);
-        Assert.Equal("user-push", foundPush.Id);
+        AssertMappingFound("User", config, MappingDirection.Push, "user-push");
 
         // Find pull mapping
-        var foundPull = MappingEngine.FindMapping("Customer", config, MappingDirection.Pull);
-        Assert.NotNull(foundPull);
-        Assert.Equal("customer-pull", foundPull.Id);
+        AssertMappingFound("Customer", config, MappingDirection.Pull, "customer-pull");
 
         // Push doesn't find pull
-        var pushNoPull = MappingEngine.FindMapping("Customer", config, MappingDirection.Push);
-        Assert.Null(pushNoPull);
+        AssertMappingMissing("Customer", config, MappingDirection.Push);
     }
 }

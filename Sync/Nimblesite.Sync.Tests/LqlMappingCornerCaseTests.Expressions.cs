@@ -77,12 +77,18 @@ public sealed partial class LqlMappingCornerCaseTests
 
     #region Numeric Edge Cases
 
-    [Fact]
-    public void LqlTransform_IntegerZero_ReturnsZero()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(LqlTransform_IntegerZero_ReturnsZero_CasesData))]
+    public void LqlTransform_IntegerZero_ReturnsZero_Cases(
+        string caseName,
+        global::System.String value0,
+        global::System.String value1,
+        global::System.Object value2
+    )
     {
-        var result = EvaluateExpressionAndRequireValue(value0: """{"Value":0}""", value1: "Value");
-
-        Assert.Equal(0L, result);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseTypedCaseMatrix1(value0: value0, value1: value1, value2: value2);
     }
 
     [Fact]
@@ -96,91 +102,15 @@ public sealed partial class LqlMappingCornerCaseTests
         Assert.Equal(-123L, result);
     }
 
-    [Fact]
-    public void LqlTransform_LargeInteger_Preserved()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Value":9223372036854775807}""",
-            value1: "Value"
-        );
-
-        Assert.Equal(9223372036854775807L, result);
-    }
-
-    [Fact]
-    public void LqlTransform_FloatingPoint_Preserved()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Value":3.14159265359}""",
-            value1: "Value"
-        );
-
-        Assert.Equal(3.14159265359, result);
-    }
-
-    [Fact]
-    public void LqlTransform_ScientificNotation_Parsed()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Value":1.5e10}""",
-            value1: "Value"
-        );
-
-        Assert.Equal(1.5e10, result);
-    }
-
     #endregion
 
     #region Boolean Edge Cases
 
-    [Fact]
-    public void LqlTransform_BooleanTrue_Preserved()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Active":true}""",
-            value1: "Active"
-        );
-
-        Assert.Equal(true, result);
-    }
-
-    [Fact]
-    public void LqlTransform_BooleanFalse_Preserved()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Active":false}""",
-            value1: "Active"
-        );
-
-        Assert.Equal(false, result);
-    }
 
     #endregion
 
     #region String Function Edge Cases
 
-
-    [Fact]
-    public void Length_EmptyString_ReturnsZero()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Text":""}""",
-            value1: "length(Text)"
-        );
-
-        Assert.Equal(0, result);
-    }
-
-    [Fact]
-    public void Length_UnicodeString_CountsCodePoints()
-    {
-        var result = EvaluateExpressionAndRequireValue(
-            value0: """{"Text":"日本語"}""",
-            value1: "length(Text)"
-        );
-
-        Assert.Equal(3, result);
-    }
 
     #endregion
 
@@ -205,5 +135,17 @@ public sealed partial class LqlMappingCornerCaseTests
         var result = LqlExpressionEvaluator.Evaluate(value1, source);
 
         return result;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseTypedCaseMatrix1(
+        global::System.String value0,
+        global::System.String value1,
+        global::System.Object value2
+    )
+    {
+        var result = EvaluateExpressionAndRequireValue(value0: value0, value1: value1);
+
+        Assert.Equal(value2, result);
     }
 }

@@ -26,9 +26,7 @@ internal static class SchemaYamlWriter
 
     private static void WriteSchema(Emitter e, SchemaDefinition schema)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, schema.Name);
+        StartNamedMapping(e: e, name: schema.Name);
 
         WriteSeq(e, "tables", schema.Tables, WriteTable);
         WriteSeq(e, "roles", schema.Roles, WriteRole);
@@ -39,14 +37,8 @@ internal static class SchemaYamlWriter
 
     private static void WriteTable(Emitter e, TableDefinition t)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, t.Name);
-        if (t.Schema != "public")
-        {
-            Key(e, "schema");
-            Str(e, t.Schema);
-        }
+        StartNamedMapping(e: e, name: t.Name);
+        StrExcept(e: e, key: "schema", value: t.Schema, defaultValue: "public");
         WriteSeq(e, "columns", t.Columns, WriteColumn);
         WriteSeq(e, "indexes", t.Indexes, WriteIndex);
         if (t.PrimaryKey is { } pk)
@@ -69,13 +61,10 @@ internal static class SchemaYamlWriter
 
     private static void WriteTrigger(Emitter e, TriggerDefinition trigger)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, trigger.Name);
+        StartNamedMapping(e: e, name: trigger.Name);
         if (trigger.Timing != TriggerTiming.Before)
         {
-            Key(e, "timing");
-            Str(e, "After");
+            StringField(e: e, key: "timing", value: "After");
         }
         WriteSeq(
             e,
@@ -92,11 +81,7 @@ internal static class SchemaYamlWriter
                     }
                 )
         );
-        if (!trigger.ForEachRow)
-        {
-            Key(e, "forEachRow");
-            Bool(e, false);
-        }
+        BoolExcept(e: e, key: "forEachRow", value: trigger.ForEachRow, defaultValue: true);
         StrOpt(e, "raiseWhen", trigger.RaiseWhenLql);
         StrOpt(e, "errorMessage", trigger.ErrorMessage);
         e.Emit(new MappingEnd());
@@ -104,39 +89,21 @@ internal static class SchemaYamlWriter
 
     private static void WriteColumn(Emitter e, ColumnDefinition c)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, c.Name);
-        Key(e, "type");
-        Str(e, SchemaYamlScalars.Encode(c.Type));
-        if (!c.IsNullable)
-        {
-            Key(e, "isNullable");
-            Bool(e, false);
-        }
+        StartNamedMapping(e: e, name: c.Name);
+        StringField(e: e, key: "type", value: SchemaYamlScalars.Encode(c.Type));
+        BoolExcept(e: e, key: "isNullable", value: c.IsNullable, defaultValue: true);
         StrOpt(e, "defaultValue", c.DefaultValue);
         StrOpt(e, "defaultLqlExpression", c.DefaultLqlExpression);
-        if (c.IsIdentity)
-        {
-            Key(e, "isIdentity");
-            Bool(e, true);
-        }
-        if (c.IdentitySeed != 1)
-        {
-            Key(e, "identitySeed");
-            Long(e, c.IdentitySeed);
-        }
-        if (c.IdentityIncrement != 1)
-        {
-            Key(e, "identityIncrement");
-            Long(e, c.IdentityIncrement);
-        }
+        BoolExcept(e: e, key: "isIdentity", value: c.IsIdentity, defaultValue: false);
+        LongExcept(e: e, key: "identitySeed", value: c.IdentitySeed, defaultValue: 1);
+        LongExcept(e: e, key: "identityIncrement", value: c.IdentityIncrement, defaultValue: 1);
         StrOpt(e, "computedExpression", c.ComputedExpression);
-        if (c.IsComputedPersisted)
-        {
-            Key(e, "isComputedPersisted");
-            Bool(e, true);
-        }
+        BoolExcept(
+            e: e,
+            key: "isComputedPersisted",
+            value: c.IsComputedPersisted,
+            defaultValue: false
+        );
         StrOpt(e, "collation", c.Collation);
         StrOpt(e, "checkConstraint", c.CheckConstraint);
         StrOpt(e, "checkConstraintName", c.CheckConstraintName);
@@ -146,16 +113,10 @@ internal static class SchemaYamlWriter
 
     private static void WriteIndex(Emitter e, IndexDefinition i)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, i.Name);
+        StartNamedMapping(e: e, name: i.Name);
         WriteStrSeq(e, "columns", i.Columns);
         WriteStrSeq(e, "expressions", i.Expressions);
-        if (i.IsUnique)
-        {
-            Key(e, "isUnique");
-            Bool(e, true);
-        }
+        BoolExcept(e: e, key: "isUnique", value: i.IsUnique, defaultValue: false);
         StrOpt(e, "filter", i.Filter);
         e.Emit(new MappingEnd());
     }
@@ -173,23 +134,21 @@ internal static class SchemaYamlWriter
         e.Emit(new MappingStart());
         StrOpt(e, "name", fk.Name);
         WriteStrSeq(e, "columns", fk.Columns);
-        Key(e, "referencedTable");
-        Str(e, fk.ReferencedTable);
-        if (fk.ReferencedSchema != "public")
-        {
-            Key(e, "referencedSchema");
-            Str(e, fk.ReferencedSchema);
-        }
+        StringField(e: e, key: "referencedTable", value: fk.ReferencedTable);
+        StrExcept(
+            e: e,
+            key: "referencedSchema",
+            value: fk.ReferencedSchema,
+            defaultValue: "public"
+        );
         WriteStrSeq(e, "referencedColumns", fk.ReferencedColumns);
         if (fk.OnDelete != ForeignKeyAction.NoAction)
         {
-            Key(e, "onDelete");
-            Str(e, SchemaYamlScalars.Encode(fk.OnDelete));
+            StringField(e: e, key: "onDelete", value: SchemaYamlScalars.Encode(fk.OnDelete));
         }
         if (fk.OnUpdate != ForeignKeyAction.NoAction)
         {
-            Key(e, "onUpdate");
-            Str(e, SchemaYamlScalars.Encode(fk.OnUpdate));
+            StringField(e: e, key: "onUpdate", value: SchemaYamlScalars.Encode(fk.OnUpdate));
         }
         e.Emit(new MappingEnd());
     }
@@ -204,29 +163,16 @@ internal static class SchemaYamlWriter
 
     private static void WriteCheck(Emitter e, CheckConstraintDefinition c)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, c.Name);
-        Key(e, "expression");
-        Str(e, c.Expression);
+        StartNamedMapping(e: e, name: c.Name);
+        StringField(e: e, key: "expression", value: c.Expression);
         e.Emit(new MappingEnd());
     }
 
     private static void WriteRole(Emitter e, PostgresRoleDefinition r)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, r.Name);
-        if (r.Login)
-        {
-            Key(e, "login");
-            Bool(e, true);
-        }
-        if (r.BypassRls)
-        {
-            Key(e, "bypassRls");
-            Bool(e, true);
-        }
+        StartNamedMapping(e: e, name: r.Name);
+        BoolExcept(e: e, key: "login", value: r.Login, defaultValue: false);
+        BoolExcept(e: e, key: "bypassRls", value: r.BypassRls, defaultValue: false);
         WriteStrSeq(e, "grantTo", r.GrantTo);
         e.Emit(new MappingEnd());
     }
@@ -234,46 +180,25 @@ internal static class SchemaYamlWriter
     private static void WriteFunction(Emitter e, PostgresFunctionDefinition f)
     {
         e.Emit(new MappingStart());
-        if (f.Schema != "public")
-        {
-            Key(e, "schema");
-            Str(e, f.Schema);
-        }
-        Key(e, "name");
-        Str(e, f.Name);
+        StrExcept(e: e, key: "schema", value: f.Schema, defaultValue: "public");
+        StringField(e: e, key: "name", value: f.Name);
         WriteSeq(e, "arguments", f.Arguments, WriteFunctionArg);
-        if (f.Returns != "void")
-        {
-            Key(e, "returns");
-            Str(e, f.Returns);
-        }
-        if (f.Language != "sql")
-        {
-            Key(e, "language");
-            Str(e, f.Language);
-        }
-        if (f.Volatility != "stable")
-        {
-            Key(e, "volatility");
-            Str(e, f.Volatility);
-        }
-        if (f.SecurityDefiner)
-        {
-            Key(e, "securityDefiner");
-            Bool(e, true);
-        }
+        StrExcept(e: e, key: "returns", value: f.Returns, defaultValue: "void");
+        StrExcept(e: e, key: "language", value: f.Language, defaultValue: "sql");
+        StrExcept(e: e, key: "volatility", value: f.Volatility, defaultValue: "stable");
+        BoolExcept(e: e, key: "securityDefiner", value: f.SecurityDefiner, defaultValue: false);
         if (!string.IsNullOrEmpty(f.Body))
         {
-            Key(e, "body");
-            Str(e, f.Body);
+            StringField(e: e, key: "body", value: f.Body);
         }
         StrOpt(e, "bodyLql", f.BodyLql);
         WriteStrSeq(e, "executeRoles", f.ExecuteRoles);
-        if (!f.RevokePublicExecute)
-        {
-            Key(e, "revokePublicExecute");
-            Bool(e, false);
-        }
+        BoolExcept(
+            e: e,
+            key: "revokePublicExecute",
+            value: f.RevokePublicExecute,
+            defaultValue: true
+        );
         e.Emit(new MappingEnd());
     }
 
@@ -282,26 +207,19 @@ internal static class SchemaYamlWriter
         e.Emit(new MappingStart());
         if (!string.IsNullOrEmpty(a.Name))
         {
-            Key(e, "name");
-            Str(e, a.Name);
+            StringField(e: e, key: "name", value: a.Name);
         }
-        Key(e, "type");
-        Str(e, a.Type);
+        StringField(e: e, key: "type", value: a.Type);
         e.Emit(new MappingEnd());
     }
 
     private static void WriteGrant(Emitter e, PostgresGrantDefinition g)
     {
         e.Emit(new MappingStart());
-        if (g.Schema != "public")
-        {
-            Key(e, "schema");
-            Str(e, g.Schema);
-        }
+        StrExcept(e: e, key: "schema", value: g.Schema, defaultValue: "public");
         if (g.Target != PostgresGrantTarget.Table)
         {
-            Key(e, "target");
-            Str(e, SchemaYamlScalars.Encode(g.Target));
+            StringField(e: e, key: "target", value: SchemaYamlScalars.Encode(g.Target));
         }
         StrOpt(e, "objectName", g.ObjectName);
         WriteStrSeq(e, "privileges", g.Privileges);
@@ -315,32 +233,18 @@ internal static class SchemaYamlWriter
         e.Emit(new MappingStart());
         // enabled defaults true and is omitted at that default (only false is
         // written); forced defaults false and is written only when true.
-        if (!rls.Enabled)
-        {
-            Key(e, "enabled");
-            Bool(e, false);
-        }
+        BoolExcept(e: e, key: "enabled", value: rls.Enabled, defaultValue: true);
         WriteSeq(e, "policies", rls.Policies, WritePolicy);
-        if (rls.Forced)
-        {
-            Key(e, "forced");
-            Bool(e, true);
-        }
+        BoolExcept(e: e, key: "forced", value: rls.Forced, defaultValue: false);
         e.Emit(new MappingEnd());
     }
 
     private static void WritePolicy(Emitter e, RlsPolicyDefinition p)
     {
-        e.Emit(new MappingStart());
-        Key(e, "name");
-        Str(e, p.Name);
+        StartNamedMapping(e: e, name: p.Name);
         // permissive defaults true and is omitted at that default; only a
         // restrictive (false) policy writes the key.
-        if (!p.IsPermissive)
-        {
-            Key(e, "permissive");
-            Bool(e, false);
-        }
+        BoolExcept(e: e, key: "permissive", value: p.IsPermissive, defaultValue: true);
         if (!(p.Operations.Count == 1 && p.Operations[0] == RlsOperation.All))
         {
             Key(e, "operations");
@@ -404,8 +308,7 @@ internal static class SchemaYamlWriter
     {
         if (!string.IsNullOrEmpty(value))
         {
-            Key(e, key);
-            Str(e, value);
+            StringField(e: e, key: key, value: value);
         }
     }
 
@@ -431,16 +334,51 @@ internal static class SchemaYamlWriter
 
     private static void WriteStrSeq(Emitter e, string key, IReadOnlyList<string> items)
     {
-        if (items.Count == 0)
+        WriteSeq(e: e, key: key, items: items, writeItem: Str);
+    }
+
+    // Implements [MIG-YAML-SHARED-FIELD-EMISSION].
+    private static void StartNamedMapping(Emitter e, string name)
+    {
+        e.Emit(new MappingStart());
+        StringField(e: e, key: "name", value: name);
+    }
+
+    private static void StrExcept(Emitter e, string key, string value, string defaultValue)
+    {
+        ValueExcept(e: e, key: key, value: value, defaultValue: defaultValue, writeValue: Str);
+    }
+
+    private static void BoolExcept(Emitter e, string key, bool value, bool defaultValue)
+    {
+        ValueExcept(e: e, key: key, value: value, defaultValue: defaultValue, writeValue: Bool);
+    }
+
+    private static void LongExcept(Emitter e, string key, long value, long defaultValue)
+    {
+        ValueExcept(e: e, key: key, value: value, defaultValue: defaultValue, writeValue: Long);
+    }
+
+    // Implements [MIG-YAML-SHARED-FIELD-EMISSION].
+    private static void StringField(Emitter e, string key, string value)
+    {
+        Key(e: e, name: key);
+        Str(e: e, value: value);
+    }
+
+    // Implements [MIG-YAML-SHARED-FIELD-EMISSION].
+    private static void ValueExcept<T>(
+        Emitter e,
+        string key,
+        T value,
+        T defaultValue,
+        Action<Emitter, T> writeValue
+    )
+    {
+        if (!EqualityComparer<T>.Default.Equals(x: value, y: defaultValue))
         {
-            return;
+            Key(e: e, name: key);
+            writeValue(arg1: e, arg2: value);
         }
-        Key(e, key);
-        e.Emit(new SequenceStart(null, null, isImplicit: true, SequenceStyle.Block));
-        foreach (var item in items)
-        {
-            Str(e, item);
-        }
-        e.Emit(new SequenceEnd());
     }
 }

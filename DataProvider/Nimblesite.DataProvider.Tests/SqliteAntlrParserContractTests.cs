@@ -2,7 +2,6 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using Nimblesite.DataProvider.Parsing.Tests;
 using Nimblesite.DataProvider.SQLite.Parsing;
-using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 

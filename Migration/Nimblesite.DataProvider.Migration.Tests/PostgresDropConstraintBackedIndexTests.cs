@@ -18,15 +18,7 @@ public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresConta
 
         try
         {
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    SchemaWithUniqueConstraint(),
-                    Logger
-                ),
-                Logger
-            );
+            PostgresTestDb.ApplySchema(connection, SchemaWithUniqueConstraint(), Logger);
             var upgrade = PostgresTestDb.Calculate(
                 PostgresTestDb.Inspect(connection, Logger),
                 SchemaWithoutUniqueConstraint(),
@@ -58,16 +50,10 @@ public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresConta
 
         try
         {
-            var desired = SchemaWithUniqueConstraint();
-
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    desired,
-                    Logger
-                ),
-                Logger
+            var desired = VerifyReusableWorkflow30(
+                input0: SchemaWithUniqueConstraint,
+                input1: connection,
+                input2: Logger
             );
 
             var inspected = PostgresTestDb
@@ -104,31 +90,6 @@ public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresConta
         }
     }
 
-    private static SchemaDefinition SchemaWithUniqueConstraint() =>
-        Schema
-            .Define("Issue49")
-            .Table(
-                SchemaName,
-                TableName,
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("key_hash", PortableTypes.VarChar(255), c => c.NotNull())
-                        .Unique(ConstraintName, "key_hash")
-            )
-            .Build();
-
-    private static SchemaDefinition SchemaWithoutUniqueConstraint() =>
-        Schema
-            .Define("Issue49")
-            .Table(
-                SchemaName,
-                TableName,
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("key_hash", PortableTypes.VarChar(255), c => c.NotNull())
-            )
-            .Build();
-
     private static bool IsConstraintBackedIndexDrop(SchemaOperation operation) =>
         operation
             is DropIndexOperation
@@ -159,5 +120,23 @@ public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresConta
         command.Parameters.AddWithValue("@schema", SchemaName);
         command.Parameters.AddWithValue("@table", TableName);
         command.Parameters.AddWithValue("@constraint", ConstraintName);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SchemaDefinition VerifyReusableWorkflow30(
+        Func<SchemaDefinition> input0,
+        NpgsqlConnection input1,
+        ILogger input2
+    )
+    {
+        var desired = input0();
+
+        PostgresTestDb.Apply(
+            input1,
+            PostgresTestDb.Calculate(PostgresTestDb.Inspect(input1, input2), desired, input2),
+            input2
+        );
+
+        return desired;
     }
 }

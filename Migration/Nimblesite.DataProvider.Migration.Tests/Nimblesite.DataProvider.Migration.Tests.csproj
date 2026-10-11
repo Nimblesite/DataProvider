@@ -44,6 +44,10 @@
       Link="Shared\PostgresContainerFixture.cs"
     />
     <Compile
+      Include="..\..\Tests.Shared\PostgresDatabaseTest.cs"
+      Link="Shared\PostgresDatabaseTest.cs"
+    />
+    <Compile
       Include="..\..\Tests.Shared\PostgresCollection.cs"
       Link="Shared\PostgresCollection.cs"
     />
@@ -60,5 +64,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
+    />
   </ItemGroup>
 </Project>

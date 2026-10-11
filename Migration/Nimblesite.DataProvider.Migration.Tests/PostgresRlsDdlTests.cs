@@ -81,12 +81,15 @@ public sealed partial class PostgresRlsDdlTests
             Dataset_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1()
         );
 
-        ContainsAll(
-            actual: ddl,
-            expected: ["AS RESTRICTIVE", "FOR SELECT", "TO \"admin\", \"auditor\"", "USING ("],
-            comparison: StringComparison.Ordinal
+        VerifyReusableWorkflow17(
+            input0: ContainsAll,
+            input1: ddl,
+            value0: "AS RESTRICTIVE",
+            value1: "FOR SELECT",
+            value2: "TO \"admin\", \"auditor\"",
+            value3: "USING (",
+            value5: "WITH CHECK"
         );
-        Assert.DoesNotContain("WITH CHECK", ddl, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,37 +120,61 @@ public sealed partial class PostgresRlsDdlTests
             Dataset_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1()
         );
 
-        ContainsAll(
-            actual: ddl,
-            expected: ["USING (is_member(\"GroupId\"))", "WITH CHECK (can_write(\"GroupId\"))"],
-            comparison: StringComparison.Ordinal
-        );
-        Assert.DoesNotContain(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: ddl,
+            value0: "USING (is_member(\"GroupId\"))",
+            value1: "WITH CHECK (can_write(\"GroupId\"))",
+            value3: "current_setting('rls.current_user_id', true)"
         );
     }
 
-    [Fact]
-    public void Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_ContextCasesData)
+    )]
+    public void Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_ContextCases(
+        string caseName,
+        Func<CreateRlsPolicyOperation> input0,
+        string value0
+    )
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                Dataset_Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_1()
-            )
-        );
-        Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", ex.Message, StringComparison.Ordinal);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix6(input0: input0, value0: value0);
     }
 
-    [Fact]
-    public void Generate_CreateRlsPolicy_EmptyWithCheck_ThrowsWithRlsErrorCode()
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow17(
+        Action<
+            string?,
+            System.Collections.Immutable.ImmutableArray<string>,
+            StringComparison
+        > input0,
+        string input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value5
+    )
+    {
+        input0(
+            arg1: input1,
+            arg2: [value0, value1, value2, value3],
+            arg3: StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(value5, input1, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix6(
+        Func<CreateRlsPolicyOperation> input0,
+        string value0
+    )
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                Dataset_Generate_CreateRlsPolicy_EmptyWithCheck_ThrowsWithRlsErrorCode_1()
-            )
+            PostgresDdlGenerator.Generate(input0())
         );
-        Assert.Contains("MIG-E-RLS-EMPTY-CHECK", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(value0, ex.Message, StringComparison.Ordinal);
     }
 }

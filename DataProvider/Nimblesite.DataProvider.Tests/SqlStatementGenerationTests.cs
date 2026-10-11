@@ -2,7 +2,6 @@ using System.Reflection;
 using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
-using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -26,7 +25,7 @@ public sealed partial class SqlStatementGenerationTests
     }
 
     internal static string RenderForProvider(SelectStatement statement, string provider) =>
-        Assert.IsType<StringOk>(FindRenderer(provider).Invoke(null, [statement])).Value;
+        Assert.IsType<StringOk>(@object: FindRenderer(provider).Invoke(null, [statement])).Value;
 
     private static MethodInfo FindRenderer(string provider)
     {
@@ -58,7 +57,7 @@ public sealed partial class SqlStatementGenerationTests
 
         var result = stmt.ToSQLite();
 
-        var sql = (Assert.IsType<StringOk>(result)).Value;
+        var sql = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal("SELECT Id, Name FROM Users", sql);
         AssertDialect(stmt, provider, "SELECT", "Id", "Name", "FROM Users");
     }
@@ -73,7 +72,7 @@ public sealed partial class SqlStatementGenerationTests
 
         var result = stmt.ToSQLite();
 
-        var success = Assert.IsType<StringOk>(result);
+        var success = global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Equal("SELECT * FROM Users", success.Value);
         AssertDialect(stmt, provider, "SELECT *", "FROM Users");
     }
@@ -93,8 +92,7 @@ public sealed partial class SqlStatementGenerationTests
             .AddWhereCondition(where)
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal("SELECT Id FROM Users WHERE Age > 18", success.Value);
+        VerifySharedChecks1(input0: stmt, value0: "SELECT Id FROM Users WHERE Age > 18");
         AssertDialect(stmt, provider, "SELECT Id", "FROM Users", "WHERE", "Age > 18");
     }
 
@@ -122,8 +120,10 @@ public sealed partial class SqlStatementGenerationTests
             )
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal("SELECT Id FROM Users WHERE Age >= 18 AND Country = 'AU'", success.Value);
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT Id FROM Users WHERE Age >= 18 AND Country = 'AU'"
+        );
         AssertDialect(stmt, provider, "WHERE", "Age >= 18", "AND", "Country = 'AU'");
     }
 
@@ -157,10 +157,9 @@ public sealed partial class SqlStatementGenerationTests
             )
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal(
-            "SELECT Id FROM Users WHERE ( Age >= 18 AND Age < 65 ) AND Active = 1",
-            success.Value
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT Id FROM Users WHERE ( Age >= 18 AND Age < 65 ) AND Active = 1"
         );
         AssertDialect(stmt, provider, "WHERE", "Age >= 18", "Age < 65", "AND Active = 1");
     }
@@ -178,10 +177,9 @@ public sealed partial class SqlStatementGenerationTests
             .AddJoin("Users", "Orders", "Users.Id = Orders.UserId", "INNER JOIN")
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal(
-            "SELECT Users.Id, Orders.Total FROM Users INNER JOIN Orders ON Users.Id = Orders.UserId",
-            success.Value
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT Users.Id, Orders.Total FROM Users INNER JOIN Orders ON Users.Id = Orders.UserId"
         );
         AssertDialect(stmt, provider, "FROM Users", "INNER JOIN Orders", "ON", "UserId");
     }
@@ -198,10 +196,9 @@ public sealed partial class SqlStatementGenerationTests
             .WithHaving("COUNT(*) > 10")
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal(
-            "SELECT Country, COUNT(*) AS Total FROM Users GROUP BY Country HAVING COUNT(*) > 10",
-            success.Value
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT Country, COUNT(*) AS Total FROM Users GROUP BY Country HAVING COUNT(*) > 10"
         );
         AssertDialect(stmt, provider, "COUNT(*)", "GROUP BY Country", "HAVING", "> 10");
     }
@@ -217,8 +214,10 @@ public sealed partial class SqlStatementGenerationTests
             .AddOrderBy("Id", "DESC")
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal("SELECT Id FROM Users ORDER BY Name ASC, Id DESC", success.Value);
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT Id FROM Users ORDER BY Name ASC, Id DESC"
+        );
         AssertDialect(stmt, provider, "ORDER BY", "Name ASC", "Id DESC");
     }
 
@@ -234,8 +233,10 @@ public sealed partial class SqlStatementGenerationTests
             .WithOffset("10")
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal("SELECT DISTINCT Name FROM Users LIMIT 5 OFFSET 10", success.Value);
+        VerifySharedChecks1(
+            input0: stmt,
+            value0: "SELECT DISTINCT Name FROM Users LIMIT 5 OFFSET 10"
+        );
         AssertDialect(stmt, provider, "SELECT DISTINCT", "Name", "5", "10");
     }
 
@@ -248,8 +249,14 @@ public sealed partial class SqlStatementGenerationTests
             .AddTable("Users")
             .Build();
 
-        var success = Assert.IsType<StringOk>(stmt.ToSQLite());
-        Assert.Equal("SELECT u.* FROM Users", success.Value);
+        VerifySharedChecks1(input0: stmt, value0: "SELECT u.* FROM Users");
         AssertDialect(stmt, provider, "SELECT", "u.*", "FROM Users");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks1(SelectStatement input0, string value0)
+    {
+        var success = global::Tests.Shared.ResultAssertions.ExactOk(actual: input0.ToSQLite());
+        Assert.Equal(value0, success.Value);
     }
 }

@@ -21,12 +21,13 @@ public sealed partial class SubscriptionManagerTests
             "2024-12-31T00:00:00Z"
         );
 
-        Assert.Equal("sub-1", sub.SubscriptionId);
-        Assert.Equal("origin-1", sub.OriginId);
-        Assert.Equal(SubscriptionType.Record, sub.Type);
-        Assert.Equal("Person", sub.TableName);
-        Assert.Equal("[\"p1\", \"p2\"]", sub.Filter);
-        Assert.Equal(Timestamp, sub.CreatedAt);
+        VerifySyncLoopWorkflow2(
+            input0: sub,
+            value0: "sub-1",
+            value1: SubscriptionType.Record,
+            value2: "Person",
+            value3: "[\"p1\", \"p2\"]"
+        );
         Assert.Equal("2024-12-31T00:00:00Z", sub.ExpiresAt);
     }
 
@@ -55,10 +56,12 @@ public sealed partial class SubscriptionManagerTests
             "2024-12-31T00:00:00Z"
         );
 
-        Assert.Equal("sub-2", sub.SubscriptionId);
-        Assert.Equal("origin-1", sub.OriginId);
-        Assert.Equal(SubscriptionType.Table, sub.Type);
-        Assert.Equal("Department", sub.TableName);
+        global::Nimblesite.Sync.Tests.SyncStateTests.VerifyReusableWorkflow3(
+            input0: sub,
+            value0: "sub-2",
+            value2: SubscriptionType.Table,
+            value3: "Department"
+        );
         Assert.Null(sub.Filter);
         Assert.Equal(Timestamp, sub.CreatedAt);
     }
@@ -88,24 +91,19 @@ public sealed partial class SubscriptionManagerTests
             "2024-12-31T00:00:00Z"
         );
 
-        Assert.Equal("sub-3", sub.SubscriptionId);
-        Assert.Equal("origin-1", sub.OriginId);
-        Assert.Equal(SubscriptionType.Query, sub.Type);
-        Assert.Equal("Orders", sub.TableName);
-        Assert.Equal("{\"status\":\"active\"}", sub.Filter);
-        Assert.Equal(Timestamp, sub.CreatedAt);
+        VerifySyncLoopWorkflow2(
+            input0: sub,
+            value0: "sub-3",
+            value1: SubscriptionType.Query,
+            value2: "Orders",
+            value3: "{\"status\":\"active\"}"
+        );
     }
 
     [Fact]
     public void CreateQuerySubscription_WithoutExpiry()
     {
-        var sub = SubscriptionManager.CreateQuerySubscription(
-            "sub-3",
-            "origin-1",
-            "Orders",
-            "{\"status\":\"active\"}",
-            Timestamp
-        );
+        var sub = QuerySubscription("sub-3");
 
         Assert.Null(sub.ExpiresAt);
     }
@@ -139,23 +137,34 @@ public sealed partial class SubscriptionManagerTests
             Timestamp
         );
 
-        var change = CreateChange("Department", "{\"Id\":\"d1\"}");
-
-        Assert.False(SubscriptionManager.MatchesChange(sub, change));
+        VerifyReusableWorkflow4(
+            input0: CreateChange,
+            input1: sub,
+            value0: "Department",
+            value1: "{\"Id\":\"d1\"}"
+        );
     }
 
-    [Fact]
-    public void MatchesChange_RecordSubscription_MatchesPkInFilter()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData14))]
+    public void MatchesChange_RecordSubscription_MatchesPkInFilter_ScenarioCases(
+        string scenarioName,
+        System.String scenario3,
+        System.String scenario5
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         var sub = SubscriptionManager.CreateRecordSubscription(
             "sub-1",
             "origin-1",
             "Person",
-            "[\"p1\", \"p2\"]",
+            scenario3,
             Timestamp
         );
 
-        var change = CreateChange("Person", "{\"Id\":\"p1\"}");
+        var change = CreateChange("Person", scenario5);
 
         Assert.True(SubscriptionManager.MatchesChange(sub, change));
     }
@@ -171,57 +180,34 @@ public sealed partial class SubscriptionManagerTests
             Timestamp
         );
 
-        var change = CreateChange("Person", "{\"Id\":\"p99\"}");
-
-        Assert.False(SubscriptionManager.MatchesChange(sub, change));
-    }
-
-    [Fact]
-    public void MatchesChange_RecordSubscription_NullFilter_ReturnsFalse()
-    {
-        var sub = Dataset_MatchesChange_RecordSubscription_NullFilter_ReturnsFalse_1();
-
-        var change = CreateChange("Person", "{\"Id\":\"p1\"}");
-
-        Assert.False(SubscriptionManager.MatchesChange(sub, change));
-    }
-
-    [Fact]
-    public void MatchesChange_RecordSubscription_EmptyFilter_ReturnsFalse()
-    {
-        var sub = Dataset_MatchesChange_RecordSubscription_EmptyFilter_ReturnsFalse_1();
-
-        var change = CreateChange("Person", "{\"Id\":\"p1\"}");
-
-        Assert.False(SubscriptionManager.MatchesChange(sub, change));
-    }
-
-    [Fact]
-    public void MatchesChange_RecordSubscription_InvalidJsonPk_FallsBackToContains()
-    {
-        var sub = SubscriptionManager.CreateRecordSubscription(
-            "sub-1",
-            "origin-1",
-            "Person",
-            "simple-filter",
-            Timestamp
+        VerifyReusableWorkflow4(
+            input0: CreateChange,
+            input1: sub,
+            value0: "Person",
+            value1: "{\"Id\":\"p99\"}"
         );
+    }
 
-        var change = CreateChange("Person", "simple-filter");
-
-        Assert.True(SubscriptionManager.MatchesChange(sub, change));
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(MatchesChange_RecordSubscription_NullFilter_ReturnsFalse_ContextCasesData))]
+    public void MatchesChange_RecordSubscription_NullFilter_ReturnsFalse_ContextCases(
+        string caseName,
+        Func<SyncSubscription> input0
+    )
+    {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix2(
+            input0: input0,
+            input1: VerifyReusableWorkflow4,
+            input2: CreateChange
+        );
     }
 
     [Fact]
     public void MatchesChange_QuerySubscription_AlwaysMatchesSameTable()
     {
-        var sub = SubscriptionManager.CreateQuerySubscription(
-            "sub-1",
-            "origin-1",
-            "Orders",
-            "{\"status\":\"active\"}",
-            Timestamp
-        );
+        var sub = QuerySubscription("sub-1");
 
         var change = CreateChange("Orders", "{\"Id\":\"o1\"}");
 
@@ -232,17 +218,14 @@ public sealed partial class SubscriptionManagerTests
     [Fact]
     public void MatchesChange_QuerySubscription_DifferentTable_ReturnsFalse()
     {
-        var sub = SubscriptionManager.CreateQuerySubscription(
-            "sub-1",
-            "origin-1",
-            "Orders",
-            "{\"status\":\"active\"}",
-            Timestamp
+        var sub = QuerySubscription("sub-1");
+
+        VerifyReusableWorkflow4(
+            input0: CreateChange,
+            input1: sub,
+            value0: "Products",
+            value1: "{\"Id\":\"p1\"}"
         );
-
-        var change = CreateChange("Products", "{\"Id\":\"p1\"}");
-
-        Assert.False(SubscriptionManager.MatchesChange(sub, change));
     }
 
     #endregion
@@ -262,15 +245,22 @@ public sealed partial class SubscriptionManagerTests
         Assert.False(SubscriptionManager.IsExpired(sub, "2099-01-01T00:00:00Z"));
     }
 
-    [Fact]
-    public void IsExpired_FutureExpiry_ReturnsFalse()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData15))]
+    public void IsExpired_FutureExpiry_ReturnsFalse_ScenarioCases(
+        string scenarioName,
+        System.String scenario3
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
         var sub = SubscriptionManager.CreateTableSubscription(
             "sub-1",
             "origin-1",
             "Person",
             Timestamp,
-            "2099-01-01T00:00:00Z"
+            scenario3
         );
 
         Assert.False(SubscriptionManager.IsExpired(sub, "2024-06-01T00:00:00Z"));
@@ -288,20 +278,6 @@ public sealed partial class SubscriptionManagerTests
         );
 
         Assert.True(SubscriptionManager.IsExpired(sub, "2024-06-01T00:00:00Z"));
-    }
-
-    [Fact]
-    public void IsExpired_ExactExpiry_ReturnsFalse()
-    {
-        var sub = SubscriptionManager.CreateTableSubscription(
-            "sub-1",
-            "origin-1",
-            "Person",
-            Timestamp,
-            "2024-06-01T00:00:00Z"
-        );
-
-        Assert.False(SubscriptionManager.IsExpired(sub, "2024-06-01T00:00:00Z"));
     }
 
     #endregion
@@ -473,8 +449,60 @@ public sealed partial class SubscriptionManagerTests
 
     #region Helper Methods
 
+    private static SyncSubscription QuerySubscription(string id) =>
+        SubscriptionManager.CreateQuerySubscription(
+            id,
+            "origin-1",
+            "Orders",
+            "{\"status\":\"active\"}",
+            Timestamp
+        );
+
     private static SyncLogEntry CreateChange(string tableName, string pkValue) =>
         new(1, tableName, pkValue, SyncOperation.Insert, "{}", "test-origin", Timestamp);
 
     #endregion
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow4(
+        Func<string, string, SyncLogEntry> input0,
+        SyncSubscription input1,
+        string value0,
+        string value1
+    )
+    {
+        var change = input0(arg1: value0, arg2: value1);
+
+        Assert.False(SubscriptionManager.MatchesChange(input1, change));
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix2(
+        Func<SyncSubscription> input0,
+        Action<Func<string, string, SyncLogEntry>, SyncSubscription, string, string> input1,
+        Func<string, string, SyncLogEntry> input2
+    )
+    {
+        var sub = input0();
+
+        input1(arg1: input2, arg2: sub, arg3: "Person", arg4: "{\"Id\":\"p1\"}");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow2(
+        SyncSubscription input0,
+        string value0,
+        global::Nimblesite.Sync.Core.SubscriptionType value1,
+        string value2,
+        string value3
+    )
+    {
+        global::Nimblesite.Sync.Tests.SyncStateTests.VerifyReusableWorkflow3(
+            input0: input0,
+            value0: value0,
+            value2: value1,
+            value3: value2
+        );
+        Assert.Equal(value3, input0.Filter);
+        Assert.Equal(Timestamp, input0.CreatedAt);
+    }
 }

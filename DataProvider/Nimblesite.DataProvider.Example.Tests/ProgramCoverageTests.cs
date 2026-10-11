@@ -1,7 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
-using Xunit;
 using static global::Tests.Shared.ResultAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
 
@@ -112,16 +111,8 @@ public sealed partial class ProgramCoverageTests : IDisposable
         await SetupTestDatabase();
 
         var result = _connection.GetRecords(
-            "Orders"
-                .From("o")
-                .InnerJoin("Customer", "CustomerId", "Id", "o", "c")
-                .Select(
-                    ("o", "OrderNumber"),
-                    ("o", "TotalAmount"),
-                    ("o", "Status"),
-                    ("c", "CustomerName"),
-                    ("c", "Email")
-                )
+            DataProviderIntegrationTests
+                .BuildOrdersWithCustomer()
                 .OrderBy("o.OrderNumber")
                 .ToSqlStatement(),
             stmt => stmt.ToSQLite(),
@@ -154,26 +145,18 @@ public sealed partial class ProgramCoverageTests : IDisposable
     {
         await SetupTestDatabase();
 
-        var result = _connection.GetRecords(
-            "Orders"
-                .From("o")
-                .InnerJoin("Customer", "CustomerId", "Id", "o", "c")
-                .Select(
-                    ("o", "OrderNumber"),
-                    ("o", "TotalAmount"),
-                    ("o", "Status"),
-                    ("c", "CustomerName"),
-                    ("c", "Email")
-                )
-                .Where("o.TotalAmount", ComparisonOperator.GreaterThan, "600.00")
-                .OrderByDescending("o.TotalAmount")
-                .Take(5)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapBasicOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                DataProviderIntegrationTests
+                    .BuildOrdersWithCustomer()
+                    .Where("o.TotalAmount", ComparisonOperator.GreaterThan, "600.00")
+                    .OrderByDescending("o.TotalAmount")
+                    .Take(5)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapBasicOrder
+            )
+        ).Value;
         Assert.Single(orders);
         Assert.Equal("ORD-002", orders[0].OrderNumber);
         Assert.Equal(750.00, orders[0].TotalAmount);
@@ -207,21 +190,10 @@ public sealed partial class ProgramCoverageTests : IDisposable
     [Fact]
     public async Task MapCustomer_WithNullPhone_ReturnsNullPhone()
     {
-        await SetupTestDatabaseWithNullableFields();
-
-        var result = _connection.GetRecords(
-            (
-                from customer in SelectStatement.From<Generated.Customer>()
-                orderby customer.CustomerName
-                select customer
-            ).ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapCustomer
+        var nullPhoneCustomer = await VerifySharedChecks2(
+            input0: _connection,
+            value0: "No Phone Corp"
         );
-
-        var customers = Ok(actual: result).Value;
-
-        var nullPhoneCustomer = customers.First(c => c.CustomerName == "No Phone Corp");
         Assert.Equal("nophone@test.com", nullPhoneCustomer.Email);
         Assert.Null(nullPhoneCustomer.Phone);
     }
@@ -229,21 +201,10 @@ public sealed partial class ProgramCoverageTests : IDisposable
     [Fact]
     public async Task MapCustomer_WithBothNullEmailAndPhone_ReturnsBothNull()
     {
-        await SetupTestDatabaseWithNullableFields();
-
-        var result = _connection.GetRecords(
-            (
-                from customer in SelectStatement.From<Generated.Customer>()
-                orderby customer.CustomerName
-                select customer
-            ).ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapCustomer
+        var nullBothCustomer = await VerifySharedChecks2(
+            input0: _connection,
+            value0: "No Contact Corp"
         );
-
-        var customers = Ok(actual: result).Value;
-
-        var nullBothCustomer = customers.First(c => c.CustomerName == "No Contact Corp");
         Assert.Null(nullBothCustomer.Email);
         Assert.Null(nullBothCustomer.Phone);
     }
@@ -253,37 +214,37 @@ public sealed partial class ProgramCoverageTests : IDisposable
     {
         await SetupTestDatabase();
 
-        var result = _connection.GetRecords(
-            "Orders"
-                .From("o")
-                .LeftJoin("Customer", "CustomerId", "Id", "o", "c")
-                .Select(
-                    ("o", "OrderNumber"),
-                    ("o", "TotalAmount"),
-                    ("o", "Status"),
-                    ("c", "CustomerName"),
-                    ("c", "Email")
-                )
-                .AddWhereCondition(WhereCondition.OpenParen())
-                .Where("o.TotalAmount", ComparisonOperator.GreaterOrEq, "500.00")
-                .AddWhereCondition(WhereCondition.And())
-                .AddWhereCondition(
-                    WhereCondition.Comparison(
-                        ColumnInfo.Named("o.OrderDate"),
-                        ComparisonOperator.GreaterOrEq,
-                        "2024-01-01"
+        var orders = Ok(read: () =>
+            _connection.GetRecords(
+                "Orders"
+                    .From("o")
+                    .LeftJoin("Customer", "CustomerId", "Id", "o", "c")
+                    .Select(
+                        ("o", "OrderNumber"),
+                        ("o", "TotalAmount"),
+                        ("o", "Status"),
+                        ("c", "CustomerName"),
+                        ("c", "Email")
                     )
-                )
-                .AddWhereCondition(WhereCondition.CloseParen())
-                .Or("o.Status", "VIP")
-                .OrderBy("o.OrderDate")
-                .Take(3)
-                .ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapBasicOrder
-        );
-
-        var orders = Ok(actual: result).Value;
+                    .AddWhereCondition(WhereCondition.OpenParen())
+                    .Where("o.TotalAmount", ComparisonOperator.GreaterOrEq, "500.00")
+                    .AddWhereCondition(WhereCondition.And())
+                    .AddWhereCondition(
+                        WhereCondition.Comparison(
+                            ColumnInfo.Named("o.OrderDate"),
+                            ComparisonOperator.GreaterOrEq,
+                            "2024-01-01"
+                        )
+                    )
+                    .AddWhereCondition(WhereCondition.CloseParen())
+                    .Or("o.Status", "VIP")
+                    .OrderBy("o.OrderDate")
+                    .Take(3)
+                    .ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapBasicOrder
+            )
+        ).Value;
         Assert.NotEmpty(orders);
 
         foreach (var order in orders)
@@ -341,67 +302,109 @@ public sealed partial class ProgramCoverageTests : IDisposable
     {
         var order1 = Dataset_ModelRecords_EqualityWorks_1();
         var order2 = Dataset_ModelRecords_EqualityWorks_2();
-        Assert.Equal(order1, order2);
-        Assert.Equal(order1.GetHashCode(), order2.GetHashCode());
+        AssertRecordEquality(order1, order2);
         Assert.Equal(order1.ToString(), order2.ToString());
 
         var item1 = Dataset_ModelRecords_EqualityWorks_3();
         var item2 = Dataset_ModelRecords_EqualityWorks_4();
-        Assert.Equal(item1, item2);
-        Assert.Equal(item1.GetHashCode(), item2.GetHashCode());
+        AssertRecordEquality(item1, item2);
 
         var addr1 = Dataset_ModelRecords_EqualityWorks_5();
         var addr2 = Dataset_ModelRecords_EqualityWorks_6();
-        Assert.Equal(addr1, addr2);
-        Assert.Equal(addr1.GetHashCode(), addr2.GetHashCode());
+        AssertRecordEquality(addr1, addr2);
 
         var cust1 = Dataset_ModelRecords_EqualityWorks_7();
         var cust2 = Dataset_ModelRecords_EqualityWorks_8();
-        Assert.Equal(cust1, cust2);
-        Assert.Equal(cust1.GetHashCode(), cust2.GetHashCode());
+        AssertRecordEquality(cust1, cust2);
 
         var basic1 = Dataset_ModelRecords_EqualityWorks_9();
         var basic2 = Dataset_ModelRecords_EqualityWorks_10();
-        Assert.Equal(basic1, basic2);
-        Assert.Equal(basic1.GetHashCode(), basic2.GetHashCode());
+        AssertRecordEquality(basic1, basic2);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertRecordEquality<T>(T first, T second)
+        where T : notnull
+    {
+        Assert.Equal(first, second);
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
     }
 
     private async Task SetupTestDatabase()
     {
-        await _connection.OpenAsync().ConfigureAwait(false);
-        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", _connection))
-        {
-            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
+        await global::Nimblesite
+            .DataProvider.Example.Tests.DataProviderIntegrationTests.VerifySharedPhase2(
+                input0: _connection
+            )
+            .ConfigureAwait(false);
 
-        // Implements [EXAMPLE-SCHEMA-SHARED].
-        await DatabaseManager.CreateSchemaAsync(connection: _connection).ConfigureAwait(false);
-
-        var insertScript = Data_SetupTestDatabase_1;
-
-        using var insertCommand = new SqliteCommand(insertScript, _connection);
-        await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow101(
+                configure: command => command.CommandText = Data_SetupTestDatabase_1,
+                input1: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     private async Task SetupTestDatabaseWithNullableFields()
     {
-        await _connection.OpenAsync().ConfigureAwait(false);
-        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", _connection))
-        {
-            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-
-        var createTablesScript = Data_SetupTestDatabaseWithNullableFields_1;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-
-        var insertScript = Data_SetupTestDatabaseWithNullableFields_2;
-
-        using var insertCommand = new SqliteCommand(insertScript, _connection);
-        await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await VerifyReusableWorkflow3(
+                configure0: command =>
+                    command.CommandText = Data_SetupTestDatabaseWithNullableFields_1,
+                configure1: command =>
+                    command.CommandText = Data_SetupTestDatabaseWithNullableFields_2,
+                input0: _connection
+            )
+            .ConfigureAwait(false);
     }
 
     public void Dispose() =>
         CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private async global::System.Threading.Tasks.Task<Customer> VerifySharedChecks2(
+        SqliteConnection input0,
+        string value0
+    )
+    {
+        await SetupTestDatabaseWithNullableFields().ConfigureAwait(false);
+
+        var customers = Ok(read: () =>
+            input0.GetRecords(
+                (
+                    from customer in SelectStatement.From<Generated.Customer>()
+                    orderby customer.CustomerName
+                    select customer
+                ).ToSqlStatement(),
+                stmt => stmt.ToSQLite(),
+                MapCustomer
+            )
+        ).Value;
+
+        var nullPhoneCustomer = customers.First(c => c.CustomerName == value0);
+
+        return nullPhoneCustomer;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifyReusableWorkflow3(
+        SqliteConnection input0,
+        global::System.Action<global::Microsoft.Data.Sqlite.SqliteCommand> configure0,
+        global::System.Action<global::Microsoft.Data.Sqlite.SqliteCommand> configure1
+    )
+    {
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow102(
+                input0: input0
+            )
+            .ConfigureAwait(false);
+
+        await global::Nimblesite
+            .DataProvider.Example.Tests.CoreCoverageTests.VerifySharedPhase1(
+                configure0: configure0,
+                configure1: configure1,
+                input0: input0
+            )
+            .ConfigureAwait(false);
+    }
 }

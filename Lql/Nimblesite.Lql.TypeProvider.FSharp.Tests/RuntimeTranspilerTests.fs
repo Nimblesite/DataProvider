@@ -35,92 +35,68 @@ let private transpile (lql: string) : string =
 let private assertContainsCi (needle: string) (haystack: string) =
     Assert.Contains(needle.ToUpperInvariant(), haystack.ToUpperInvariant())
 
+// Implements [LQL-FSHARP-SHARED-SQL-ASSERTIONS].
+let private verifyContains (lql: string) (expected: string list) : unit =
+    let sql = transpile lql
+    for needle in expected do
+        assertContainsCi needle sql
+
 [<Collection("TypeProvider")>]
 type RuntimeSelectTests() =
 
     [<Fact>]
     member _.``Runtime: select * generates SELECT *``() =
-        let sql = transpile "Customer |> select(*)"
-        assertContainsCi "SELECT" sql
-        assertContainsCi "CUSTOMER" sql
+        verifyContains "Customer |> select(*)" [ "SELECT"; "CUSTOMER" ]
 
     [<Fact>]
     member _.``Runtime: select named columns``() =
-        let sql = transpile "Users |> select(Users.Id, Users.Name, Users.Email)"
-        assertContainsCi "SELECT" sql
-        assertContainsCi "ID" sql
-        assertContainsCi "NAME" sql
-        assertContainsCi "EMAIL" sql
+        verifyContains "Users |> select(Users.Id, Users.Name, Users.Email)" [ "SELECT"; "ID"; "NAME"; "EMAIL" ]
 
     [<Fact>]
     member _.``Runtime: select with column alias``() =
-        let sql = transpile "Users |> select(Users.Id, Users.Name as username)"
-        assertContainsCi "AS" sql
+        verifyContains "Users |> select(Users.Id, Users.Name as username)" [ "AS" ]
 
     [<Fact>]
     member _.``Runtime: select multiple tables produces qualified columns``() =
-        let sql = transpile "Users |> select(Users.Id, Users.Name)"
-        assertContainsCi "USERS" sql
+        verifyContains "Users |> select(Users.Id, Users.Name)" [ "USERS" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeFilterTests() =
 
     [<Fact>]
     member _.``Runtime: simple filter generates WHERE``() =
-        let sql = transpile "Users |> filter(fn(row) => row.Users.Age > 18) |> select(Users.Name)"
-        assertContainsCi "WHERE" sql
-        assertContainsCi ">" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18) |> select(Users.Name)" [ "WHERE"; ">" ]
 
     [<Fact>]
     member _.``Runtime: filter with AND``() =
-        let sql =
-            transpile
-                "Users |> filter(fn(row) => row.Users.Age > 18 and row.Users.Status = 'active') |> select(*)"
-        assertContainsCi "WHERE" sql
-        assertContainsCi "AND" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18 and row.Users.Status = 'active') |> select(*)" [ "WHERE"; "AND" ]
 
     [<Fact>]
     member _.``Runtime: filter with OR``() =
-        let sql =
-            transpile
-                "Users |> filter(fn(row) => row.Users.Age < 18 or row.Users.Role = 'admin') |> select(*)"
-        assertContainsCi "WHERE" sql
-        assertContainsCi "OR" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age < 18 or row.Users.Role = 'admin') |> select(*)" [ "WHERE"; "OR" ]
 
     [<Fact>]
     member _.``Runtime: filter with equality on string literal``() =
-        let sql = transpile "Users |> filter(fn(row) => row.Users.Status = 'active') |> select(*)"
-        assertContainsCi "WHERE" sql
-        assertContainsCi "ACTIVE" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Status = 'active') |> select(*)" [ "WHERE"; "ACTIVE" ]
 
     [<Fact>]
     member _.``Runtime: filter with less-than-or-equal``() =
-        let sql = transpile "Users |> filter(fn(row) => row.Users.Age <= 65) |> select(*)"
-        assertContainsCi "WHERE" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age <= 65) |> select(*)" [ "WHERE" ]
 
     [<Fact>]
     member _.``Runtime: filter with greater-than-or-equal``() =
-        let sql = transpile "Users |> filter(fn(row) => row.Users.Age >= 21) |> select(*)"
-        assertContainsCi "WHERE" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age >= 21) |> select(*)" [ "WHERE" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeJoinTests() =
 
     [<Fact>]
     member _.``Runtime: inner join``() =
-        let sql =
-            transpile
-                "Users |> join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)"
-        assertContainsCi "JOIN" sql
-        assertContainsCi "ON" sql
+        verifyContains "Users |> join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)" [ "JOIN"; "ON" ]
 
     [<Fact>]
     member _.``Runtime: left join``() =
-        let sql =
-            transpile
-                "Users |> left_join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)"
-        assertContainsCi "LEFT" sql
-        assertContainsCi "JOIN" sql
+        verifyContains "Users |> left_join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)" [ "LEFT"; "JOIN" ]
 
     [<Fact>]
     member _.``Runtime: multiple joins chained``() =
@@ -137,56 +113,38 @@ type RuntimeAggregationTests() =
 
     [<Fact>]
     member _.``Runtime: group by``() =
-        let sql =
-            transpile "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as order_count)"
-        assertContainsCi "GROUP BY" sql
-        assertContainsCi "COUNT" sql
+        verifyContains "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as order_count)" [ "GROUP BY"; "COUNT" ]
 
     [<Fact>]
     member _.``Runtime: group by with sum and avg``() =
-        let sql =
-            transpile
-                "Orders |> group_by(Orders.Status) |> select(Orders.Status, sum(Orders.Total) as total_sum, avg(Orders.Total) as avg_total)"
-        assertContainsCi "GROUP BY" sql
-        assertContainsCi "SUM" sql
-        assertContainsCi "AVG" sql
+        verifyContains "Orders |> group_by(Orders.Status) |> select(Orders.Status, sum(Orders.Total) as total_sum, avg(Orders.Total) as avg_total)" [ "GROUP BY"; "SUM"; "AVG" ]
 
     [<Fact>]
     member _.``Runtime: having clause``() =
-        let sql =
-            transpile
-                "Orders |> group_by(Orders.UserId) |> having(fn(g) => count(*) > 5) |> select(Orders.UserId, count(*) as cnt)"
-        assertContainsCi "HAVING" sql
+        verifyContains "Orders |> group_by(Orders.UserId) |> having(fn(g) => count(*) > 5) |> select(Orders.UserId, count(*) as cnt)" [ "HAVING" ]
 
     [<Fact>]
     member _.``Runtime: count star``() =
-        let sql = transpile "Users |> select(count(*) as total)"
-        assertContainsCi "COUNT" sql
+        verifyContains "Users |> select(count(*) as total)" [ "COUNT" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeOrderingTests() =
 
     [<Fact>]
     member _.``Runtime: order by ascending``() =
-        let sql = transpile "Users |> order_by(Users.Name asc) |> select(*)"
-        assertContainsCi "ORDER BY" sql
+        verifyContains "Users |> order_by(Users.Name asc) |> select(*)" [ "ORDER BY" ]
 
     [<Fact>]
     member _.``Runtime: order by descending``() =
-        let sql = transpile "Users |> order_by(Users.CreatedAt desc) |> select(*)"
-        assertContainsCi "ORDER BY" sql
-        assertContainsCi "DESC" sql
+        verifyContains "Users |> order_by(Users.CreatedAt desc) |> select(*)" [ "ORDER BY"; "DESC" ]
 
     [<Fact>]
     member _.``Runtime: limit``() =
-        let sql = transpile "Users |> order_by(Users.Id) |> limit(10) |> select(*)"
-        assertContainsCi "LIMIT" sql
+        verifyContains "Users |> order_by(Users.Id) |> limit(10) |> select(*)" [ "LIMIT" ]
 
     [<Fact>]
     member _.``Runtime: limit with offset``() =
-        let sql = transpile "Users |> order_by(Users.Id) |> limit(10) |> offset(20) |> select(*)"
-        assertContainsCi "LIMIT" sql
-        assertContainsCi "OFFSET" sql
+        verifyContains "Users |> order_by(Users.Id) |> limit(10) |> offset(20) |> select(*)" [ "LIMIT"; "OFFSET" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeArithmeticTests() =
@@ -213,33 +171,15 @@ type RuntimeComplexPipelineTests() =
 
     [<Fact>]
     member _.``Runtime: filter then select then order then limit``() =
-        let sql =
-            transpile
-                "Users |> filter(fn(row) => row.Users.Age > 18) |> order_by(Users.Name asc) |> limit(50) |> select(Users.Id, Users.Name)"
-        assertContainsCi "WHERE" sql
-        assertContainsCi "ORDER BY" sql
-        assertContainsCi "LIMIT" sql
+        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18) |> order_by(Users.Name asc) |> limit(50) |> select(Users.Id, Users.Name)" [ "WHERE"; "ORDER BY"; "LIMIT" ]
 
     [<Fact>]
     member _.``Runtime: join + filter + group + having + order``() =
-        let sql =
-            transpile
-                "Users |> join(Orders, on = Users.Id = Orders.UserId) |> filter(fn(row) => row.Orders.Status = 'paid') |> group_by(Users.Id) |> having(fn(g) => sum(Orders.Total) > 100) |> order_by(Users.Id asc) |> select(Users.Id, sum(Orders.Total) as revenue)"
-        assertContainsCi "JOIN" sql
-        assertContainsCi "WHERE" sql
-        assertContainsCi "GROUP BY" sql
-        assertContainsCi "HAVING" sql
-        assertContainsCi "ORDER BY" sql
+        verifyContains "Users |> join(Orders, on = Users.Id = Orders.UserId) |> filter(fn(row) => row.Orders.Status = 'paid') |> group_by(Users.Id) |> having(fn(g) => sum(Orders.Total) > 100) |> order_by(Users.Id asc) |> select(Users.Id, sum(Orders.Total) as revenue)" [ "JOIN"; "WHERE"; "GROUP BY"; "HAVING"; "ORDER BY" ]
 
     [<Fact>]
     member _.``Runtime: group by with multiple aggregates``() =
-        let sql =
-            transpile
-                "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as orders, sum(Orders.Total) as revenue, avg(Orders.Total) as avg_order)"
-        assertContainsCi "GROUP BY" sql
-        assertContainsCi "COUNT" sql
-        assertContainsCi "SUM" sql
-        assertContainsCi "AVG" sql
+        verifyContains "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as orders, sum(Orders.Total) as revenue, avg(Orders.Total) as avg_order)" [ "GROUP BY"; "COUNT"; "SUM"; "AVG" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeDistinctAndPredicateTests() =

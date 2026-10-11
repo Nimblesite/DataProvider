@@ -24,36 +24,22 @@ public sealed class PostgreSqlFunctionMapping : FunctionMappingProviderBase
     /// </summary>
     /// <returns>Dictionary of function mappings</returns>
     internal static ImmutableDictionary<string, FunctionMap> CreateFunctionMappings() =>
-        CommonFunctionMappings
-            .WithWindows()
-            .SetItems(
-                items: new Dictionary<string, FunctionMap>
-                {
-                    ["extract"] = new("extract", "EXTRACT"),
-                    ["date_trunc"] = new("date_trunc", "DATE_TRUNC"),
-                    ["current_date"] = new(
-                        "current_date",
-                        "CURRENT_DATE",
-                        RequiresSpecialHandling: true,
-                        SpecialHandler: _ => "CURRENT_DATE"
-                    ),
-                    ["length"] = new("length", "LENGTH"),
-                }
-            );
+        CommonFunctionMappings.WithDateFunctions(
+            extract: "EXTRACT",
+            dateTrunc: "DATE_TRUNC",
+            currentDate: "CURRENT_DATE",
+            currentDateExpression: "CURRENT_DATE",
+            length: "LENGTH"
+        );
 
     /// <summary>
     /// Creates the PostgreSQL syntax mapping
     /// </summary>
     /// <returns>The PostgreSQL syntax mapping</returns>
     internal static SqlSyntaxMapping CreateSyntaxMapping() =>
-        new(
-            LimitClause: "LIMIT {0}",
-            OffsetClause: "OFFSET {0}",
-            DateCurrentFunction: "CURRENT_DATE",
-            DateAddFunction: "INTERVAL '{0} {1}'",
-            StringLengthFunction: "LENGTH",
-            StringConcatOperator: "||",
-            IdentifierQuoteChar: "\"",
-            SupportsBoolean: true
+        CommonFunctionMappings.LimitSyntax(
+            currentDate: "CURRENT_DATE",
+            dateAdd: "INTERVAL '{0} {1}'",
+            supportsBoolean: true
         );
 }

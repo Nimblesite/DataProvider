@@ -2,8 +2,6 @@
 #pragma warning disable CA2000 // Dispose objects before losing scope
 #pragma warning disable CA1849 // Synchronous blocking calls
 
-using System.Data.Common;
-
 namespace Nimblesite.DataProvider.Tests.Fakes;
 
 public class FakeDbConnectionTests
@@ -76,23 +74,25 @@ public class FakeDbConnectionTests
             }
         );
 
-        connection.Open();
-
         // Act & Assert - Test Users query
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var usersReader = transaction.GetDataReader("SELECT * FROM Users");
+        ReadRows(
+            connection: connection,
+            sql: "SELECT * FROM Users",
+            assert: usersReader =>
+            {
+                Assert.True(usersReader.Read());
+                Assert.Equal(1, usersReader.GetInt32(0));
+                Assert.Equal("John Doe", usersReader.GetString(1));
+                Assert.Equal("john@example.com", usersReader.GetString(2));
 
-        Assert.True(usersReader.Read());
-        Assert.Equal(1, usersReader.GetInt32(0));
-        Assert.Equal("John Doe", usersReader.GetString(1));
-        Assert.Equal("john@example.com", usersReader.GetString(2));
+                Assert.True(usersReader.Read());
+                Assert.Equal(2, usersReader.GetInt32(0));
+                Assert.Equal("Jane Smith", usersReader.GetString(1));
+                Assert.Equal("jane@example.com", usersReader.GetString(2));
 
-        Assert.True(usersReader.Read());
-        Assert.Equal(2, usersReader.GetInt32(0));
-        Assert.Equal("Jane Smith", usersReader.GetString(1));
-        Assert.Equal("jane@example.com", usersReader.GetString(2));
-
-        Assert.False(usersReader.Read());
+                Assert.False(usersReader.Read());
+            }
+        );
     }
 
     [Fact]
@@ -121,16 +121,17 @@ public class FakeDbConnectionTests
             }
         );
 
-        connection.Open();
-
-        // Act
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var reader = transaction.GetDataReader("SELECT COUNT(*) FROM Users");
-
-        // Assert
-        Assert.True(reader.Read());
-        Assert.Equal(42, reader.GetInt32(0));
-        Assert.False(reader.Read());
+        // Act & Assert
+        ReadRows(
+            connection: connection,
+            sql: "SELECT COUNT(*) FROM Users",
+            assert: reader =>
+            {
+                Assert.True(reader.Read());
+                Assert.Equal(42, reader.GetInt32(0));
+                Assert.False(reader.Read());
+            }
+        );
     }
 
     [Fact]
@@ -158,17 +159,18 @@ public class FakeDbConnectionTests
             ]
         ));
 
-        connection.Open();
-
-        // Act
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var reader = transaction.GetDataReader("SELECT * FROM Users");
-
-        // Assert
-        Assert.True(reader.Read());
-        Assert.Equal(1, reader.GetInt32(0));
-        Assert.Equal("John Doe", reader.GetString(1));
-        Assert.True(reader.IsDBNull(2));
+        // Act & Assert
+        ReadRows(
+            connection: connection,
+            sql: "SELECT * FROM Users",
+            assert: reader =>
+            {
+                Assert.True(reader.Read());
+                Assert.Equal(1, reader.GetInt32(0));
+                Assert.Equal("John Doe", reader.GetString(1));
+                Assert.True(reader.IsDBNull(2));
+            }
+        );
     }
 
     [Fact]
@@ -183,6 +185,20 @@ public class FakeDbConnectionTests
         Assert.Equal(1, reader.GetInt32(0));
         Assert.Equal("Test User", reader.GetString(1));
         Assert.False(await reader.IsDBNullAsync(0));
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: opens the fake connection, runs the
+    // query through a fake transaction and asserts on the returned reader.
+    private static void ReadRows(
+        FakeDbConnection connection,
+        string sql,
+        Action<DbDataReader> assert
+    )
+    {
+        connection.Open();
+        using var transaction = (FakeTransaction)connection.BeginTransaction();
+        using var reader = transaction.GetDataReader(sql);
+        assert(reader);
     }
 
     private static DbCommand CreateTestUserCommand()

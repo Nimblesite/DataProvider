@@ -1,5 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Integration.Tests;
 
@@ -31,16 +32,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
     {
         foreach (var dbPath in _sqliteDbPaths)
         {
-            if (File.Exists(dbPath))
-            {
-                try
-                {
-                    File.Delete(dbPath);
-                }
-                catch
-                { /* File may be locked */
-                }
-            }
+            global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: dbPath);
         }
         return Task.CompletedTask;
     }
@@ -51,18 +43,11 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
     /// </summary>
     private SqliteConnection CreateSourceDb(string originId)
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"mapping_source_{Guid.NewGuid()}.db");
+        var dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("mapping_source");
         _sqliteDbPaths.Add(dbPath);
-        var conn = new SqliteConnection($"Data Source={dbPath}");
-        conn.Open();
+        var conn = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: dbPath, origin: originId);
 
-        SyncSchema.CreateSchema(conn);
-        SyncSchema.SetOriginId(conn, originId);
-
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: command => command.CommandText = Data_CreateSourceDb_1
-        );
+        ExecuteSql(conn, Data_CreateSourceDb_1);
 
         TriggerGenerator.CreateTriggers(conn, "User", NullLogger.Instance);
         return conn;
@@ -110,8 +95,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
     /// </summary>
     private MappedEntry MapFirstChange(SqliteConnection source, SyncMappingConfig mappingConfig)
     {
-        var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        var entry = ((SyncLogListOk)changes).Value[0];
+        var entry = (Ok(read: () => SyncLogRepository.FetchChanges(source, 0, 100))).Value[0];
 
         var success = MapSuccessfully(entry: entry, mappingConfig: mappingConfig);
         return success.Entries[0];
@@ -210,4 +194,101 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
                 logger: _logger
             )
         );
+
+    /// <summary>Fetches all source changes, asserting the Ok result.</summary>
+    private static IReadOnlyList<SyncLogEntry> FetchAllChanges(SqliteConnection source) =>
+        (Ok(read: () => SyncLogRepository.FetchChanges(source, 0, 100))).Value;
+
+    /// <summary>Executes a single SQL statement against SQLite.</summary>
+    private static void ExecuteSql(SqliteConnection connection, string sql)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Executes SQL and fetches all resulting changes.</summary>
+    private static IReadOnlyList<SyncLogEntry> ExecuteAndFetchAll(
+        SqliteConnection source,
+        string sql
+    )
+    {
+        ExecuteSql(source, sql);
+        var changes = FetchAllChanges(source);
+        Assert.Single(changes);
+        return changes;
+    }
+
+    /// <summary>Inserts rows into the source User table using bound parameters.</summary>
+    private static void InsertUsers(
+        SqliteConnection source,
+        IReadOnlyList<(string Id, string Name, string Email)> rows
+    )
+    {
+        foreach (var (id, name, email) in rows)
+        {
+            using var cmd = source.CreateCommand();
+            cmd.CommandText =
+                "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
+            cmd.Parameters.Clear();
+            DatabaseCommands.Bind(command: cmd, name: "@id", value: id);
+            DatabaseCommands.Bind(command: cmd, name: "@name", value: name);
+            DatabaseCommands.Bind(command: cmd, name: "@email", value: email);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>Inserts a row and returns the first mapped entry.</summary>
+    private MappedEntry InsertAndMapFirst(
+        SqliteConnection source,
+        SyncMappingConfig mappingConfig,
+        string insertSql
+    )
+    {
+        ExecuteSql(source, insertSql);
+        var changes = FetchAllChanges(source);
+        Assert.Single(changes);
+        return MapSingle(changes[0], mappingConfig);
+    }
+
+    /// <summary>Fetches exactly one change of the expected operation.</summary>
+    private static SyncLogEntry FetchSingleOperation(
+        SqliteConnection source,
+        long fromVersion,
+        SyncOperation expected
+    )
+    {
+        var list = (Ok(read: () => SyncLogRepository.FetchChanges(source, fromVersion, 100))).Value;
+        Assert.Single(list);
+        Assert.Equal(expected, list[0].Operation);
+        return list[0];
+    }
+
+    /// <summary>Applies a mapping and returns its single mapped entry.</summary>
+    private MappedEntry MapSingle(SyncLogEntry entry, SyncMappingConfig mappingConfig)
+    {
+        var success = MapSuccessfully(entry: entry, mappingConfig: mappingConfig);
+        Assert.Single(success.Entries);
+        return success.Entries[0];
+    }
+
+    /// <summary>Asserts a mapping is found for the table/direction with the expected id.</summary>
+    private static void AssertMappingFound(
+        string table,
+        SyncMappingConfig config,
+        MappingDirection direction,
+        string expectedId
+    )
+    {
+        var found = MappingEngine.FindMapping(table, config, direction);
+        Assert.NotNull(found);
+        Assert.Equal(expectedId, found.Id);
+    }
+
+    /// <summary>Asserts no mapping is found for the table/direction.</summary>
+    private static void AssertMappingMissing(
+        string table,
+        SyncMappingConfig config,
+        MappingDirection direction
+    ) => Assert.Null(MappingEngine.FindMapping(table, config, direction));
 }

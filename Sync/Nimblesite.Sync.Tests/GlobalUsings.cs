@@ -22,10 +22,6 @@ global using ConflictResolutionError = Outcome.Result<
     Nimblesite.Sync.Core.ConflictResolution,
     Nimblesite.Sync.Core.SyncError
 >.Error<Nimblesite.Sync.Core.ConflictResolution, Nimblesite.Sync.Core.SyncError>;
-global using ConflictResolutionOk = Outcome.Result<
-    Nimblesite.Sync.Core.ConflictResolution,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.ConflictResolution, Nimblesite.Sync.Core.SyncError>;
 global using IntSyncOk = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Ok<
     int,
     Nimblesite.Sync.Core.SyncError
@@ -35,18 +31,11 @@ global using PullResultError = Outcome.Result<
     Nimblesite.Sync.Core.SyncError
 >.Error<Nimblesite.Sync.Core.PullResult, Nimblesite.Sync.Core.SyncError>;
 // SyncCoordinator result types
-global using PullResultOk = Outcome.Result<
-    Nimblesite.Sync.Core.PullResult,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.PullResult, Nimblesite.Sync.Core.SyncError>;
+
 global using PushResultError = Outcome.Result<
     Nimblesite.Sync.Core.PushResult,
     Nimblesite.Sync.Core.SyncError
 >.Error<Nimblesite.Sync.Core.PushResult, Nimblesite.Sync.Core.SyncError>;
-global using PushResultOk = Outcome.Result<
-    Nimblesite.Sync.Core.PushResult,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.PushResult, Nimblesite.Sync.Core.SyncError>;
 global using SyncLogEntryError = Outcome.Result<
     Nimblesite.Sync.Core.SyncLogEntry,
     Nimblesite.Sync.Core.SyncError
@@ -77,7 +66,3 @@ global using SyncResultError = Outcome.Result<
     Nimblesite.Sync.Core.SyncResult,
     Nimblesite.Sync.Core.SyncError
 >.Error<Nimblesite.Sync.Core.SyncResult, Nimblesite.Sync.Core.SyncError>;
-global using SyncResultOk = Outcome.Result<
-    Nimblesite.Sync.Core.SyncResult,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.SyncResult, Nimblesite.Sync.Core.SyncError>;

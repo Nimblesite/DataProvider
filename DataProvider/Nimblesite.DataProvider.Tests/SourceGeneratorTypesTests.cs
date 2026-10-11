@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 

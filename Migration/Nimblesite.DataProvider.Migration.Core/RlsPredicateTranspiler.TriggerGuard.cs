@@ -447,10 +447,7 @@ public static partial class RlsPredicateTranspiler
     private static int ReadIdentifierEnd(string source, int start)
     {
         var i = start;
-        while (i < source.Length && (char.IsLetterOrDigit(source[i]) || source[i] == '_'))
-        {
-            i++;
-        }
+        i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(source: source, start: i);
         return i;
     }
 

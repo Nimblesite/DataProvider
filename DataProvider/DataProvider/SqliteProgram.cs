@@ -20,24 +20,18 @@ internal static class SqliteCli
 
     public static Command BuildCommand()
     {
-        var projectDir = new Option<DirectoryInfo>(
-            "--project-dir",
+        var projectDir = CliOptions.Required<DirectoryInfo>(
+            name: "--project-dir",
             description: "Project directory containing sql, grouping, and DataProvider.json"
-        )
-        {
-            IsRequired = true,
-        };
-        var config = new Option<FileInfo>("--config", description: "Path to DataProvider.json")
-        {
-            IsRequired = true,
-        };
-        var outDir = new Option<DirectoryInfo>(
-            "--out",
+        );
+        var config = CliOptions.Required<FileInfo>(
+            name: "--config",
+            description: "Path to DataProvider.json"
+        );
+        var outDir = CliOptions.Required<DirectoryInfo>(
+            name: "--out",
             description: "Output directory for generated .g.cs files"
-        )
-        {
-            IsRequired = true,
-        };
+        );
         var connectionTypeOpt = new Option<string>(
             "--connection-type",
             getDefaultValue: () => "SqliteConnection",
@@ -259,14 +253,12 @@ internal static class SqliteCli
                             >
                         )!.Value;
                         var prettyMeta = FormatSqliteMetadataMessage(err.DetailedMessage);
-                        Console.WriteLine($"❌ {prettyMeta}");
-                        // Also emit an MSBuild-formatted error so IDE Problem Matchers pick it up
-                        Console.Error.WriteLine($"{sqlPath}(1,1): error DP0001: {prettyMeta}");
-                        // Emit a compile-time error file so MSBuild surfaces the exact problem
-                        await WriteCompileTimeErrorFileAsync(
+                        await CliErrorWriter
+                            .ReportAsync(
                                 outDir,
                                 baseName,
                                 sqlPath,
+                                code: "DP0001",
                                 reason: "SQL error",
                                 message: prettyMeta
                             )
@@ -302,14 +294,12 @@ internal static class SqliteCli
                     else if (gen is Result<string, SqlError>.Error<string, SqlError> failure)
                     {
                         var prettyGen = FormatSqliteMetadataMessage(failure.Value.DetailedMessage);
-                        Console.WriteLine($"❌ {prettyGen}");
-                        // Also emit an MSBuild-formatted error so IDE Problem Matchers pick it up
-                        Console.Error.WriteLine($"{sqlPath}(1,1): error DL0002: {prettyGen}");
-                        // Emit a compile-time error file so MSBuild surfaces the exact problem
-                        await WriteCompileTimeErrorFileAsync(
+                        await CliErrorWriter
+                            .ReportAsync(
                                 outDir,
                                 baseName,
                                 sqlPath,
+                                code: "DL0002",
                                 reason: "SQL generation error",
                                 message: prettyGen
                             )
@@ -319,21 +309,8 @@ internal static class SqliteCli
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Error processing {sqlPath}: {ex.Message}");
-                    // Emit a compile-time error file so MSBuild surfaces the exact problem
-                    var baseName = Path.GetFileNameWithoutExtension(sqlPath);
-                    if (baseName.EndsWith(".generated", StringComparison.OrdinalIgnoreCase))
-                    {
-                        baseName = baseName[..^".generated".Length];
-                    }
-                    Console.Error.WriteLine($"{sqlPath}(1,1): error DL0003: {ex.Message}");
-                    await WriteCompileTimeErrorFileAsync(
-                            outDir,
-                            baseName,
-                            sqlPath,
-                            reason: "unexpected error",
-                            message: ex.Message
-                        )
+                    await CliErrorWriter
+                        .ReportUnexpectedAsync(outDir, sqlPath, code: "DL0003", exception: ex)
                         .ConfigureAwait(false);
                     hadErrors = true;
                 }
@@ -366,32 +343,10 @@ internal static class SqliteCli
 
                             while (await reader.ReadAsync().ConfigureAwait(false))
                             {
-                                var columnName = reader.GetString(1); // name column
-                                var sqliteType = reader.GetString(2); // type column
-                                var notNull = reader.GetInt32(3) == 1; // notnull column
-                                var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
-
-                                var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(
-                                    sqliteType,
-                                    !notNull
-                                );
-
                                 columns.Add(
-                                    new DatabaseColumn
-                                    {
-                                        Name = columnName,
-                                        SqlType = sqliteType,
-                                        CSharpType = csharpType,
-                                        IsNullable = !notNull,
-                                        IsPrimaryKey = isPrimaryKey,
-                                        IsIdentity =
-                                            isPrimaryKey
-                                            && sqliteType.Contains(
-                                                "INTEGER",
-                                                StringComparison.OrdinalIgnoreCase
-                                            ),
-                                        IsComputed = false,
-                                    }
+                                    item: global::Nimblesite.DataProvider.SQLite.SqliteCodeGenerator.ReadTableColumn(
+                                        reader: reader
+                                    )
                                 );
                             }
                         }
@@ -475,32 +430,6 @@ internal static class SqliteCli
             Console.WriteLine($"❌ Unexpected error: {ex}");
             return 1;
         }
-    }
-
-    private static async Task WriteCompileTimeErrorFileAsync(
-        DirectoryInfo outDir,
-        string baseName,
-        string sqlPath,
-        string reason,
-        string message
-    )
-    {
-        var errorFile = Path.Combine(outDir.FullName, baseName + ".g.cs");
-        var content =
-            $"// Auto-generated due to {reason} in {sqlPath}\n#error {EscapeForPreprocessor(message)}\n";
-        await File.WriteAllTextAsync(errorFile, content).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Generates a source file with the correct using statement for the specified connection type.
-    /// </summary>
-    private static string EscapeForPreprocessor(string message)
-    {
-        if (string.IsNullOrEmpty(message))
-            return string.Empty;
-        // Preprocessor directives cannot span multiple lines; replace newlines and quotes
-        var oneLine = message.Replace('\r', ' ').Replace('\n', ' ');
-        return oneLine.Replace('"', '\'');
     }
 
     private static string FormatSqliteMetadataMessage(string detailed)

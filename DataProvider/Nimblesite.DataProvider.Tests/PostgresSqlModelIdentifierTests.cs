@@ -1,5 +1,4 @@
 using Nimblesite.Lql.Postgres;
-using Nimblesite.Sql.Model;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -14,7 +13,9 @@ public sealed class PostgresSqlModelIdentifierTests
             .AddTable("Users")
             .Build();
 
-        var sql = Assert.IsType<StringOk>(statement.ToPostgreSql()).Value;
+        var sql = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statement.ToPostgreSql())
+            .Value;
 
         ContainsAll(
             actual: sql,

@@ -18,11 +18,10 @@ public sealed partial class SchemaDiffTests
         var desired = Fixture_Calculate_EmptyCurrentToNewDesired_CreatesTable_1();
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
-
-        Assert.Single(ops);
-        Assert.IsType<CreateTableOperation>(ops[0]);
-        var createOp = (CreateTableOperation)ops[0];
+        var createOp = VerifyReusableWorkflow9<CreateTableOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("users", createOp.Table.Name);
     }
 
@@ -47,11 +46,10 @@ public sealed partial class SchemaDiffTests
         var desired = Fixture_Calculate_NewColumn_AddsColumn_1();
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
-
-        Assert.Single(ops);
-        Assert.IsType<AddColumnOperation>(ops[0]);
-        var addColOp = (AddColumnOperation)ops[0];
+        var addColOp = VerifyReusableWorkflow9<AddColumnOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("email", addColOp.Column.Name);
         Assert.Equal("users", addColOp.TableName);
     }
@@ -65,11 +63,10 @@ public sealed partial class SchemaDiffTests
         var desired = UsersSchema(name: "Desired", indexEmail: true);
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
-
-        Assert.Single(ops);
-        Assert.IsType<CreateIndexOperation>(ops[0]);
-        var createIdxOp = (CreateIndexOperation)ops[0];
+        var createIdxOp = VerifyReusableWorkflow9<CreateIndexOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("idx_users_email", createIdxOp.Index.Name);
     }
 
@@ -82,11 +79,10 @@ public sealed partial class SchemaDiffTests
         var desired = Fixture_Calculate_NewForeignKey_AddsForeignKey_2();
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
-
-        Assert.Single(ops);
-        Assert.IsType<AddForeignKeyOperation>(ops[0]);
-        var addFkOp = (AddForeignKeyOperation)ops[0];
+        var addFkOp = VerifyReusableWorkflow9<AddForeignKeyOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("employees", addFkOp.TableName);
     }
 
@@ -110,19 +106,12 @@ public sealed partial class SchemaDiffTests
     public void Calculate_CaseInsensitiveTableMatching()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "USERS", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var current = Data_Calculate_CaseInsensitiveTableMatching_1();
 
         var desired = UsersSchema(name: "Desired", email: true);
 
         // Act
-        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
-
-        // Should recognize USERS and users as the same table, just add the column
-        Assert.Single(ops);
-        Assert.IsType<AddColumnOperation>(ops[0]);
+        _ = VerifyReusableWorkflow9<AddColumnOperation>(input0: current, input1: desired);
     }
 
     [Fact]
@@ -190,32 +179,14 @@ public sealed partial class SchemaDiffTests
     [Fact]
     public void Calculate_DesiredForcedRls_EmitsEnableForceRls()
     {
-        var current = SchemaTestData.Schema(
-            name: "Current",
-            tables: [RlsTable(new RlsPolicySetDefinition { Enabled = false })]
-        );
+        var current = RlsSchema("Current", new RlsPolicySetDefinition { Enabled = false });
 
-        var desired = SchemaTestData.Schema(
-            name: "Desired",
-            tables: [RlsTable(new RlsPolicySetDefinition { Forced = true })]
-        );
+        var desired = RlsSchema("Desired", new RlsPolicySetDefinition { Forced = true });
 
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
         Assert.Contains(ops, op => op is EnableRlsOperation);
         Assert.Contains(ops, op => op is EnableForceRlsOperation);
     }
-
-    private static TableDefinition RlsTable(RlsPolicySetDefinition rls) =>
-        SchemaTestData.Table(
-            schema: "public",
-            name: "documents",
-            columns:
-            [
-                SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
-            ],
-            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
-            rowLevelSecurity: rls
-        );
 
     // Implements [MIG-TEST-USER-FIXTURE].
     private static SchemaDefinition UsersSchema(
@@ -253,5 +224,28 @@ public sealed partial class SchemaDiffTests
             table.Column(name: "email", type: PortableTypes.VarChar(255));
         if (indexEmail)
             table.Index(name: "idx_users_email", column: "email");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SchemaDefinition RlsSchema(string name, RlsPolicySetDefinition rls) =>
+        SchemaTestData.Schema(name: name, tables: [RlsTable(rls)]);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static T VerifyReusableWorkflow9<T>(SchemaDefinition input0, SchemaDefinition input1)
+        where T : SchemaOperation =>
+        Assert.IsType<T>(Assert.Single(VerifyReusableWorkflow9(input0, input1)));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow9(
+        SchemaDefinition input0,
+        SchemaDefinition input1
+    )
+    {
+        // Act
+        var ops = SchemaDiffAssertions.Diff(current: input0, desired: input1);
+
+        Assert.Single(ops);
+
+        return ops;
     }
 }

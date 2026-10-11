@@ -43,12 +43,10 @@ public sealed partial class HttpSyncE2ETests
 
     private static void InitializeDatabase(SqliteConnection conn, string originId)
     {
-        SyncSchema.CreateSchema(conn);
-        SyncSchema.SetOriginId(conn, originId);
-
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: command => command.CommandText = Data_InitializeDatabase_1
+        global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow1(
+            configure0: command => command.CommandText = Data_InitializeDatabase_1,
+            input0: conn,
+            input1: originId
         );
 
         TriggerGenerator.CreateTriggers(conn, "Person", NullLogger.Instance);
@@ -80,9 +78,7 @@ public sealed partial class HttpSyncE2ETests
     )
     {
         Assert.True(entry.Version > 0);
-        Assert.Equal("Person", entry.TableName);
-        Assert.Equal(SyncOperation.Insert, entry.Operation);
-        Assert.Equal(originId, entry.Origin);
+        CrossDatabaseSyncTests.AssertPersonInsert(entry, originId);
         using var key = JsonDocument.Parse(Assert.IsType<string>(entry.PkValue));
         Assert.Equal(id, key.RootElement.GetProperty("Id").GetString());
         using var payload = JsonDocument.Parse(Assert.IsType<string>(entry.Payload));
@@ -91,25 +87,109 @@ public sealed partial class HttpSyncE2ETests
         Assert.Equal(email, payload.RootElement.GetProperty("Email").GetString());
     }
 
+    /// <summary>Parses a camelCase HTTP change payload into a sync log entry.</summary>
+    private static SyncLogEntry ParseEntry(JsonElement change) =>
+        new(
+            Version: change.GetProperty("version").GetInt64(),
+            TableName: change.GetProperty("tableName").GetString() ?? "",
+            PkValue: change.GetProperty("pkValue").GetString() ?? "",
+            Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
+            Payload: change.GetProperty("payload").GetString() ?? "",
+            Origin: change.GetProperty("origin").GetString() ?? "",
+            Timestamp: change.GetProperty("timestamp").GetString() ?? ""
+        );
+
+    /// <summary>Builds a JSON push request body for the given changes and origin.</summary>
+    private static string BuildPushJson(IReadOnlyList<SyncLogEntry> changes, string originId) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                Changes = changes
+                    .Select(c => new
+                    {
+                        c.Version,
+                        c.TableName,
+                        c.PkValue,
+                        Operation = c.Operation.ToString().ToLowerInvariant(),
+                        c.Payload,
+                        c.Origin,
+                        c.Timestamp,
+                    })
+                    .ToList(),
+                OriginId = originId,
+            }
+        );
+
+    /// <summary>Builds a JSON push request content for the given changes and origin.</summary>
+    private static StringContent BuildPushContent(
+        IReadOnlyList<SyncLogEntry> changes,
+        string originId
+    ) => new(BuildPushJson(changes, originId), System.Text.Encoding.UTF8, "application/json");
+
+    /// <summary>Asserts the number of rows in the Person table.</summary>
+    private static void AssertPersonCount(SqliteConnection connection, long expected) =>
+        Assert.Equal(
+            expected,
+            global::Tests.Shared.DatabaseCommands.ScalarInt64(
+                connection: connection,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+            )
+        );
+
+    /// <summary>Asserts the single logged client insert and returns the change list.</summary>
+    private IReadOnlyList<SyncLogEntry> ExpectLoggedClientInsert(
+        Outcome.Result<IReadOnlyList<SyncLogEntry>, SyncError> changes,
+        string id,
+        string name,
+        string email
+    ) =>
+        VerifyReusableWorkflow8(
+            input0: changes,
+            input1: AssertLoggedInsert,
+            input2: _clientOriginId,
+            value0: id,
+            value1: name,
+            value2: email
+        );
+
+    /// <summary>Reads a response body after asserting the action succeeded.</summary>
+    private static async Task<string> ReadBodyAssertSuccess(
+        HttpResponseMessage response,
+        string action
+    )
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(
+            response.IsSuccessStatusCode,
+            $"{action} failed: {response.StatusCode} - {body}"
+        );
+        return body;
+    }
+
+    /// <summary>Issues a GET request, asserting success, and parses the JSON body.</summary>
+    private static async Task<JsonDocument> GetJsonAsync(HttpClient client, string url)
+    {
+        var response = await client.GetAsync(url);
+        Assert.True(response.IsSuccessStatusCode);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Asserts an OK response and parses its JSON body.</summary>
+    private static async Task<JsonDocument> ReadJsonOkAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+    }
+
     public void Dispose()
     {
         _client.Dispose();
-        _serverConn.Close();
-        _serverConn.Dispose();
-        _clientConn.Close();
-        _clientConn.Dispose();
-
-        try
-        {
-            if (File.Exists(_serverDbPath))
-                File.Delete(_serverDbPath);
-            if (File.Exists(_clientDbPath))
-                File.Delete(_clientDbPath);
-        }
-        catch
-        {
-            // Ignore cleanup errors
-        }
+        VerifyReusableWorkflow3(
+            input0: _serverConn,
+            input1: _clientConn,
+            input2: _serverDbPath,
+            input3: _clientDbPath
+        );
     }
 
     /// <summary>
@@ -119,44 +199,23 @@ public sealed partial class HttpSyncE2ETests
     public async Task PushChanges_InsertsOnClient_AppearsOnServer()
     {
         // Arrange - insert data on client
-        DatabaseCommands.Execute(
-            connection: _clientConn,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('http1', 'HTTP Test', 'http@test.com')"
-        );
-
-        // Get changes from client
-        var clientChanges = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        var changesList = Assert.IsType<SyncLogListOk>(clientChanges).Value;
-        AssertLoggedInsert(
-            Assert.Single(changesList),
+        var clientChanges =
+            global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow2(
+                configure0: cmd =>
+                    cmd.CommandText =
+                        "INSERT INTO Person (Id, Name, Email) VALUES ('http1', 'HTTP Test', 'http@test.com')",
+                input0: _clientConn
+            );
+        var changesList = ExpectLoggedClientInsert(
+            clientChanges,
             "http1",
             "HTTP Test",
-            "http@test.com",
-            _clientOriginId
+            "http@test.com"
         );
 
         // Build request - OriginId is the origin to SKIP (server's own origin prevents echo)
         // We're pushing FROM client, so server should NOT skip client's changes
-        var pushRequest = new
-        {
-            Changes = changesList
-                .Select(c => new
-                {
-                    c.Version,
-                    c.TableName,
-                    c.PkValue,
-                    Operation = c.Operation.ToString().ToLowerInvariant(),
-                    c.Payload,
-                    c.Origin,
-                    c.Timestamp,
-                })
-                .ToList(),
-            OriginId = _serverOriginId,
-        };
-
-        var requestJson = JsonSerializer.Serialize(pushRequest);
+        var requestJson = BuildPushJson(changesList, _serverOriginId);
         var content = new StringContent(requestJson, System.Text.Encoding.UTF8, "application/json");
 
         var connStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
@@ -168,8 +227,7 @@ public sealed partial class HttpSyncE2ETests
         );
 
         // Assert - HTTP success
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"Push failed: {response.StatusCode} - {body}");
+        _ = await ReadBodyAssertSuccess(response, "Push");
 
         AssertPerson(_serverConn, "http1", "HTTP Test", "http@test.com");
 
@@ -184,16 +242,7 @@ public sealed partial class HttpSyncE2ETests
         );
         Assert.True(repeat.IsSuccessStatusCode, await repeat.Content.ReadAsStringAsync());
         AssertPerson(_serverConn, "http1", "HTTP Test", "http@test.com");
-        Assert.Equal(
-            1L,
-            Convert.ToInt64(
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _serverConn,
-                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
-                ),
-                System.Globalization.CultureInfo.InvariantCulture
-            )
-        );
+        AssertPersonCount(_serverConn, 1L);
     }
 
     /// <summary>
@@ -203,14 +252,13 @@ public sealed partial class HttpSyncE2ETests
     public async Task PullChanges_ChangesOnServer_AppearsOnClient()
     {
         // Arrange - insert data on server
-        DatabaseCommands.Execute(
-            connection: _serverConn,
-            configure: cmd =>
+        var connStr = VerifyReusableWorkflow9(
+            configure0: cmd =>
                 cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('pull1', 'Pull Test', 'pull@test.com')"
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('pull1', 'Pull Test', 'pull@test.com')",
+            input0: _serverConn,
+            input1: _serverDbPath
         );
-
-        var connStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
 
         // Act - pull changes via HTTP
         var response = await _client.GetAsync(
@@ -218,8 +266,7 @@ public sealed partial class HttpSyncE2ETests
         );
 
         // Assert - HTTP success
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"Pull failed: {response.StatusCode} - {body}");
+        var body = await ReadBodyAssertSuccess(response, "Pull");
 
         // Parse response (ASP.NET Core uses camelCase by default)
         using var doc = JsonDocument.Parse(body);
@@ -238,19 +285,9 @@ public sealed partial class HttpSyncE2ETests
         // Apply changes to client (operation is returned as integer enum value)
         foreach (var change in changesArray.EnumerateArray())
         {
-            var entry = new SyncLogEntry(
-                Version: change.GetProperty("version").GetInt64(),
-                TableName: change.GetProperty("tableName").GetString() ?? "",
-                PkValue: change.GetProperty("pkValue").GetString() ?? "",
-                Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
-                Payload: change.GetProperty("payload").GetString() ?? "",
-                Origin: change.GetProperty("origin").GetString() ?? "",
-                Timestamp: change.GetProperty("timestamp").GetString() ?? ""
-            );
+            var entry = ParseEntry(change);
 
-            SyncSessionManager.EnableSuppression(_clientConn);
-            var result = ChangeApplierSQLite.ApplyChange(_clientConn, entry);
-            SyncSessionManager.DisableSuppression(_clientConn);
+            var result = CrossDatabaseSyncTests.ApplyChangeWithSuppression(_clientConn, entry);
             Assert.True(result is BoolSyncOk, $"Apply failed: {result}");
         }
 
@@ -263,8 +300,7 @@ public sealed partial class HttpSyncE2ETests
         using var nextPage = await _client.GetAsync(
             $"/sync/changes?fromVersion={lastVersion}&batchSize=100&dbType=sqlite&connectionString={connStr}"
         );
-        Assert.Equal(System.Net.HttpStatusCode.OK, nextPage.StatusCode);
-        using var nextPageJson = JsonDocument.Parse(await nextPage.Content.ReadAsStringAsync());
+        using var nextPageJson = await ReadJsonOkAsync(nextPage);
         Assert.Empty(nextPageJson.RootElement.GetProperty("changes").EnumerateArray());
     }
 
@@ -275,86 +311,47 @@ public sealed partial class HttpSyncE2ETests
     public async Task BidirectionalSync_ChangesBothWays_BothDatabasesHaveBothRecords()
     {
         // Arrange - insert different data on each side
-        DatabaseCommands.Execute(
-            connection: _serverConn,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_server', 'Server Record', 'server@test.com')"
+        CrossDatabaseSyncTests.ExecuteSql(
+            _serverConn,
+            "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_server', 'Server Record', 'server@test.com')"
         );
 
-        DatabaseCommands.Execute(
-            connection: _clientConn,
-            configure: cmd =>
+        var serverConnStr = VerifyReusableWorkflow9(
+            configure0: cmd =>
                 cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_client', 'Client Record', 'client@test.com')"
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_client', 'Client Record', 'client@test.com')",
+            input0: _clientConn,
+            input1: _serverDbPath
         );
-
-        var serverConnStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
         var clientConnStr = Uri.EscapeDataString($"Data Source={_clientDbPath}");
 
         // Pull from server -> apply to client
-        var pullResponse = await _client.GetAsync(
+        using var pullDoc = await GetJsonAsync(
+            _client,
             $"/sync/changes?fromVersion=0&batchSize=100&dbType=sqlite&connectionString={serverConnStr}"
         );
-        Assert.True(pullResponse.IsSuccessStatusCode);
-
-        var pullBody = await pullResponse.Content.ReadAsStringAsync();
-        using var pullDoc = JsonDocument.Parse(pullBody);
         Assert.Single(pullDoc.RootElement.GetProperty("changes").EnumerateArray());
 
         foreach (var change in pullDoc.RootElement.GetProperty("changes").EnumerateArray())
         {
-            var entry = new SyncLogEntry(
-                Version: change.GetProperty("version").GetInt64(),
-                TableName: change.GetProperty("tableName").GetString() ?? "",
-                PkValue: change.GetProperty("pkValue").GetString() ?? "",
-                Operation: (SyncOperation)change.GetProperty("operation").GetInt32(),
-                Payload: change.GetProperty("payload").GetString() ?? "",
-                Origin: change.GetProperty("origin").GetString() ?? "",
-                Timestamp: change.GetProperty("timestamp").GetString() ?? ""
-            );
+            var entry = ParseEntry(change);
 
             if (entry.Origin != _clientOriginId)
             {
-                SyncSessionManager.EnableSuppression(_clientConn);
-                ChangeApplierSQLite.ApplyChange(_clientConn, entry);
-                SyncSessionManager.DisableSuppression(_clientConn);
+                CrossDatabaseSyncTests.ApplyChangeWithSuppression(_clientConn, entry);
             }
         }
 
         // Push from client -> server (OriginId = server's origin to not skip client changes)
         var clientChanges = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        var clientChangesList = Assert.IsType<SyncLogListOk>(clientChanges).Value;
-        AssertLoggedInsert(
-            Assert.Single(clientChangesList),
+        var clientChangesList = ExpectLoggedClientInsert(
+            clientChanges,
             "bidir_client",
             "Client Record",
-            "client@test.com",
-            _clientOriginId
+            "client@test.com"
         );
 
-        var pushRequest = new
-        {
-            Changes = clientChangesList
-                .Select(c => new
-                {
-                    c.Version,
-                    c.TableName,
-                    c.PkValue,
-                    Operation = c.Operation.ToString().ToLowerInvariant(),
-                    c.Payload,
-                    c.Origin,
-                    c.Timestamp,
-                })
-                .ToList(),
-            OriginId = _serverOriginId,
-        };
-
-        var content = new StringContent(
-            JsonSerializer.Serialize(pushRequest),
-            System.Text.Encoding.UTF8,
-            "application/json"
-        );
+        var content = BuildPushContent(clientChangesList, _serverOriginId);
 
         var pushResponse = await _client.PostAsync(
             $"/sync/changes?dbType=sqlite&connectionString={serverConnStr}",
@@ -363,27 +360,8 @@ public sealed partial class HttpSyncE2ETests
         Assert.True(pushResponse.IsSuccessStatusCode);
 
         // Assert - both databases have both records
-        Assert.Equal(
-            2L,
-            Convert.ToInt64(
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _serverConn,
-                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
-                ),
-                System.Globalization.CultureInfo.InvariantCulture
-            )
-        );
-
-        Assert.Equal(
-            2L,
-            Convert.ToInt64(
-                global::Tests.Shared.DatabaseCommands.Scalar(
-                    connection: _clientConn,
-                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
-                ),
-                System.Globalization.CultureInfo.InvariantCulture
-            )
-        );
+        AssertPersonCount(_serverConn, 2L);
+        AssertPersonCount(_clientConn, 2L);
 
         AssertPerson(_serverConn, "bidir_server", "Server Record", "server@test.com");
         AssertPerson(_serverConn, "bidir_client", "Client Record", "client@test.com");
@@ -400,25 +378,19 @@ public sealed partial class HttpSyncE2ETests
         // Arrange - insert multiple records
         for (var i = 0; i < 5; i++)
         {
-            DatabaseCommands.Execute(
-                connection: _serverConn,
-                configure: command =>
-                    command.CommandText =
-                        $"INSERT INTO Person (Id, Name, Email) VALUES ('state{i}', 'Person {i}', 'p{i}@test.com')"
+            CrossDatabaseSyncTests.ExecuteSql(
+                _serverConn,
+                $"INSERT INTO Person (Id, Name, Email) VALUES ('state{i}', 'Person {i}', 'p{i}@test.com')"
             );
         }
 
         var connStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
 
         // Act
-        var response = await _client.GetAsync(
+        using var doc = await GetJsonAsync(
+            _client,
             $"/sync/state?dbType=sqlite&connectionString={connStr}"
         );
-
-        // Assert
-        Assert.True(response.IsSuccessStatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(body);
 
         var maxVersion = doc.RootElement.GetProperty("maxVersion").GetInt64();
         Assert.Equal(5L, maxVersion);
@@ -426,11 +398,72 @@ public sealed partial class HttpSyncE2ETests
         using var pull = await _client.GetAsync(
             $"/sync/changes?fromVersion=0&batchSize=2&dbType=sqlite&connectionString={connStr}"
         );
-        Assert.Equal(System.Net.HttpStatusCode.OK, pull.StatusCode);
-        using var pullJson = JsonDocument.Parse(await pull.Content.ReadAsStringAsync());
+        using var pullJson = await ReadJsonOkAsync(pull);
         var page = pullJson.RootElement.GetProperty("changes").EnumerateArray().ToArray();
         Assert.Equal(2, page.Length);
         Assert.Equal(1L, page[0].GetProperty("version").GetInt64());
         Assert.Equal(2L, page[1].GetProperty("version").GetInt64());
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow3(
+        SqliteConnection input0,
+        SqliteConnection input1,
+        string input2,
+        string input3
+    )
+    {
+        input0.Close();
+        input0.Dispose();
+        input1.Close();
+        input1.Dispose();
+
+        try
+        {
+            if (File.Exists(input2))
+                File.Delete(input2);
+            if (File.Exists(input3))
+                File.Delete(input3);
+        }
+        catch
+        {
+            // Ignore cleanup errors
+        }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SyncLogEntry> VerifyReusableWorkflow8(
+        Outcome.Result<IReadOnlyList<SyncLogEntry>, SyncError> input0,
+        Action<SyncLogEntry, string, string, string, string> input1,
+        string input2,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var changesList = Assert.IsType<SyncLogListOk>(input0).Value;
+        input1(
+            arg1: Assert.Single(changesList),
+            arg2: value0,
+            arg3: value1,
+            arg4: value2,
+            arg5: input2
+        );
+
+        return changesList;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyReusableWorkflow9(
+        SqliteConnection input0,
+        string input1,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    { // Arrange - insert data on server
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        var connStr = Uri.EscapeDataString($"Data Source={input1}");
+
+        return connStr;
     }
 }

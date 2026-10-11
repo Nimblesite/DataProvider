@@ -2,9 +2,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -23,10 +21,7 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     public SpecConformanceTests()
     {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
         CreatePersonTable();
     }
 
@@ -42,7 +37,7 @@ public sealed partial class SpecConformanceTests : IDisposable
         // Arrange: Create table with UUID primary key (spec recommended)
         ExecuteSql(Data_Spec4_1_SingleColumnUuidPrimaryKey_IsSupported_1);
         var triggerResult = TriggerGenerator.CreateTriggers(_db, "UuidTable", TestLogger.L);
-        Assert.IsType<BoolSyncOk>(triggerResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: triggerResult);
 
         // Act: Insert with UUID
         var uuid = Guid.NewGuid().ToString();
@@ -61,13 +56,10 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec4_3_PkValue_IsJsonObject()
     {
         // Arrange
-        TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
-
-        // Act
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('pk-123', 'Alice', 'a@b.com')");
-
-        // Assert
-        var changes = FetchAllChanges();
+        var changes = VerifySharedPhase1(
+            input0: _db,
+            value1: "INSERT INTO Person (Id, Name, Email) VALUES ('pk-123', 'Alice', 'a@b.com')"
+        );
         var pkValue = changes[0].PkValue;
 
         // pk_value must be valid JSON object like {"Id": "pk-123"}
@@ -101,8 +93,8 @@ public sealed partial class SpecConformanceTests : IDisposable
         var result = SyncSchema.GetOriginId(_db);
 
         // Assert
-        Assert.IsType<StringSyncOk>(result);
-        Assert.Equal(_originId, ((StringSyncOk)result).Value);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        Assert.Equal(_originId, (Ok(actual: result)).Value);
     }
 
     /// <summary>
@@ -116,12 +108,10 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Act: Insert, update, delete
         ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')");
-        ExecuteSql("UPDATE Person SET Name = 'Bob' WHERE Id = 'p1'");
-        ExecuteSql("DELETE FROM Person WHERE Id = 'p1'");
-
-        // Assert: All entries have origin
-        var changes = FetchAllChanges();
-        Assert.Equal(3, changes.Count);
+        var changes = RunPersonMutations(
+            first: "UPDATE Person SET Name = 'Bob' WHERE Id = 'p1'",
+            second: "DELETE FROM Person WHERE Id = 'p1'"
+        );
         Assert.All(changes, c => Assert.Equal(_originId, c.Origin));
     }
 
@@ -137,17 +127,11 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec6_1_Timestamps_AreIso8601UtcWithMilliseconds()
     {
         // Arrange
-        TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
-
-        // Act
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')");
-
-        // Assert
-        var changes = FetchAllChanges();
-        var timestamp = changes[0].Timestamp;
+        var timestamp = VerifySharedPhase1AndMatchTimestamp(
+            insertSql: "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')"
+        );
 
         // Must match ISO 8601 UTC format with milliseconds
-        Assert.Matches(Iso8601UtcRegex(), timestamp);
         Assert.EndsWith("Z", timestamp); // Spec 6.2: MUST be UTC (Z suffix)
     }
 
@@ -158,11 +142,10 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec6_2_Timestamps_EndWithZ()
     {
         // Arrange
-        TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')");
-
-        // Assert
-        var changes = FetchAllChanges();
+        var changes = VerifySharedPhase1(
+            input0: _db,
+            value1: "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')"
+        );
         Assert.EndsWith("Z", changes[0].Timestamp);
     }
 
@@ -182,12 +165,18 @@ public sealed partial class SpecConformanceTests : IDisposable
         var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All required columns exist
-        Assert.Contains("version", columns);
-        Assert.Contains("table_name", columns);
-        Assert.Contains("pk_value", columns);
-        Assert.Contains("operation", columns);
-        Assert.Contains("payload", columns);
-        Assert.Contains("origin", columns);
+        VerifyReusableWorkflow1(
+            input0: columns,
+            value0: "version",
+            value1: "table_name",
+            value2: "pk_value"
+        );
+        VerifyReusableWorkflow1(
+            input0: columns,
+            value0: "operation",
+            value1: "payload",
+            value2: "origin"
+        );
         Assert.Contains("timestamp", columns);
     }
 
@@ -202,11 +191,12 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Act
         ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'a@b.com')");
-        ExecuteSql("UPDATE Person SET Name = 'Bob' WHERE Id = 'p1'");
-        ExecuteSql("DELETE FROM Person WHERE Id = 'p1'");
-
-        // Assert
-        var changes = FetchAllChanges();
+        var changes = VerifyReusableWorkflow11(
+            input0: ExecuteSql,
+            input1: FetchAllChanges,
+            value0: "UPDATE Person SET Name = 'Bob' WHERE Id = 'p1'",
+            value1: "DELETE FROM Person WHERE Id = 'p1'"
+        );
         Assert.Equal("insert", changes[0].Operation.ToString().ToLowerInvariant());
         Assert.Equal("update", changes[1].Operation.ToString().ToLowerInvariant());
         Assert.Equal("delete", changes[2].Operation.ToString().ToLowerInvariant());
@@ -220,13 +210,10 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec7_3_Payload_IsValidJsonWithAllColumns()
     {
         // Arrange
-        TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
-
-        // Act
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'alice@test.com')");
-
-        // Assert
-        var changes = FetchAllChanges();
+        var changes = VerifySharedPhase1(
+            input0: _db,
+            value1: "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'alice@test.com')"
+        );
         var payload = JsonSerializer.Deserialize<Dictionary<string, string>>(changes[0].Payload!);
         Assert.NotNull(payload);
         Assert.Equal("p1", payload["Id"]);
@@ -333,7 +320,9 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Assert
 
-        var triggers = (Assert.IsType<StringSyncOk>(triggersResult)).Value;
+        var triggers = (
+            global::Tests.Shared.ResultAssertions.ExactOk(actual: triggersResult)
+        ).Value;
         Assert.Contains("strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", triggers);
     }
 
@@ -352,9 +341,12 @@ public sealed partial class SpecConformanceTests : IDisposable
             "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'Person'";
         var triggers = DatabaseCommands.ReadStrings(cmd);
 
-        Assert.Contains("Person_sync_insert", triggers);
-        Assert.Contains("Person_sync_update", triggers);
-        Assert.Contains("Person_sync_delete", triggers);
+        VerifyReusableWorkflow1(
+            input0: triggers,
+            value0: "Person_sync_insert",
+            value1: "Person_sync_update",
+            value2: "Person_sync_delete"
+        );
     }
 
     #endregion
@@ -370,14 +362,10 @@ public sealed partial class SpecConformanceTests : IDisposable
         // Arrange
         TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
         ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'First', 'a@b.com')");
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Second', 'b@c.com')");
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Third', 'c@d.com')");
-
-        // Act
-        var changes = FetchAllChanges();
-
-        // Assert: Ordered by version ascending
-        Assert.Equal(3, changes.Count);
+        var changes = RunPersonMutations(
+            first: "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Second', 'b@c.com')",
+            second: "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Third', 'c@d.com')"
+        );
         Assert.True(changes[0].Version < changes[1].Version);
         Assert.True(changes[1].Version < changes[2].Version);
     }
@@ -462,7 +450,7 @@ public sealed partial class SpecConformanceTests : IDisposable
         );
 
         // Assert: Entry was skipped (echo prevention)
-        Assert.IsType<BatchApplyResultOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Empty(applied);
     }
 
@@ -585,15 +573,9 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec17_3_Timestamps_AreUtcIso8601WithMilliseconds()
     {
         // Arrange
-        TriggerGenerator.CreateTriggers(_db, "Person", TestLogger.L);
-        ExecuteSql("INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Test', 'test@test.com')");
-
-        // Act
-        var changes = FetchAllChanges();
-        var ts = changes[0].Timestamp;
-
-        // Assert: Matches format YYYY-MM-DDTHH:MM:SS.sssZ
-        Assert.Matches(Iso8601UtcRegex(), ts);
+        _ = VerifySharedPhase1AndMatchTimestamp(
+            insertSql: "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Test', 'test@test.com')"
+        );
     }
 
     /// <summary>
@@ -632,7 +614,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     {
         var result = SyncLogRepository.FetchChanges(_db, 0, 1000);
         Assert.IsType<SyncLogListOk>(result);
-        return [.. ((SyncLogListOk)result).Value];
+        return [.. (Ok(actual: result)).Value];
     }
 
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")]
@@ -643,19 +625,84 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
     }
 
     #endregion
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal List<SyncLogEntry> VerifySharedPhase1(SqliteConnection input0, string value1)
+    { // Arrange
+        TriggerGenerator.CreateTriggers(input0, "Person", TestLogger.L);
+
+        // Act
+        ExecuteSql(value1);
+
+        // Assert
+        var changes = FetchAllChanges();
+
+        return changes;
+    }
+
+    private List<SyncLogEntry> RunPersonMutations(string first, string second)
+    {
+        var changes = VerifySyncLoopWorkflow3(
+            input0: VerifyReusableWorkflow11,
+            input1: ExecuteSql,
+            input2: FetchAllChanges,
+            value0: first,
+            value1: second
+        );
+        return changes;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private string VerifySharedPhase1AndMatchTimestamp(string insertSql)
+    {
+        var changes = VerifySharedPhase1(input0: _db, value1: insertSql);
+        var timestamp = changes[0].Timestamp;
+        Assert.Matches(Iso8601UtcRegex(), timestamp);
+        return timestamp;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow1(
+        List<string> input0,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        // Assert: All required columns exist
+        Assert.Contains(value0, input0);
+        Assert.Contains(value1, input0);
+        Assert.Contains(value2, input0);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static List<SyncLogEntry> VerifyReusableWorkflow11(
+        Action<string> input0,
+        Func<List<SyncLogEntry>> input1,
+        string value0,
+        string value1
+    )
+    {
+        input0(obj: value0);
+        input0(obj: value1);
+        // Assert: All entries have origin
+        var changes = input1();
+        return changes;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+internal static List<SyncLogEntry> VerifySyncLoopWorkflow3(Func<Action<string>, Func<List<SyncLogEntry>>, string, string, List<SyncLogEntry>> input0, Action<string> input1, Func<List<SyncLogEntry>> input2, string value0, string value1)
+{
+    var changes = input0(input1, input2, value0, value1);
+    Assert.Equal(3, changes.Count);
+    return changes;
+}
 }

@@ -87,38 +87,38 @@ internal sealed class PortableTypeJsonConverter : JsonConverter<PortableType>
             "Int" => new IntType(),
             "BigInt" => new BigIntType(),
             "Decimal" => new DecimalType(
-                root.TryGetProperty("precision", out var p) ? p.GetInt32() : 18,
-                root.TryGetProperty("scale", out var s) ? s.GetInt32() : 2
+                ReadInteger(element: root, propertyName: "precision", fallback: 18),
+                ReadInteger(element: root, propertyName: "scale", fallback: 2)
             ),
             "Float" => new FloatType(),
             "Double" => new DoubleType(),
             "Money" => new MoneyType(),
             "SmallMoney" => new SmallMoneyType(),
             "Boolean" => new BooleanType(),
-            "Char" => new CharType(root.TryGetProperty("length", out var cl) ? cl.GetInt32() : 1),
+            "Char" => new CharType(ReadInteger(element: root, propertyName: "length", fallback: 1)),
             "VarChar" => new VarCharType(
-                root.TryGetProperty("length", out var vl) ? vl.GetInt32() : 255
+                ReadInteger(element: root, propertyName: "length", fallback: 255)
             ),
             "NChar" => new NCharType(
-                root.TryGetProperty("length", out var ncl) ? ncl.GetInt32() : 1
+                ReadInteger(element: root, propertyName: "length", fallback: 1)
             ),
             "NVarChar" => new NVarCharType(
-                root.TryGetProperty("length", out var nvl) ? nvl.GetInt32() : 255
+                ReadInteger(element: root, propertyName: "length", fallback: 255)
             ),
             "Text" => new TextType(),
             "Binary" => new BinaryType(
-                root.TryGetProperty("length", out var bl) ? bl.GetInt32() : 1
+                ReadInteger(element: root, propertyName: "length", fallback: 1)
             ),
             "VarBinary" => new VarBinaryType(
-                root.TryGetProperty("length", out var vbl) ? vbl.GetInt32() : 255
+                ReadInteger(element: root, propertyName: "length", fallback: 255)
             ),
             "Blob" => new BlobType(),
             "Date" => new DateType(),
             "Time" => new TimeType(
-                root.TryGetProperty("precision", out var tp) ? tp.GetInt32() : 7
+                ReadInteger(element: root, propertyName: "precision", fallback: 7)
             ),
             "DateTime" => new DateTimeType(
-                root.TryGetProperty("precision", out var dtp) ? dtp.GetInt32() : 3
+                ReadInteger(element: root, propertyName: "precision", fallback: 3)
             ),
             "DateTimeOffset" => new DateTimeOffsetType(),
             "Uuid" => new UuidType(),
@@ -129,7 +129,7 @@ internal sealed class PortableTypeJsonConverter : JsonConverter<PortableType>
                 root.TryGetProperty("srid", out var gs) ? gs.GetInt32() : null
             ),
             "Geography" => new GeographyType(
-                root.TryGetProperty("srid", out var ggs) ? ggs.GetInt32() : 4326
+                ReadInteger(element: root, propertyName: "srid", fallback: 4326)
             ),
             "Enum" => new EnumType(
                 root.TryGetProperty("name", out var en) ? en.GetString() ?? "enum" : "enum",
@@ -150,109 +150,48 @@ internal sealed class PortableTypeJsonConverter : JsonConverter<PortableType>
     {
         writer.WriteStartObject();
 
+        writer.WriteString(propertyName: "type", value: SerializedTypeName(value: value));
+
         switch (value)
         {
-            case TinyIntType:
-                writer.WriteString("type", "TinyInt");
-                break;
-            case SmallIntType:
-                writer.WriteString("type", "SmallInt");
-                break;
-            case IntType:
-                writer.WriteString("type", "Int");
-                break;
-            case BigIntType:
-                writer.WriteString("type", "BigInt");
-                break;
             case DecimalType d:
-                writer.WriteString("type", "Decimal");
                 writer.WriteNumber("precision", d.Precision);
                 writer.WriteNumber("scale", d.Scale);
                 break;
-            case FloatType:
-                writer.WriteString("type", "Float");
-                break;
-            case DoubleType:
-                writer.WriteString("type", "Double");
-                break;
-            case MoneyType:
-                writer.WriteString("type", "Money");
-                break;
-            case SmallMoneyType:
-                writer.WriteString("type", "SmallMoney");
-                break;
-            case BooleanType:
-                writer.WriteString("type", "Boolean");
-                break;
             case CharType c:
-                writer.WriteString("type", "Char");
                 writer.WriteNumber("length", c.Length);
                 break;
             case VarCharType v:
-                writer.WriteString("type", "VarChar");
                 writer.WriteNumber("length", v.MaxLength);
                 break;
             case NCharType nc:
-                writer.WriteString("type", "NChar");
                 writer.WriteNumber("length", nc.Length);
                 break;
             case NVarCharType nv:
-                writer.WriteString("type", "NVarChar");
                 writer.WriteNumber("length", nv.MaxLength);
                 break;
-            case TextType:
-                writer.WriteString("type", "Text");
-                break;
             case BinaryType b:
-                writer.WriteString("type", "Binary");
                 writer.WriteNumber("length", b.Length);
                 break;
             case VarBinaryType vb:
-                writer.WriteString("type", "VarBinary");
                 writer.WriteNumber("length", vb.MaxLength);
                 break;
-            case BlobType:
-                writer.WriteString("type", "Blob");
-                break;
-            case DateType:
-                writer.WriteString("type", "Date");
-                break;
             case TimeType t:
-                writer.WriteString("type", "Time");
                 writer.WriteNumber("precision", t.Precision);
                 break;
             case DateTimeType dt:
-                writer.WriteString("type", "DateTime");
                 writer.WriteNumber("precision", dt.Precision);
                 break;
-            case DateTimeOffsetType:
-                writer.WriteString("type", "DateTimeOffset");
-                break;
-            case UuidType:
-                writer.WriteString("type", "Uuid");
-                break;
-            case JsonType:
-                writer.WriteString("type", "Json");
-                break;
-            case XmlType:
-                writer.WriteString("type", "Xml");
-                break;
-            case RowVersionType:
-                writer.WriteString("type", "RowVersion");
-                break;
             case GeometryType g:
-                writer.WriteString("type", "Geometry");
                 if (g.Srid.HasValue)
                 {
                     writer.WriteNumber("srid", g.Srid.Value);
                 }
                 break;
             case GeographyType geo:
-                writer.WriteString("type", "Geography");
                 writer.WriteNumber("srid", geo.Srid);
                 break;
             case EnumType e:
-                writer.WriteString("type", "Enum");
                 writer.WriteString("name", e.Name);
                 writer.WriteStartArray("values");
                 foreach (var val in e.Values)
@@ -261,11 +200,49 @@ internal sealed class PortableTypeJsonConverter : JsonConverter<PortableType>
                 }
                 writer.WriteEndArray();
                 break;
-            default:
-                writer.WriteString("type", "Text");
-                break;
         }
 
         writer.WriteEndObject();
     }
+
+    // Implements [MIG-JSON-SHARED-PORTABLE-TYPE-FIELDS].
+    private static string SerializedTypeName(PortableType value) =>
+        value switch
+        {
+            TinyIntType => "TinyInt",
+            SmallIntType => "SmallInt",
+            IntType => "Int",
+            BigIntType => "BigInt",
+            DecimalType => "Decimal",
+            FloatType => "Float",
+            DoubleType => "Double",
+            MoneyType => "Money",
+            SmallMoneyType => "SmallMoney",
+            BooleanType => "Boolean",
+            CharType => "Char",
+            VarCharType => "VarChar",
+            NCharType => "NChar",
+            NVarCharType => "NVarChar",
+            TextType => "Text",
+            BinaryType => "Binary",
+            VarBinaryType => "VarBinary",
+            BlobType => "Blob",
+            DateType => "Date",
+            TimeType => "Time",
+            DateTimeType => "DateTime",
+            DateTimeOffsetType => "DateTimeOffset",
+            UuidType => "Uuid",
+            JsonType => "Json",
+            XmlType => "Xml",
+            RowVersionType => "RowVersion",
+            GeometryType => "Geometry",
+            GeographyType => "Geography",
+            EnumType => "Enum",
+            _ => "Text",
+        };
+
+    private static int ReadInteger(JsonElement element, string propertyName, int fallback) =>
+        element.TryGetProperty(propertyName: propertyName, value: out var property)
+            ? property.GetInt32()
+            : fallback;
 }

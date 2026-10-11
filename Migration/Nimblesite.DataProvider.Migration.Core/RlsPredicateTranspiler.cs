@@ -293,10 +293,10 @@ public static partial class RlsPredicateTranspiler
             )
             {
                 var start = i;
-                while (i < source.Length && (char.IsLetterOrDigit(source[i]) || source[i] == '_'))
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: source,
+                    start: i
+                );
                 var word = source[start..i];
                 var savedI = i;
                 while (i < source.Length && char.IsWhiteSpace(source[i]))
@@ -358,31 +358,22 @@ public static partial class RlsPredicateTranspiler
             }
             if (c == open)
             {
-                sb.Append(c);
-                i++;
-                while (i < predicate.Length)
-                {
-                    sb.Append(predicate[i]);
-                    if (predicate[i] == close)
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyQuoted(
+                    source: predicate,
+                    start: i,
+                    sql: sb,
+                    close: close
+                );
                 continue;
             }
             if (char.IsLetter(c) || c == '_')
             {
                 var start = i;
                 i++;
-                while (
-                    i < predicate.Length
-                    && (char.IsLetterOrDigit(predicate[i]) || predicate[i] == '_')
-                )
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: predicate,
+                    start: i
+                );
                 var word = predicate[start..i];
 
                 var prev = start - 1;

@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using Nimblesite.Sql.Model;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -29,7 +28,7 @@ public sealed partial class CodeGenerationE2ETests
             columns: [new DatabaseColumn { Name = "Id", CSharpType = cSharpType }],
             connectionType: "NpgsqlConnection"
         );
-        var code = Assert.IsType<StringOk>(@object: result).Value;
+        var code = global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
         Assert.Contains(
             expectedSubstring: $"new NpgsqlParameter(\"@id\", NpgsqlTypes.NpgsqlDbType.{databaseType}) {{ Value = DBNull.Value }}",
             actualString: code
@@ -119,49 +118,55 @@ public sealed partial class CodeGenerationE2ETests
         }
 
         // Empty method name
-        var emptyMethod = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "",
             returnTypeName: "TestRecord",
             sql: "SELECT 1",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptyMethod is StringError);
 
         // Empty return type
-        var emptyReturn = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "",
             sql: "SELECT 1",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptyReturn is StringError);
 
         // Empty SQL
-        var emptySql = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "TestRecord",
             sql: "",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptySql is StringError);
 
         // Empty columns
-        var emptyColumns = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "TestRecord",
             sql: "SELECT 1",
-            parameters: [],
             columns: []
         );
-        Assert.True(emptyColumns is StringError);
     }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertGenerateQueryMethodError(
+        string methodName,
+        string returnTypeName,
+        string sql,
+        IReadOnlyList<DatabaseColumn> columns
+    ) =>
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateQueryMethod(
+                className: "TestClass",
+                methodName: methodName,
+                returnTypeName: returnTypeName,
+                sql: sql,
+                parameters: [],
+                columns: columns
+            )
+        );
 
     [Fact]
     public void GenerateNonQueryMethod_FullWorkflow_ProducesValidCode()
@@ -268,10 +273,11 @@ public sealed partial class CodeGenerationE2ETests
 
         // Verify bulk insert structure
         Assert.Contains("Patients", code);
-        Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-
-        // Verify batch handling
-        Assert.Contains("100", code);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: code,
+            value0: "INSERT",
+            value2: "100"
+        );
     }
 
     [Fact]
@@ -332,28 +338,31 @@ public sealed partial class CodeGenerationE2ETests
     [Fact]
     public void GenerateNonQueryMethod_ValidationErrors_ReturnErrors()
     {
-        var emptyClass = DataAccessGenerator.GenerateNonQueryMethod(
-            className: " ",
-            methodName: "Test",
-            sql: "DELETE FROM T",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: " ",
+                methodName: "Test",
+                sql: "DELETE FROM T",
+                parameters: []
+            )
         );
-        Assert.True(emptyClass is StringError);
 
-        var emptyMethod = DataAccessGenerator.GenerateNonQueryMethod(
-            className: "TestClass",
-            methodName: "",
-            sql: "DELETE FROM T",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: "TestClass",
+                methodName: "",
+                sql: "DELETE FROM T",
+                parameters: []
+            )
         );
-        Assert.True(emptyMethod is StringError);
 
-        var emptySql = DataAccessGenerator.GenerateNonQueryMethod(
-            className: "TestClass",
-            methodName: "Test",
-            sql: "",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: "TestClass",
+                methodName: "Test",
+                sql: "",
+                parameters: []
+            )
         );
-        Assert.True(emptySql is StringError);
     }
 }

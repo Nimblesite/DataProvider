@@ -27,25 +27,18 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <summary>
     /// Creates a SqlError with position information from an ANTLR context
     /// </summary>
-    private SqlError CreateSqlError(string message, ParserRuleContext context)
-    {
-        var start = context.Start;
-        var stop = context.Stop;
-
-        return SqlError.WithDetailedPosition(
-            $"Syntax error: {message}",
-            start.Line,
-            start.Column,
-            start.StartIndex,
-            stop?.StopIndex ?? start.StartIndex,
-            _sourceCode
-        );
-    }
+    private SqlError CreateSqlError(string message, ParserRuleContext context) =>
+        CreateSqlErrorStatic(message: message, context: context, sourceCode: _sourceCode);
 
     /// <summary>
     /// Creates a SqlError with position information from an ANTLR context (static version)
     /// </summary>
-    private static SqlError CreateSqlErrorStatic(string message, ParserRuleContext context)
+    // Implements [LQL-SHARED-SOURCE-POSITION].
+    private static SqlError CreateSqlErrorStatic(
+        string message,
+        ParserRuleContext context,
+        string? sourceCode = null
+    )
     {
         var start = context.Start;
         var stop = context.Stop;
@@ -56,7 +49,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             start.Column,
             start.StartIndex,
             stop?.StopIndex ?? start.StartIndex,
-            null // No source code available in static context
+            sourceCode
         );
     }
 
@@ -581,14 +574,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             return ProcessQualifiedIdentifierToSql(inExpr.qualifiedIdent(), lambdaScope);
         }
 
-        if (inExpr.IDENT() != null)
+        if (TokenText(tokens: [inExpr.IDENT(), inExpr.PARAMETER()]) is { } tokenText1)
         {
-            return inExpr.IDENT().GetText();
-        }
-
-        if (inExpr.PARAMETER() != null)
-        {
-            return inExpr.PARAMETER().GetText();
+            return tokenText1;
         }
 
         throw new SqlErrorException(
@@ -696,25 +684,20 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // Handle basic tokens
-        if (arithmeticFactor.INT() != null)
+        if (
+            TokenText(
+                tokens:
+                [
+                    arithmeticFactor.INT(),
+                    arithmeticFactor.DECIMAL(),
+                    arithmeticFactor.STRING(),
+                    arithmeticFactor.PARAMETER(),
+                ]
+            ) is
+            { } tokenText2
+        )
         {
-            return arithmeticFactor.INT().GetText();
-        }
-
-        if (arithmeticFactor.DECIMAL() != null)
-        {
-            return arithmeticFactor.DECIMAL().GetText();
-        }
-
-        if (arithmeticFactor.STRING() != null)
-        {
-            return arithmeticFactor.STRING().GetText();
-        }
-
-        // Handle parameter tokens
-        if (arithmeticFactor.PARAMETER() != null)
-        {
-            return arithmeticFactor.PARAMETER().GetText();
+            return tokenText2;
         }
 
         // No fallback - fail hard if factor type is not handled
@@ -818,21 +801,20 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
                 return ProcessQualifiedIdentifierToSql(caseResult.qualifiedIdent(), lambdaScope);
             }
             // Handle basic tokens
-            if (caseResult.IDENT() != null)
+            if (
+                TokenText(
+                    tokens:
+                    [
+                        caseResult.IDENT(),
+                        caseResult.INT(),
+                        caseResult.DECIMAL(),
+                        caseResult.STRING(),
+                    ]
+                ) is
+                { } tokenText3
+            )
             {
-                return caseResult.IDENT().GetText();
-            }
-            if (caseResult.INT() != null)
-            {
-                return caseResult.INT().GetText();
-            }
-            if (caseResult.DECIMAL() != null)
-            {
-                return caseResult.DECIMAL().GetText();
-            }
-            if (caseResult.STRING() != null)
-            {
-                return caseResult.STRING().GetText();
+                return tokenText3;
             }
         }
 
@@ -928,21 +910,12 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             {
                 return ProcessQualifiedIdentifierToSql(inner.qualifiedIdent(), lambdaScope);
             }
-            if (inner.IDENT() != null)
+            if (
+                TokenText(tokens: [inner.IDENT(), inner.STRING(), inner.INT(), inner.DECIMAL()]) is
+                { } tokenText4
+            )
             {
-                return inner.IDENT().GetText();
-            }
-            if (inner.STRING() != null)
-            {
-                return inner.STRING().GetText();
-            }
-            if (inner.INT() != null)
-            {
-                return inner.INT().GetText();
-            }
-            if (inner.DECIMAL() != null)
-            {
-                return inner.DECIMAL().GetText();
+                return tokenText4;
             }
         }
         if (arg.comparison() != null)
@@ -1933,75 +1906,36 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <returns>Tuple of column name and direction.</returns>
     private static (string Column, string Direction) ExtractOrderItem(LqlParser.ArgContext arg)
     {
-        // Check if it's a comparison with orderDirection
-        if (arg.comparison() != null)
+        if (arg.comparison() is { } comparison)
         {
-            var comparison = arg.comparison();
-
-            // Check if it has an orderDirection
-            if (comparison.orderDirection() != null)
+            if (comparison.orderDirection() is { } order)
             {
-                var direction = comparison.orderDirection().ASC() != null ? "ASC" : "DESC";
-
-                // Extract the column name (could be qualifiedIdent or IDENT)
-                string columnName;
-                if (comparison.qualifiedIdent(0) != null)
-                {
-                    columnName = ProcessQualifiedIdentifierToSql(
-                        comparison.qualifiedIdent(0),
-                        null
-                    );
-                }
-                else if (comparison.IDENT(0) != null)
-                {
-                    columnName = comparison.IDENT(0).GetText();
-                }
-                else
-                {
-                    throw new SqlErrorException(
-                        CreateSqlErrorStatic(
-                            "Unsupported column type in order direction",
-                            comparison
-                        )
-                    );
-                }
-
-                return (columnName, direction);
-            }
-
-            // If no direction specified, return empty direction
-            string colName;
-            if (comparison.qualifiedIdent(0) != null)
-            {
-                colName = ProcessQualifiedIdentifierToSql(comparison.qualifiedIdent(0), null);
-            }
-            else if (comparison.IDENT(0) != null)
-            {
-                colName = comparison.IDENT(0).GetText();
-            }
-            else
-            {
-                throw new SqlErrorException(
-                    CreateSqlErrorStatic("Unsupported column type in order by", comparison)
+                var direction = order.ASC() != null ? "ASC" : "DESC";
+                return (
+                    ExtractOrderColumn(
+                        comparison: comparison,
+                        errorMessage: "Unsupported column type in order direction"
+                    ),
+                    direction
                 );
             }
-            return (colName, "");
+            return (
+                ExtractOrderColumn(
+                    comparison: comparison,
+                    errorMessage: "Unsupported column type in order by"
+                ),
+                ""
+            );
         }
-
-        // Fallback - just extract the identifier directly using ANTLR grammar
-        var text = ExtractIdentifier(arg);
-
-        // The ANTLR grammar should have already parsed ASC/DESC properly,
-        // so we don't need regex. Just check for simple string endings as fallback
-        if (text.EndsWith("desc", StringComparison.OrdinalIgnoreCase))
+        var text = ExtractIdentifier(arg: arg);
+        foreach (
+            var suffix in global::System.Collections.Immutable.ImmutableArray.Create<string>(
+                items: ["desc", "asc"]
+            )
+        )
         {
-            var column = text[..^4].Trim();
-            return (column, "DESC");
-        }
-        if (text.EndsWith("asc", StringComparison.OrdinalIgnoreCase))
-        {
-            var column = text[..^3].Trim();
-            return (column, "ASC");
+            if (text.EndsWith(value: suffix, comparisonType: StringComparison.OrdinalIgnoreCase))
+                return (text[..^suffix.Length].Trim(), suffix.ToUpperInvariant());
         }
         return (text, "");
     }
@@ -2053,5 +1987,38 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         string otherQuery =
             args.Length > 0 ? ExtractUnionQuery(args[0]) : "-- UNION ALL query not found";
         return new UnionAllStep { Base = baseNode, OtherQuery = otherQuery };
+    }
+
+    // Implements [LQL-SHARED-TERMINAL-TEXT].
+    private static string? TokenText(IReadOnlyList<ITerminalNode?> tokens)
+    {
+        foreach (var token in tokens)
+        {
+            if (token is not null)
+                return token.GetText();
+        }
+        return null;
+    }
+
+    // Implements [LQL-ORDER-SHARED-COLUMN-EXTRACTION].
+    private static string ExtractOrderColumn(
+        LqlParser.ComparisonContext comparison,
+        string errorMessage
+    )
+    {
+        string colName;
+        if (comparison.qualifiedIdent(0) != null)
+        {
+            colName = ProcessQualifiedIdentifierToSql(comparison.qualifiedIdent(0), null);
+        }
+        else if (comparison.IDENT(0) != null)
+        {
+            colName = comparison.IDENT(0).GetText();
+        }
+        else
+        {
+            throw new SqlErrorException(CreateSqlErrorStatic(errorMessage, comparison));
+        }
+        return colName;
     }
 }

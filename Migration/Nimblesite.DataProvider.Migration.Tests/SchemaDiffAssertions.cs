@@ -19,4 +19,14 @@ internal static class SchemaDiffAssertions
                 )
             )
             .Value;
+
+    // Implements [MIG-TEST-DIFF-SHARED].
+    internal static T DiffSingle<T>(
+        SchemaDefinition current,
+        SchemaDefinition desired,
+        bool destructive = false,
+        ILogger? logger = null
+    )
+        where T : SchemaOperation =>
+        Assert.IsType<T>(Assert.Single(Diff(current, desired, destructive, logger)));
 }

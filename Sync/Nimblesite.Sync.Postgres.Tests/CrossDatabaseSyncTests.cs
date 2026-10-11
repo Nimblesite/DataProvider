@@ -2,6 +2,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.Postgres.Tests;
@@ -58,31 +59,17 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         await _pgConn.CloseAsync().ConfigureAwait(false);
         await _pgConn.DisposeAsync().ConfigureAwait(false);
 
-        if (File.Exists(_sqliteDbPath))
-        {
-            try
-            {
-                File.Delete(_sqliteDbPath);
-            }
-            catch
-            { /* File may be locked */
-            }
-        }
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _sqliteDbPath);
     }
 
-    private static void CreateTestTable(NpgsqlConnection conn)
+    private static void CreateTestTable(System.Data.Common.DbConnection conn)
     {
         DatabaseCommands.Execute(
             connection: conn,
-            configure: command => command.CommandText = Data_CreateTestTable_1
-        );
-    }
-
-    private static void CreateTestTable(SqliteConnection conn)
-    {
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: command => command.CommandText = Data_CreateTestTable_2
+            configure: command =>
+                command.CommandText = conn is NpgsqlConnection
+                    ? Data_CreateTestTable_1
+                    : Data_CreateTestTable_2
         );
     }
 
@@ -170,7 +157,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
             foreach (var entry in sqliteChanges)
             {
                 var result = PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-                Assert.IsType<BoolSyncOk>(result);
+                global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
             }
         }
         finally
@@ -201,7 +188,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
             foreach (var entry in pgChanges)
             {
                 var result = ChangeApplierSQLite.ApplyChange(_sqliteConn, entry);
-                Assert.IsType<BoolSyncOk>(result);
+                global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
             }
         }
         finally
@@ -225,11 +212,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         // Sync SQLite -> Postgres
         var sqliteChanges = FetchChanges(_sqliteConn, 0);
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in sqliteChanges)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: sqliteChanges, input1: _pgConn, input2: Logger);
 
         // Sync Postgres -> SQLite
         var pgChanges = FetchChanges(_pgConn, 0);
@@ -260,11 +243,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         // Sync to Postgres first
         var initialChanges = FetchChanges(_sqliteConn, 0);
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in initialChanges)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: initialChanges, input1: _pgConn, input2: Logger);
 
         // Update in SQLite
         UpdatePerson(_sqliteConn, "upd1", "Updated");
@@ -272,11 +251,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         // Sync update to Postgres
         var updateChanges = FetchChanges(_sqliteConn, initialChanges[0].Version);
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in updateChanges)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: updateChanges, input1: _pgConn, input2: Logger);
 
         // Verify update propagated
         var person = GetPerson(_pgConn, "upd1");
@@ -290,11 +265,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         InsertPerson(_sqliteConn, "del1", "ToDelete", "del@test.com");
         var insertChanges = FetchChanges(_sqliteConn, 0);
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in insertChanges)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: insertChanges, input1: _pgConn, input2: Logger);
 
         // Verify exists in both
         Assert.NotNull(GetPerson(_pgConn, "del1"));
@@ -305,11 +276,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         // Sync delete
         var deleteChanges = FetchChanges(_sqliteConn, insertChanges[0].Version);
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in deleteChanges)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: deleteChanges, input1: _pgConn, input2: Logger);
 
         // Verify deleted in both
         Assert.Null(GetPerson(_sqliteConn, "del1"));
@@ -392,7 +359,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
             Logger
         );
 
-        var applied = (Assert.IsType<BatchApplyResultOk>(result)).Value;
+        var applied = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(0, applied.AppliedCount); // Should be skipped due to echo
         // Echo-skipped entries don't count as deferred, they just aren't applied
     }
@@ -414,11 +381,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Sync to Postgres
         PostgresSyncSession.EnableSuppression(_pgConn);
-        foreach (var entry in changes)
-        {
-            PostgresChangeApplier.ApplyChange(_pgConn, entry, Logger);
-        }
-        PostgresSyncSession.DisableSuppression(_pgConn);
+        VerifySharedChecks2(input0: changes, input1: _pgConn, input2: Logger);
 
         // Compute hash from same changes
         var verifyHash = HashVerifier.ComputeBatchHash(changes);
@@ -441,71 +404,60 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Upsert client
         var upsertResult = PostgresSyncClientRepository.Upsert(_pgConn, client);
-        Assert.IsType<BoolSyncOk>(upsertResult);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: upsertResult);
 
         // Get client
         var getResult = PostgresSyncClientRepository.GetByOrigin(_pgConn, _sqliteOrigin);
 
-        var retrieved = (Assert.IsType<SyncClientOk>(getResult)).Value;
+        var retrieved = (global::Tests.Shared.ResultAssertions.ExactOk(actual: getResult)).Value;
         Assert.NotNull(retrieved);
         Assert.Equal(100, retrieved!.LastSyncVersion);
 
         // Get all clients
         var allResult = PostgresSyncClientRepository.GetAll(_pgConn);
         Assert.IsType<SyncClientListOk>(allResult);
-        Assert.Contains(((SyncClientListOk)allResult).Value, c => c.OriginId == _sqliteOrigin);
+        Assert.Contains((Ok(actual: allResult)).Value, c => c.OriginId == _sqliteOrigin);
     }
 
     #endregion
 
     #region Helper Methods
 
-    private static void InsertPerson(NpgsqlConnection conn, string id, string name, string email)
+    private static void InsertPerson(
+        System.Data.Common.DbConnection conn,
+        string id,
+        string name,
+        string email
+    )
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO person (id, name, email) VALUES (@id, @name, @email)";
+        cmd.CommandText =
+            conn is NpgsqlConnection
+                ? "INSERT INTO person (id, name, email) VALUES (@id, @name, @email)"
+                : "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
         PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
     }
 
-    private static void InsertPerson(SqliteConnection conn, string id, string name, string email)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)";
-        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
-    }
-
-    private static void UpdatePerson(NpgsqlConnection conn, string id, string name)
+    private static void UpdatePerson(System.Data.Common.DbConnection conn, string id, string name)
     {
         DatabaseCommands.Execute(
             connection: conn,
-            configure: cmd => cmd.CommandText = "UPDATE person SET name = @name WHERE id = @id",
+            configure: cmd =>
+                cmd.CommandText = conn is NpgsqlConnection
+                    ? "UPDATE person SET name = @name WHERE id = @id"
+                    : "UPDATE Person SET Name = @name WHERE Id = @id",
             parameters: () => [("@id", id), ("@name", name)]
         );
     }
 
-    private static void UpdatePerson(SqliteConnection conn, string id, string name)
+    private static void DeletePerson(System.Data.Common.DbConnection conn, string id)
     {
         DatabaseCommands.Execute(
             connection: conn,
-            configure: cmd => cmd.CommandText = "UPDATE Person SET Name = @name WHERE Id = @id",
-            parameters: () => [("@id", id), ("@name", name)]
-        );
-    }
-
-    private static void DeletePerson(NpgsqlConnection conn, string id)
-    {
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: cmd => cmd.CommandText = "DELETE FROM person WHERE id = @id",
-            parameters: () => [("@id", id)]
-        );
-    }
-
-    private static void DeletePerson(SqliteConnection conn, string id)
-    {
-        DatabaseCommands.Execute(
-            connection: conn,
-            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
+            configure: cmd =>
+                cmd.CommandText = conn is NpgsqlConnection
+                    ? "DELETE FROM person WHERE id = @id"
+                    : "DELETE FROM Person WHERE Id = @id",
             parameters: () => [("@id", id)]
         );
     }
@@ -532,26 +484,14 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         );
     }
 
-    private static PersonRecord? GetPerson(NpgsqlConnection conn, string id)
+    private static PersonRecord? GetPerson(System.Data.Common.DbConnection conn, string id)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT id, name, email FROM person WHERE id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        using var reader = cmd.ExecuteReader();
-        return reader.Read()
-            ? new PersonRecord(
-                reader.GetString(0),
-                reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2)
-            )
-            : null;
-    }
-
-    private static PersonRecord? GetPerson(SqliteConnection conn, string id)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, Name, Email FROM Person WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
+        cmd.CommandText =
+            conn is NpgsqlConnection
+                ? "SELECT id, name, email FROM person WHERE id = @id"
+                : "SELECT Id, Name, Email FROM Person WHERE Id = @id";
+        DatabaseCommands.Bind(command: cmd, name: "@id", value: id);
         using var reader = cmd.ExecuteReader();
         return reader.Read()
             ? new PersonRecord(
@@ -564,16 +504,27 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
     private static int GetPersonCount(NpgsqlConnection conn)
     {
-        return Convert.ToInt32(
-            global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: conn,
-                configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
-            ),
-            System.Globalization.CultureInfo.InvariantCulture
+        return global::Tests.Shared.DatabaseCommands.ScalarInt32(
+            connection: conn,
+            configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
         );
     }
 
     private sealed record PersonRecord(string Id, string Name, string? Email);
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks2(
+        IReadOnlyList<SyncLogEntry> input0,
+        NpgsqlConnection input1,
+        ILogger input2
+    )
+    {
+        foreach (var entry in input0)
+        {
+            PostgresChangeApplier.ApplyChange(input1, entry, input2);
+        }
+        PostgresSyncSession.DisableSuppression(input1);
+    }
 }

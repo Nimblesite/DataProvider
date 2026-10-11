@@ -27,14 +27,6 @@ global using ColumnInfoListResult = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.SQLite.TriggerColumnInfo>,
     Nimblesite.Sync.Core.SyncError
 >;
-global using IntSyncError = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Error<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
-global using IntSyncOk = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Ok<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
 global using IntSyncResult = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>;
 global using LongSyncError = Outcome.Result<long, Nimblesite.Sync.Core.SyncError>.Error<
     long,

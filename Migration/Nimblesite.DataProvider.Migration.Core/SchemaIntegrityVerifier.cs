@@ -46,16 +46,16 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expected in desired.Tables)
-        {
-            var actual = FindTable(schema: live, expected: expected);
-            if (actual is null)
+        VerifyExpected(
+            expected: desired.Tables,
+            find: expected => FindTable(schema: live, expected: expected),
+            missing: expected => $"{TablePath(table: expected)}: missing table",
+            verify: (actual, expected) =>
             {
-                mismatches.Add($"{TablePath(table: expected)}: missing table");
-                continue;
-            }
-            VerifyTable(actual: actual, expected: expected, includeRls: includeRls, mismatches);
-        }
+                VerifyTable(actual: actual, expected: expected, includeRls: includeRls, mismatches);
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyTable(
@@ -83,29 +83,28 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedColumn in expected.Columns)
-        {
-            var actualColumn = FindColumn(table: actual, name: expectedColumn.Name);
-            if (actualColumn is null)
+        VerifyExpected(
+            expected: expected.Columns,
+            find: expectedColumn => FindColumn(table: actual, name: expectedColumn.Name),
+            missing: expectedColumn =>
+                $"{TablePath(table: expected)}.{expectedColumn.Name}: missing column",
+            verify: (actualColumn, expectedColumn) =>
             {
-                mismatches.Add(
-                    $"{TablePath(table: expected)}.{expectedColumn.Name}: missing column"
+                VerifyColumn(
+                    actual: actualColumn,
+                    expected: PrimaryKeyNullability.UsesPlatformDefault(expected, expectedColumn)
+                        ? expectedColumn with
+                        {
+                            IsNullable = actualColumn.IsNullable,
+                        }
+                        : expectedColumn,
+                    path: $"{TablePath(table: expected)}.{expectedColumn.Name}",
+                    isSqlite: IsSqliteSchema(actual.Schema),
+                    mismatches: mismatches
                 );
-                continue;
-            }
-            VerifyColumn(
-                actual: actualColumn,
-                expected: PrimaryKeyNullability.UsesPlatformDefault(expected, expectedColumn)
-                    ? expectedColumn with
-                    {
-                        IsNullable = actualColumn.IsNullable,
-                    }
-                    : expectedColumn,
-                path: $"{TablePath(table: expected)}.{expectedColumn.Name}",
-                isSqlite: IsSqliteSchema(actual.Schema),
-                mismatches: mismatches
-            );
-        }
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyColumn(
@@ -189,23 +188,22 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedFk in expected.ForeignKeys)
-        {
-            var actualFk = FindForeignKey(table: actual, expected: expectedFk);
-            if (actualFk is null)
+        VerifyExpected(
+            expected: expected.ForeignKeys,
+            find: expectedFk => FindForeignKey(table: actual, expected: expectedFk),
+            missing: expectedFk =>
+                $"{TablePath(table: expected)}: missing foreign key {ForeignKeyName(expected.Name, expectedFk)} on ({Format(expectedFk.Columns)})",
+            verify: (actualFk, expectedFk) =>
             {
-                mismatches.Add(
-                    $"{TablePath(table: expected)}: missing foreign key {ForeignKeyName(expected.Name, expectedFk)} on ({Format(expectedFk.Columns)})"
+                VerifyForeignKey(
+                    actual: actualFk,
+                    expected: expectedFk,
+                    tablePath: TablePath(expected),
+                    mismatches
                 );
-                continue;
-            }
-            VerifyForeignKey(
-                actual: actualFk,
-                expected: expectedFk,
-                tablePath: TablePath(expected),
-                mismatches
-            );
-        }
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyForeignKey(
@@ -281,23 +279,23 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedIndex in expected.Indexes)
-        {
-            var actualIndex = actual.Indexes.FirstOrDefault(i =>
-                SameIdentifier(i.Name, expectedIndex.Name)
-            );
-            if (actualIndex is null)
+        VerifyExpected(
+            expected: expected.Indexes,
+            find: expectedIndex =>
+                actual.Indexes.FirstOrDefault(i => SameIdentifier(i.Name, expectedIndex.Name)),
+            missing: expectedIndex =>
+                $"{TablePath(table: expected)}: missing index {expectedIndex.Name}",
+            verify: (actualIndex, expectedIndex) =>
             {
-                mismatches.Add($"{TablePath(table: expected)}: missing index {expectedIndex.Name}");
-                continue;
-            }
-            VerifyIndex(
-                actual: actualIndex,
-                expected: expectedIndex,
-                tablePath: TablePath(expected),
-                mismatches
-            );
-        }
+                VerifyIndex(
+                    actual: actualIndex,
+                    expected: expectedIndex,
+                    tablePath: TablePath(expected),
+                    mismatches
+                );
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyIndex(
@@ -335,24 +333,24 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedCheck in expected.CheckConstraints)
-        {
-            var actualCheck = actual.CheckConstraints.FirstOrDefault(c =>
-                SameIdentifier(c.Name, expectedCheck.Name)
-            );
-            if (actualCheck is null)
+        VerifyExpected(
+            expected: expected.CheckConstraints,
+            find: expectedCheck =>
+                actual.CheckConstraints.FirstOrDefault(c =>
+                    SameIdentifier(c.Name, expectedCheck.Name)
+                ),
+            missing: expectedCheck =>
+                $"{TablePath(table: expected)}: missing check constraint {expectedCheck.Name}",
+            verify: (actualCheck, expectedCheck) =>
             {
-                mismatches.Add(
-                    $"{TablePath(table: expected)}: missing check constraint {expectedCheck.Name}"
+                AddIf(
+                    !SameSql(actualCheck.Expression, expectedCheck.Expression),
+                    $"{TablePath(table: expected)}: check constraint {expectedCheck.Name} expression drifted",
+                    mismatches
                 );
-                continue;
-            }
-            AddIf(
-                !SameSql(actualCheck.Expression, expectedCheck.Expression),
-                $"{TablePath(table: expected)}: check constraint {expectedCheck.Name} expression drifted",
-                mismatches
-            );
-        }
+            },
+            mismatches: mismatches
+        );
         VerifyColumnCheckConstraints(actual: actual, expected: expected, mismatches: mismatches);
     }
 
@@ -403,38 +401,38 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedPolicy in expected.RowLevelSecurity?.Policies ?? [])
-        {
-            var actualPolicy = actual.RowLevelSecurity?.Policies.FirstOrDefault(p =>
-                SameIdentifier(p.Name, expectedPolicy.Name)
-            );
-            if (actualPolicy is null)
+        VerifyExpected(
+            expected: expected.RowLevelSecurity?.Policies ?? [],
+            find: expectedPolicy =>
+                actual.RowLevelSecurity?.Policies.FirstOrDefault(p =>
+                    SameIdentifier(p.Name, expectedPolicy.Name)
+                ),
+            missing: expectedPolicy =>
+                $"{TablePath(table: expected)}: missing row-level security policy {expectedPolicy.Name}",
+            verify: (actualPolicy, expectedPolicy) =>
             {
-                mismatches.Add(
-                    $"{TablePath(table: expected)}: missing row-level security policy {expectedPolicy.Name}"
+                if (IsSqliteSchema(actual.Schema))
+                {
+                    return;
+                }
+                AddIf(
+                    !RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
+                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} USING predicate drifted",
+                    mismatches
                 );
-                continue;
-            }
-            if (IsSqliteSchema(actual.Schema))
-            {
-                continue;
-            }
-            AddIf(
-                !RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
-                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} USING predicate drifted",
-                mismatches
-            );
-            AddIf(
-                !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
-                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
-                mismatches
-            );
-            AddIf(
-                !RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
-                $"{TablePath(table: expected)}: policy {expectedPolicy.Name} scope drifted",
-                mismatches
-            );
-        }
+                AddIf(
+                    !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
+                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
+                    mismatches
+                );
+                AddIf(
+                    !RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
+                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} scope drifted",
+                    mismatches
+                );
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifySupportObjects(
@@ -454,27 +452,26 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedRole in desired.Roles)
-        {
-            var actualRole = live.Roles.FirstOrDefault(r =>
-                SameIdentifier(r.Name, expectedRole.Name)
-            );
-            if (actualRole is null)
+        VerifyExpected(
+            expected: desired.Roles,
+            find: expectedRole =>
+                live.Roles.FirstOrDefault(r => SameIdentifier(r.Name, expectedRole.Name)),
+            missing: expectedRole => $"role {expectedRole.Name}: missing role",
+            verify: (actualRole, expectedRole) =>
             {
-                mismatches.Add($"role {expectedRole.Name}: missing role");
-                continue;
-            }
-            AddIf(
-                actualRole.Login != expectedRole.Login,
-                $"role {expectedRole.Name}: login drifted",
-                mismatches
-            );
-            AddIf(
-                actualRole.BypassRls != expectedRole.BypassRls,
-                $"role {expectedRole.Name}: bypassRls drifted",
-                mismatches
-            );
-        }
+                AddIf(
+                    actualRole.Login != expectedRole.Login,
+                    $"role {expectedRole.Name}: login drifted",
+                    mismatches
+                );
+                AddIf(
+                    actualRole.BypassRls != expectedRole.BypassRls,
+                    $"role {expectedRole.Name}: bypassRls drifted",
+                    mismatches
+                );
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyFunctions(
@@ -483,22 +480,21 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        foreach (var expectedFunction in desired.Functions)
-        {
-            var actualFunction = FindFunction(schema: live, expected: expectedFunction);
-            if (actualFunction is null)
+        VerifyExpected(
+            expected: desired.Functions,
+            find: expectedFunction => FindFunction(schema: live, expected: expectedFunction),
+            missing: expectedFunction =>
+                $"{expectedFunction.Schema}.{expectedFunction.Name}: missing function",
+            verify: (actualFunction, expectedFunction) =>
             {
-                mismatches.Add(
-                    $"{expectedFunction.Schema}.{expectedFunction.Name}: missing function"
+                VerifyFunction(
+                    actual: actualFunction,
+                    expected: expectedFunction,
+                    mismatches: mismatches
                 );
-                continue;
-            }
-            VerifyFunction(
-                actual: actualFunction,
-                expected: expectedFunction,
-                mismatches: mismatches
-            );
-        }
+            },
+            mismatches: mismatches
+        );
     }
 
     private static void VerifyFunction(
@@ -838,4 +834,24 @@ public static class SchemaIntegrityVerifier
         string.IsNullOrWhiteSpace(foreignKey.Name)
             ? $"FK_{tableName}_{string.Join("_", foreignKey.Columns)}"
             : foreignKey.Name;
+
+    // Implements [MIG-VERIFY-SHARED-OBJECT-MATCHING].
+    private static void VerifyExpected<T>(
+        IEnumerable<T> expected,
+        Func<T, T?> find,
+        Func<T, string> missing,
+        Action<T, T> verify,
+        ImmutableArray<string>.Builder mismatches
+    )
+        where T : class
+    {
+        foreach (var item in expected)
+        {
+            var actual = find(item);
+            if (actual is null)
+                mismatches.Add(missing(item));
+            else
+                verify(actual, item);
+        }
+    }
 }

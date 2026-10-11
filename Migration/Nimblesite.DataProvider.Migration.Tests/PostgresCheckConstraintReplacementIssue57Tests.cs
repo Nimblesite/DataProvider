@@ -32,13 +32,13 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
                 ),
                 Logger
             );
-            Assert.True(LiveExpressionContains(connection, "input_tokens"));
-            Assert.False(LiveExpressionContains(connection, "llm_input_tokens"));
-
-            var upgrade = PostgresTestDb.Calculate(
-                PostgresTestDb.Inspect(connection, Logger),
-                SchemaWithKindCheck("usage_events_kind_check_v2"),
-                Logger
+            var upgrade = VerifyReusableWorkflow26(
+                input0: LiveExpressionContains,
+                input1: connection,
+                input2: Logger,
+                input3: SchemaWithKindCheck,
+                value0: "input_tokens",
+                value1: "llm_input_tokens"
             );
             Assert.Contains(
                 upgrade,
@@ -50,13 +50,13 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
 
             PostgresTestDb.Apply(connection, upgrade, Logger);
 
-            Assert.True(LiveExpressionContains(connection, "llm_input_tokens"));
-            Assert.False(LiveExpressionContains(connection, "'input_tokens'"));
-
-            var replay = PostgresTestDb.Calculate(
-                PostgresTestDb.Inspect(connection, Logger),
-                SchemaWithKindCheck("usage_events_kind_check_v2"),
-                Logger
+            var replay = VerifyReusableWorkflow26(
+                input0: LiveExpressionContains,
+                input1: connection,
+                input2: Logger,
+                input3: SchemaWithKindCheck,
+                value0: "llm_input_tokens",
+                value1: "'input_tokens'"
             );
             Assert.DoesNotContain(replay, op => op is DropCheckConstraintOperation);
             Assert.DoesNotContain(replay, op => op is AddCheckConstraintOperation);
@@ -90,5 +90,27 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
             ) as string;
 
         return def is not null && def.Contains(needle, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow26(
+        Func<NpgsqlConnection, string, bool> input0,
+        NpgsqlConnection input1,
+        ILogger input2,
+        Func<string, SchemaDefinition> input3,
+        string value0,
+        string value1
+    )
+    {
+        Assert.True(input0(arg1: input1, arg2: value0));
+        Assert.False(input0(arg1: input1, arg2: value1));
+
+        var upgrade = PostgresTestDb.Calculate(
+            PostgresTestDb.Inspect(input1, input2),
+            input3(arg: "usage_events_kind_check_v2"),
+            input2
+        );
+
+        return upgrade;
     }
 }
