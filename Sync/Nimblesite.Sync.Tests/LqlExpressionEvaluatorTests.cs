@@ -171,13 +171,7 @@ public sealed partial class LqlExpressionEvaluatorTests
             new("created_date", "CreatedAt"),
         };
 
-        var mapping = Fixture_E2E_MobileToServerSchemaTransform_3(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_E2E_MobileToServerSchemaTransform_3(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var mobileEntry = MappingTestData.Entry(
@@ -221,13 +215,7 @@ public sealed partial class LqlExpressionEvaluatorTests
             new("ZIP_5", "PostalCode"),
         };
 
-        var mapping = Fixture_E2E_LegacyCRMToModernERPTransform_2(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_E2E_LegacyCRMToModernERPTransform_2(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var legacyEntry = MappingTestData.Entry(
@@ -267,13 +255,7 @@ public sealed partial class LqlExpressionEvaluatorTests
             new("Total", "Details", TransformType.Lql, null, "concat('Order total: $', Total)"),
         };
 
-        var mapping = Fixture_E2E_OrderToAuditLogTransform_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_E2E_OrderToAuditLogTransform_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var orderEntry = MappingTestData.Entry(
@@ -298,13 +280,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     // Implements [SYNC-MAPPING-TRANSFORM-FIXTURE].
     private MappingSuccess MapUser(IReadOnlyList<ColumnMapping> columnMappings, string payload)
     {
-        var mapping = Fixture_MapUser_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_MapUser_1(columnMappings: columnMappings);
         var entry = MappingTestData.Entry(table: "User", pk: """{"Id":"u1"}""", payload: payload);
         return Expected<MappingSuccess>(
             entry: entry,

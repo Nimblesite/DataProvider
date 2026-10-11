@@ -5,16 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class DataProviderMigrateIntegrityTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1(
-        global::System.String name,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Action<global::Nimblesite.DataProvider.Migration.Core.TableBuilder> configure,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Action<global::Nimblesite.DataProvider.Migration.Core.ColumnBuilder>? configure,
-        global::System.String defaultValue
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1() =>
         Schema
             .Define(name: "nap")
             .Table(

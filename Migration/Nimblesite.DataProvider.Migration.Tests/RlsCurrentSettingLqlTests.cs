@@ -141,12 +141,7 @@ public sealed partial class RlsCurrentSettingLqlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "agent_configs",
-                Fixture_Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument_1(
-                    name: name,
-                    roles: roles,
-                    usingLql: usingLql,
-                    withCheckLql: withCheckLql
-                )
+                Fixture_Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument_1()
             )
         );
 

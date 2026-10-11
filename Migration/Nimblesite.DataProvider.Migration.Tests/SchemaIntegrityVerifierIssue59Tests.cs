@@ -27,45 +27,14 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral()
     {
-        var live = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            defaultValue: defaultValue
-        );
-        var desired = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            defaultValue: defaultValue
-        );
+        var live = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1();
+        var desired = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
 
-        var changedDefault =
-            Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3(
-                name: name,
-                tables: tables,
-                schema: schema,
-                name: name,
-                columns: columns,
-                name: name,
-                type: type,
-                isNullable: isNullable,
-                defaultValue: defaultValue
-            );
+        var changedDefault = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3();
 
         var changedDefaultMismatches = Verify(live: live, desired: changedDefault);
 
@@ -77,20 +46,8 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector()
     {
-        var live =
-            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1(
-                name: name,
-                grants: grants
-            );
-        var desired =
-            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2(
-                name: name,
-                grants: grants,
-                schema: schema,
-                target: target,
-                privileges: privileges,
-                roles: roles
-            );
+        var live = Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1();
+        var desired = Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -111,26 +68,8 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector()
     {
-        var live =
-            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1(
-                schema: schema,
-                name: name,
-                grants: grants,
-                schema: schema,
-                target: target,
-                objectName: objectName,
-                privileges: privileges,
-                roles: roles
-            );
-        var desired =
-            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2(
-                name: name,
-                tables: tables,
-                schema: schema,
-                target: target,
-                privileges: privileges,
-                roles: roles
-            );
+        var live = Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1();
+        var desired = Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2();
 
         var mismatches = Verify(live: live, desired: desired);
 

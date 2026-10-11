@@ -15,30 +15,8 @@ public sealed partial class SchemaIntegrityVerifierFunctionDriftTests
     [Fact]
     public void Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches()
     {
-        var live = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1(
-            name: name,
-            functions: functions,
-            schema: schema,
-            name: name,
-            arguments: arguments,
-            returns: returns,
-            language: language,
-            volatility: volatility,
-            securityDefiner: securityDefiner,
-            body: body
-        );
-        var desired = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2(
-            name: name,
-            functions: functions,
-            schema: schema,
-            name: name,
-            arguments: arguments,
-            returns: returns,
-            language: language,
-            volatility: volatility,
-            securityDefiner: securityDefiner,
-            body: body
-        );
+        var live = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1();
+        var desired = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2();
 
         var mismatches = Verify(live: live, desired: desired);
 

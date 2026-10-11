@@ -9,9 +9,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// because the diff matched on name only.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
-    PostgresContainerFixture fixture
-)
+public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(PostgresContainerFixture fixture)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -78,21 +76,7 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
                 "kind IN ('llm_request','llm_input_tokens','llm_output_tokens','machine_seconds')",
             _ => throw new ArgumentOutOfRangeException(nameof(version)),
         };
-        return Fixture_SchemaWithKindCheck_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey,
-            checkConstraints: checkConstraints,
-            name: name,
-            expression: expression,
-            expression: expression
-        );
+        return Fixture_SchemaWithKindCheck_1(expression: expression);
     }
 
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)

@@ -51,10 +51,7 @@ public sealed partial class SchemaDiffRlsTests
     {
         var current = SchemaTestData.Schema(name: "t", tables: []);
         var desired = WithRls(
-            Fixture_Diff_NewTableWithRls_EmitsCreateTableThenEnableThenPolicy_1(
-                name: name,
-                usingLql: usingLql
-            )
+            Fixture_Diff_NewTableWithRls_EmitsCreateTableThenEnableThenPolicy_1()
         );
 
         var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, desired)).Value;
@@ -74,10 +71,7 @@ public sealed partial class SchemaDiffRlsTests
     {
         var current = WithRls(null);
         var desired = WithRls(
-            Fixture_Diff_ExistingTableNoRls_DesiredAddsPolicy_EmitsEnableAndCreate_1(
-                name: name,
-                usingLql: usingLql
-            )
+            Fixture_Diff_ExistingTableNoRls_DesiredAddsPolicy_EmitsEnableAndCreate_1()
         );
 
         var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, desired)).Value;

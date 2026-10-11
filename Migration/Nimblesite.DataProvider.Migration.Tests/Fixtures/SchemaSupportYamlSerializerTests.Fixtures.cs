@@ -1,16 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaSupportYamlSerializerTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionDefinition>? functions,
-        global::System.String name,
-        global::System.String returns,
-        global::System.String body
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1() =>
         SchemaTestData.Schema(
             name: "nap",
             functions:
@@ -23,15 +18,7 @@ public partial class SchemaSupportYamlSerializerTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles,
-        global::System.String? runAs
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1() =>
         SchemaTestData.Schema(
             name: "nap",
             grants:

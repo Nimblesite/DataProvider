@@ -82,17 +82,7 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
     [Fact]
     public void Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate()
     {
-        var baseline =
-            Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1(
-                name: name,
-                schema: schema,
-                name: name,
-                configure: configure,
-                name: name,
-                type: type,
-                configure: configure,
-                defaultValue: defaultValue
-            );
+        var baseline = Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1();
         ApplySchema(schema: baseline);
 
         var schemaPath = WriteTempSchemaFile(

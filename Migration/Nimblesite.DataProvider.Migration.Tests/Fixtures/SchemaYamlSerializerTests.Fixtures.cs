@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaYamlSerializerTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_SimpleSchema_ProducesValidYaml_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_SimpleSchema_ProducesValidYaml_1() =>
         Schema
             .Define("test")
             .Table(
@@ -18,9 +18,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_RoundTrip_ComplexSchema_PreservesAllData_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_RoundTrip_ComplexSchema_PreservesAllData_1() =>
         Schema
             .Define("complex_schema")
             .Table(
@@ -50,7 +48,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_PortableType_AllTypes_SerializeCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_PortableType_AllTypes_SerializeCorrectly_1() =>
         Schema
             .Define("types_test")
             .Table(
@@ -85,10 +83,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ForeignKey_WithActions_SerializesCorrectly_1(
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onDelete,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onUpdate
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ForeignKey_WithActions_SerializesCorrectly_1() =>
         Schema
             .Define("fk_test")
             .Table("Parent", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
@@ -107,10 +102,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_WithFilter_SerializesCorrectly_1(
-        global::System.Boolean unique,
-        global::System.String? filter
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_WithFilter_SerializesCorrectly_1() =>
         Schema
             .Define("index_test")
             .Table(
@@ -123,12 +115,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_SerializesCorrectly_1(
-        global::Nimblesite.DataProvider.Migration.Core.TableBuilder table,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType idType,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType nameType,
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_SerializesCorrectly_1() =>
         Schema
             .Define("expr_index_test")
             .Table(
@@ -144,7 +131,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CheckConstraint_SerializesCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CheckConstraint_SerializesCorrectly_1() =>
         Schema
             .Define("check_test")
             .Table(
@@ -161,7 +148,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UniqueConstraint_SerializesCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UniqueConstraint_SerializesCorrectly_1() =>
         Schema
             .Define("unique_test")
             .Table(
@@ -174,7 +161,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_PortableType_EnumType_SerializesCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_PortableType_EnumType_SerializesCorrectly_1() =>
         Schema
             .Define("enum_test")
             .Table(
@@ -188,7 +175,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultLqlExpression_SerializesCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultLqlExpression_SerializesCorrectly_1() =>
         Schema
             .Define("lql_test")
             .Table(
@@ -208,7 +195,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_OmitsSemanticDefaultValues_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_OmitsSemanticDefaultValues_1() =>
         Schema
             .Define("test")
             .Table(
@@ -219,7 +206,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_YamlRoundTrip_PreservesDimensions_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_YamlRoundTrip_PreservesDimensions_1() =>
         Schema
             .Define("ai")
             .Table(
@@ -230,7 +217,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_PostgresDdl_EmitsPgVectorType_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_PostgresDdl_EmitsPgVectorType_1() =>
         Schema
             .Define("ai")
             .Table(
@@ -241,7 +228,7 @@ public partial class SchemaYamlSerializerTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_SqliteDdl_FallsBackToBlob_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_VectorType_SqliteDdl_FallsBackToBlob_1() =>
         Schema
             .Define("ai")
             .Table(

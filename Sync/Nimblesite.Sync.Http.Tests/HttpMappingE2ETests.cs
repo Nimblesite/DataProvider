@@ -284,15 +284,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_TransformsUserToCustomer_WithLql()
     {
         // Arrange - create a User sync log entry
-        var entry = Fixture_MappingEngine_TransformsUserToCustomer_WithLql_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_MappingEngine_TransformsUserToCustomer_WithLql_1();
 
         var config = CreateUserToCustomerMapping();
 
@@ -519,18 +511,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
             // Create a new SyncLogEntry with the mapped data
-            var targetEntry = Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
-                Version: Version,
-                changesList: changesList,
-                TableName: TableName,
-                entry: entry,
-                PkValue: PkValue,
-                Operation: Operation,
-                Payload: Payload,
-                mergedPayload: mergedPayload,
-                Origin: Origin,
-                Timestamp: Timestamp
-            );
+            var targetEntry = Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(changesList: changesList, entry: entry, mergedPayload: mergedPayload);
 
             var applyResult = PostgresChangeApplier.ApplyChange(
                 _postgresConn,
@@ -597,11 +578,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
                 // Merge PK into payload - PostgresChangeApplier expects PK in payload for inserts
                 var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
-                var targetEntry = Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(
-                    change: change,
-                    entry: entry,
-                    mergedPayload: mergedPayload
-                );
+                var targetEntry = Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(change: change, entry: entry, mergedPayload: mergedPayload);
                 PostgresChangeApplier.ApplyChange(_postgresConn, targetEntry, _logger);
             }
         }
@@ -635,15 +612,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         // Arrange
         var config = CreateUserToCustomerMapping();
 
-        var entry = Fixture_MappingEngine_DeleteOperation_TransformsTableAndPk_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_MappingEngine_DeleteOperation_TransformsTableAndPk_1();
 
         // Act
         var result = ApplyMapping(entry, config);
@@ -664,15 +633,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         // Arrange
         var config = CreateUserToCustomerMapping();
 
-        var entry = Fixture_MappingEngine_UpdateOperation_TransformsPayload_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_MappingEngine_UpdateOperation_TransformsPayload_1();
 
         // Act
         var result = ApplyMapping(entry, config);
@@ -798,21 +759,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_DisabledMapping_ReturnsSkipped()
     {
         // Arrange
-        var config = Fixture_MappingEngine_DisabledMapping_ReturnsSkipped_1(
-            Version: Version,
-            UnmappedTableBehavior: UnmappedTableBehavior,
-            Mappings: Mappings,
-            Id: Id,
-            SourceTable: SourceTable,
-            TargetTable: TargetTable,
-            Direction: Direction,
-            Enabled: Enabled,
-            PkMapping: PkMapping,
-            ColumnMappings: ColumnMappings,
-            ExcludedColumns: ExcludedColumns,
-            Filter: Filter,
-            SyncTracking: SyncTracking
-        );
+        var config = Fixture_MappingEngine_DisabledMapping_ReturnsSkipped_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
@@ -828,21 +775,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_WrongDirection_ReturnsSkipped()
     {
         // Arrange - mapping only for Pull direction
-        var config = Fixture_MappingEngine_WrongDirection_ReturnsSkipped_1(
-            Version: Version,
-            UnmappedTableBehavior: UnmappedTableBehavior,
-            Mappings: Mappings,
-            Id: Id,
-            SourceTable: SourceTable,
-            TargetTable: TargetTable,
-            Direction: Direction,
-            Enabled: Enabled,
-            PkMapping: PkMapping,
-            ColumnMappings: ColumnMappings,
-            ExcludedColumns: ExcludedColumns,
-            Filter: Filter,
-            SyncTracking: SyncTracking
-        );
+        var config = Fixture_MappingEngine_WrongDirection_ReturnsSkipped_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
@@ -857,21 +790,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_BothDirection_WorksForPushAndPull()
     {
         // Arrange - mapping for Both directions
-        var config = Fixture_MappingEngine_BothDirection_WorksForPushAndPull_1(
-            Version: Version,
-            UnmappedTableBehavior: UnmappedTableBehavior,
-            Mappings: Mappings,
-            Id: Id,
-            SourceTable: SourceTable,
-            TargetTable: TargetTable,
-            Direction: Direction,
-            Enabled: Enabled,
-            PkMapping: PkMapping,
-            ColumnMappings: ColumnMappings,
-            ExcludedColumns: ExcludedColumns,
-            Filter: Filter,
-            SyncTracking: SyncTracking
-        );
+        var config = Fixture_MappingEngine_BothDirection_WorksForPushAndPull_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
@@ -1011,12 +930,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             new ColumnMapping("Col3", "col_3"),
             new ColumnMapping("Col4", "col_4"),
             new ColumnMapping("Col5", "col_5"),
-            Fixture_MappingEngine_MultipleColumnMappings_AllApplied_1(
-                Source: Source,
-                Target: Target,
-                Transform: Transform,
-                Value: Value
-            ),
+            Fixture_MappingEngine_MultipleColumnMappings_AllApplied_1(),
             LqlColumn("computed", "concat(Col1, '-', Col2)")
         );
 
@@ -1043,21 +957,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_ExcludeMultipleColumns_AllExcluded()
     {
         // Arrange - exclude many columns
-        var config = Fixture_MappingEngine_ExcludeMultipleColumns_AllExcluded_1(
-            Version: Version,
-            UnmappedTableBehavior: UnmappedTableBehavior,
-            Mappings: Mappings,
-            Id: Id,
-            SourceTable: SourceTable,
-            TargetTable: TargetTable,
-            Direction: Direction,
-            Enabled: Enabled,
-            PkMapping: PkMapping,
-            ColumnMappings: ColumnMappings,
-            ExcludedColumns: ExcludedColumns,
-            Filter: Filter,
-            SyncTracking: SyncTracking
-        );
+        var config = Fixture_MappingEngine_ExcludeMultipleColumns_AllExcluded_1();
 
         var entry = SourceEntry(
             """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}"""

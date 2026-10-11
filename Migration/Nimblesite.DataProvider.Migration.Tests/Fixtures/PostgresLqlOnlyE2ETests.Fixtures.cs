@@ -1,28 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresLqlOnlyE2ETests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_OrCombination_SelfOrOwner_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsOperation> operations,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles,
-        global::System.String? usingLql
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_OrCombination_SelfOrOwner_1() =>
         SchemaTestData.Schema(
             name: "lql",
             tables:
@@ -62,26 +45,7 @@ public partial class PostgresLqlOnlyE2ETests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsOperation> operations,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles,
-        global::System.String? usingLql,
-        global::System.String? withCheckLql
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1() =>
         SchemaTestData.Schema(
             name: "lql",
             tables:
@@ -117,17 +81,7 @@ public partial class PostgresLqlOnlyE2ETests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1() =>
         SchemaTestData.Schema(
             name: "lql",
             tables:
@@ -149,26 +103,7 @@ public partial class PostgresLqlOnlyE2ETests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsOperation> operations,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles,
-        global::System.String? usingLql,
-        global::System.String? withCheckLql
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2() =>
         SchemaTestData.Schema(
             name: "lql",
             tables:

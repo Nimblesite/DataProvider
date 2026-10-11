@@ -552,7 +552,10 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec15_4_BatchHash_IsConsistent()
     {
         // Arrange
-        var entries = new[] { Fixture_Spec15_4_BatchHash_IsConsistent_1() };
+        var entries = new[]
+        {
+            Fixture_Spec15_4_BatchHash_IsConsistent_1(),
+        };
 
         // Act
         var hash1 = HashVerifier.ComputeBatchHash(entries);

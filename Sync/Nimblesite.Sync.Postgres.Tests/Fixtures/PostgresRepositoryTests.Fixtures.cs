@@ -5,7 +5,7 @@ namespace Nimblesite.Sync.Postgres.Tests;
 
 public partial class PostgresRepositoryTests
 {
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Repositories_WithoutSyncSchema_ReturnDatabaseErrors_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Repositories_WithoutSyncSchema_ReturnDatabaseErrors_1() =>
         new SyncLogEntry(
             0,
             "TestTable",

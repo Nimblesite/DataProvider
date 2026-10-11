@@ -1,29 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresRlsNapShapeTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsOperation> operations,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles,
-        global::System.String? usingLql
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1() =>
         SchemaTestData.Schema(
             name: "nap",
             tables:

@@ -1,10 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaDiffTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_EmptyCurrentToNewDesired_CreatesTable_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_EmptyCurrentToNewDesired_CreatesTable_1() =>
         Schema
             .Define("Desired")
             .Table(
@@ -16,7 +17,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_SameSchema_NoOperations_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_SameSchema_NoOperations_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -28,7 +29,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewColumn_AddsColumn_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewColumn_AddsColumn_1() =>
         Schema
             .Define("Desired")
             .Table(
@@ -40,7 +41,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewForeignKey_AddsForeignKey_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewForeignKey_AddsForeignKey_1() =>
         Schema
             .Define("Current")
             .Table(
@@ -57,7 +58,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewForeignKey_AddsForeignKey_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_NewForeignKey_AddsForeignKey_2() =>
         Schema
             .Define("Desired")
             .Table(
@@ -75,7 +76,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_CaseInsensitiveColumnMatching_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_CaseInsensitiveColumnMatching_1() =>
         Schema
             .Define("Current")
             .Table(
@@ -87,7 +88,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_MultipleNewTables_CreatesAll_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_MultipleNewTables_CreatesAll_1() =>
         Schema
             .Define("Desired")
             .Table(
@@ -103,7 +104,7 @@ public partial class SchemaDiffTests
             .Table("public", "cities", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_ComplexMigration_CombinesOperations_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_ComplexMigration_CombinesOperations_1() =>
         Schema
             .Define("Current")
             .Table(
@@ -120,7 +121,7 @@ public partial class SchemaDiffTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_ComplexMigration_CombinesOperations_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_ComplexMigration_CombinesOperations_2() =>
         Schema
             .Define("Desired")
             .Table(

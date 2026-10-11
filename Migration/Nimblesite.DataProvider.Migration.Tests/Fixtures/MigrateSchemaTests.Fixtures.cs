@@ -5,7 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class MigrateSchemaTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -28,7 +28,7 @@ public partial class MigrateSchemaTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MigrateSchema_CallbacksInvoked_ForSuccessAndFailure_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MigrateSchema_CallbacksInvoked_ForSuccessAndFailure_1() =>
         Schema
             .Define("Test")
             .Table(

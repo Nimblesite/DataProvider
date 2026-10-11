@@ -51,14 +51,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     private static SchemaDefinition ForeignKeySchema(bool parent, bool column, bool fk)
     {
-        var endUser = Fixture_ForeignKeySchema_1(
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey
-        );
+        var endUser = Fixture_ForeignKeySchema_1();
         var events = SchemaTestData.Table(
             name: "usage_events",
             columns: column

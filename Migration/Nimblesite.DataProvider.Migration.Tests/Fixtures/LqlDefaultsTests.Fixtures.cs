@@ -5,7 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class LqlDefaultsTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_True_WorksOnBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_True_WorksOnBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -17,7 +17,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_False_WorksOnBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_False_WorksOnBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -29,7 +29,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNow_DefaultsToCurrentTime_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNow_DefaultsToCurrentTime_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -45,7 +45,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -61,7 +61,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -77,7 +77,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -91,7 +91,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -113,7 +113,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -131,7 +131,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlGenUuid_GeneratesValidUuid_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlGenUuid_GeneratesValidUuid_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -143,7 +143,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -155,7 +155,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlMultipleDefaults_AllWorkTogether_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlMultipleDefaults_AllWorkTogether_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -176,7 +176,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefaults_Idempotent_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefaults_Idempotent_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -189,7 +189,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -202,7 +202,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -223,7 +223,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -254,7 +254,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -269,7 +269,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlUuid_MultipleInserts_AllUnique_BothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlUuid_MultipleInserts_AllUnique_BothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -281,7 +281,7 @@ public partial class LqlDefaultsTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1() =>
         Schema
             .Define("Test")
             .Table(

@@ -1,10 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.Sync.Tests;
 
 public partial class SyncStateTests
 {
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_SyncLogEntry_CreatesCorrectRecord_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_SyncLogEntry_CreatesCorrectRecord_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -15,7 +16,7 @@ public partial class SyncStateTests
             "2024-01-01T00:00:00Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_SyncLogEntry_DeleteHasNullPayload_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_SyncLogEntry_DeleteHasNullPayload_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -26,7 +27,7 @@ public partial class SyncStateTests
             "2024-01-01T00:00:00Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ChangeNotification_CreatesCorrectRecord_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ChangeNotification_CreatesCorrectRecord_1() =>
         new SyncLogEntry(
             1,
             "Person",

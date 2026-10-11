@@ -55,13 +55,7 @@ public sealed partial class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                Fixture_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1(
-                    name: name,
-                    isPermissive: isPermissive,
-                    operations: operations,
-                    usingLql: usingLql,
-                    withCheckLql: withCheckLql
-                )
+                Fixture_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1()
             )
         );
 
@@ -90,13 +84,7 @@ public sealed partial class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Audit",
-                Fixture_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1(
-                    name: name,
-                    isPermissive: isPermissive,
-                    operations: operations,
-                    roles: roles,
-                    usingLql: usingLql
-                )
+                Fixture_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1()
             )
         );
 
@@ -120,13 +108,7 @@ public sealed partial class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                Fixture_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(
-                    name: name,
-                    isPermissive: isPermissive,
-                    operations: operations,
-                    usingLql: usingLql,
-                    lql: lql
-                )
+                Fixture_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(lql: lql)
             )
         );
 
@@ -146,14 +128,7 @@ public sealed partial class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                Fixture_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1(
-                    name: name,
-                    operations: operations,
-                    usingLql: usingLql,
-                    withCheckLql: withCheckLql,
-                    usingSql: usingSql,
-                    withCheckSql: withCheckSql
-                )
+                Fixture_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1()
             )
         );
 

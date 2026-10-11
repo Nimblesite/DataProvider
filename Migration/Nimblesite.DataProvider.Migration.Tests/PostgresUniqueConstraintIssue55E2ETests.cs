@@ -10,9 +10,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// case where a foreign key was declared in the same table.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
-    PostgresContainerFixture fixture
-)
+public sealed partial class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFixture fixture)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -92,34 +90,8 @@ public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
 
     private static SchemaDefinition Schema(bool includeUnique)
     {
-        var tenants = Fixture_Schema_1(
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey
-        );
-        var agentConfigs = Fixture_Schema_2(
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey,
-            foreignKeys: foreignKeys,
-            columns: columns,
-            referencedSchema: referencedSchema,
-            referencedTable: referencedTable,
-            referencedColumns: referencedColumns,
-            onDelete: onDelete,
-            uniqueConstraints: uniqueConstraints,
-            includeUnique: includeUnique,
-            name: name,
-            columns: columns
-        );
+        var tenants = Fixture_Schema_1();
+        var agentConfigs = Fixture_Schema_2(includeUnique: includeUnique);
         return SchemaTestData.Schema(name: "issue55", tables: [tenants, agentConfigs]);
     }
 }

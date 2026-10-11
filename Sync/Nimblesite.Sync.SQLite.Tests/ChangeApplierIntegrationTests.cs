@@ -50,15 +50,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_CreatesNewRecord()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_CreatesNewRecord_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_CreatesNewRecord_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -80,15 +72,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithNullPayload_ReturnsError()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -101,15 +85,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithEmptyPayload_ReturnsError()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -122,27 +98,11 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_DuplicateKey_ReplacesExisting()
     {
         // Arrange - Insert first record
-        var entry1 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry1 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1();
         ChangeApplierSQLite.ApplyChange(_db, entry1);
 
         // Act - Insert with same PK (should replace)
-        var entry2 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry2 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2();
         var result = ChangeApplierSQLite.ApplyChange(_db, entry2);
 
         // Assert
@@ -166,15 +126,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Arrange - Insert first
         InsertPerson("p1", "Alice", 30);
 
-        var entry = Fixture_ApplyChange_Update_ModifiesExistingRecord_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Update_ModifiesExistingRecord_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -195,15 +147,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Update_NonExistingRecord_InsertsAsUpsert()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -226,15 +170,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Arrange
         InsertPerson("p1", "Alice", 30);
 
-        var entry = Fixture_ApplyChange_Delete_RemovesExistingRecord_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Delete_RemovesExistingRecord_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -251,15 +187,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Delete_NonExistingRecord_StillSucceeds()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -272,15 +200,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Delete_InvalidPkValue_ReturnsError()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -297,15 +217,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesStringValues()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_HandlesStringValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesStringValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -318,15 +230,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesIntegerValues()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_HandlesIntegerValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesIntegerValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -343,15 +247,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesNullValues()
     {
         // Arrange
-        var entry = Fixture_ApplyChange_Insert_HandlesNullValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesNullValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -374,15 +270,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
                 command.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)"
         );
 
-        var entry = Fixture_ApplyChange_Insert_HandlesBooleanValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesBooleanValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -405,15 +293,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
                 command.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)"
         );
 
-        var entry = Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -436,15 +316,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
                 command.CommandText = "CREATE TABLE Product (Id TEXT PRIMARY KEY, Price REAL)"
         );
 
-        var entry = Fixture_ApplyChange_Insert_HandlesDoubleValues_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_HandlesDoubleValues_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -483,15 +355,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
                 """
         );
 
-        var entry = Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -520,15 +384,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
                 """
         );
 
-        var entry = Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1();
 
         // Act
         var result = ChangeApplierSQLite.ApplyChange(_db, entry);

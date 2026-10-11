@@ -1,21 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaDiffUniqueConstraintIssue55Tests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition current,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.UniqueConstraintDefinition>? uniqueConstraints,
-        global::System.String? name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition current) =>
         SchemaTestData.Schema(
             name: "desired",
             tables:

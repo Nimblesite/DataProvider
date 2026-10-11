@@ -5,9 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresMigrationTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateDatabaseFromScratch_SingleTable_Success_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateDatabaseFromScratch_SingleTable_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -21,7 +19,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -47,7 +45,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddColumn_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddColumn_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -59,7 +57,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddColumn_Success_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddColumn_Success_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -73,7 +71,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddTable_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddTable_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -85,7 +83,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddTable_Success_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddTable_Success_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -106,7 +104,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddIndex_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddIndex_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -119,7 +117,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddIndex_Success_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeExistingDatabase_AddIndex_Success_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -133,7 +131,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Migration_IsIdempotent_NoErrorOnRerun_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Migration_IsIdempotent_NoErrorOnRerun_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -145,7 +143,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTable_PostgresNativeTypes_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTable_PostgresNativeTypes_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -161,7 +159,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -177,9 +175,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -192,9 +188,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -211,9 +205,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -247,9 +239,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -283,9 +273,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -298,9 +286,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -313,9 +299,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -328,9 +312,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -343,9 +325,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -358,9 +338,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -373,9 +351,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -388,7 +364,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Destructive_DropTable_AllowedWithOption_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Destructive_DropTable_AllowedWithOption_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -399,7 +375,7 @@ public partial class PostgresMigrationTests
             .Table("public", "dropme", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Destructive_DropTable_AllowedWithOption_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Destructive_DropTable_AllowedWithOption_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -409,7 +385,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_NowFunction_GeneratesCurrentTimestamp_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_NowFunction_GeneratesCurrentTimestamp_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -425,7 +401,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_GenUuidFunction_GeneratesValidUuid_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_GenUuidFunction_GeneratesValidUuid_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -437,7 +413,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -458,7 +434,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -476,7 +452,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -497,7 +473,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_AllTypesInOneTable_WorksTogether_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_LqlDefault_AllTypesInOneTable_WorksTogether_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -531,7 +507,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1() =>
         Schema
             .Define("Embeddings")
             .Table(
@@ -544,7 +520,7 @@ public partial class PostgresMigrationTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTableWithVectorColumn_OpenAiLargeDim_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_CreateTableWithVectorColumn_OpenAiLargeDim_Success_1() =>
         Schema
             .Define("EmbeddingsLarge")
             .Table(

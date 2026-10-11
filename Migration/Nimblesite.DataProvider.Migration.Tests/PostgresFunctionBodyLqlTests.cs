@@ -112,13 +112,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody()
     {
         var yaml = SchemaYamlSerializer.ToYaml(
-            Fixture_ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody_1(
-                name: name,
-                functions: functions,
-                name: name,
-                returns: returns,
-                bodyLql: bodyLql
-            )
+            Fixture_ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody_1()
         );
 
         Assert.Contains("bodyLql: current_setting('app.tenant_id')::uuid", yaml);
@@ -193,13 +187,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations()
     {
-        var current = Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1(
-            name: name,
-            functions: functions,
-            name: name,
-            returns: returns,
-            body: body
-        );
+        var current = Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1();
         var desired = current with
         {
             Functions =
@@ -221,13 +209,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction()
     {
-        var current = Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1(
-            name: name,
-            functions: functions,
-            name: name,
-            returns: returns,
-            body: body
-        );
+        var current = Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1();
         var desired = current with
         {
             Functions =

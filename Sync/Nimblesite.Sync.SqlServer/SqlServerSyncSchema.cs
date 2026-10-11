@@ -19,7 +19,7 @@ public static class SqlServerSyncSchema
             return Failure(message: "Could not inspect sync schema");
         if (SchemaDiff.Calculate(current: current.Value, desired: Definition()) is not OperationsOk operations)
             return Failure(message: "Could not calculate sync migration");
-        var migration = MigrationRunner.Apply(connection: connection, operations: operations.Value,
+        var migration = MigrationRunner.Apply(connection: connection, operations: operations.Value, options: new MigrationOptions(),
             generateDdl: operation => SqlServerDdlGenerator.Generate(operation: operation is CreateTableOperation create
                 ? create with { Table = create.Table with { Indexes = [] } } : operation));
         return migration.Match<BoolResult>(

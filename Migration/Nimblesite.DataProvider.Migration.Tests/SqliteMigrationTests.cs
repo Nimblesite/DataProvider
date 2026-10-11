@@ -31,7 +31,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1(unique: unique);
+            var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1();
 
             // Act
             var emptySchema = SqliteSchemaInspector.Inspect(connection, _logger);
@@ -79,8 +79,7 @@ public sealed partial class SqliteMigrationTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema =
-                Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
+            var schema = Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -211,7 +210,7 @@ public sealed partial class SqliteMigrationTests
             SeedSchema(connection, v1, _logger);
 
             // v2 adds an index
-            var v2 = Fixture_UpgradeExistingDatabase_AddIndex_Success_2(unique: unique);
+            var v2 = Fixture_UpgradeExistingDatabase_AddIndex_Success_2();
 
             // Act
             var currentSchema = (
@@ -405,7 +404,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_SchemaInspector_RoundTrip_Matches_1(unique: unique);
+            var schema = Fixture_SchemaInspector_RoundTrip_Matches_1();
 
             // Create schema
             SeedSchema(connection, schema, _logger);
@@ -594,12 +593,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -629,12 +623,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1();
 
             SeedSchema(connection, schema, _logger);
 
@@ -664,12 +653,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -700,12 +684,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var schema = Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1();
 
             // Act - Run migration twice
             for (var i = 0; i < 2; i++)
@@ -785,23 +764,13 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1();
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // v2 changes to expression index (different name since it's semantically different)
-            var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2();
 
             // Act - Calculate upgrade operations
             var currentSchema = (
@@ -844,23 +813,13 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1();
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // v2 changes back to simple column index (different name)
-            var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2(
-                table: table,
-                idType: idType,
-                nameType: nameType,
-                unique: unique
-            );
+            var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2();
 
             // Act
             var currentSchema = (
@@ -1164,8 +1123,7 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema =
-                Fixture_CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully_1();
+            var schema = Fixture_CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully_1();
 
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 

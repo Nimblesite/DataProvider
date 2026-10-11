@@ -13,8 +13,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -33,7 +32,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void CreateDatabaseFromScratch_SingleTable_Success()
     {
         // Arrange
-        var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1(unique: unique);
+        var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1();
 
         // Act
         var emptySchema = PostgresSchemaInspector.Inspect(_connection, "public", _logger);
@@ -288,7 +287,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_CreateWithLowerFunction_Success()
     {
         // Arrange - Create table with expression index for case-insensitive uniqueness
-        var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1(unique: unique);
+        var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1();
 
         // Act
         var emptySchema = InspectPublic();
@@ -323,7 +322,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_EnforcesCaseInsensitiveUniqueness()
     {
         // Arrange - Create table with expression index
-        var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1(unique: unique);
+        var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1();
 
         var emptySchema = InspectPublic();
         var operations = (
@@ -351,9 +350,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_MultiExpression_CompositeIndexSuccess()
     {
         // Arrange - Create table with multi-expression index (like venues with suburb_id)
-        var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1(
-            unique: unique
-        );
+        var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1();
 
         // Act
         var emptySchema = InspectPublic();
@@ -388,9 +385,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb()
     {
         // Arrange - Create tables with composite expression index
-        var schema = Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1(
-            unique: unique
-        );
+        var schema = Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1();
 
         var emptySchema = InspectPublic();
         var operations = (
@@ -436,7 +431,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void ExpressionIndex_Idempotent_NoErrorOnRerun()
     {
         // Arrange
-        var schema = Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1(unique: unique);
+        var schema = Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1();
 
         // Act - Run migration twice
         // Note: Expression indexes aren't read back by schema inspector (no expression index introspection)
@@ -477,7 +472,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeIndex_ColumnToExpression_RequiresDropAndCreate()
     {
         // Arrange - Create table with regular column index
-        var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1(unique: unique);
+        var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1();
 
         // Apply v1
         var emptySchema = InspectPublic();
@@ -487,7 +482,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         _ = Apply(operations: v1Ops);
 
         // v2 changes to expression index (different name since semantically different)
-        var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2(unique: unique);
+        var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2();
 
         // Act - Calculate upgrade operations
         var currentSchema = InspectPublic();
@@ -524,7 +519,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     public void UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate()
     {
         // Arrange - Create table with expression index
-        var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1(unique: unique);
+        var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1();
 
         // Apply v1
         var emptySchema = InspectPublic();
@@ -534,7 +529,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         _ = Apply(operations: v1Ops);
 
         // v2 changes back to simple column index (different name)
-        var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2(unique: unique);
+        var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2();
 
         // Act
         var currentSchema = InspectPublic();
@@ -574,9 +569,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Converting an index type is a destructive operation requiring explicit opt-in.
 
         // Arrange - Create table with regular column index
-        var v1 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1(
-            unique: unique
-        );
+        var v1 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1();
 
         var emptySchema = InspectPublic();
         var v1Ops = (
@@ -586,9 +579,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // v2 wants to change to expression index with SAME name
         // This is a semantic change - case-sensitive to case-insensitive
-        var v2 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2(
-            unique: unique
-        );
+        var v2 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_2();
 
         // Act - Calculate without destructive flag
         var currentSchema = InspectPublic();
@@ -880,8 +871,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     {
         // Arrange — a Documents table with a 384-dim embedding, the
         // sentence-transformers default.
-        var schema =
-            Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1();
+        var schema = Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1();
 
         // The pgvector extension must exist in the database before any
         // vector(N) column can be created. The migration pipeline is

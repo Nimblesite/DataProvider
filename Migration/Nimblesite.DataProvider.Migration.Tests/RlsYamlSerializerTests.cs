@@ -11,23 +11,7 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicyDefinition_YamlRoundTrip_Simple()
     {
-        var schema = Fixture_RlsPolicyDefinition_YamlRoundTrip_Simple_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            type: type,
-            primaryKey: primaryKey,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            policies: policies,
-            name: name,
-            isPermissive: isPermissive,
-            operations: operations,
-            usingLql: usingLql,
-            withCheckLql: withCheckLql
-        );
+        var schema = Fixture_RlsPolicyDefinition_YamlRoundTrip_Simple_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var deserialized = SchemaYamlSerializer.FromYaml(yaml);
@@ -92,19 +76,7 @@ public sealed partial class RlsYamlSerializerTests
     {
         foreach (var op in Enum.GetValues<RlsOperation>())
         {
-            var schema = Fixture_RlsOperation_AllValues_SerializeDeserialize_1(
-                name: name,
-                tables: tables,
-                name: name,
-                columns: columns,
-                name: name,
-                type: type,
-                rowLevelSecurity: rowLevelSecurity,
-                name: name,
-                op: op,
-                operations: operations,
-                usingLql: usingLql
-            );
+            var schema = Fixture_RlsOperation_AllValues_SerializeDeserialize_1(op: op);
 
             var yaml = SchemaYamlSerializer.ToYaml(schema);
             var back = SchemaYamlSerializer.FromYaml(yaml);
@@ -115,18 +87,7 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicy_RestrictiveAndRoles_RoundTrip()
     {
-        var schema = Fixture_RlsPolicy_RestrictiveAndRoles_RoundTrip_1(
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            rowLevelSecurity: rowLevelSecurity,
-            name: name,
-            isPermissive: isPermissive,
-            operations: operations,
-            roles: roles,
-            usingLql: usingLql
-        );
+        var schema = Fixture_RlsPolicy_RestrictiveAndRoles_RoundTrip_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var policy = SchemaYamlSerializer.FromYaml(yaml).Tables[0].RowLevelSecurity!.Policies[0];
@@ -143,14 +104,7 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicySet_DisabledFlag_RoundTrip()
     {
-        var schema = Fixture_RlsPolicySet_DisabledFlag_RoundTrip_1(
-            name: name,
-            tables: tables,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type
-        );
+        var schema = Fixture_RlsPolicySet_DisabledFlag_RoundTrip_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var back = SchemaYamlSerializer.FromYaml(yaml);
@@ -163,17 +117,7 @@ public sealed partial class RlsYamlSerializerTests
     {
         // Defaults: Enabled=true, IsPermissive=true, Operations=[All].
         // These should not appear in serialized YAML.
-        var schema = Fixture_RlsPolicySet_DefaultsOmittedFromYaml_1(
-            name: name,
-            tables: tables,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            rowLevelSecurity: rowLevelSecurity,
-            name: name,
-            usingLql: usingLql
-        );
+        var schema = Fixture_RlsPolicySet_DefaultsOmittedFromYaml_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
@@ -184,14 +128,7 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RowLevelSecurity_Absent_DoesNotAppearInYaml()
     {
-        var schema = Fixture_RowLevelSecurity_Absent_DoesNotAppearInYaml_1(
-            name: name,
-            tables: tables,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type
-        );
+        var schema = Fixture_RowLevelSecurity_Absent_DoesNotAppearInYaml_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 

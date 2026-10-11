@@ -74,14 +74,7 @@ public sealed partial class TriggerYamlSerializerTests
     [Fact]
     public void Triggers_Absent_DoNotAppearInYaml()
     {
-        var schema = Fixture_Triggers_Absent_DoNotAppearInYaml_1(
-            name: name,
-            tables: tables,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type
-        );
+        var schema = Fixture_Triggers_Absent_DoNotAppearInYaml_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 

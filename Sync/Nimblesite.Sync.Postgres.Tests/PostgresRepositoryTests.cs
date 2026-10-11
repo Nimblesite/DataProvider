@@ -8,8 +8,7 @@ namespace Nimblesite.Sync.Postgres.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _conn = null!;
     private static readonly ILogger Logger = NullLogger.Instance;

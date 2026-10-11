@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Tests;
 
 public partial class CodeGenerationE2ETests
 {
-    private global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode_1() =>
+    private static global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode_1() =>
         new DatabaseTable
         {
             Name = "Patients",
@@ -14,7 +14,7 @@ public partial class CodeGenerationE2ETests
             Columns = PatientColumns,
         };
 
-    private global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateBulkInsertMethod_ProducesValidBatchCode_1() =>
+    private static global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateBulkInsertMethod_ProducesValidBatchCode_1() =>
         new DatabaseTable
         {
             Name = "Patients",
@@ -22,7 +22,7 @@ public partial class CodeGenerationE2ETests
             Columns = PatientColumns,
         };
 
-    private global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode_1() =>
+    private static global::Nimblesite.DataProvider.Core.DatabaseTable Fixture_GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode_1() =>
         new DatabaseTable
         {
             Name = "Patients",

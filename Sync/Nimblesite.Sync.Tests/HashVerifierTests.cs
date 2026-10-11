@@ -30,9 +30,15 @@ public sealed partial class HashVerifierTests
     [Fact]
     public void ComputeBatchHash_DifferentEntries_DifferentHash()
     {
-        var entries1 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_1() };
+        var entries1 = new[]
+        {
+            Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_1(),
+        };
 
-        var entries2 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_2() };
+        var entries2 = new[]
+        {
+            Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_2(),
+        };
 
         var hash1 = HashVerifier.ComputeBatchHash(entries1);
         var hash2 = HashVerifier.ComputeBatchHash(entries2);
@@ -43,7 +49,10 @@ public sealed partial class HashVerifierTests
     [Fact]
     public void ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly()
     {
-        var entries = new[] { Fixture_ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly_1() };
+        var entries = new[]
+        {
+            Fixture_ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly_1(),
+        };
 
         var hash = HashVerifier.ComputeBatchHash(entries);
 

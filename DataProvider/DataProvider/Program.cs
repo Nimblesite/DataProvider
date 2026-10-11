@@ -20,11 +20,12 @@ internal static class Program
     {
         var root = new RootCommand(
             "DataProvider codegen tool. Generates type-safe data access code "
-                + "from a live database. Pick a platform subcommand: postgres | sqlite."
+                + "from a live database. Pick a platform subcommand: postgres | sqlite | sqlserver."
         )
         {
             PostgresCli.BuildCommand(),
             SqliteCli.BuildCommand(),
+            SqlServerCli.BuildCommand(),
         };
 
         return root.InvokeAsync(args);

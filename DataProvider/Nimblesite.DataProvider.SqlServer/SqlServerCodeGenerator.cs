@@ -1,7 +1,6 @@
 using Microsoft.Data.SqlClient;
-using Nimblesite.DataProvider.Core;
 using Nimblesite.DataProvider.Core.CodeGeneration;
-using Nimblesite.Sql.Model;
+using SqlError = Nimblesite.Sql.Model.SqlError;
 using CodeResult = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>;
 using ColumnsOk = Outcome.Result<System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Core.DatabaseColumn>, Nimblesite.Sql.Model.SqlError>.Ok<System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Core.DatabaseColumn>, Nimblesite.Sql.Model.SqlError>;
 using ParseOk = Outcome.Result<Nimblesite.Sql.Model.SelectStatement, string>.Ok<Nimblesite.Sql.Model.SelectStatement, string>;
@@ -18,6 +17,8 @@ public static class SqlServerCodeGenerator
     {
         ConnectionType = "Microsoft.Data.SqlClient.SqlConnection",
         TargetNamespace = targetNamespace,
+        GenerateSourceFile = (namespaceName, model, methods) => CodeGenerationConfig.GenerateSourceForConnection(
+            namespaceName: namespaceName, modelCode: model, dataAccessCode: methods, connectionNamespace: "Microsoft.Data.SqlClient"),
     };
 
     /// <summary>Generates a query extension using validated T-SQL and live result metadata.</summary>
@@ -32,7 +33,7 @@ public static class SqlServerCodeGenerator
             : metadata.Match<CodeResult>(_ => new CodeResult.Error<string, SqlError>(new SqlError("No columns")), error => new CodeResult.Error<string, SqlError>(error));
     }
 
-    private static string MapType(Type fieldType, string dataTypeName, bool isNullable) =>
+    internal static string MapType(Type fieldType, string dataTypeName, bool isNullable) =>
         (dataTypeName.ToUpperInvariant() switch
         {
             "BIT" => "bool", "TINYINT" => "byte", "SMALLINT" => "short", "INT" => "int", "BIGINT" => "long",

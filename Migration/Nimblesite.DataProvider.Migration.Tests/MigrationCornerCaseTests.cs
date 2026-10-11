@@ -244,11 +244,7 @@ public sealed partial class MigrationCornerCaseTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema = Fixture_Table_SelfReferencingForeignKey_Success_1(
-                table: table,
-                idType: idType,
-                nameType: nameType
-            );
+            var schema = Fixture_Table_SelfReferencingForeignKey_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -328,11 +324,7 @@ public sealed partial class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Fixture_AllColumnsNotNull_Success_1(
-                table: table,
-                idType: idType,
-                nameType: nameType
-            );
+            var schema = Fixture_AllColumnsNotNull_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -514,11 +506,7 @@ public sealed partial class MigrationCornerCaseTests
             ApplySchema(connection, v1);
 
             // Upgrade to full table
-            var v2 = Fixture_UpgradeFrom_EmptyTable_ToFullSchema_Success_1(
-                table: table,
-                idType: idType,
-                nameType: nameType
-            );
+            var v2 = Fixture_UpgradeFrom_EmptyTable_ToFullSchema_Success_1();
 
             var currentSchema = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)

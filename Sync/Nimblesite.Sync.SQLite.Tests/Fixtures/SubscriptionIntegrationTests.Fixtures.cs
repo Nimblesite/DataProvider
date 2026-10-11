@@ -6,15 +6,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 
 public partial class SubscriptionIntegrationTests
 {
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1() =>
         new SyncLogEntry(
             Version: 100,
             TableName: "Orders",
@@ -25,7 +17,7 @@ public partial class SubscriptionIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec10_7_Notifications_IncludeFullPayload_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec10_7_Notifications_IncludeFullPayload_1() =>
         new SyncLogEntry(
             1,
             "Orders",

@@ -12,18 +12,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaIntegrityVerifierFunctionDriftTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionDefinition>? functions,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionArgumentDefinition>? arguments,
-        global::System.String returns,
-        global::System.String language,
-        global::System.String volatility,
-        global::System.Boolean securityDefiner,
-        global::System.String body
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1() =>
         SchemaTestData.Schema(
             name: "live",
             functions:
@@ -41,18 +30,7 @@ public partial class SchemaIntegrityVerifierFunctionDriftTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionDefinition>? functions,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionArgumentDefinition>? arguments,
-        global::System.String returns,
-        global::System.String language,
-        global::System.String volatility,
-        global::System.Boolean securityDefiner,
-        global::System.String body
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2() =>
         SchemaTestData.Schema(
             name: "desired",
             functions:

@@ -17,8 +17,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -373,26 +372,7 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
     {
         // tenant_members_self_or_owner shape:
         // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner)
-        var schema = Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            defaultValue: defaultValue,
-            primaryKey: primaryKey,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            name: name,
-            operations: operations,
-            roles: roles,
-            usingLql: usingLql
-        );
+        var schema = Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1();
         ApplyAndGrant(schema);
 
         var inspected = (

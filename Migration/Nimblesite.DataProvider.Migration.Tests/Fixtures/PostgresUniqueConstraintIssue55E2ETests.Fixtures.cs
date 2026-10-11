@@ -1,18 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresUniqueConstraintIssue55E2ETests
 {
-    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_1(
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_1() =>
         SchemaTestData.Table(
             schema: SchemaName,
             name: "tenants",
@@ -23,25 +16,7 @@ public partial class PostgresUniqueConstraintIssue55E2ETests
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
         );
 
-    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_2(
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ForeignKeyDefinition>? foreignKeys,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.String referencedSchema,
-        global::System.String referencedTable,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? referencedColumns,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onDelete,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.UniqueConstraintDefinition>? uniqueConstraints,
-        global::System.Boolean includeUnique,
-        global::System.String? name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_2(global::System.Boolean includeUnique) =>
         SchemaTestData.Table(
             schema: SchemaName,
             name: "agent_configs",

@@ -10,13 +10,37 @@ namespace Nimblesite.Sync.SQLite.Tests;
 public partial class SpecComplianceTests
 {
     private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S10_Subscriptions_RecordLevelMatching_1() =>
-        new SyncLogEntry(1, "Person", "{\"Id\":\"p1\"}", SyncOperation.Update, "{}", _originId, "");
+        new SyncLogEntry(
+            1,
+            "Person",
+            "{\"Id\":\"p1\"}",
+            SyncOperation.Update,
+            "{}",
+            _originId,
+            ""
+        );
 
     private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S10_Subscriptions_RecordLevelMatching_2() =>
-        new SyncLogEntry(2, "Person", "{\"Id\":\"p3\"}", SyncOperation.Update, "{}", _originId, "");
+        new SyncLogEntry(
+            2,
+            "Person",
+            "{\"Id\":\"p3\"}",
+            SyncOperation.Update,
+            "{}",
+            _originId,
+            ""
+        );
 
     private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_1() =>
-        new SyncLogEntry(1, "Person", "{\"Id\":\"p1\"}", SyncOperation.Insert, "{}", _originId, "");
+        new SyncLogEntry(
+            1,
+            "Person",
+            "{\"Id\":\"p1\"}",
+            SyncOperation.Insert,
+            "{}",
+            _originId,
+            ""
+        );
 
     private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_2() =>
         new SyncLogEntry(
@@ -30,9 +54,17 @@ public partial class SpecComplianceTests
         );
 
     private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_3() =>
-        new SyncLogEntry(3, "Order", "{\"Id\":\"o1\"}", SyncOperation.Insert, "{}", _originId, "");
+        new SyncLogEntry(
+            3,
+            "Order",
+            "{\"Id\":\"o1\"}",
+            SyncOperation.Insert,
+            "{}",
+            _originId,
+            ""
+        );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -43,7 +75,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:00.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_2() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_2() =>
         new SyncLogEntry(
             2,
             "Person",
@@ -54,7 +86,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:01.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_3() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_3() =>
         new SyncLogEntry(
             3,
             "Person",
@@ -65,7 +97,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:01.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -76,7 +108,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:00.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_2() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_2() =>
         new SyncLogEntry(
             2,
             "Person",
@@ -87,7 +119,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:01.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -98,7 +130,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:01.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_2() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_2() =>
         new SyncLogEntry(
             2,
             "Person",
@@ -109,7 +141,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:00.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_1() =>
         new SyncLogEntry(
             1,
             "Person",
@@ -120,7 +152,7 @@ public partial class SpecComplianceTests
             "2025-01-01T00:00:00.000Z"
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_2() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_2() =>
         new SyncLogEntry(
             2,
             "Person",

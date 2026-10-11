@@ -1,10 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresEdgeCaseTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_NullableColumn_InsertNull_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_NullableColumn_InsertNull_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -19,7 +20,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_AddNullableColumn_ExistingDataUnaffected_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_AddNullableColumn_ExistingDataUnaffected_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -31,7 +32,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_AddNullableColumn_ExistingDataUnaffected_Success_2() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_AddNullableColumn_ExistingDataUnaffected_Success_2() =>
         Schema
             .Define("Test")
             .Table(
@@ -44,7 +45,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_NegativeNumber_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_NegativeNumber_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -57,7 +58,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_EmptyString_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_EmptyString_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -69,7 +70,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_BooleanTrue_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_BooleanTrue_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -82,7 +83,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_UuidGeneration_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_DefaultValue_UuidGeneration_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -98,7 +99,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UnicodeData_InsertAndRetrieve_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_UnicodeData_InsertAndRetrieve_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -111,7 +112,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_SpecialChars_InData_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_SpecialChars_InData_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -123,7 +124,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_JsonColumn_StoreAndQuery_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_JsonColumn_StoreAndQuery_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -135,7 +136,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_JsonColumn_NullVsJsonNull_Distinction_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_JsonColumn_NullVsJsonNull_Distinction_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -147,7 +148,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Decimal_ExtremeValues_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Decimal_ExtremeValues_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -161,7 +162,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Decimal_ZeroAndNegative_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Decimal_ZeroAndNegative_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -175,7 +176,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Timestamp_ExtremeValues_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Timestamp_ExtremeValues_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -188,9 +189,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_VeryLongName_Success_1(
-        global::System.String longName
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_VeryLongName_Success_1(global::System.String longName) =>
         Schema
             .Define("Test")
             .Table(
@@ -203,7 +202,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_AllColumnsInTable_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_AllColumnsInTable_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -218,7 +217,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ForeignKey_AllCascadeTypes_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ForeignKey_AllCascadeTypes_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -252,7 +251,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MultipleOperations_CorrectOrder_Success_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MultipleOperations_CorrectOrder_Success_1() =>
         Schema
             .Define("Test")
             .Table(
@@ -262,9 +261,7 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MultipleOperations_CorrectOrder_Success_2(
-        global::System.Boolean unique
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_MultipleOperations_CorrectOrder_Success_2() =>
         Schema
             .Define("Test")
             .Table(

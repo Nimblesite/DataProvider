@@ -19,8 +19,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -408,25 +407,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
     {
         ApplyAndGrant(TenantMembersSchema(), "tenant_members");
         BootstrapMembershipFns(_connection);
-        var schema = Fixture_LqlOnly_OrCombination_SelfOrOwner_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            name: name,
-            operations: operations,
-            roles: roles,
-            usingLql: usingLql
-        );
+        var schema = Fixture_LqlOnly_OrCombination_SelfOrOwner_1();
         ApplyAndGrant(schema, "self_owner");
 
         // Verify the OR-combination predicate landed in pg_policies.
@@ -447,26 +428,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         // USING is_member(...), WITH CHECK is_member(...) AND is_member(...).
         ApplyAndGrant(TenantMembersSchema(), "tenant_members");
         BootstrapMembershipFns(_connection);
-        var schema = Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            name: name,
-            operations: operations,
-            roles: roles,
-            usingLql: usingLql,
-            withCheckLql: withCheckLql
-        );
+        var schema = Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1();
         ApplyAndGrant(schema, "asymmetric");
 
         using var cmd = _connection.CreateCommand();
@@ -496,41 +458,11 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         BootstrapMembershipFns(_connection);
 
         // Parent table: conversations.
-        var convSchema =
-            Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1(
-                name: name,
-                tables: tables,
-                schema: schema,
-                name: name,
-                columns: columns,
-                name: name,
-                type: type,
-                isNullable: isNullable,
-                primaryKey: primaryKey
-            );
+        var convSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1();
         ApplyAndGrant(convSchema, "conversations");
 
         // Child table: messages — RLS via exists() over conversations.
-        var msgSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            primaryKey: primaryKey,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            name: name,
-            operations: operations,
-            roles: roles,
-            usingLql: usingLql,
-            withCheckLql: withCheckLql
-        );
+        var msgSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2();
         ApplyAndGrant(msgSchema, "messages");
 
         // Set up: tenantA has userA as member, tenantB has userB as member.

@@ -19,23 +19,10 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_NullPayload_ReturnsNullMappedPayload()
     {
-        var mapping = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var entry = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2();
 
         var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Null(success.Entries[0].MappedPayload);
@@ -72,13 +59,7 @@ public sealed partial class LqlMappingCornerCaseTests
             new("NonExistent", "DisplayName", TransformType.Lql, null, "upper(NonExistent)"),
         };
 
-        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var entry = MappingTestData.Entry(
@@ -103,13 +84,7 @@ public sealed partial class LqlMappingCornerCaseTests
             new("Status", "StatusCode"), // Direct mapping
         };
 
-        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var entry = MappingTestData.Entry(
@@ -247,13 +222,7 @@ public sealed partial class LqlMappingCornerCaseTests
             new("zip", "PostalCode", TransformType.Lql, null, "left(zip, 5)"),
         };
 
-        var mapping = Fixture_E2E_FullAddressNormalization_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_E2E_FullAddressNormalization_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var entry = MappingTestData.Entry(
@@ -285,13 +254,7 @@ public sealed partial class LqlMappingCornerCaseTests
             new(null, "DataSource", TransformType.Constant, "legacy_crm"),
         };
 
-        var mapping = Fixture_E2E_UserDataSanitization_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        ) with
+        var mapping = Fixture_E2E_UserDataSanitization_1(columnMappings: columnMappings) with
         {
             PkMapping = new PkMapping("legacy_id", "Id"),
             ExcludedColumns = ["password_hash", "ssn", "credit_card"],

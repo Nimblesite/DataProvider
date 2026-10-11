@@ -48,7 +48,8 @@ public record CodeGenerationConfig
         string,
         string,
         Result<string, SqlError>
-    > GenerateSourceFile { get; init; } = GenerateDefaultSourceFile;
+    > GenerateSourceFile { get; init; } = (namespaceName, model, methods) => GenerateSourceForConnection(
+        namespaceName: namespaceName, modelCode: model, dataAccessCode: methods, connectionNamespace: "Microsoft.Data.Sqlite");
 
     /// <summary>
     /// Function to generate grouped model types
@@ -132,10 +133,12 @@ public record CodeGenerationConfig
     /// <summary>
     /// Default source file generator
     /// </summary>
-    private static Result<string, SqlError> GenerateDefaultSourceFile(
+    /// <summary>Emits a shared source file with the selected database driver's namespace.</summary>
+    public static Result<string, SqlError> GenerateSourceForConnection(
         string namespaceName,
         string modelCode,
-        string dataAccessCode
+        string dataAccessCode,
+        string connectionNamespace
     )
     {
         if (string.IsNullOrWhiteSpace(namespaceName))
@@ -155,7 +158,7 @@ public record CodeGenerationConfig
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Collections.Immutable;");
         sb.AppendLine("using System.Threading.Tasks;");
-        sb.AppendLine("using Microsoft.Data.Sqlite;");
+        sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"using {connectionNamespace};");
         sb.AppendLine("using Outcome;");
         sb.AppendLine("using Nimblesite.Sql.Model;");
         sb.AppendLine();

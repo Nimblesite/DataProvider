@@ -120,15 +120,7 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
             SubscriptionManager.CreateTableSubscription("sub-3", "origin-3", "Products", Timestamp),
         };
 
-        var change = Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var change = Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1();
 
         // Act
         var notifications = SubscriptionManager.CreateNotifications(subscriptions, change);

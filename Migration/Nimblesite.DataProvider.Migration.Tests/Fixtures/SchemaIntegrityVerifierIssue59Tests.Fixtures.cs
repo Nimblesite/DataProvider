@@ -12,17 +12,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaIntegrityVerifierIssue59Tests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1() =>
         SchemaTestData.Schema(
             name: "live",
             tables:
@@ -43,17 +33,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:
@@ -74,17 +54,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3() =>
         SchemaTestData.Schema(
             name: "changed-default",
             tables:
@@ -105,10 +75,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1() =>
         SchemaTestData.Schema(
             name: "live",
             grants:
@@ -128,14 +95,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2() =>
         SchemaTestData.Schema(
             name: "desired",
             grants:
@@ -149,16 +109,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1(
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.String? objectName,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1() =>
         SchemaTestData.Schema(
             name: "live",
             tables:
@@ -185,14 +136,7 @@ public partial class SchemaIntegrityVerifierIssue59Tests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:

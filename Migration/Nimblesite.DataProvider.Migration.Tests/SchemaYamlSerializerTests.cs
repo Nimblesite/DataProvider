@@ -81,7 +81,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void RoundTrip_ComplexSchema_PreservesAllData()
     {
         // Arrange
-        var schema = Fixture_RoundTrip_ComplexSchema_PreservesAllData_1(unique: unique);
+        var schema = Fixture_RoundTrip_ComplexSchema_PreservesAllData_1();
 
         // Act
         var yaml = SchemaYamlSerializer.ToYaml(schema);
@@ -142,10 +142,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void ForeignKey_WithActions_SerializesCorrectly()
     {
         // Arrange
-        var schema = Fixture_ForeignKey_WithActions_SerializesCorrectly_1(
-            onDelete: onDelete,
-            onUpdate: onUpdate
-        );
+        var schema = Fixture_ForeignKey_WithActions_SerializesCorrectly_1();
 
         // Act
         var yaml = SchemaYamlSerializer.ToYaml(schema);
@@ -165,7 +162,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void Index_WithFilter_SerializesCorrectly()
     {
         // Arrange
-        var schema = Fixture_Index_WithFilter_SerializesCorrectly_1(unique: unique, filter: filter);
+        var schema = Fixture_Index_WithFilter_SerializesCorrectly_1();
 
         // Act
         var table = RoundtripFirstTable(schema: schema);
@@ -181,12 +178,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void ExpressionIndex_SerializesCorrectly()
     {
         // Arrange
-        var schema = Fixture_ExpressionIndex_SerializesCorrectly_1(
-            table: table,
-            idType: idType,
-            nameType: nameType,
-            unique: unique
-        );
+        var schema = Fixture_ExpressionIndex_SerializesCorrectly_1();
 
         // Act
         var table = RoundtripFirstTable(schema: schema);

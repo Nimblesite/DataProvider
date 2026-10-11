@@ -22,37 +22,8 @@ public sealed partial class SchemaIntegrityVerifierTests
     [Fact]
     public void Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches()
     {
-        var live =
-            Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1(
-                name: name,
-                tables: tables,
-                schema: schema,
-                name: name,
-                columns: columns,
-                name: name,
-                type: type,
-                isNullable: isNullable,
-                defaultValue: defaultValue,
-                primaryKey: primaryKey,
-                indexes: indexes,
-                name: name,
-                columns: columns,
-                filter: filter
-            );
-        var desired =
-            Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2(
-                name: name,
-                tables: tables,
-                schema: schema,
-                name: name,
-                columns: columns,
-                name: name,
-                type: type,
-                isNullable: isNullable,
-                defaultValue: defaultValue,
-                primaryKey: primaryKey,
-                indexes: indexes
-            );
+        var live = Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1();
+        var desired = Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -62,59 +33,8 @@ public sealed partial class SchemaIntegrityVerifierTests
     [Fact]
     public void Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches()
     {
-        var live = Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            columns: columns,
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            isIdentity: isIdentity,
-            defaultValue: defaultValue,
-            primaryKey: primaryKey,
-            foreignKeys: foreignKeys,
-            name: name,
-            columns: columns,
-            referencedTable: referencedTable,
-            referencedColumns: referencedColumns,
-            onDelete: onDelete,
-            onUpdate: onUpdate,
-            uniqueConstraints: uniqueConstraints,
-            name: name,
-            columns: columns,
-            indexes: indexes,
-            name: name,
-            columns: columns,
-            expressions: expressions,
-            filter: filter,
-            checkConstraints: checkConstraints,
-            name: name,
-            expression: expression
-        );
-        var desired = Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_2(
-            name: name,
-            type: type,
-            isNullable: isNullable,
-            isIdentity: isIdentity,
-            defaultLqlExpression: defaultLqlExpression,
-            defaultValue: defaultValue,
-            checkConstraint: checkConstraint,
-            name: name,
-            columns: columns,
-            referencedTable: referencedTable,
-            referencedColumns: referencedColumns,
-            onDelete: onDelete,
-            onUpdate: onUpdate,
-            name: name,
-            columns: columns,
-            expressions: expressions,
-            isUnique: isUnique,
-            filter: filter,
-            name: name,
-            expression: expression
-        );
+        var live = Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_1();
+        var desired = Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -203,44 +123,8 @@ public sealed partial class SchemaIntegrityVerifierTests
     [Fact]
     public void Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches()
     {
-        var live = Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            roles: roles,
-            name: name,
-            login: login,
-            bypassRls: bypassRls
-        );
-        var desired = Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_2(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            roles: roles,
-            name: name,
-            login: login,
-            bypassRls: bypassRls,
-            functions: functions,
-            schema: schema,
-            name: name,
-            arguments: arguments,
-            grants: grants,
-            schema: schema,
-            target: target,
-            objectName: objectName,
-            privileges: privileges,
-            roles: roles
-        );
+        var live = Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_1();
+        var desired = Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -270,23 +154,7 @@ public sealed partial class SchemaIntegrityVerifierTests
             name: "live",
             tables: [SchemaTestData.Table(schema: "public", name: "documents")]
         );
-        var desired = Fixture_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1(
-            name: name,
-            tables: tables,
-            schema: schema,
-            name: name,
-            rowLevelSecurity: rowLevelSecurity,
-            enabled: enabled,
-            forced: forced,
-            policies: policies,
-            roles: roles,
-            functions: functions,
-            grants: grants,
-            schema: schema,
-            target: target,
-            privileges: privileges,
-            roles: roles
-        );
+        var desired = Fixture_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1();
 
         var mismatches = Verify(
             live: live,

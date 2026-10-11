@@ -489,7 +489,7 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(v1);
 
         // Upgrade with multiple changes
-        var v2 = Fixture_MultipleOperations_CorrectOrder_Success_2(unique: unique);
+        var v2 = Fixture_MultipleOperations_CorrectOrder_Success_2();
 
         var currentSchema = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)

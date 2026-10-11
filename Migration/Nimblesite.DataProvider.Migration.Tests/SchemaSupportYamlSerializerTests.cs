@@ -52,13 +52,7 @@ public sealed partial class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresSupportObjects_OmitsSemanticDefaults()
     {
-        var schema = Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1(
-            name: name,
-            functions: functions,
-            name: name,
-            returns: returns,
-            body: body
-        );
+        var schema = Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
@@ -72,15 +66,7 @@ public sealed partial class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresGrantRunAs_EmitsRunAs()
     {
-        var schema = Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1(
-            name: name,
-            grants: grants,
-            schema: schema,
-            target: target,
-            privileges: privileges,
-            roles: roles,
-            runAs: runAs
-        );
+        var schema = Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 

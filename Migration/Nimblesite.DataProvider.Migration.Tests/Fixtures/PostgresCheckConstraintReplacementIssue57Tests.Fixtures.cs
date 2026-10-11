@@ -1,24 +1,11 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
 
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresCheckConstraintReplacementIssue57Tests
 {
-    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_SchemaWithKindCheck_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.CheckConstraintDefinition>? checkConstraints,
-        global::System.String name,
-        global::System.String expression,
-        global::System.String expression
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_SchemaWithKindCheck_1(global::System.String expression) =>
         SchemaTestData.Schema(
             name: "issue57",
             tables:

@@ -16,12 +16,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void FindMapping_ExactMatch_ReturnsMapping()
     {
-        var mapping = Fixture_FindMapping_ExactMatch_ReturnsMapping_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_FindMapping_ExactMatch_ReturnsMapping_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
@@ -33,12 +28,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPush()
     {
-        var mapping = Fixture_FindMapping_BothDirection_MatchesPush_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_FindMapping_BothDirection_MatchesPush_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
@@ -50,12 +40,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPull()
     {
-        var mapping = Fixture_FindMapping_BothDirection_MatchesPull_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_FindMapping_BothDirection_MatchesPull_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Pull);
@@ -66,12 +51,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void FindMapping_WrongDirection_ReturnsNull()
     {
-        var mapping = Fixture_FindMapping_WrongDirection_ReturnsNull_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_FindMapping_WrongDirection_ReturnsNull_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Pull);
@@ -82,12 +62,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void FindMapping_UnmappedTable_ReturnsNull()
     {
-        var mapping = Fixture_FindMapping_UnmappedTable_ReturnsNull_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_FindMapping_UnmappedTable_ReturnsNull_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var found = MappingEngine.FindMapping("User", config, MappingDirection.Push);
@@ -128,12 +103,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_RenamesTable()
     {
-        var mapping = Fixture_ApplyMapping_SingleTarget_RenamesTable_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_ApplyMapping_SingleTarget_RenamesTable_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
         var entry = MappingTestData.Entry(
             table: "User",
@@ -178,13 +148,7 @@ public sealed partial class MappingEngineTests
             new("EmailAddress", "Email"),
         };
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
         var entry = MappingTestData.Entry(
             table: "User",
@@ -208,13 +172,7 @@ public sealed partial class MappingEngineTests
             new(null, "Source", TransformType.Constant, "mobile-app"),
         };
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            columnMappings: columnMappings,
-            columnMappings: columnMappings
-        );
+        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
         var entry = MappingTestData.Entry(
             table: "User",
@@ -387,22 +345,9 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_DeleteOperation_NullPayload_Succeeds()
     {
-        var mapping = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_1(
-            id: id,
-            sourceTable: sourceTable,
-            targetTable: targetTable,
-            direction: direction
-        );
+        var mapping = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_2(
-            Version: Version,
-            TableName: TableName,
-            PkValue: PkValue,
-            Operation: Operation,
-            Payload: Payload,
-            Origin: Origin,
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_2();
 
         var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Null(success.Entries[0].MappedPayload);

@@ -19,22 +19,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaIntegrityVerifierTests
 {
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.IndexDefinition>? indexes,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.String? filter
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1() =>
         SchemaTestData.Schema(
             name: "live",
             tables:
@@ -64,19 +49,7 @@ public partial class SchemaIntegrityVerifierTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.String? defaultValue,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.IndexDefinition>? indexes
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:
@@ -106,37 +79,7 @@ public partial class SchemaIntegrityVerifierTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ColumnDefinition>? columns,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.Boolean isIdentity,
-        global::System.String? defaultValue,
-        global::Nimblesite.DataProvider.Migration.Core.PrimaryKeyDefinition? primaryKey,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.ForeignKeyDefinition>? foreignKeys,
-        global::System.String? name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.String referencedTable,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? referencedColumns,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onDelete,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onUpdate,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.UniqueConstraintDefinition>? uniqueConstraints,
-        global::System.String? name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.IndexDefinition>? indexes,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? expressions,
-        global::System.String? filter,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.CheckConstraintDefinition>? checkConstraints,
-        global::System.String name,
-        global::System.String expression
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_1() =>
         SchemaTestData.Schema(
             name: "live",
             tables:
@@ -199,28 +142,7 @@ public partial class SchemaIntegrityVerifierTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_2(
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.PortableType type,
-        global::System.Boolean isNullable,
-        global::System.Boolean isIdentity,
-        global::System.String? defaultLqlExpression,
-        global::System.String? defaultValue,
-        global::System.String? checkConstraint,
-        global::System.String? name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.String referencedTable,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? referencedColumns,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onDelete,
-        global::Nimblesite.DataProvider.Migration.Core.ForeignKeyAction onUpdate,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? columns,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? expressions,
-        global::System.Boolean isUnique,
-        global::System.String? filter,
-        global::System.String name,
-        global::System.String expression
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenColumnsAndConstraintsDrift_ReturnsDetailedMismatches_2() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:
@@ -301,7 +223,7 @@ public partial class SchemaIntegrityVerifierTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenPrimaryKeyIsMissing_ReturnsMissingPrimaryKey_1() =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenPrimaryKeyIsMissing_ReturnsMissingPrimaryKey_1() =>
         Schema
             .Define("desired")
             .Table(
@@ -311,20 +233,7 @@ public partial class SchemaIntegrityVerifierTests
             )
             .Build();
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresRoleDefinition>? roles,
-        global::System.String name,
-        global::System.Boolean login,
-        global::System.Boolean bypassRls
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_1() =>
         SchemaTestData.Schema(
             name: "live",
             tables:
@@ -342,30 +251,7 @@ public partial class SchemaIntegrityVerifierTests
             roles: [SchemaTestData.PostgresRole(name: "app_user", login: false, bypassRls: true)]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_2(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresRoleDefinition>? roles,
-        global::System.String name,
-        global::System.Boolean login,
-        global::System.Boolean bypassRls,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionDefinition>? functions,
-        global::System.String schema,
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionArgumentDefinition>? arguments,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.String? objectName,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsDrift_ReturnsDetailedMismatches_2() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:
@@ -405,23 +291,7 @@ public partial class SchemaIntegrityVerifierTests
             ]
         );
 
-    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1(
-        global::System.String name,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.TableDefinition>? tables,
-        global::System.String schema,
-        global::System.String name,
-        global::Nimblesite.DataProvider.Migration.Core.RlsPolicySetDefinition? rowLevelSecurity,
-        global::System.Boolean enabled,
-        global::System.Boolean forced,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.RlsPolicyDefinition>? policies,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresRoleDefinition>? roles,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresFunctionDefinition>? functions,
-        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.PostgresGrantDefinition>? grants,
-        global::System.String schema,
-        global::Nimblesite.DataProvider.Migration.Core.PostgresGrantTarget target,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? privileges,
-        global::System.Collections.Generic.IReadOnlyList<global::System.String>? roles
-    ) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1() =>
         SchemaTestData.Schema(
             name: "desired",
             tables:

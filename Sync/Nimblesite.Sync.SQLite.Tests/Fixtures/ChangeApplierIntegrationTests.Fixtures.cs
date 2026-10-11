@@ -7,15 +7,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 
 public partial class ChangeApplierIntegrationTests
 {
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_CreatesNewRecord_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_CreatesNewRecord_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -26,15 +18,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -45,15 +29,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -64,15 +40,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -83,15 +51,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2() =>
         new SyncLogEntry(
             Version: 2,
             TableName: "Person",
@@ -102,15 +62,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Update_ModifiesExistingRecord_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Update_ModifiesExistingRecord_1() =>
         new SyncLogEntry(
             Version: 2,
             TableName: "Person",
@@ -121,15 +73,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -140,15 +84,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_RemovesExistingRecord_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_RemovesExistingRecord_1() =>
         new SyncLogEntry(
             Version: 2,
             TableName: "Person",
@@ -159,15 +95,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -178,15 +106,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -197,15 +117,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesStringValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesStringValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -216,15 +128,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesIntegerValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesIntegerValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -235,15 +139,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesNullValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesNullValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Person",
@@ -254,15 +150,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesBooleanValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesBooleanValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Settings",
@@ -273,15 +161,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Settings",
@@ -292,15 +172,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesDoubleValues_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_HandlesDoubleValues_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Product",
@@ -311,15 +183,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Employee",
@@ -330,15 +194,7 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1(
-        global::System.Int64 Version,
-        global::System.String TableName,
-        global::System.String PkValue,
-        global::Nimblesite.Sync.Core.SyncOperation Operation,
-        global::System.String? Payload,
-        global::System.String Origin,
-        global::System.String Timestamp
-    ) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1() =>
         new SyncLogEntry(
             Version: 1,
             TableName: "Employee",
@@ -349,36 +205,36 @@ public partial class ChangeApplierIntegrationTests
             Timestamp: Timestamp
         );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_1() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_1() =>
         new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-            "origin",
-            Timestamp
-        );
+                1,
+                "Person",
+                "{\"Id\":\"p1\"}",
+                SyncOperation.Insert,
+                "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
+                "origin",
+                Timestamp
+            );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_2() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_2() =>
         new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p2\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
-            "origin",
-            Timestamp
-        );
+                2,
+                "Person",
+                "{\"Id\":\"p2\"}",
+                SyncOperation.Insert,
+                "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
+                "origin",
+                Timestamp
+            );
 
-    private global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_3() =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_3() =>
         new SyncLogEntry(
-            3,
-            "Person",
-            "{\"Id\":\"p3\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
-            "origin",
-            Timestamp
-        );
+                3,
+                "Person",
+                "{\"Id\":\"p3\"}",
+                SyncOperation.Insert,
+                "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
+                "origin",
+                Timestamp
+            );
 }

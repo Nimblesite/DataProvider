@@ -22,7 +22,7 @@ public static class SqlServerParser
         }
         catch (Exception exception)
         {
-            return new ParseResult.Error<ModelStatement, string>(exception.Message);
+            return new ParseResult.Error<ModelStatement, string>(exception.ToString());
         }
     }
 

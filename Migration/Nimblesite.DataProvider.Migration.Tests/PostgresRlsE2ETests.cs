@@ -341,12 +341,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
             [
                 BuildOwnerIsolationSchema().Tables[0] with
                 {
-                    RowLevelSecurity = Fixture_SchemaDiff_AddsNewPolicy_ToExistingRlsTable_1(
-                        name: name,
-                        operations: operations,
-                        usingLql: usingLql,
-                        withCheckLql: withCheckLql
-                    ),
+                    RowLevelSecurity = Fixture_SchemaDiff_AddsNewPolicy_ToExistingRlsTable_1(),
                 },
             ],
         };
