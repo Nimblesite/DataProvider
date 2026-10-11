@@ -14,10 +14,6 @@ using ClientOk = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
     Nimblesite.Sync.Core.SyncError
 >.Ok<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
-using IntSyncOk = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Ok<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
 
 namespace Nimblesite.Sync.Tests;
 

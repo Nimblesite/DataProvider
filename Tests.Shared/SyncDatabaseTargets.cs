@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Nimblesite.Sync.Postgres;
 using Nimblesite.Sync.SQLite;
 using Xunit;
-using BoolSyncOk = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Ok<
+using DatabaseSetupOk = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Ok<
     bool,
     Nimblesite.Sync.Core.SyncError
 >;
@@ -53,9 +53,11 @@ internal static class SyncDatabaseTargets
                 .CreateDatabaseAsync("sync_http")
                 .ConfigureAwait(false);
             CreatePersonTable("postgres", connection.ConnectionString, "public", tableChecks);
-            Assert.IsType<BoolSyncOk>(PostgresSyncSchema.CreateSchema(connection));
-            Assert.IsType<BoolSyncOk>(PostgresSyncSchema.SetOriginId(connection, "server-origin"));
-            Assert.IsType<BoolSyncOk>(
+            Assert.IsType<DatabaseSetupOk>(PostgresSyncSchema.CreateSchema(connection));
+            Assert.IsType<DatabaseSetupOk>(
+                PostgresSyncSchema.SetOriginId(connection, "server-origin")
+            );
+            Assert.IsType<DatabaseSetupOk>(
                 PostgresTriggerGenerator.CreateTriggers(connection, "person", NullLogger.Instance)
             );
             return (connection.ConnectionString, FilePath: null);
@@ -68,13 +70,13 @@ internal static class SyncDatabaseTargets
             CreatePersonTable("sqlserver", connectionString, "dbo", tableChecks);
             using var sqlServer = new SqlConnection(connectionString);
             await sqlServer.OpenAsync().ConfigureAwait(false);
-            Assert.IsType<BoolSyncOk>(
+            Assert.IsType<DatabaseSetupOk>(
                 Nimblesite.Sync.SqlServer.SqlServerSyncSchema.CreateSchema(sqlServer)
             );
-            Assert.IsType<BoolSyncOk>(
+            Assert.IsType<DatabaseSetupOk>(
                 Nimblesite.Sync.SqlServer.SqlServerSyncStore.SetOriginId(sqlServer, "server-origin")
             );
-            Assert.IsType<BoolSyncOk>(
+            Assert.IsType<DatabaseSetupOk>(
                 Nimblesite.Sync.SqlServer.SqlServerTriggerGenerator.CreateTriggers(
                     sqlServer,
                     "person",
@@ -89,9 +91,9 @@ internal static class SyncDatabaseTargets
         CreatePersonTable("sqlite", path, "main", tableChecks);
         using var sqlite = new SqliteConnection(sqliteConnectionString);
         await sqlite.OpenAsync().ConfigureAwait(false);
-        Assert.IsType<BoolSyncOk>(SyncSchema.CreateSchema(sqlite));
-        Assert.IsType<BoolSyncOk>(SyncSchema.SetOriginId(sqlite, "server-origin"));
-        Assert.IsType<BoolSyncOk>(
+        Assert.IsType<DatabaseSetupOk>(SyncSchema.CreateSchema(sqlite));
+        Assert.IsType<DatabaseSetupOk>(SyncSchema.SetOriginId(sqlite, "server-origin"));
+        Assert.IsType<DatabaseSetupOk>(
             TriggerGenerator.CreateTriggers(sqlite, "person", NullLogger.Instance)
         );
         return (sqliteConnectionString, path);

@@ -78,11 +78,11 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     /// A short prefix used to name the database. Helpful for diagnostics; the fixture appends
     /// a unique counter so concurrent tests cannot collide.
     /// </param>
-    public async Task<NpgsqlConnection> CreateDatabaseAsync(string namePrefix)
+    public async Task<global::Npgsql.NpgsqlConnection> CreateDatabaseAsync(string namePrefix)
     {
         var connectionString = await CreateDatabaseConnectionStringAsync(namePrefix)
             .ConfigureAwait(false);
-        var conn = new NpgsqlConnection(connectionString);
+        var conn = new global::Npgsql.NpgsqlConnection(connectionString);
         await conn.OpenAsync().ConfigureAwait(false);
         return conn;
     }
@@ -91,10 +91,10 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     /// Synchronous variant of <see cref="CreateDatabaseAsync"/>. Returns an open connection
     /// to a freshly created database.
     /// </summary>
-    public NpgsqlConnection CreateDatabase(string namePrefix)
+    public global::Npgsql.NpgsqlConnection CreateDatabase(string namePrefix)
     {
         var connectionString = CreateDatabaseConnectionString(namePrefix);
-        var conn = new NpgsqlConnection(connectionString);
+        var conn = new global::Npgsql.NpgsqlConnection(connectionString);
         conn.Open();
         return conn;
     }
@@ -107,7 +107,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     public async Task<string> CreateDatabaseConnectionStringAsync(string namePrefix)
     {
         var dbName = NextDatabaseName(namePrefix);
-        var adminConn = new NpgsqlConnection(_adminConnectionString);
+        var adminConn = new global::Npgsql.NpgsqlConnection(_adminConnectionString);
         try
         {
             await adminConn.OpenAsync().ConfigureAwait(false);
@@ -128,7 +128,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     public string CreateDatabaseConnectionString(string namePrefix)
     {
         var dbName = NextDatabaseName(namePrefix);
-        using var adminConn = new NpgsqlConnection(_adminConnectionString);
+        using var adminConn = new global::Npgsql.NpgsqlConnection(_adminConnectionString);
         adminConn.Open();
         using var cmd = adminConn.CreateCommand();
         cmd.CommandText = $"CREATE DATABASE \"{dbName}\"";
@@ -137,14 +137,14 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     }
 
     // Pooling=false: with the default pool, every test in the assembly retains
-    // its server-side connection slot after disposing the NpgsqlConnection, and
+    // its server-side connection slot after disposing the global::Npgsql.NpgsqlConnection, and
     // a single test run easily exhausts Postgres's default max_connections=100,
     // causing later tests to fail with SQLSTATE 53300 ("too many clients
     // already"). The shared container only services this test process, so
     // pool reuse delivers no real benefit; turning it off makes each test
     // hand its slot back immediately.
     private string BuildConnectionString(string dbName) =>
-        new NpgsqlConnectionStringBuilder(_adminConnectionString)
+        new global::Npgsql.NpgsqlConnectionStringBuilder(_adminConnectionString)
         {
             Database = dbName,
             Pooling = false,
