@@ -718,15 +718,23 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         }
 
         // Assert - All UUIDs are unique in Postgres
-        using var pgCmd = _pgConnection.CreateCommand();
-        pgCmd.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test";
-        var pgDistinct = (long)pgCmd.ExecuteScalar()!;
+        var pgDistinct = (long)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _pgConnection,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test"
+            )!;
+
         Assert.Equal(10, pgDistinct);
 
         // Assert - All UUIDs are unique in SQLite
-        using var sqliteCmd = _sqliteConnection.CreateCommand();
-        sqliteCmd.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test";
-        var sqliteDistinct = (long)sqliteCmd.ExecuteScalar()!;
+        var sqliteDistinct = (long)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _sqliteConnection,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(DISTINCT id) FROM uuid_test"
+            )!;
+
         Assert.Equal(10, sqliteDistinct);
     }
 
@@ -819,16 +827,20 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
     private T QueryPg<T>(string sql)
     {
-        using var cmd = _pgConnection.CreateCommand();
-        cmd.CommandText = sql;
-        return (T)cmd.ExecuteScalar()!;
+        return (T)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _pgConnection,
+                configure: command => command.CommandText = sql
+            )!;
     }
 
     private T QuerySqlite<T>(string sql)
     {
-        using var cmd = _sqliteConnection.CreateCommand();
-        cmd.CommandText = sql;
-        return (T)cmd.ExecuteScalar()!;
+        return (T)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _sqliteConnection,
+                configure: command => command.CommandText = sql
+            )!;
     }
 
     // =========================================================================
@@ -894,10 +906,14 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
     /// </summary>
     private static string GetSqliteTableDdl(SqliteConnection conn, string tableName)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name=@name";
-        cmd.Parameters.AddWithValue("@name", tableName);
-        var result = cmd.ExecuteScalar();
+        var result = global::Tests.Shared.DatabaseCommands.Scalar(
+            connection: conn,
+            configure: command =>
+                command.CommandText =
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name=@name",
+            parameters: () => [("@name", tableName)]
+        );
+
         return result?.ToString() ?? "";
     }
 

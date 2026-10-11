@@ -298,10 +298,11 @@ public sealed partial record HttpEndpointPlatformTests
     private static long CountPeople(string provider, string connectionString)
     {
         using var connection = OpenConnection(provider, connectionString);
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM person";
         return Convert.ToInt64(
-            command.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
     }

@@ -424,11 +424,7 @@ public sealed partial class SqliteMigrationTests
         SqliteTestDb.WithDb(test: connection =>
         {
             // Create a custom operation that generates invalid SQL
-            var badTable = SchemaTestData.Table(
-                schema: "main",
-                name: "Bad\"Table",
-                columns: [SchemaTestData.Column(name: "Id", type: PortableTypes.Int)]
-            );
+            var badTable = Dataset_InvalidSql_ReturnsUsefulError_1();
 
             var createOp = new CreateTableOperation(badTable);
 
@@ -544,10 +540,13 @@ public sealed partial class SqliteMigrationTests
             );
 
             // Verify index exists
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name'";
-            var indexDef = cmd.ExecuteScalar() as string;
+            var indexDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name'"
+                ) as string;
 
             Assert.NotNull(indexDef);
             ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower"]);
@@ -603,10 +602,13 @@ public sealed partial class SqliteMigrationTests
             );
 
             // Verify composite expression index exists
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_places_name_suburb'";
-            var indexDef = cmd.ExecuteScalar() as string;
+            var indexDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_places_name_suburb'"
+                ) as string;
 
             Assert.NotNull(indexDef);
             ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "SuburbId"]);
@@ -728,10 +730,14 @@ public sealed partial class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Verify new expression index exists
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name_ci'";
-            var indexDef = cmd.ExecuteScalar() as string;
+            var indexDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_artists_name_ci'"
+                ) as string;
+
             Assert.NotNull(indexDef);
             Assert.Contains("lower", indexDef);
         });
@@ -776,10 +782,14 @@ public sealed partial class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Verify new column index exists (no lower() function)
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_venues_name'";
-            var indexDef = cmd.ExecuteScalar() as string;
+            var indexDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_venues_name'"
+                ) as string;
+
             Assert.NotNull(indexDef);
             Assert.DoesNotContain("lower", indexDef);
         });
@@ -802,9 +812,14 @@ public sealed partial class SqliteMigrationTests
             SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Verify table DDL contains datetime('now') - the SQLite translation of now()
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='events'";
-            var tableDef = cmd.ExecuteScalar() as string;
+            var tableDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='table' AND name='events'"
+                ) as string;
+
             Assert.NotNull(tableDef);
             Assert.Contains("(datetime('now'))", tableDef);
 
@@ -814,9 +829,13 @@ public sealed partial class SqliteMigrationTests
                 configure: command => command.CommandText = "INSERT INTO events (id) VALUES (1)"
             );
 
-            using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT created_at FROM events WHERE id = 1";
-            var createdAt = selectCmd.ExecuteScalar() as string;
+            var createdAt =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText = "SELECT created_at FROM events WHERE id = 1"
+                ) as string;
+
             Assert.NotNull(createdAt);
             Assert.NotEmpty(createdAt);
         });
@@ -835,9 +854,14 @@ public sealed partial class SqliteMigrationTests
             SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Verify table DDL contains 1 and 0 for boolean defaults
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='flags'";
-            var tableDef = cmd.ExecuteScalar() as string;
+            var tableDef =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT sql FROM sqlite_master WHERE type='table' AND name='flags'"
+                ) as string;
+
             Assert.NotNull(tableDef);
             ContainsAll(actual: tableDef, expected: ["DEFAULT 1", "DEFAULT 0"]); // false -> 0
 
@@ -971,9 +995,13 @@ public sealed partial class SqliteMigrationTests
                 configure: command => command.CommandText = "INSERT INTO logs (id) VALUES (1)"
             );
 
-            using var selectCmd = connection.CreateCommand();
-            selectCmd.CommandText = "SELECT log_date FROM logs WHERE id = 1";
-            var logDate = selectCmd.ExecuteScalar() as string;
+            var logDate =
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: connection,
+                    configure: command =>
+                        command.CommandText = "SELECT log_date FROM logs WHERE id = 1"
+                ) as string;
+
             Assert.NotNull(logDate);
             Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", logDate); // YYYY-MM-DD format
         });

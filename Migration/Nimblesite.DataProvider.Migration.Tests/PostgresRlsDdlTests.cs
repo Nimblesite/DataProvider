@@ -54,11 +54,7 @@ public sealed partial class PostgresRlsDdlTests
     public void Generate_CreateRlsPolicy_OwnerIsolation_FullShape()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                Fixture_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1()
-            )
+            Dataset_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1()
         );
 
         ContainsAll(
@@ -82,11 +78,7 @@ public sealed partial class PostgresRlsDdlTests
     public void Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Audit",
-                Fixture_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1()
-            )
+            Dataset_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1()
         );
 
         ContainsAll(
@@ -103,11 +95,7 @@ public sealed partial class PostgresRlsDdlTests
         var lql = Data_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1;
 
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                Fixture_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(lql: lql)
-            )
+            Dataset_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(lql: lql)
         );
 
         ContainsAll(
@@ -126,11 +114,7 @@ public sealed partial class PostgresRlsDdlTests
     public void Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                Fixture_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1()
-            )
+            Dataset_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1()
         );
 
         ContainsAll(
@@ -150,11 +134,7 @@ public sealed partial class PostgresRlsDdlTests
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
             PostgresDdlGenerator.Generate(
-                new CreateRlsPolicyOperation(
-                    "public",
-                    "Documents",
-                    SchemaTestData.RlsPolicy(name: "broken", usingLql: "")
-                )
+                Dataset_Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_1()
             )
         );
         Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", ex.Message, StringComparison.Ordinal);
@@ -165,14 +145,7 @@ public sealed partial class PostgresRlsDdlTests
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
             PostgresDdlGenerator.Generate(
-                new CreateRlsPolicyOperation(
-                    "public",
-                    "Documents",
-                    SchemaTestData.RlsPolicy(
-                        name: "broken_check",
-                        operations: [RlsOperation.Insert]
-                    )
-                )
+                Dataset_Generate_CreateRlsPolicy_EmptyWithCheck_ThrowsWithRlsErrorCode_1()
             )
         );
         Assert.Contains("MIG-E-RLS-EMPTY-CHECK", ex.Message, StringComparison.Ordinal);

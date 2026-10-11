@@ -24,15 +24,12 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
                 {
                     CheckConstraints =
                     [
-                        SchemaTestData.CheckConstraint(
-                            name: "usage_events_kind_check",
-                            expression: "kind IN ('request','input_tokens','output_tokens','sandbox_seconds')"
-                        ),
+                        Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(),
                     ],
                 },
             ]
         );
-        var desired = Fixture_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(
+        var desired = Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_2(
             current: current
         );
 
@@ -123,10 +120,7 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
                 {
                     CheckConstraints =
                     [
-                        SchemaTestData.CheckConstraint(
-                            name: "usage_events_kind_check",
-                            expression: "kind IN ('a','b')"
-                        ),
+                        Dataset_Calculate_CheckConstraintUnchanged_EmitsNoCheckConstraintOps_1(),
                     ],
                 },
             ]

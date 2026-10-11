@@ -36,13 +36,15 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("MIG-E-RLS-MSSQL-UNSUPPORTED", result.Output, StringComparison.Ordinal);
         Assert.Equal(before, SqlServerSchemaSnapshot(target));
-        using var command = target.Connection.CreateCommand();
-        command.CommandText =
-            "SELECT (SELECT COUNT(*) FROM sys.security_policies) + (SELECT COUNT(*) FROM sys.objects WHERE type = 'IF')";
         Assert.Equal(
             0,
             Convert.ToInt32(
-                command.ExecuteScalar(),
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: target.Connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT (SELECT COUNT(*) FROM sys.security_policies) + (SELECT COUNT(*) FROM sys.objects WHERE type = 'IF')"
+                ),
                 System.Globalization.CultureInfo.InvariantCulture
             )
         );

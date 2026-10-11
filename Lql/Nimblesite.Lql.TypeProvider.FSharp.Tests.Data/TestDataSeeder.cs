@@ -75,10 +75,17 @@ public static class TestDataSeeder
         var steps = ImmutableArray.Create<Func<Task<Result<int, SqlError>>>>(
             () => ClearDataAsync(transaction),
             () =>
-                transaction.InsertCustomerAsync("c1", "Acme Corp", "acme@example.com", 10, "active"),
+                transaction.InsertCustomerAsync(
+                    "c1",
+                    "Acme Corp",
+                    "acme@example.com",
+                    10,
+                    "active"
+                ),
             () =>
                 transaction.InsertCustomerAsync("c2", "Tech Corp", "tech@example.com", 5, "active"),
-            () => transaction.InsertCustomerAsync("c3", "New Corp", "new@example.com", 1, "pending"),
+            () =>
+                transaction.InsertCustomerAsync("c3", "New Corp", "new@example.com", 1, "pending"),
             () =>
                 transaction.InsertUsersAsync(
                     "u1",

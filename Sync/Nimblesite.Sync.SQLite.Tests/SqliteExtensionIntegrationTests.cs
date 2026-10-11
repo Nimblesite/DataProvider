@@ -30,15 +30,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void InsertSubscription_ValidSubscription_Succeeds()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            SubscriptionId: "sub-1",
-            OriginId: _originId,
-            Type: SubscriptionType.Table,
-            TableName: "Orders",
-            Filter: null,
-            CreatedAt: Timestamp,
-            ExpiresAt: null
-        );
+        var subscription = Dataset_InsertSubscription_ValidSubscription_Succeeds_1();
 
         // Act
         var result = _db.InsertSubscription(subscription);
@@ -56,24 +48,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void GetAllSubscriptions_WithSubscriptions_ReturnsAll()
     {
         // Arrange
-        var sub1 = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Table,
-            "Orders",
-            null,
-            Timestamp,
-            null
-        );
-        var sub2 = new SyncSubscription(
-            "sub-2",
-            _originId,
-            SubscriptionType.Record,
-            "Products",
-            "[\"p1\"]",
-            Timestamp,
-            "2025-12-31T23:59:59Z"
-        );
+        var sub1 = Dataset_GetAllSubscriptions_WithSubscriptions_ReturnsAll_1();
+        var sub2 = Dataset_GetAllSubscriptions_WithSubscriptions_ReturnsAll_2();
         _db.InsertSubscription(sub1);
         _db.InsertSubscription(sub2);
 
@@ -90,24 +66,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void GetSubscriptionsByTable_FiltersCorrectly()
     {
         // Arrange
-        var ordersSub = new SyncSubscription(
-            "sub-orders",
-            _originId,
-            SubscriptionType.Table,
-            "Orders",
-            null,
-            Timestamp,
-            null
-        );
-        var productsSub = new SyncSubscription(
-            "sub-products",
-            _originId,
-            SubscriptionType.Table,
-            "Products",
-            null,
-            Timestamp,
-            null
-        );
+        var ordersSub = Dataset_GetSubscriptionsByTable_FiltersCorrectly_1();
+        var productsSub = Dataset_GetSubscriptionsByTable_FiltersCorrectly_2();
         _db.InsertSubscription(ordersSub);
         _db.InsertSubscription(productsSub);
 
@@ -125,15 +85,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void DeleteSubscription_ExistingSubscription_Removes()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Table,
-            "Orders",
-            null,
-            Timestamp,
-            null
-        );
+        var subscription = Dataset_DeleteSubscription_ExistingSubscription_Removes_1();
         _db.InsertSubscription(subscription);
 
         // Act
@@ -153,37 +105,13 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var origin1 = "origin-1";
         var origin2 = "origin-2";
         _db.InsertSubscription(
-            new SyncSubscription(
-                "sub-1",
-                origin1,
-                SubscriptionType.Table,
-                "Orders",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_DeleteSubscriptionsByOrigin_RemovesAllForOrigin_1(origin1: origin1)
         );
         _db.InsertSubscription(
-            new SyncSubscription(
-                "sub-2",
-                origin1,
-                SubscriptionType.Table,
-                "Products",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_DeleteSubscriptionsByOrigin_RemovesAllForOrigin_2(origin1: origin1)
         );
         _db.InsertSubscription(
-            new SyncSubscription(
-                "sub-3",
-                origin2,
-                SubscriptionType.Table,
-                "Customers",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_DeleteSubscriptionsByOrigin_RemovesAllForOrigin_3(origin2: origin2)
         );
 
         // Act
@@ -202,33 +130,9 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void DeleteExpiredSubscriptions_RemovesExpired()
     {
         // Arrange
-        var expiredSub = new SyncSubscription(
-            "sub-expired",
-            _originId,
-            SubscriptionType.Table,
-            "Orders",
-            null,
-            "2025-01-01T00:00:00Z",
-            "2025-06-01T00:00:00Z"
-        );
-        var activeSub = new SyncSubscription(
-            "sub-active",
-            _originId,
-            SubscriptionType.Table,
-            "Products",
-            null,
-            "2025-01-01T00:00:00Z",
-            "2025-12-31T23:59:59Z"
-        );
-        var noExpirySub = new SyncSubscription(
-            "sub-no-expiry",
-            _originId,
-            SubscriptionType.Table,
-            "Customers",
-            null,
-            "2025-01-01T00:00:00Z",
-            null
-        );
+        var expiredSub = Dataset_DeleteExpiredSubscriptions_RemovesExpired_1();
+        var activeSub = Dataset_DeleteExpiredSubscriptions_RemovesExpired_2();
+        var noExpirySub = Dataset_DeleteExpiredSubscriptions_RemovesExpired_3();
         _db.InsertSubscription(expiredSub);
         _db.InsertSubscription(activeSub);
         _db.InsertSubscription(noExpirySub);
@@ -336,15 +240,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void InsertAndRetrieve_RecordSubscription_TypePreserved()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Record,
-            "Orders",
-            "[\"o1\"]",
-            Timestamp,
-            null
-        );
+        var subscription = Dataset_InsertAndRetrieve_RecordSubscription_TypePreserved_1();
         var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(SubscriptionType.Record, subs[0].Type);
     }
@@ -353,15 +249,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void InsertAndRetrieve_QuerySubscription_TypePreserved()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Query,
-            "Orders",
-            "{\"status\":\"pending\"}",
-            Timestamp,
-            null
-        );
+        var subscription = Dataset_InsertAndRetrieve_QuerySubscription_TypePreserved_1();
         var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(SubscriptionType.Query, subs[0].Type);
     }
@@ -371,14 +259,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     {
         // Arrange
         var expiresAt = "2025-12-31T23:59:59.999Z";
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Table,
-            "Orders",
-            null,
-            Timestamp,
-            expiresAt
+        var subscription = Dataset_InsertAndRetrieve_WithExpiresAt_PreservesValue_1(
+            expiresAt: expiresAt
         );
         var subs = InsertAndRetrieveSubscription(subscription: subscription);
         Assert.Equal(expiresAt, subs[0].ExpiresAt);

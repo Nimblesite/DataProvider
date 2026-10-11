@@ -23,8 +23,9 @@ public sealed partial class GeneratedOperationsCoverageTests : IDisposable
 
     public GeneratedOperationsCoverageTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"generated_ops_tests_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.CreateClosed(
+            "generated_ops_tests"
+        );
     }
 
     [Fact]

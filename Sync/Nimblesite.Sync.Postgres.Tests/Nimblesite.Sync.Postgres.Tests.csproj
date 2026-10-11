@@ -48,5 +48,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
+    />
   </ItemGroup>
 </Project>

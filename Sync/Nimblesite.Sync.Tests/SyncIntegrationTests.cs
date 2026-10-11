@@ -14,13 +14,11 @@ namespace Nimblesite.Sync.Tests;
 public sealed class SyncIntegrationTests : IDisposable
 {
     private static readonly ILogger Logger = NullLogger.Instance;
-    private readonly string _serverDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"syncintegration_server_{Guid.NewGuid()}.db"
+    private readonly string _serverDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "syncintegration_server"
     );
-    private readonly string _clientDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"syncintegration_client_{Guid.NewGuid()}.db"
+    private readonly string _clientDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "syncintegration_client"
     );
     private readonly SqliteConnection _serverDb;
     private readonly SqliteConnection _clientDb;
@@ -332,10 +330,12 @@ public sealed class SyncIntegrationTests : IDisposable
 
     private static string? GetPersonName(SqliteConnection db, string id)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Person WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: db,
+                configure: command =>
+                    command.CommandText = "SELECT Name FROM Person WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private static void InsertParent(SqliteConnection db, string id, string name)
@@ -349,10 +349,12 @@ public sealed class SyncIntegrationTests : IDisposable
 
     private static string? GetParentName(SqliteConnection db, string id)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Parent WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: db,
+                configure: command =>
+                    command.CommandText = "SELECT Name FROM Parent WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private static void InsertChild(SqliteConnection db, string id, string parentId, string name)
@@ -368,28 +370,34 @@ public sealed class SyncIntegrationTests : IDisposable
 
     private static string? GetChildName(SqliteConnection db, string id)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Child WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: db,
+                configure: command => command.CommandText = "SELECT Name FROM Child WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private static int GetSyncLogCount(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM _sync_log";
         return Convert.ToInt32(
-            cmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: db,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
     }
 
     private static long GetLastSyncVersion(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'last_server_version'";
         return long.Parse(
-            (string)cmd.ExecuteScalar()!,
+            (string)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: db,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT value FROM _sync_state WHERE key = 'last_server_version'"
+                )!,
             System.Globalization.CultureInfo.InvariantCulture
         );
     }

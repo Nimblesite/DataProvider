@@ -175,16 +175,7 @@ public sealed partial record QueryBuilderPlatformE2ETests
         };
         var source = new DefaultTableOperationGenerator(
             connectionType: connection.GetType().Name
-        ).GenerateTableOperations(
-            table: table,
-            config: new TableConfig
-            {
-                Name = "products",
-                GenerateInsert = true,
-                GenerateUpdate = true,
-                GenerateDelete = true,
-            }
-        );
+        ).GenerateTableOperations(table: table, config: Dataset_AssertGeneratedCrudAsync_1());
         var assembly = GeneratedCodeCompiler.Compile(
             source: Ok(actual: source, message: source.ToString()).Value
         );

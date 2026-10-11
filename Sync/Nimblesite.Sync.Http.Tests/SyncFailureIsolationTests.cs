@@ -26,14 +26,14 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     /// </summary>
     public SyncFailureIsolationTests()
     {
-        _serverDbPath = Path.Combine(Path.GetTempPath(), $"sync_fail_server_{Guid.NewGuid()}.db");
-        _serverConn = new SqliteConnection($"Data Source={_serverDbPath}");
-        _serverConn.Open();
+        (_serverDbPath, _serverConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "sync_fail_server"
+        );
         InitializeDatabase(_serverConn, _serverOriginId);
 
-        _clientDbPath = Path.Combine(Path.GetTempPath(), $"sync_fail_client_{Guid.NewGuid()}.db");
-        _clientConn = new SqliteConnection($"Data Source={_clientDbPath}");
-        _clientConn.Open();
+        (_clientDbPath, _clientConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "sync_fail_client"
+        );
         InitializeDatabase(_clientConn, _clientOriginId);
     }
 
@@ -334,10 +334,14 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         SyncSessionManager.DisableSuppression(_serverConn);
 
         // Verify server state after apply
-        using var verifyCmd = _serverConn.CreateCommand();
-        verifyCmd.CommandText =
-            $"SELECT NameFamily FROM fhir_Practitioner WHERE Id = '{practitionerId}'";
-        var currentFamily = verifyCmd.ExecuteScalar()?.ToString();
+        var currentFamily = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _serverConn,
+                configure: command =>
+                    command.CommandText =
+                        $"SELECT NameFamily FROM fhir_Practitioner WHERE Id = '{practitionerId}'"
+            )
+            ?.ToString();
 
         // BUG: Currently this fails because client overwrites server despite being older
         Assert.Equal("ServerFamily", currentFamily); // WILL FAIL - proves version mismatch bug
@@ -422,9 +426,14 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         );
 
         // Verify appointment exists on server
-        using var verifyCmd = _serverConn.CreateCommand();
-        verifyCmd.CommandText = $"SELECT Status FROM fhir_Appointment WHERE Id = '{appointmentId}'";
-        var status = verifyCmd.ExecuteScalar()?.ToString();
+        var status = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _serverConn,
+                configure: command =>
+                    command.CommandText =
+                        $"SELECT Status FROM fhir_Appointment WHERE Id = '{appointmentId}'"
+            )
+            ?.ToString();
 
         Assert.NotNull(status);
         Assert.Equal("pending", status); // The appointment status is pending, but sync should be complete
@@ -507,10 +516,11 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         Assert.Equal(0, failCount);
 
         // Verify all appointments on server
-        using var countCmd = _serverConn.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM fhir_Appointment";
         var serverCount = Convert.ToInt32(
-            countCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _serverConn,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM fhir_Appointment"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
 
@@ -529,17 +539,7 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
     public void CrossServiceSync_ClinicalToScheduling_ShouldSyncAllEntityTypes()
     {
         // Arrange - create entities representing the failed syncs
-        _ = new Dictionary<string, (string table, string data)>
-        {
-            ["patient-123"] = ("fhir_Patient", ""),
-            ["enc-101"] = (
-                "fhir_Encounter",
-                $"""
-                INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class)
-                VALUES ('enc-101', 'patient-123', 'finished', 'ambulatory')
-                """
-            ),
-        };
+        _ = Dataset_CrossServiceSync_ClinicalToScheduling_ShouldSyncAllEntityTypes_1();
 
         // Create Patient table for the test
         using (var cmd = _clientConn.CreateCommand())

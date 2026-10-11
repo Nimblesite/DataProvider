@@ -40,9 +40,9 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             .ConfigureAwait(false);
 
         // Create SQLite database
-        _sqliteDbPath = Path.Combine(Path.GetTempPath(), $"mapping_test_{Guid.NewGuid()}.db");
-        _sqliteConn = new SqliteConnection($"Data Source={_sqliteDbPath}");
-        _sqliteConn.Open();
+        (_sqliteDbPath, _sqliteConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "mapping_test"
+        );
 
         // Create Postgres connection
         _postgresConn = new NpgsqlConnection(_postgresConnectionString);
@@ -404,7 +404,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
             // Create a new SyncLogEntry with the mapped data
-            var targetEntry = Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
+            var targetEntry = Dataset_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
                 changesList: changesList,
                 entry: entry,
                 mergedPayload: mergedPayload
@@ -475,7 +475,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
                 // Merge PK into payload - PostgresChangeApplier expects PK in payload for inserts
                 var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
-                var targetEntry = Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(
+                var targetEntry = Dataset_E2E_MultipleRecords_AllTransformedCorrectly_1(
                     change: change,
                     entry: entry,
                     mergedPayload: mergedPayload
@@ -486,12 +486,14 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         PostgresSyncSession.DisableSuppression(_postgresConn);
 
         // Verify all records transformed
-        using var countCmd = _postgresConn.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM customer";
         var count = Convert.ToInt32(
-            countCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _postgresConn,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM customer"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(3, count);
 
         // Verify uppercase names
@@ -619,11 +621,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_UnmappedTable_WithPassthrough_ReturnsIdentity()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Passthrough,
-            Mappings: [] // No mappings defined
-        );
+        var config = Dataset_MappingEngine_UnmappedTable_WithPassthrough_ReturnsIdentity_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 
@@ -641,11 +639,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     public void MappingEngine_UnmappedTable_WithStrict_ReturnsSkipped()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings: [] // No mappings defined
-        );
+        var config = Dataset_MappingEngine_UnmappedTable_WithStrict_ReturnsSkipped_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 

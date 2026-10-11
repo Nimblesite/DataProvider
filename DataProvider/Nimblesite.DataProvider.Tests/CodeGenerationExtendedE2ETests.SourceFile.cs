@@ -15,13 +15,7 @@ public sealed partial class CodeGenerationExtendedE2ETests
         string expectedMessage
     )
     {
-        var config = new CodeGenerationConfig(
-            getColumnMetadata: Nimblesite
-                .DataProvider
-                .SQLite
-                .SqliteCodeGenerator
-                .GetColumnMetadataFromSqlAsync
-        );
+        var config = Dataset_DefaultConfig_SourceFile_RejectsInvalidInput_1();
         var error = Assert.IsType<StringError>(
             config.GenerateSourceFile(arg1: namespaceName, arg2: modelCode, arg3: dataAccessCode)
         );

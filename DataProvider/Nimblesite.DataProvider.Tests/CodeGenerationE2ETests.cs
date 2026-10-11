@@ -305,18 +305,7 @@ public sealed partial class CodeGenerationE2ETests
     {
         var manyColumns = Enumerable
             .Range(0, 15)
-            .Select(i =>
-                ColumnTestData.Create(
-                    name: $"Column{i}",
-                    cSharpType: i % 3 == 0 ? "int"
-                        : i % 3 == 1 ? "string"
-                        : "bool",
-                    sqlType: i % 3 == 0 ? "INTEGER"
-                        : i % 3 == 1 ? "TEXT"
-                        : "BOOLEAN",
-                    isNullable: i % 4 == 0
-                )
-            )
+            .Select(i => Dataset_GenerateQueryMethod_MultipleColumns_MapsAllColumns_1(i: i))
             .ToImmutableArray();
 
         var result = DataAccessGenerator.GenerateQueryMethod(

@@ -62,12 +62,7 @@ public sealed partial class SyncStateTests
     [Fact]
     public void SyncClient_CreatesCorrectRecord()
     {
-        var client = new SyncClient(
-            "client-001",
-            100,
-            "2024-01-01T00:00:00Z",
-            "2024-01-01T00:00:00Z"
-        );
+        var client = Dataset_SyncClient_CreatesCorrectRecord_1();
 
         Assert.Equal("client-001", client.OriginId);
         Assert.Equal(100, client.LastSyncVersion);
@@ -139,15 +134,7 @@ public sealed partial class SyncStateTests
     [Fact]
     public void SyncSubscription_CreatesCorrectRecord()
     {
-        var sub = new SyncSubscription(
-            "sub-1",
-            "origin-1",
-            SubscriptionType.Table,
-            "Person",
-            null,
-            "2024-01-01T00:00:00Z",
-            "2024-12-31T00:00:00Z"
-        );
+        var sub = Dataset_SyncSubscription_CreatesCorrectRecord_1();
 
         Assert.Equal("sub-1", sub.SubscriptionId);
         Assert.Equal("origin-1", sub.OriginId);

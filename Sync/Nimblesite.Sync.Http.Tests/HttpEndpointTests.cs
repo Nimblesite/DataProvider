@@ -207,9 +207,7 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
 
     public HttpEndpointWithDatabaseTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sync_test_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
-        _connection.Open();
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.Create("sync_test");
 
         // Initialize sync schema
         SyncSchema.CreateSchema(_connection);
@@ -329,9 +327,16 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         Assert.Empty(list);
 
         // Verify data exists
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Person WHERE Id = 'incoming1'";
-        Assert.Equal("Incoming", cmd.ExecuteScalar()?.ToString());
+        Assert.Equal(
+            "Incoming",
+            global::Tests
+                .Shared.DatabaseCommands.Scalar(
+                    connection: _connection,
+                    configure: command =>
+                        command.CommandText = "SELECT Name FROM Person WHERE Id = 'incoming1'"
+                )
+                ?.ToString()
+        );
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

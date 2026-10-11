@@ -125,8 +125,12 @@ internal static class SqliteTestDb
 
     public static int Count(SqliteConnection connection, string sql)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        return Convert.ToInt32(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command => command.CommandText = sql
+            ),
+            CultureInfo.InvariantCulture
+        );
     }
 }

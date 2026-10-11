@@ -19,7 +19,8 @@ namespace Nimblesite.Sync.Tests;
 
 // Implements [SYNC-CLIENT-SHARED-STORAGE]. Identical persistence assertions on all three databases.
 [Collection(PostgresTestSuite.Name)]
-public sealed record SyncClientStoragePlatformTests : IClassFixture<SqlServerContainerFixture>
+public sealed partial record SyncClientStoragePlatformTests
+    : IClassFixture<SqlServerContainerFixture>
 {
     private readonly PostgresContainerFixture _postgres;
     private readonly SqlServerContainerFixture _sqlServer;
@@ -69,12 +70,7 @@ public sealed record SyncClientStoragePlatformTests : IClassFixture<SqlServerCon
                 )
                 .Value
         );
-        var first = new SyncClient(
-            OriginId: "O'Brien 雪",
-            LastSyncVersion: 2,
-            LastSyncTimestamp: "2024-01-01T00:00:00Z",
-            CreatedAt: "2024-01-01T00:00:00Z"
-        );
+        var first = Dataset_AssertRoundTrips_1();
         var second = first with { OriginId = "second", LastSyncVersion = 7 };
         Upsert(connection: connection, client: first);
         Upsert(connection: connection, client: second);

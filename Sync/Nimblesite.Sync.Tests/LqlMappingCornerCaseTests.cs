@@ -32,11 +32,7 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_EmptyColumnMappings_PassthroughPayload()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "passthrough",
-            sourceTable: "Source",
-            targetTable: "Target"
-        );
+        var mapping = Dataset_MappingEngine_EmptyColumnMappings_PassthroughPayload_1();
         var success = ApplyMappingToEntry(
             input0: mapping,
             value0: "Source",
@@ -50,21 +46,14 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_LqlWithMissingSourceColumn_FallsBack()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("NonExistent", "DisplayName", TransformType.Lql, null, "upper(NonExistent)"),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1();
 
-        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(
+        var mapping = Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_2(
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var entry = MappingTestData.Entry(
-            table: "Source",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","Name":"Alice"}"""
-        );
+        var entry = Dataset_MappingEngine_LqlWithMissingSourceColumn_FallsBack_3();
 
         // Should not throw, should handle gracefully
         var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
@@ -74,15 +63,9 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_MixedTransformTypes_AllApplied()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("Name", "Name"), // Direct mapping
-            new("Email", "NormalizedEmail", TransformType.Lql, null, "lower(Email)"), // LQL transform
-            new(null, "Source", TransformType.Constant, "mobile-app"), // Constant
-            new("Status", "StatusCode"), // Direct mapping
-        };
+        var columnMappings = Dataset_MappingEngine_MixedTransformTypes_AllApplied_1();
 
-        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(
+        var mapping = Dataset_MappingEngine_MixedTransformTypes_AllApplied_2(
             columnMappings: columnMappings
         );
         var success = ApplyMappingToEntry(
@@ -98,11 +81,7 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_ExcludedColumns_RemovedFromPayload()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "with-exclusions",
-            sourceTable: "User",
-            targetTable: "PublicUser"
-        ) with
+        var mapping = Dataset_MappingEngine_ExcludedColumns_RemovedFromPayload_1() with
         {
             ExcludedColumns = ["Password", "Salt", "SecurityToken", "InternalNotes"],
         };
@@ -124,11 +103,7 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_PkMapping_RenamesKey()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "pk-rename",
-            sourceTable: "Source",
-            targetTable: "Target"
-        ) with
+        var mapping = Dataset_MappingEngine_PkMapping_RenamesKey_1() with
         {
             PkMapping = new PkMapping("UserId", "CustomerId"),
         };
@@ -146,29 +121,9 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_MultiTarget_AllTargetsReceiveTransformedData()
     {
-        var targets = new List<TargetConfig>
-        {
-            new(
-                "UserProfile",
-                [
-                    Fixture_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1(),
-                    new ColumnMapping("Email", "Email"),
-                ]
-            ),
-            new(
-                "UserAudit",
-                [
-                    new ColumnMapping("Name", "UserName"),
-                    new ColumnMapping(null, "EventType", TransformType.Constant, "user_created"),
-                ]
-            ),
-        };
+        var targets = Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1();
 
-        var mapping = MappingTestData.Mapping(
-            id: "multi-target",
-            sourceTable: "User",
-            targetTable: null
-        ) with
+        var mapping = Dataset_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_2() with
         {
             IsMultiTarget = true,
             Targets = targets,
@@ -197,13 +152,7 @@ public sealed partial class LqlMappingCornerCaseTests
     public void E2E_FullAddressNormalization()
     {
         // Simulate normalizing messy address data
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("street", "Street", TransformType.Lql, null, "trim(street)"),
-            new("city", "City", TransformType.Lql, null, "city |> trim() |> upper()"),
-            new("state", "State", TransformType.Lql, null, "upper(state)"),
-            new("zip", "PostalCode", TransformType.Lql, null, "left(zip, 5)"),
-        };
+        var columnMappings = Dataset_E2E_FullAddressNormalization_1();
 
         var mapping = Fixture_E2E_FullAddressNormalization_1(columnMappings: columnMappings);
         var success = ApplyMappingToEntry(
@@ -222,14 +171,7 @@ public sealed partial class LqlMappingCornerCaseTests
     public void E2E_UserDataSanitization()
     {
         // Remove sensitive fields, normalize remaining
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("username", "Username", TransformType.Lql, null, "lower(username)"),
-            new("email", "Email", TransformType.Lql, null, "lower(email)"),
-            new("display_name", "DisplayName", TransformType.Lql, null, "trim(display_name)"),
-            // Constant for sync source
-            new(null, "DataSource", TransformType.Constant, "legacy_crm"),
-        };
+        var columnMappings = Dataset_E2E_UserDataSanitization_1();
 
         var mapping = Fixture_E2E_UserDataSanitization_1(columnMappings: columnMappings) with
         {

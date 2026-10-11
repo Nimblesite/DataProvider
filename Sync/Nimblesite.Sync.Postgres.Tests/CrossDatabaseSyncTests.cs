@@ -32,9 +32,9 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         _pgConn = await fixture.CreateDatabaseAsync("synctest").ConfigureAwait(false);
 
         // Create SQLite file database
-        _sqliteDbPath = Path.Combine(Path.GetTempPath(), $"cross_db_sync_{Guid.NewGuid()}.db");
-        _sqliteConn = new SqliteConnection($"Data Source={_sqliteDbPath}");
-        _sqliteConn.Open();
+        (_sqliteDbPath, _sqliteConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "cross_db_sync"
+        );
 
         // Initialize sync schemas
         PostgresSyncSchema.CreateSchema(_pgConn);
@@ -524,9 +524,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
     private static long GetLogCount(NpgsqlConnection conn)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM _sync_log";
-        return (long)(cmd.ExecuteScalar() ?? 0);
+        return (long)(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: conn,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log"
+            ) ?? 0
+        );
     }
 
     private static PersonRecord? GetPerson(NpgsqlConnection conn, string id)
@@ -561,10 +564,11 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
     private static int GetPersonCount(NpgsqlConnection conn)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM person";
         return Convert.ToInt32(
-            cmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: conn,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
     }

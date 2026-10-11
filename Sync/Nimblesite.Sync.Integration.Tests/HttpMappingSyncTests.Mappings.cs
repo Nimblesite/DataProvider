@@ -23,12 +23,7 @@ public sealed partial class HttpMappingSyncTests
         using var target = CreateTargetDb(targetOrigin);
 
         // Define the mapping configuration
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("FullName", "name"),
-            new("EmailAddress", "email"),
-            new(null, "source", TransformType.Constant, "mobile-app"),
-        };
+        var columnMappings = Dataset_Mapping_TransformsColumnsFromUserToCustomer_1();
 
         var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
@@ -94,12 +89,7 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateSourceDb(sourceOrigin);
         using var target = CreateTargetDb(targetOrigin);
 
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("FullName", "name"),
-            new("EmailAddress", "email"),
-            new(null, "source", TransformType.Constant, "sync-test"),
-        };
+        var columnMappings = Dataset_FullSync_WithMapping_TransformsAndApplies_1();
 
         var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
@@ -179,40 +169,9 @@ public sealed partial class HttpMappingSyncTests
         TriggerGenerator.CreateTriggers(source, "SalesOrder", NullLogger.Instance);
 
         // Define multi-target mapping
-        var targets = new List<TargetConfig>
-        {
-            new(
-                "OrderHeader",
-                [
-                    new ColumnMapping("Id", "OrderId"),
-                    new ColumnMapping("CustomerId", "CustomerId"),
-                    new ColumnMapping("Total", "Amount"),
-                ]
-            ),
-            new(
-                "OrderAudit",
-                [
-                    new ColumnMapping("Id", "OrderId"),
-                    new ColumnMapping("CreatedAt", "EventTime"),
-                    new ColumnMapping(null, "EventType", TransformType.Constant, "order_created"),
-                ]
-            ),
-        };
+        var targets = Dataset_MultiTargetMapping_OneSourceToManyTargets_1();
 
-        var mapping = new TableMapping(
-            Id: "order-split",
-            SourceTable: "SalesOrder",
-            TargetTable: null,
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: null,
-            ColumnMappings: [],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig(),
-            IsMultiTarget: true,
-            Targets: targets
-        );
+        var mapping = Dataset_MultiTargetMapping_OneSourceToManyTargets_2(targets: targets);
 
         var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
 
@@ -349,37 +308,14 @@ public sealed partial class HttpMappingSyncTests
     public void BidirectionalMapping_DifferentConfigsPerDirection()
     {
         // Push: User -> Customer (rename columns)
-        var pushMapping = new TableMapping(
-            Id: "user-push",
-            SourceTable: "User",
-            TargetTable: "Customer",
-            Direction: MappingDirection.Push,
-            Enabled: true,
-            PkMapping: new PkMapping("Id", "CustomerId"),
-            ColumnMappings: [new("FullName", "Name")],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
+        var pushMapping = Dataset_BidirectionalMapping_DifferentConfigsPerDirection_1();
 
         // Pull: Customer -> User (reverse rename)
-        var pullMapping = new TableMapping(
-            Id: "customer-pull",
-            SourceTable: "Customer",
-            TargetTable: "User",
-            Direction: MappingDirection.Pull,
-            Enabled: true,
-            PkMapping: new PkMapping("CustomerId", "Id"),
-            ColumnMappings: [new("Name", "FullName")],
-            ExcludedColumns: [],
-            Filter: null,
-            SyncTracking: new SyncTrackingConfig()
-        );
+        var pullMapping = Dataset_BidirectionalMapping_DifferentConfigsPerDirection_2();
 
-        var config = new SyncMappingConfig(
-            "1.0",
-            UnmappedTableBehavior.Strict,
-            [pushMapping, pullMapping]
+        var config = Dataset_BidirectionalMapping_DifferentConfigsPerDirection_3(
+            pushMapping: pushMapping,
+            pullMapping: pullMapping
         );
 
         // Find push mapping

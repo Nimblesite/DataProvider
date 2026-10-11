@@ -4,7 +4,7 @@ using static global::Tests.Shared.ResultAssertions;
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
 {
     [Fact]
     public void GrantRunAs_AppliesNapAuthShapeGrantsThroughSchemaOwner()
@@ -63,21 +63,15 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
             connection: migrateConnection,
             operations:
             [
-                new GrantPrivilegesOperation(
-                    SchemaTestData.PostgresGrant(
-                        schema: "public",
-                        target: PostgresGrantTarget.Schema,
-                        privileges: ["USAGE"],
-                        roles: [appUser],
-                        runAs: owner
-                    )
+                Dataset_GrantRunAs_MissingRoleMembership_ReturnsClearGrantToMessage_1(
+                    appUser: appUser,
+                    owner: owner
                 ),
             ],
             logger: NullLogger.Instance
         );
 
-        var error = Expected<MigrationApplyResultError>(actual: result)
-            .Value;
+        var error = Expected<MigrationApplyResultError>(actual: result).Value;
         Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", error.Message);
         Assert.Contains($"GRANT \"{owner}\" TO \"{migrate}\"", error.Message);
     }

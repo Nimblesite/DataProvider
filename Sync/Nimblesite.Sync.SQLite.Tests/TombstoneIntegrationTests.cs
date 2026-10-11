@@ -16,13 +16,11 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _serverDb;
     private readonly SqliteConnection _clientDb;
-    private readonly string _serverDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"tombstoneintegrationtests_server_{Guid.NewGuid()}.db"
+    private readonly string _serverDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "tombstoneintegrationtests_server"
     );
-    private readonly string _clientDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"tombstoneintegrationtests_client_{Guid.NewGuid()}.db"
+    private readonly string _clientDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "tombstoneintegrationtests_client"
     );
     private readonly string _serverOrigin = "server-" + Guid.NewGuid();
     private readonly string _clientOrigin = "client-" + Guid.NewGuid();
@@ -60,12 +58,7 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
     public void Spec13_3_UpdateClientSyncState_TracksVersion()
     {
         // Arrange
-        var existingClient = new SyncClient(
-            _clientOrigin,
-            50,
-            "2024-12-01T00:00:00.000Z",
-            "2024-01-01T00:00:00.000Z"
-        );
+        var existingClient = Dataset_Spec13_3_UpdateClientSyncState_TracksVersion_1();
 
         // Act
         var updated = TombstoneManager.UpdateClientSyncState(
@@ -150,18 +143,8 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         var now = new DateTime(2025, 4, 10, 0, 0, 0, DateTimeKind.Utc);
         var clients = new[]
         {
-            new SyncClient(
-                "stale-client",
-                100,
-                "2025-01-01T00:00:00.000Z", // 100 days ago
-                "2024-01-01T00:00:00.000Z"
-            ),
-            new SyncClient(
-                "active-client",
-                200,
-                "2025-04-01T00:00:00.000Z", // 9 days ago
-                "2024-01-01T00:00:00.000Z"
-            ),
+            Dataset_Spec13_5_StaleClients_IdentifiedByInactivity_1(),
+            Dataset_Spec13_5_StaleClients_IdentifiedByInactivity_2(),
         };
 
         // Act
@@ -277,10 +260,16 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         );
 
         // Retrieve
-        using var cmd = _serverDb.CreateCommand();
-        cmd.CommandText = "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin";
-        cmd.Parameters.AddWithValue("$origin", _clientOrigin);
-        var storedVersion = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        var storedVersion = Convert.ToInt64(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _serverDb,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin",
+                parameters: () => [("$origin", _clientOrigin)]
+            ),
+            CultureInfo.InvariantCulture
+        );
 
         // Assert
         Assert.Equal(100, storedVersion);
@@ -295,18 +284,8 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         // Arrange: Two clients, one behind
         var clients = new[]
         {
-            new SyncClient(
-                "fast-client",
-                100,
-                "2025-01-01T00:00:00.000Z",
-                "2025-01-01T00:00:00.000Z"
-            ),
-            new SyncClient(
-                "slow-client",
-                20,
-                "2025-01-01T00:00:00.000Z",
-                "2025-01-01T00:00:00.000Z"
-            ), // Can't purge past this
+            Dataset_Spec13_7_TombstonesPreserved_UntilAllClientsSynced_1(),
+            Dataset_Spec13_7_TombstonesPreserved_UntilAllClientsSynced_2(), // Can't purge past this
         };
 
         // Act
@@ -349,9 +328,11 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
 
     private static long GetOldestVersion(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT MIN(version) FROM _sync_log";
-        var result = cmd.ExecuteScalar();
+        var result = global::Tests.Shared.DatabaseCommands.Scalar(
+            connection: db,
+            configure: command => command.CommandText = "SELECT MIN(version) FROM _sync_log"
+        );
+
         return result == DBNull.Value ? 0 : Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 

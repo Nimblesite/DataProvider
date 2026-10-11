@@ -90,11 +90,7 @@ public sealed partial class MappingEngineTests
     public void ApplyMapping_StrictMode_NoMapping_ReturnsSkipped()
     {
         var config = SyncMappingConfig.Empty;
-        var entry = MappingTestData.Entry(
-            table: "Person",
-            pk: """{"Id":"p1"}""",
-            payload: """{"Id":"p1","Name":"Alice"}"""
-        );
+        var entry = Dataset_ApplyMapping_StrictMode_NoMapping_ReturnsSkipped_1();
 
         var skipped = Expected<MappingSkipped>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Person", skipped.Reason);
@@ -118,11 +114,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_MapsPrimaryKey()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-mapping",
-            sourceTable: "User",
-            targetTable: "Customer"
-        ) with
+        var mapping = Dataset_ApplyMapping_SingleTarget_MapsPrimaryKey_1() with
         {
             PkMapping = new PkMapping("Id", "CustomerId"),
         };
@@ -140,13 +132,9 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_MapsColumns()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("FullName", "Name"),
-            new("EmailAddress", "Email"),
-        };
+        var columnMappings = Dataset_ApplyMapping_SingleTarget_MapsColumns_1();
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(
+        var mapping = Dataset_ApplyMapping_SingleTarget_MapsColumns_2(
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -165,13 +153,9 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_ConstantTransform()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("Name", "Name"),
-            new(null, "Source", TransformType.Constant, "mobile-app"),
-        };
+        var columnMappings = Dataset_ApplyMapping_SingleTarget_ConstantTransform_1();
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(
+        var mapping = Dataset_ApplyMapping_SingleTarget_ConstantTransform_2(
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -188,11 +172,7 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_SingleTarget_ExcludesColumns()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-mapping",
-            sourceTable: "User",
-            targetTable: "Customer"
-        ) with
+        var mapping = Dataset_ApplyMapping_SingleTarget_ExcludesColumns_1() with
         {
             ExcludedColumns = ["PasswordHash", "SecurityStamp"],
         };
@@ -211,20 +191,12 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_DisabledMapping_ReturnsSkipped()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "disabled-mapping",
-            sourceTable: "User",
-            targetTable: "Customer"
-        ) with
+        var mapping = Dataset_ApplyMapping_DisabledMapping_ReturnsSkipped_1() with
         {
             Enabled = false,
         };
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1"}"""
-        );
+        var entry = Dataset_ApplyMapping_DisabledMapping_ReturnsSkipped_2();
 
         var skipped = Expected<MappingSkipped>(entry: entry, config: config, logger: _logger);
         Assert.Contains("disabled", skipped.Reason);
@@ -233,26 +205,9 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_MultiTarget_ProducesMultipleEntries()
     {
-        var targets = new List<TargetConfig>
-        {
-            new(
-                "OrderHeader",
-                [new ColumnMapping("Id", "OrderId"), new ColumnMapping("Total", "Amount")]
-            ),
-            new(
-                "OrderAudit",
-                [
-                    new ColumnMapping("Id", "OrderId"),
-                    new ColumnMapping(null, "EventType", TransformType.Constant, "created"),
-                ]
-            ),
-        };
+        var targets = Dataset_ApplyMapping_MultiTarget_ProducesMultipleEntries_1();
 
-        var mapping = MappingTestData.Mapping(
-            id: "order-split",
-            sourceTable: "Order",
-            targetTable: null
-        ) with
+        var mapping = Dataset_ApplyMapping_MultiTarget_ProducesMultipleEntries_2() with
         {
             IsMultiTarget = true,
             Targets = targets,
@@ -272,20 +227,9 @@ public sealed partial class MappingEngineTests
     [Fact]
     public void ApplyMapping_MultiTarget_EachTargetHasCorrectPayload()
     {
-        var targets = new List<TargetConfig>
-        {
-            new("OrderHeader", [new ColumnMapping("Total", "Amount")]),
-            new(
-                "OrderAudit",
-                [new ColumnMapping(null, "EventType", TransformType.Constant, "created")]
-            ),
-        };
+        var targets = Dataset_ApplyMapping_MultiTarget_EachTargetHasCorrectPayload_1();
 
-        var mapping = MappingTestData.Mapping(
-            id: "order-split",
-            sourceTable: "Order",
-            targetTable: null
-        ) with
+        var mapping = Dataset_ApplyMapping_MultiTarget_EachTargetHasCorrectPayload_2() with
         {
             IsMultiTarget = true,
             Targets = targets,

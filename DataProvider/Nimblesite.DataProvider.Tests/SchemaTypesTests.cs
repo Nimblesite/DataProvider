@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for schema types and their functionality
 /// </summary>
-public sealed class SchemaTypesTests
+public sealed partial class SchemaTypesTests
 {
     [Fact]
     public void DatabaseColumn_CanBeCreatedWithDefaults()
@@ -28,19 +28,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedWithAllProperties()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "CustomerName",
-            SqlType = "NVARCHAR(100)",
-            CSharpType = "string",
-            IsNullable = true,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-            MaxLength = 100,
-            Precision = null,
-            Scale = null,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedWithAllProperties_1();
 
         // Assert
         Assert.Equal("CustomerName", column.Name);
@@ -59,19 +47,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedForDecimalColumn()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "TotalAmount",
-            SqlType = "DECIMAL(10,2)",
-            CSharpType = "decimal",
-            IsNullable = false,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-            MaxLength = null,
-            Precision = 10,
-            Scale = 2,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedForDecimalColumn_1();
 
         // Assert
         Assert.Equal("TotalAmount", column.Name);
@@ -86,16 +62,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedForIdentityColumn()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "Id",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-            IsNullable = false,
-            IsPrimaryKey = true,
-            IsIdentity = true,
-            IsComputed = false,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedForIdentityColumn_1();
 
         // Assert
         Assert.Equal("Id", column.Name);
@@ -121,25 +88,10 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_CanBeCreatedWithColumns()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-            },
-            new() { Name = "Name", CSharpType = "string" },
-            new() { Name = "Amount", CSharpType = "decimal" },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_CanBeCreatedWithColumns_1().AsReadOnly();
 
         // Act
-        var table = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
+        var table = Dataset_DatabaseTable_CanBeCreatedWithColumns_2(columns: columns);
 
         // Assert
         Assert.Equal("dbo", table.Schema);
@@ -151,18 +103,8 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-            },
-            new() { Name = "SecondaryId", IsPrimaryKey = true },
-            new() { Name = "Name", IsPrimaryKey = false },
-            new() { Name = "Amount", IsPrimaryKey = false },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_1()
+            .AsReadOnly();
 
         var table = new DatabaseTable { Columns = columns };
 
@@ -181,33 +123,8 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_InsertableColumns_ExcludesIdentityAndComputed()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsIdentity = true,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "ComputedField",
-                IsIdentity = false,
-                IsComputed = true,
-            },
-            new()
-            {
-                Name = "Name",
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Amount",
-                IsIdentity = false,
-                IsComputed = false,
-            },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_InsertableColumns_ExcludesIdentityAndComputed_1()
+            .AsReadOnly();
 
         var table = new DatabaseTable { Columns = columns };
 
@@ -226,44 +143,9 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "ComputedField",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = true,
-            },
-            new()
-            {
-                Name = "CategoryId",
-                IsPrimaryKey = true,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Name",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Amount",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-        }.AsReadOnly();
+        var columns =
+            Dataset_DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed_1()
+                .AsReadOnly();
 
         var table = new DatabaseTable { Columns = columns };
 
@@ -295,24 +177,9 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_RecordEquality_WorksCorrectly()
     {
         // Arrange
-        var column1 = new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        };
-        var column2 = new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        };
-        var column3 = new DatabaseColumn
-        {
-            Name = "Name",
-            CSharpType = "string",
-            IsPrimaryKey = false,
-        };
+        var column1 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_1();
+        var column2 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_2();
+        var column3 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_3();
 
         // Act & Assert
         Assert.Equal(column1, column2);
@@ -323,29 +190,11 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_RecordEquality_WorksCorrectly()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new() { Name = "Id", CSharpType = "int" },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_1().AsReadOnly();
 
-        var table1 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
-        var table2 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
-        var table3 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "InvoiceLine",
-            Columns = columns,
-        };
+        var table1 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_2(columns: columns);
+        var table2 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_3(columns: columns);
+        var table3 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_4(columns: columns);
 
         // Act & Assert
         Assert.Equal(table1, table2);
@@ -356,11 +205,7 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_ComputedProperties_AreReadOnly()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new() { Name = "Id", IsPrimaryKey = true },
-            new() { Name = "Name", IsPrimaryKey = false },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_ComputedProperties_AreReadOnly_1().AsReadOnly();
 
         var table = new DatabaseTable { Columns = columns };
 

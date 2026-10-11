@@ -30,9 +30,9 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     /// </summary>
     public DbTransactionExtensionsTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"dbtrans_ext_tests_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
-        _connection.Open();
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "dbtrans_ext_tests"
+        );
         CreateSchema();
         _transaction = _connection.BeginTransaction();
     }

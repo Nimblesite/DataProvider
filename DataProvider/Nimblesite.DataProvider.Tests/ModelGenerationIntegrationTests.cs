@@ -6,19 +6,13 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Integration tests for ModelGenerator functionality
 /// </summary>
-public sealed class ModelGenerationIntegrationTests
+public sealed partial class ModelGenerationIntegrationTests
 {
     [Fact]
     public void GenerateRecordType_WithSimpleColumns_GeneratesValidCode()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "Email", cSharpType: "string?", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "Age", cSharpType: "int?", sqlType: "INTEGER"),
-        };
+        var columns = Dataset_GenerateRecordType_WithSimpleColumns_GeneratesValidCode_1();
 
         // Act
         var result = ModelGenerator.GenerateRecordType("UserRecord", columns);
@@ -48,10 +42,7 @@ public sealed class ModelGenerationIntegrationTests
     public void GenerateRecordType_WithNullTypeName_ReturnsFailure()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
-        };
+        var columns = Dataset_GenerateRecordType_WithNullTypeName_ReturnsFailure_1();
 
         // Act
         var result = ModelGenerator.GenerateRecordType(null!, columns);
@@ -80,15 +71,8 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange
         var parentColumns = new List<string> { "Id", "Name", "Email" };
         var childColumns = new List<string> { "OrderId", "Amount", "Status" };
-        var allColumns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "Email", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "OrderId", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "Amount", cSharpType: "decimal", sqlType: "DECIMAL"),
-            ColumnTestData.Create(name: "Status", cSharpType: "string", sqlType: "TEXT"),
-        };
+        var allColumns =
+            Dataset_GenerateGroupedRecordTypes_WithValidInputs_GeneratesParentAndChild_1();
 
         // Act
         var result = ModelGenerator.GenerateGroupedRecordTypes(
@@ -127,12 +111,7 @@ public sealed class ModelGenerationIntegrationTests
     public void GenerateRawRecordType_WithColumns_GeneratesInternalRecord()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "UserId", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "UserName", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "OrderCount", cSharpType: "int", sqlType: "INTEGER"),
-        };
+        var columns = Dataset_GenerateRawRecordType_WithColumns_GeneratesInternalRecord_1();
 
         // Act
         var result = ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns);
@@ -159,13 +138,8 @@ public sealed class ModelGenerationIntegrationTests
     public void GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly()
     {
         // Arrange - Testing edge cases with column names
-        var columns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "user_id", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "first_name", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "is_active", cSharpType: "bool", sqlType: "BOOLEAN"),
-            ColumnTestData.Create(name: "created_at", cSharpType: "DateTime", sqlType: "DATETIME"),
-        };
+        var columns =
+            Dataset_GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly_1();
 
         // Act
         var result = ModelGenerator.GenerateRecordType("UserProfile", columns);
@@ -197,11 +171,7 @@ public sealed class ModelGenerationIntegrationTests
         for (int i = 1; i <= 20; i++)
         {
             columns.Add(
-                ColumnTestData.Create(
-                    name: $"Column{i}",
-                    cSharpType: i % 2 == 0 ? "string" : "int",
-                    sqlType: i % 2 == 0 ? "TEXT" : "INTEGER"
-                )
+                Dataset_GenerateRecordType_WithLargeNumberOfColumns_GeneratesCorrectly_1(i: i)
             );
         }
 
@@ -243,11 +213,8 @@ public sealed class ModelGenerationIntegrationTests
     {
         // Arrange
         var validColumns = new List<string> { "Id", "Name" };
-        var allColumns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
-        };
+        var allColumns =
+            Dataset_GenerateGroupedRecordTypes_WithNullInputs_ReturnsAppropriateFailures_1();
 
         // Act & Assert - Null parent name
         var result1 = ModelGenerator.GenerateGroupedRecordTypes(
@@ -304,12 +271,7 @@ public sealed class ModelGenerationIntegrationTests
     public void GeneratedCode_CompileabilityTest_ValidCSharp()
     {
         // Arrange - Generate code and verify it contains proper C# syntax
-        var columns = new List<DatabaseColumn>
-        {
-            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
-            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
-            ColumnTestData.Create(name: "CreatedAt", cSharpType: "DateTime?", sqlType: "DATETIME"),
-        };
+        var columns = Dataset_GeneratedCode_CompileabilityTest_ValidCSharp_1();
 
         // Act
         var result = ModelGenerator.GenerateRecordType("TestEntity", columns);

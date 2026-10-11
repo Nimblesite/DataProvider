@@ -7,7 +7,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for configuration types and JSON serialization
 /// </summary>
-public sealed class ConfigurationTypesTests
+public sealed partial class ConfigurationTypesTests
 {
     [Fact]
     public void DataProviderConfig_CanBeCreatedWithDefaults()
@@ -25,17 +25,13 @@ public sealed class ConfigurationTypesTests
     public void DataProviderConfig_CanBeCreatedWithTablesAndConnectionString()
     {
         // Arrange
-        var tables = new List<TableConfig>
-        {
-            new() { Name = "Invoice", Schema = "dbo" },
-        }.AsReadOnly();
+        var tables = Dataset_DataProviderConfig_CanBeCreatedWithTablesAndConnectionString_1()
+            .AsReadOnly();
 
         // Act
-        var config = new DataProviderConfig
-        {
-            Tables = tables,
-            ConnectionString = "Data Source=test.db",
-        };
+        var config = Dataset_DataProviderConfig_CanBeCreatedWithTablesAndConnectionString_2(
+            tables: tables
+        );
 
         // Assert
         Assert.Single(config.Tables);
@@ -134,12 +130,7 @@ public sealed class ConfigurationTypesTests
     {
         // Arrange
         var parentEntity = new EntityConfig("Invoice", ["Id"], ["Id", "InvoiceNumber"]);
-        var childEntity = new EntityConfig(
-            "InvoiceLine",
-            ["LineId"],
-            ["LineId", "Description"],
-            ["InvoiceId"]
-        );
+        var childEntity = Dataset_GroupingConfig_CanBeCreated_1();
 
         // Act
         var config = new GroupingConfig("TestQuery", "ParentChild", parentEntity, childEntity);
@@ -169,12 +160,7 @@ public sealed class ConfigurationTypesTests
     public void EntityConfig_CanBeCreatedWithParentKeyColumns()
     {
         // Arrange & Act
-        var entity = new EntityConfig(
-            "InvoiceLine",
-            ["LineId"],
-            ["LineId", "Description"],
-            ["InvoiceId"]
-        );
+        var entity = Dataset_EntityConfig_CanBeCreatedWithParentKeyColumns_1();
 
         // Assert
         Assert.Equal("InvoiceLine", entity.Name);
@@ -190,17 +176,7 @@ public sealed class ConfigurationTypesTests
     public void GroupingConfig_JsonSerialization_WorksCorrectly()
     {
         // Arrange
-        var config = new GroupingConfig(
-            "GetInvoices",
-            "ParentChild",
-            new EntityConfig("Invoice", ["Id"], ["Id", "InvoiceNumber", "CustomerName"]),
-            new EntityConfig(
-                "InvoiceLine",
-                ["LineId"],
-                ["LineId", "Description", "Amount"],
-                ["InvoiceId"]
-            )
-        );
+        var config = Dataset_GroupingConfig_JsonSerialization_WorksCorrectly_1();
 
         // Act
         var json = JsonSerializer.Serialize(
@@ -246,20 +222,13 @@ public sealed class ConfigurationTypesTests
     {
         // Arrange
         var parentEntity = new EntityConfig("Invoice", ["Id"], ["Id", "Name"]);
-        var childEntity = new EntityConfig(
-            "InvoiceLine",
-            ["LineId"],
-            ["LineId", "Description"],
-            ["InvoiceId"]
-        );
+        var childEntity = Dataset_GroupingConfig_RecordEquality_WorksCorrectly_1();
 
         var config1 = new GroupingConfig("TestQuery", "ParentChild", parentEntity, childEntity);
         var config2 = new GroupingConfig("TestQuery", "ParentChild", parentEntity, childEntity);
-        var config3 = new GroupingConfig(
-            "DifferentQuery",
-            "ParentChild",
-            parentEntity,
-            childEntity
+        var config3 = Dataset_GroupingConfig_RecordEquality_WorksCorrectly_2(
+            parentEntity: parentEntity,
+            childEntity: childEntity
         );
 
         // Act & Assert
@@ -271,10 +240,7 @@ public sealed class ConfigurationTypesTests
     public void DataProviderConfig_RecordEquality_WorksCorrectly()
     {
         // Arrange
-        var tables = new List<TableConfig>
-        {
-            new() { Name = "Invoice", Schema = "dbo" },
-        }.AsReadOnly();
+        var tables = Dataset_DataProviderConfig_RecordEquality_WorksCorrectly_1().AsReadOnly();
 
         var config1 = new DataProviderConfig { Tables = tables, ConnectionString = "test" };
         var config2 = new DataProviderConfig { Tables = tables, ConnectionString = "test" };

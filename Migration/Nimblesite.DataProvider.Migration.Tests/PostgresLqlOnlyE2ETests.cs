@@ -375,10 +375,14 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         ApplyAndGrant(schema, "self_owner");
 
         // Verify the OR-combination predicate landed in pg_policies.
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "SELECT qual FROM pg_policies WHERE tablename='self_owner' AND policyname='self_or_member'";
-        var qual = (string)cmd.ExecuteScalar()!;
+        var qual = (string)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT qual FROM pg_policies WHERE tablename='self_owner' AND policyname='self_or_member'"
+            )!;
+
         Assert.Contains("OR", qual, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("is_member", qual, StringComparison.Ordinal);
     }
@@ -513,11 +517,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
             [
                 TenantTableLqlOnly("docs_drop").Tables[0] with
                 {
-                    RowLevelSecurity = SchemaTestData.RlsPolicySet(
-                        enabled: true,
-                        forced: true,
-                        policies: []
-                    ),
+                    RowLevelSecurity = Dataset_LqlOnly_DropPolicy_AllowDestructive_RemovesIt_1(),
                 },
             ],
         };
@@ -537,8 +537,15 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         );
         Assert.True(apply is MigrationApplyResultOk);
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM pg_policies WHERE tablename='docs_drop'";
-        Assert.Equal(0L, (long)cmd.ExecuteScalar()!);
+        Assert.Equal(
+            0L,
+            (long)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT COUNT(*) FROM pg_policies WHERE tablename='docs_drop'"
+                )!
+        );
     }
 }

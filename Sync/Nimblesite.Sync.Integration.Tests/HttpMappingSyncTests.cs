@@ -87,9 +87,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
         var schemaResult = PostgresSyncSchema.CreateSchema(conn);
         if (schemaResult is not BoolSyncOk)
         {
-            throw new InvalidOperationException(
-                $"Failed to create Postgres schema: {schemaResult}"
-            );
+            throw Dataset_CreateTargetDb_1(schemaResult: schemaResult);
         }
 
         var originResult = PostgresSyncSchema.SetOriginId(conn, originId);

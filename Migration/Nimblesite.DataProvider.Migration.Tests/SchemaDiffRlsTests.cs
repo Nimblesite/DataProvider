@@ -97,12 +97,7 @@ public sealed partial class SchemaDiffRlsTests
     [Fact]
     public void Diff_OrphanPolicy_AllowDestructiveFalse_NoDrop()
     {
-        var current = WithRls(
-            new RlsPolicySetDefinition
-            {
-                Policies = [SchemaTestData.RlsPolicy(name: "orphan", usingLql: "true")],
-            }
-        );
+        var current = WithRls(Dataset_Diff_OrphanPolicy_AllowDestructiveFalse_NoDrop_1());
         var desired = WithRls(new RlsPolicySetDefinition { Policies = [] });
 
         var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, desired)).Value;
@@ -113,12 +108,7 @@ public sealed partial class SchemaDiffRlsTests
     [Fact]
     public void Diff_OrphanPolicy_AllowDestructiveTrue_EmitsDrop()
     {
-        var current = WithRls(
-            new RlsPolicySetDefinition
-            {
-                Policies = [SchemaTestData.RlsPolicy(name: "orphan", usingLql: "true")],
-            }
-        );
+        var current = WithRls(Dataset_Diff_OrphanPolicy_AllowDestructiveTrue_EmitsDrop_1());
         var desired = WithRls(new RlsPolicySetDefinition { Policies = [] });
 
         var ops = (
@@ -158,10 +148,7 @@ public sealed partial class SchemaDiffRlsTests
         var existing = SchemaTestData.RlsPolicy(name: "owner", usingLql: "Id = current_user_id()");
         var current = WithRls(new RlsPolicySetDefinition { Policies = [existing] });
         var desired = WithRls(
-            new RlsPolicySetDefinition
-            {
-                Policies = [existing, SchemaTestData.RlsPolicy(name: "extra", usingLql: "true")],
-            }
+            Dataset_Diff_AddSecondPolicy_OnlyEmitsCreateForNewPolicy_1(existing: existing)
         );
 
         var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, desired)).Value;

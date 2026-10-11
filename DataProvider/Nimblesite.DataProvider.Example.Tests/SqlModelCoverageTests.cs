@@ -21,8 +21,9 @@ public sealed partial class SqlModelCoverageTests : IDisposable
 
     public SqlModelCoverageTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sql_model_coverage_tests_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.CreateClosed(
+            "sql_model_coverage_tests"
+        );
     }
 
     #region LINQ Expression Where - various comparison operators
@@ -428,15 +429,10 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         var innerEx = new ArgumentException("inner");
         var outerEx = new InvalidOperationException("outer", innerEx);
-        var error = new SqlError(
-            "Parse failed",
-            outerEx,
-            new SourcePosition(1, 5),
-            "SELECT * FROM bad_table"
-        )
-        {
-            InnerException = innerEx,
-        };
+        var error = Dataset_SqlError_DetailedMessage_WithExceptionAndSource_IncludesAllDetails_1(
+            outerEx: outerEx,
+            innerEx: innerEx
+        );
 
         var detailed = error.DetailedMessage;
         ContainsAll(

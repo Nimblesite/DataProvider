@@ -1,23 +1,5 @@
 using System.Collections.Immutable;
 using System.Data.Common;
-using BoolSyncError = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Error<
-    bool,
-    Nimblesite.Sync.Core.SyncError
->;
-using BoolSyncOk = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Ok<
-    bool,
-    Nimblesite.Sync.Core.SyncError
->;
-using BoolSyncResult = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>;
-using IntSyncError = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Error<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
-using IntSyncOk = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Ok<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
-using IntSyncResult = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>;
 
 namespace Nimblesite.Sync.Core;
 

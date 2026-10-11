@@ -80,13 +80,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void Generate_CreateFunction_BodyLqlCurrentSetting_EmitsDollarQuotedSqlBody()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                SchemaTestData.PostgresFunction(
-                    name: "app_tenant_id",
-                    returns: "uuid",
-                    bodyLql: "current_setting('app.tenant_id')::uuid"
-                )
-            )
+            Dataset_Generate_CreateFunction_BodyLqlCurrentSetting_EmitsDollarQuotedSqlBody_1()
         );
 
         ContainsAll(
@@ -101,19 +95,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void Generate_CreateFunction_BodyLqlExists_EmitsSelectExistsBody()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                SchemaTestData.PostgresFunction(
-                    name: "is_member",
-                    returns: "boolean",
-                    arguments:
-                    [
-                        SchemaTestData.PostgresFunctionArgument(name: "u", type: "uuid"),
-                        SchemaTestData.PostgresFunctionArgument(name: "t", type: "uuid"),
-                    ],
-                    securityDefiner: true,
-                    bodyLql: "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))"
-                )
-            )
+            Dataset_Generate_CreateFunction_BodyLqlExists_EmitsSelectExistsBody_1()
         );
 
         ContainsAll(
@@ -127,15 +109,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void Generate_CreateFunction_BodyAndBodyLql_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                new CreateOrReplaceFunctionOperation(
-                    SchemaTestData.PostgresFunction(
-                        name: "bad",
-                        body: "SELECT true",
-                        bodyLql: "true"
-                    )
-                )
-            )
+            PostgresDdlGenerator.Generate(Dataset_Generate_CreateFunction_BodyAndBodyLql_Throws_1())
         );
 
         Assert.Contains("mutually exclusive", ex.Message, StringComparison.Ordinal);
@@ -147,14 +121,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
         var current = Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1();
         var desired = current with
         {
-            Functions =
-            [
-                SchemaTestData.PostgresFunction(
-                    name: "app_tenant_id",
-                    returns: "uuid",
-                    bodyLql: "current_setting('app.tenant_id')::uuid"
-                ),
-            ],
+            Functions = [Dataset_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1()],
         };
 
         var result = SchemaDiff.Calculate(current, desired);
@@ -169,14 +136,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
         var current = Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1();
         var desired = current with
         {
-            Functions =
-            [
-                SchemaTestData.PostgresFunction(
-                    name: "app_tenant_id",
-                    returns: "text",
-                    bodyLql: "current_setting('app.tenant_id')"
-                ),
-            ],
+            Functions = [Dataset_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1()],
         };
 
         var result = SchemaDiff.Calculate(current, desired);

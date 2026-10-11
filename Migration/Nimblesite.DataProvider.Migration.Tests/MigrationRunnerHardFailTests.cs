@@ -1,5 +1,6 @@
-// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+
 using MigrationRunnerResult = Outcome.Result<
     bool,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -68,11 +69,7 @@ public sealed partial record MigrationPlatformRegressionTests
             connection: target.Connection,
             operations: [before, broken, after],
             generateDdl: GenerateDdl,
-            options: new MigrationOptions
-            {
-                ContinueOnError = continueOnError,
-                UseTransaction = false,
-            }
+            options: Dataset_ApplyFailureScenario_1(continueOnError: continueOnError)
         );
     }
 

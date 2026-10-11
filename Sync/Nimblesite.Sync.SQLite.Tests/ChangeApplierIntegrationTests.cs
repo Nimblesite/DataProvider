@@ -127,9 +127,14 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
+        Assert.Equal(
+            1L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'"
+            )
+        );
     }
 
     #endregion
@@ -147,9 +152,14 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        Assert.Equal(
+            0L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'"
+            )
+        );
     }
 
     [Fact]
@@ -185,9 +195,13 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Age FROM Person WHERE Id = 'p1'";
-        Assert.Equal(25L, cmd.ExecuteScalar());
+        Assert.Equal(
+            25L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command => command.CommandText = "SELECT Age FROM Person WHERE Id = 'p1'"
+            )
+        );
     }
 
     [Fact]
@@ -199,9 +213,13 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Email FROM Person WHERE Id = 'p1'";
-        Assert.True(cmd.ExecuteScalar() is DBNull);
+        Assert.True(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT Email FROM Person WHERE Id = 'p1'"
+            ) is DBNull
+        );
     }
 
     [Fact]
@@ -219,9 +237,14 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
+        Assert.Equal(
+            1L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'"
+            )
+        );
     }
 
     [Fact]
@@ -239,9 +262,14 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        Assert.Equal(
+            0L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'"
+            )
+        );
     }
 
     [Fact]
@@ -259,12 +287,15 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Act
         ApplyChangeAndAssertSuccess(input0: entry);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Price FROM Product WHERE Id = 'prod1'";
         var price = Convert.ToDouble(
-            cmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT Price FROM Product WHERE Id = 'prod1'"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(99.99, price, precision: 2);
     }
 
@@ -340,9 +371,13 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
             }
         );
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person";
-        Assert.Equal(3L, cmd.ExecuteScalar());
+        Assert.Equal(
+            3L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+            )
+        );
     }
 
     #endregion

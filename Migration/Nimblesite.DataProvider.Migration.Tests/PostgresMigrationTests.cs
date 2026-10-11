@@ -324,9 +324,13 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         );
 
         // Verify composite expression index exists
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = Data_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1;
-        var indexDef = (string?)cmd.ExecuteScalar();
+        var indexDef = (string?)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText =
+                        Data_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1
+            );
 
         Assert.NotNull(indexDef);
         ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "suburb_id"]);
@@ -392,12 +396,16 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         }
 
         // Verify expression index exists and is functional
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT indexdef FROM pg_indexes
-            WHERE tablename = 'bands' AND indexname = 'uq_bands_name'
-            """;
-        var indexDef = (string?)cmd.ExecuteScalar();
+        var indexDef = (string?)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText = """
+                    SELECT indexdef FROM pg_indexes
+                    WHERE tablename = 'bands' AND indexname = 'uq_bands_name'
+                    """
+            );
+
         Assert.NotNull(indexDef);
         Assert.Contains("lower", indexDef);
     }
@@ -443,12 +451,16 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         );
 
         // Verify new expression index exists
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT indexdef FROM pg_indexes
-            WHERE tablename = 'artists' AND indexname = 'uq_artists_name_ci'
-            """;
-        var indexDef = (string?)cmd.ExecuteScalar();
+        var indexDef = (string?)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText = """
+                    SELECT indexdef FROM pg_indexes
+                    WHERE tablename = 'artists' AND indexname = 'uq_artists_name_ci'
+                    """
+            );
+
         Assert.NotNull(indexDef);
         Assert.Contains("lower", indexDef);
     }
@@ -489,12 +501,16 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         );
 
         // Verify new column index exists (no lower() function)
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT indexdef FROM pg_indexes
-            WHERE tablename = 'venues' AND indexname = 'idx_venues_name'
-            """;
-        var indexDef = (string?)cmd.ExecuteScalar();
+        var indexDef = (string?)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText = """
+                    SELECT indexdef FROM pg_indexes
+                    WHERE tablename = 'venues' AND indexname = 'idx_venues_name'
+                    """
+            );
+
         Assert.NotNull(indexDef);
         Assert.DoesNotContain("lower", indexDef);
     }
@@ -586,10 +602,13 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         );
 
         // Verify the default was applied - should be a recent timestamp
-        using var selectCmd = _connection.CreateCommand();
-        selectCmd.CommandText =
-            "SELECT created_at FROM events WHERE id = '11111111-1111-1111-1111-111111111111'";
-        var createdAt = (DateTime)selectCmd.ExecuteScalar()!;
+        var createdAt = (DateTime)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT created_at FROM events WHERE id = '11111111-1111-1111-1111-111111111111'"
+            )!;
 
         // Should be within last few seconds
         Assert.True((DateTime.UtcNow - createdAt).TotalSeconds < 10);
@@ -873,13 +892,19 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             $"Large-dim vector migration failed: {(result as MigrationApplyResultError)?.Value}"
         );
 
-        using var typeCmd = _connection.CreateCommand();
-        typeCmd.CommandText =
-            "SELECT format_type(a.atttypid, a.atttypmod) "
-            + "FROM pg_attribute a "
-            + "JOIN pg_class c ON c.oid = a.attrelid "
-            + "WHERE c.relname = 'large_embeddings' AND a.attname = 'embedding'";
-        Assert.Equal("vector(3072)", (string?)typeCmd.ExecuteScalar());
+        Assert.Equal(
+            "vector(3072)",
+            (string?)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT format_type(a.atttypid, a.atttypmod) "
+                            + "FROM pg_attribute a "
+                            + "JOIN pg_class c ON c.oid = a.attrelid "
+                            + "WHERE c.relname = 'large_embeddings' AND a.attname = 'embedding'"
+                )
+        );
     }
 
     private void InsertPatientGender(string gender)

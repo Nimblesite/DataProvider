@@ -11,10 +11,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// </summary>
 public sealed partial class SqliteTransactionE2ETests : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"tx_e2e_{Guid.NewGuid()}.db"
-    );
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("tx_e2e");
 
     private readonly SqliteConnection _connection;
 

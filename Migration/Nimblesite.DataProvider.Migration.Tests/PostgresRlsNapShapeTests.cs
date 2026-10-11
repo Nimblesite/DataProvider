@@ -320,10 +320,8 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
                 .Tables.Select(t =>
                     t with
                     {
-                        RowLevelSecurity = SchemaTestData.RlsPolicySet(
-                            enabled: true,
-                            forced: true,
-                            policies: [t.RowLevelSecurity!.Policies[0]]
+                        RowLevelSecurity = Dataset_NapShape_Drift_ForwardOnly_DoesNotDropOrphan_1(
+                            t: t
                         ),
                     }
                 )

@@ -15,9 +15,8 @@ namespace Nimblesite.Sync.SQLite.Tests;
 public sealed partial class SchemaAndTriggerTests : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"schemaandtriggertests_{Guid.NewGuid()}.db"
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "schemaandtriggertests"
     );
     private const string OriginId = "test-origin-id";
 
@@ -96,9 +95,10 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Assert
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT sync_active FROM _sync_session";
-        var syncActive = cmd.ExecuteScalar();
+        var syncActive = global::Tests.Shared.DatabaseCommands.Scalar(
+            connection: _db,
+            configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
+        );
 
         Assert.Equal(0L, syncActive);
     }
@@ -115,9 +115,12 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         // Assert
         Assert.True(result is BoolSyncOk);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'";
-        var storedOrigin = cmd.ExecuteScalar() as string;
+        var storedOrigin =
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'"
+            ) as string;
 
         Assert.Equal(OriginId, storedOrigin);
     }
@@ -182,10 +185,14 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Assert
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = Data_CreateSchema_CreatesSyncClientsIndex_1;
 
-        var indexName = cmd.ExecuteScalar() as string;
+        var indexName =
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = Data_CreateSchema_CreatesSyncClientsIndex_1
+            ) as string;
+
         Assert.Equal("idx_sync_clients_version", indexName);
     }
 
@@ -638,9 +645,13 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         // Assert
         Assert.True(result is BoolSyncOk);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT sync_active FROM _sync_session";
-        Assert.Equal(1L, cmd.ExecuteScalar());
+        Assert.Equal(
+            1L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
+            )
+        );
     }
 
     [Fact]
@@ -656,9 +667,13 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         // Assert
         Assert.True(result is BoolSyncOk);
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT sync_active FROM _sync_session";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        Assert.Equal(
+            0L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command => command.CommandText = "SELECT sync_active FROM _sync_session"
+            )
+        );
     }
 
     [Fact]

@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
 
-public sealed class SchemaDiffSupportTests
+public sealed partial class SchemaDiffSupportTests
 {
     [Fact]
     public void Calculate_DeclarativeSupportObjects_OrdersBeforeRlsPolicy()
@@ -57,15 +57,7 @@ public sealed class SchemaDiffSupportTests
         var current = SupportSchema();
         var desired = current with
         {
-            Grants =
-            [
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.AllTablesInSchema,
-                    privileges: ["SELECT"],
-                    roles: ["app_user"]
-                ),
-            ],
+            Grants = [Dataset_Calculate_StaleManagedGrant_AllowDestructive_EmitsRevoke_1()],
         };
 
         var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
@@ -80,16 +72,7 @@ public sealed class SchemaDiffSupportTests
         var current = SupportSchema();
         var desired = current with
         {
-            Grants =
-            [
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.AllTablesInSchema,
-                    privileges: ["SELECT", "INSERT"],
-                    roles: ["app_user"],
-                    runAs: "schema_owner"
-                ),
-            ],
+            Grants = [Dataset_Calculate_GrantRunAsAlreadyApplied_HasNoOperations_1()],
         };
 
         var result = SchemaDiff.Calculate(current, desired);
@@ -104,17 +87,7 @@ public sealed class SchemaDiffSupportTests
         var current = SupportSchema() with { Grants = [] };
         var desired = SupportSchema() with
         {
-            Grants =
-            [
-                SchemaTestData.PostgresGrant(
-                    schema: "auth",
-                    target: PostgresGrantTarget.Table,
-                    objectName: "users",
-                    privileges: ["SELECT"],
-                    roles: ["app_user"],
-                    runAs: "supabase_admin"
-                ),
-            ],
+            Grants = [Dataset_Calculate_MissingGrantRunAs_PreservesRunAsOnOperation_1()],
         };
 
         var result = SchemaDiff.Calculate(current, desired);

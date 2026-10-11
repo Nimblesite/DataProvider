@@ -150,9 +150,17 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
             allowDestructive: true
         );
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'zz_unmanaged_touch'";
-        Assert.Equal(1L, Assert.IsType<long>(cmd.ExecuteScalar()));
+        Assert.Equal(
+            1L,
+            Assert.IsType<long>(
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _connection,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'zz_unmanaged_touch'"
+                )
+            )
+        );
 
         // Guard still enforced after the destructive rerun.
         var owner = Guid.NewGuid();
@@ -221,8 +229,12 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
 
     private long CountMembers()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM \"public\".\"tenant_members\"";
-        return Assert.IsType<long>(cmd.ExecuteScalar());
+        return Assert.IsType<long>(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _connection,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM \"public\".\"tenant_members\""
+            )
+        );
     }
 }

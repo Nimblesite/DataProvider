@@ -14,15 +14,7 @@ public sealed partial class ChangeApplierTests : IDisposable
     public void ApplyBatch_SkipsOwnOriginChanges()
     {
         var myOrigin = "my-origin";
-        var batch = new SyncBatch(
-            [
-                Fixture_ApplyBatch_SkipsOwnOriginChanges_1(myOrigin: myOrigin),
-                Fixture_ApplyBatch_SkipsOwnOriginChanges_2(),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_SkipsOwnOriginChanges_1(myOrigin: myOrigin);
 
         var appliedEntries = new List<SyncLogEntry>();
 
@@ -48,15 +40,7 @@ public sealed partial class ChangeApplierTests : IDisposable
     public void ApplyBatch_DefersAndRetriesFkViolations()
     {
         // Simulate: Child insert comes before Parent insert (FK violation on first try)
-        var batch = new SyncBatch(
-            [
-                Fixture_ApplyBatch_DefersAndRetriesFkViolations_1(),
-                Fixture_ApplyBatch_DefersAndRetriesFkViolations_2(),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_DefersAndRetriesFkViolations_1();
 
         var attemptCounts = new Dictionary<long, int>();
 
@@ -109,15 +93,7 @@ public sealed partial class ChangeApplierTests : IDisposable
         // Insert Parent first
         InsertParent("p1", "Parent1");
 
-        var batch = new SyncBatch(
-            [
-                Fixture_ApplyBatch_WithRealSqlite_HandlesInsertUpdateDelete_1(),
-                Fixture_ApplyBatch_WithRealSqlite_HandlesInsertUpdateDelete_2(),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_WithRealSqlite_HandlesInsertUpdateDelete_1();
 
         var result = ChangeApplier.ApplyBatch(batch, "my-origin", 3, ApplyToDb, Logger);
 
@@ -149,10 +125,11 @@ public sealed partial class ChangeApplierTests : IDisposable
 
     private string? GetChildName(string id)
     {
-        using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Child WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db.Connection,
+                configure: command => command.CommandText = "SELECT Name FROM Child WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private BoolSyncResult ApplyToDb(SyncLogEntry entry)

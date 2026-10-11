@@ -75,13 +75,8 @@ public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFix
             connection: connection,
             operations:
             [
-                new AlterRlsPolicyOperation(
-                    Schema: "public",
-                    TableName: "items",
-                    Policy: before with
-                    {
-                        UsingSql = "id = 2",
-                    }
+                Dataset_RealPredicateDrift_FailsIntegrityAndRollsBackPolicyAlteration_1(
+                    before: before
                 ),
             ],
             generateDdl: PostgresDdlGenerator.Generate,

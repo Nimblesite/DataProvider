@@ -83,9 +83,12 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
 
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = Data_LiveExpressionContains_1;
-        var def = command.ExecuteScalar() as string;
+        var def =
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command => command.CommandText = Data_LiveExpressionContains_1
+            ) as string;
+
         return def is not null && def.Contains(needle, StringComparison.Ordinal);
     }
 }

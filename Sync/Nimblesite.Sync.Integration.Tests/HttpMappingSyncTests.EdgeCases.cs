@@ -234,14 +234,7 @@ public sealed partial class HttpMappingSyncTests
         var sourceOrigin = Guid.NewGuid().ToString();
         using var source = CreateSourceDb(sourceOrigin);
 
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("FullName", "name"),
-            new(null, "status", TransformType.Constant, "active"),
-            new(null, "priority", TransformType.Constant, "0"),
-            new(null, "verified", TransformType.Constant, "true"),
-            new(null, "notes", TransformType.Constant, ""),
-        };
+        var columnMappings = Dataset_ConstantTransform_SpecialValues_Work_1();
 
         var mappingConfig = UserToCustomerConfig(columnMappings, []);
 

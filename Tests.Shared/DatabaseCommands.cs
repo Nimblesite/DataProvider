@@ -30,6 +30,22 @@ internal static class DatabaseCommands
         command.Parameters.Add(parameter);
     }
 
+    // Implements [CI-TEST-SHARED-SCALAR-QUERY].
+    internal static object? Scalar(
+        DbConnection connection,
+        Action<DbCommand> configure,
+        Func<ImmutableArray<(string Name, object? Value)>>? parameters = null
+    )
+    {
+        using var command = connection.CreateCommand();
+        configure(obj: command);
+        foreach (var (name, value) in parameters?.Invoke() ?? [])
+        {
+            Bind(command: command, name: name, value: value);
+        }
+        return command.ExecuteScalar();
+    }
+
     // Implements [CI-TEST-SHARED-READ-COLUMN]. Reads every value of one result
     // column into a list, preserving the caller's original iteration order.
     internal static List<string> ReadStrings(DbCommand command, int ordinal = 0) =>

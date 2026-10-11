@@ -176,28 +176,8 @@ public sealed partial class GeneratedOperationsPlatformTests
         }
         Assert.Collection(
             ReadCustomers(connection),
-            actual =>
-                Assert.Equal(
-                    new CustomerSnapshot(
-                        firstId,
-                        "Alpha Customer",
-                        "alpha@example.test",
-                        "555-0001",
-                        "2024-01-01"
-                    ),
-                    actual
-                ),
-            actual =>
-                Assert.Equal(
-                    new CustomerSnapshot(
-                        secondId,
-                        "Beta Customer",
-                        "beta@example.test",
-                        "555-0002",
-                        "2024-02-02"
-                    ),
-                    actual
-                )
+            actual => Assert.Equal(Dataset_VerifyOperationsAsync_1(firstId: firstId), actual),
+            actual => Assert.Equal(Dataset_VerifyOperationsAsync_2(secondId: secondId), actual)
         );
 
         using (var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false))
@@ -226,28 +206,8 @@ public sealed partial class GeneratedOperationsPlatformTests
         }
         Assert.Collection(
             ReadCustomers(connection),
-            actual =>
-                Assert.Equal(
-                    new CustomerSnapshot(
-                        firstId,
-                        "Alpha Updated",
-                        "updated@example.test",
-                        "555-9999",
-                        "2025-03-03"
-                    ),
-                    actual
-                ),
-            actual =>
-                Assert.Equal(
-                    new CustomerSnapshot(
-                        secondId,
-                        "Beta Customer",
-                        "beta@example.test",
-                        "555-0002",
-                        "2024-02-02"
-                    ),
-                    actual
-                )
+            actual => Assert.Equal(Dataset_VerifyOperationsAsync_3(firstId: firstId), actual),
+            actual => Assert.Equal(Dataset_VerifyOperationsAsync_4(secondId: secondId), actual)
         );
     }
 

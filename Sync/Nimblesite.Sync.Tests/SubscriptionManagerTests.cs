@@ -3,7 +3,7 @@ namespace Nimblesite.Sync.Tests;
 /// <summary>
 /// Tests for SubscriptionManager.
 /// </summary>
-public sealed class SubscriptionManagerTests
+public sealed partial class SubscriptionManagerTests
 {
     private const string Timestamp = "2024-01-01T00:00:00Z";
 
@@ -179,15 +179,7 @@ public sealed class SubscriptionManagerTests
     [Fact]
     public void MatchesChange_RecordSubscription_NullFilter_ReturnsFalse()
     {
-        var sub = new SyncSubscription(
-            "sub-1",
-            "origin-1",
-            SubscriptionType.Record,
-            "Person",
-            null,
-            Timestamp,
-            null
-        );
+        var sub = Dataset_MatchesChange_RecordSubscription_NullFilter_ReturnsFalse_1();
 
         var change = CreateChange("Person", "{\"Id\":\"p1\"}");
 
@@ -197,15 +189,7 @@ public sealed class SubscriptionManagerTests
     [Fact]
     public void MatchesChange_RecordSubscription_EmptyFilter_ReturnsFalse()
     {
-        var sub = new SyncSubscription(
-            "sub-1",
-            "origin-1",
-            SubscriptionType.Record,
-            "Person",
-            "",
-            Timestamp,
-            null
-        );
+        var sub = Dataset_MatchesChange_RecordSubscription_EmptyFilter_ReturnsFalse_1();
 
         var change = CreateChange("Person", "{\"Id\":\"p1\"}");
 

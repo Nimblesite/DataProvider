@@ -215,15 +215,8 @@ public sealed partial class BulkOperationsTests
         {
             Schema = "public",
             Name = "Logs",
-            Columns = new List<DatabaseColumn>
-            {
-                ColumnTestData.Create(name: "Message", cSharpType: "string", isPrimaryKey: false),
-                ColumnTestData.Create(
-                    name: "Timestamp",
-                    cSharpType: "DateTime",
-                    isPrimaryKey: false
-                ),
-            }.AsReadOnly(),
+            Columns = Dataset_GenerateBulkUpsertMethod_WithNoPrimaryKey_ReturnsEmpty_1()
+                .AsReadOnly(),
         };
 
         // Act
@@ -336,13 +329,8 @@ public sealed partial class BulkOperationsTests
         {
             Schema = "public",
             Name = "OrderItems",
-            Columns = new List<DatabaseColumn>
-            {
-                ColumnTestData.Create(name: "OrderId", cSharpType: "Guid", isPrimaryKey: true),
-                ColumnTestData.Create(name: "ProductId", cSharpType: "Guid", isPrimaryKey: true),
-                ColumnTestData.Create(name: "Quantity", cSharpType: "int", isNullable: false),
-                ColumnTestData.Create(name: "UnitPrice", cSharpType: "decimal", isNullable: false),
-            }.AsReadOnly(),
+            Columns = Dataset_GenerateBulkUpsertMethod_WithCompositeKey_HandlesCorrectly_1()
+                .AsReadOnly(),
         };
 
         // Act

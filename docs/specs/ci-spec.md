@@ -158,3 +158,9 @@ the public NuGet contracts; executable implementations remain audited.
 Consecutive fragment checks use one ordered assertion loop. The original expected
 strings, actual value and comparison behavior are preserved, including xUnit's default
 current-culture comparison and explicit string comparison modes. Every original fragment check still executes.
+
+### Shared scalar-query execution [CI-TEST-SHARED-SCALAR-QUERY]
+
+Scalar-query tests share command creation, configuration, binding and execution.
+Their original conversions, assertions, SQL and parameter evaluation order remain
+at the call sites. The command is disposed after its scalar value is read.

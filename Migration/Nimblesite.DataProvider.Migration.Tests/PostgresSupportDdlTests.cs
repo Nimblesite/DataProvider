@@ -3,15 +3,13 @@ using static global::Tests.Shared.StringAssertions;
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class PostgresSupportDdlTests
+public sealed partial class PostgresSupportDdlTests
 {
     [Fact]
     public void Generate_CreateOrAlterRole_EmitsNoLoginNoBypassRlsAndMembershipGrant()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrAlterRoleOperation(
-                SchemaTestData.PostgresRole(name: "app_user", grantTo: ["postgres"])
-            )
+            Dataset_Generate_CreateOrAlterRole_EmitsNoLoginNoBypassRlsAndMembershipGrant_1()
         );
 
         ContainsAll(
@@ -29,21 +27,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_CreateOrReplaceFunction_EmitsSecurityDefinerAndExecuteGrants()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                SchemaTestData.PostgresFunction(
-                    schema: "public",
-                    name: "is_member",
-                    arguments:
-                    [
-                        SchemaTestData.PostgresFunctionArgument(name: "tenant_id", type: "uuid"),
-                        SchemaTestData.PostgresFunctionArgument(name: "user_id", type: "uuid"),
-                    ],
-                    returns: "boolean",
-                    securityDefiner: true,
-                    body: "SELECT true",
-                    executeRoles: ["app_user", "app_admin"]
-                )
-            )
+            Dataset_Generate_CreateOrReplaceFunction_EmitsSecurityDefinerAndExecuteGrants_1()
         );
 
         ContainsAll(
@@ -66,14 +50,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_GrantPrivileges_EmitsAllTablesInSchemaGrant()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new GrantPrivilegesOperation(
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.AllTablesInSchema,
-                    privileges: ["select", "insert", "update", "delete"],
-                    roles: ["app_user", "app_admin"]
-                )
-            )
+            Dataset_Generate_GrantPrivileges_EmitsAllTablesInSchemaGrant_1()
         );
 
         Assert.Equal(
@@ -86,16 +63,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_GrantPrivileges_WithRunAs_WrapsGrantInLocalRole()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new GrantPrivilegesOperation(
-                SchemaTestData.PostgresGrant(
-                    schema: "auth",
-                    target: PostgresGrantTarget.Table,
-                    objectName: "users",
-                    privileges: ["select", "insert"],
-                    roles: ["app_admin"],
-                    runAs: "supabase_admin"
-                )
-            )
+            Dataset_Generate_GrantPrivileges_WithRunAs_WrapsGrantInLocalRole_1()
         );
 
         ContainsAll(
@@ -123,15 +91,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_RevokePrivileges_EmitsTableRevoke()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new RevokePrivilegesOperation(
-                SchemaTestData.PostgresGrant(
-                    schema: "public",
-                    target: PostgresGrantTarget.Table,
-                    objectName: "documents",
-                    privileges: ["select"],
-                    roles: ["app_user"]
-                )
-            )
+            Dataset_Generate_RevokePrivileges_EmitsTableRevoke_1()
         );
 
         Assert.Equal("REVOKE SELECT ON TABLE \"public\".\"documents\" FROM \"app_user\"", ddl);

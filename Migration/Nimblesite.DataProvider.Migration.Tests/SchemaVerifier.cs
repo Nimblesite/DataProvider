@@ -367,11 +367,15 @@ public static partial class SchemaVerifier
     /// </summary>
     public static void VerifySqliteIndex(SqliteConnection conn, IndexDefinition expected)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='index' AND name=@name";
-        cmd.Parameters.AddWithValue("@name", expected.Name);
+        var indexDdl =
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: conn,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT sql FROM sqlite_master WHERE type='index' AND name=@name",
+                parameters: () => [("@name", expected.Name)]
+            ) as string;
 
-        var indexDdl = cmd.ExecuteScalar() as string;
         Assert.NotNull(indexDdl);
 
         // Verify uniqueness
@@ -470,11 +474,12 @@ public static partial class SchemaVerifier
 
     internal static bool PostgresTableExists(NpgsqlConnection conn, string tableName, string schema)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_PostgresTableExists_1;
-        cmd.Parameters.AddWithValue("@schema", schema);
-        cmd.Parameters.AddWithValue("@table", tableName);
-        return (bool)cmd.ExecuteScalar()!;
+        return (bool)
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: conn,
+                configure: command => command.CommandText = Data_PostgresTableExists_1,
+                parameters: () => [("@schema", schema), ("@table", tableName)]
+            )!;
     }
 
     private static List<string> GetPostgresTables(NpgsqlConnection conn, string schema)
@@ -508,10 +513,14 @@ public static partial class SchemaVerifier
 
     internal static bool SqliteTableExists(SqliteConnection conn, string tableName)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name";
-        cmd.Parameters.AddWithValue("@name", tableName);
-        return (long)cmd.ExecuteScalar()! > 0;
+        return (long)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: conn,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name",
+                    parameters: () => [("@name", tableName)]
+                )! > 0;
     }
 
     private static List<string> GetSqliteTables(SqliteConnection conn)
@@ -525,10 +534,13 @@ public static partial class SchemaVerifier
 
     private static string? GetSqliteTableDdl(SqliteConnection conn, string tableName)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name=@name";
-        cmd.Parameters.AddWithValue("@name", tableName);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: conn,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT sql FROM sqlite_master WHERE type='table' AND name=@name",
+                parameters: () => [("@name", tableName)]
+            ) as string;
     }
 
     private static string ForeignKeyActionToString(ForeignKeyAction action) =>

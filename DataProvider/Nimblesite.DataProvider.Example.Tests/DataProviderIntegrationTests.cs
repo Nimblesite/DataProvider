@@ -42,9 +42,7 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         // Assert
         if (result is InvoiceListError failure)
         {
-            throw new InvalidOperationException(
-                $"GetInvoicesAsync failed: {failure.Value.Message}"
-            );
+            throw Dataset_GetInvoicesAsync_WithValidData_ReturnsCorrectTypes_1(failure: failure);
         }
 
         var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");

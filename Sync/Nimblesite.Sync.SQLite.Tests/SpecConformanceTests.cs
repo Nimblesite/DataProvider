@@ -16,9 +16,8 @@ namespace Nimblesite.Sync.SQLite.Tests;
 public sealed partial class SpecConformanceTests : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"specconformancetests_{Guid.NewGuid()}.db"
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "specconformancetests"
     );
     private readonly string _originId = Guid.NewGuid().ToString();
 
@@ -277,9 +276,14 @@ public sealed partial class SpecConformanceTests : IDisposable
         Assert.Empty(changes);
 
         // But data is there
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
+        Assert.Equal(
+            1L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'"
+            )
+        );
     }
 
     /// <summary>
@@ -474,12 +478,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     {
         // Act
         var json = HashVerifier.ToCanonicalJson(
-            new Dictionary<string, object?>
-            {
-                ["Zebra"] = "z",
-                ["Alpha"] = "a",
-                ["Middle"] = "m",
-            }
+            Dataset_Spec15_2_CanonicalJson_KeysSortedAlphabetically_1()
         );
 
         // Assert
@@ -513,11 +512,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec15_3_DatabaseHash_IsConsistent()
     {
         // Arrange
-        var rows = new List<Dictionary<string, object?>>
-        {
-            new() { ["Id"] = "1", ["Name"] = "Alice" },
-            new() { ["Id"] = "2", ["Name"] = "Bob" },
-        };
+        var rows = Dataset_Spec15_3_DatabaseHash_IsConsistent_1();
 
         // Act
         var hash1 = HashVerifier.ComputeDatabaseHash(["Person"], _ => rows);

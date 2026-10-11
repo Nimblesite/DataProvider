@@ -1,5 +1,6 @@
-// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+
 using SchemaIntegrityError = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -116,10 +117,7 @@ public sealed partial class SchemaIntegrityVerifierTests
     [Fact]
     public void Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches()
     {
-        var live = SchemaTestData.Schema(
-            name: "live",
-            tables: [SchemaTestData.Table(schema: "public", name: "documents")]
-        );
+        var live = Dataset_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1();
         var desired = Fixture_Verify_WhenRlsAndSupportObjectsAreExcluded_IgnoresThoseMismatches_1();
 
         var mismatches = Verify(

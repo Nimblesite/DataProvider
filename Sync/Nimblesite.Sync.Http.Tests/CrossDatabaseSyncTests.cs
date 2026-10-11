@@ -82,9 +82,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         var schemaResult = PostgresSyncSchema.CreateSchema(conn);
         if (schemaResult is not BoolSyncOk)
         {
-            throw new InvalidOperationException(
-                $"Failed to create Postgres schema: {schemaResult}"
-            );
+            throw Dataset_CreatePostgresDb_1(schemaResult: schemaResult);
         }
 
         var originResult = PostgresSyncSchema.SetOriginId(conn, originId);
@@ -135,9 +133,14 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         PostgresSyncSession.DisableSuppression(postgres);
 
         // Assert - Verify in Postgres
-        using var verifyCmd = postgres.CreateCommand();
-        verifyCmd.CommandText = "SELECT name FROM person WHERE id = 'p1'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: postgres,
+                configure: command =>
+                    command.CommandText = "SELECT name FROM person WHERE id = 'p1'"
+            )
+            ?.ToString();
+
         Assert.Equal("Alice", name);
     }
 
@@ -179,9 +182,14 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         SyncSessionManager.DisableSuppression(sqlite);
 
         // Assert - Verify in SQLite (note: SQLite preserves case from payload)
-        using var verifyCmd = sqlite.CreateCommand();
-        verifyCmd.CommandText = "SELECT Name FROM Person WHERE Id = 'p2'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: sqlite,
+                configure: command =>
+                    command.CommandText = "SELECT Name FROM Person WHERE Id = 'p2'"
+            )
+            ?.ToString();
+
         Assert.Equal("Bob", name);
     }
 
@@ -241,20 +249,24 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         SyncSessionManager.DisableSuppression(sqlite);
 
         // Assert - Both databases have both records
-        using var pgCmd = postgres.CreateCommand();
-        pgCmd.CommandText = "SELECT COUNT(*) FROM person";
         var pgCount = Convert.ToInt32(
-            pgCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: postgres,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM person"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(2, pgCount);
 
-        using var sqliteCmd = sqlite.CreateCommand();
-        sqliteCmd.CommandText = "SELECT COUNT(*) FROM Person";
         var sqliteCount = Convert.ToInt32(
-            sqliteCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: sqlite,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(2, sqliteCount);
     }
 
@@ -364,12 +376,15 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         Assert.True(applyResult is BoolSyncOk);
 
         // Assert - Record deleted
-        using var verifyCmd = postgres.CreateCommand();
-        verifyCmd.CommandText = "SELECT COUNT(*) FROM person WHERE id = 'd1'";
         var count = Convert.ToInt32(
-            verifyCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: postgres,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM person WHERE id = 'd1'"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(0, count);
     }
 

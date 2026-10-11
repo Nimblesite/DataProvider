@@ -52,7 +52,10 @@
     <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="../../Tests.Shared/SqlServerContainerFixture.cs" Link="Shared/SqlServerContainerFixture.cs" />
+    <Compile
+      Include="../../Tests.Shared/SqlServerContainerFixture.cs"
+      Link="Shared/SqlServerContainerFixture.cs"
+    />
     <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
   </ItemGroup>
   <ItemGroup>

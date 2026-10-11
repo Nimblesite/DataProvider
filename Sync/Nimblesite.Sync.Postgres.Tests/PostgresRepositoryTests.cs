@@ -437,9 +437,14 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var setResult = PostgresSyncSchema.SetOriginId(_conn, "my-origin-123");
         Assert.IsType<BoolSyncOk>(setResult);
 
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'";
-        var origin = cmd.ExecuteScalar()?.ToString();
+        var origin = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'"
+            )
+            ?.ToString();
+
         Assert.Equal("my-origin-123", origin);
     }
 
@@ -451,11 +456,15 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
         foreach (var table in tables)
         {
-            using var cmd = _conn.CreateCommand();
-            cmd.CommandText =
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = @table)";
-            cmd.Parameters.AddWithValue("@table", table);
-            var exists = (bool)cmd.ExecuteScalar()!;
+            var exists = (bool)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _conn,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = @table)",
+                    parameters: () => [("@table", table)]
+                )!;
+
             Assert.True(exists, $"Table {table} should exist");
         }
     }
@@ -537,9 +546,14 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         Assert.IsType<BoolSyncOk>(result);
 
         // Verify row exists
-        using var verifyCmd = _conn.CreateCommand();
-        verifyCmd.CommandText = "SELECT name FROM test_person WHERE id = 'p1'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT name FROM test_person WHERE id = 'p1'"
+            )
+            ?.ToString();
+
         Assert.Equal("Alice", name);
     }
 
@@ -565,9 +579,14 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
         Assert.IsType<BoolSyncOk>(result);
 
-        using var verifyCmd = _conn.CreateCommand();
-        verifyCmd.CommandText = "SELECT name FROM test_update WHERE id = 'u1'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT name FROM test_update WHERE id = 'u1'"
+            )
+            ?.ToString();
+
         Assert.Equal("Updated", name);
     }
 
@@ -592,12 +611,15 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
         Assert.IsType<BoolSyncOk>(result);
 
-        using var verifyCmd = _conn.CreateCommand();
-        verifyCmd.CommandText = "SELECT COUNT(*) FROM test_delete WHERE id = 'd1'";
         var count = Convert.ToInt32(
-            verifyCmd.ExecuteScalar(),
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT COUNT(*) FROM test_delete WHERE id = 'd1'"
+            ),
             System.Globalization.CultureInfo.InvariantCulture
         );
+
         Assert.Equal(0, count);
     }
 
@@ -622,9 +644,14 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
         Assert.IsType<BoolSyncOk>(result);
 
-        using var verifyCmd = _conn.CreateCommand();
-        verifyCmd.CommandText = "SELECT name FROM test_upsert WHERE id = 'x1'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT name FROM test_upsert WHERE id = 'x1'"
+            )
+            ?.ToString();
+
         Assert.Equal("Upserted", name);
     }
 
@@ -650,9 +677,14 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var result = PostgresChangeApplier.ApplyChange(_conn, entry, Logger);
         Assert.IsType<BoolSyncOk>(result);
 
-        using var verifyCmd = _conn.CreateCommand();
-        verifyCmd.CommandText = "SELECT name FROM test_update_upsert WHERE id = 'new1'";
-        var name = verifyCmd.ExecuteScalar()?.ToString();
+        var name = global::Tests
+            .Shared.DatabaseCommands.Scalar(
+                connection: _conn,
+                configure: command =>
+                    command.CommandText = "SELECT name FROM test_update_upsert WHERE id = 'new1'"
+            )
+            ?.ToString();
+
         Assert.Equal("NewRecord", name);
     }
 
@@ -700,10 +732,15 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         var triggerTypes = new[] { "insert", "update", "delete" };
         foreach (var triggerType in triggerTypes)
         {
-            using var checkCmd = _conn.CreateCommand();
-            checkCmd.CommandText = "SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = @name)";
-            checkCmd.Parameters.AddWithValue("@name", $"test_trigger_table_sync_{triggerType}");
-            var exists = (bool)checkCmd.ExecuteScalar()!;
+            var exists = (bool)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _conn,
+                    configure: command =>
+                        command.CommandText =
+                            "SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = @name)",
+                    parameters: () => [("@name", $"test_trigger_table_sync_{triggerType}")]
+                )!;
+
             Assert.True(exists, $"Trigger for {triggerType} should exist");
         }
     }

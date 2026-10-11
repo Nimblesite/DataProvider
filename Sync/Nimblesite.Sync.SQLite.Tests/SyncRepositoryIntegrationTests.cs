@@ -14,9 +14,8 @@ namespace Nimblesite.Sync.SQLite.Tests;
 public sealed partial class SyncRepositoryIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"syncrepositoryintegrationtests_{Guid.NewGuid()}.db"
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "syncrepositoryintegrationtests"
     );
     private readonly string _originId = Guid.NewGuid().ToString();
     private const string Timestamp = "2025-01-01T00:00:00.000Z";
@@ -497,15 +496,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SubscriptionRepository_Insert_ValidSubscription_Succeeds()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Table,
-            "Person",
-            null,
-            Timestamp,
-            null
-        );
+        var subscription = Dataset_SubscriptionRepository_Insert_ValidSubscription_Succeeds_1();
 
         // Act
         var result = SubscriptionRepository.Insert(_db, subscription);
@@ -521,15 +512,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SubscriptionRepository_GetById_ExistingSubscription_ReturnsSubscription()
     {
         // Arrange
-        var subscription = new SyncSubscription(
-            "sub-1",
-            _originId,
-            SubscriptionType.Table,
-            "Person",
-            null,
-            Timestamp,
-            null
-        );
+        var subscription =
+            Dataset_SubscriptionRepository_GetById_ExistingSubscription_ReturnsSubscription_1();
         SubscriptionRepository.Insert(_db, subscription);
 
         // Act
@@ -559,27 +543,11 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-1",
-                _originId,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_1()
         );
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-2",
-                _originId,
-                SubscriptionType.Table,
-                "Orders",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_GetByTable_FiltersCorrectly_2()
         );
 
         // Act
@@ -600,27 +568,11 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var origin2 = "origin-2";
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-1",
-                origin1,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_1(origin1: origin1)
         );
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-2",
-                origin2,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_GetByOrigin_FiltersCorrectly_2(origin2: origin2)
         );
 
         // Act
@@ -639,15 +591,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-1",
-                _originId,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_Delete_ExistingSubscription_Removes_1()
         );
 
         // Act
@@ -667,39 +611,15 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var origin1 = "origin-1";
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-1",
-                origin1,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_1(origin1: origin1)
         );
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-2",
-                origin1,
-                SubscriptionType.Table,
-                "Orders",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_2(origin1: origin1)
         );
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-3",
-                "origin-2",
-                SubscriptionType.Table,
-                "Products",
-                null,
-                Timestamp,
-                null
-            )
+            Dataset_SubscriptionRepository_DeleteByOrigin_RemovesAll_3()
         );
 
         // Act
@@ -719,27 +639,11 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-expired",
-                _originId,
-                SubscriptionType.Table,
-                "Person",
-                null,
-                "2025-01-01T00:00:00Z",
-                "2025-06-01T00:00:00Z"
-            )
+            Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_1()
         );
         SubscriptionRepository.Insert(
             _db,
-            new SyncSubscription(
-                "sub-active",
-                _originId,
-                SubscriptionType.Table,
-                "Orders",
-                null,
-                "2025-01-01T00:00:00Z",
-                "2025-12-31T23:59:59Z"
-            )
+            Dataset_SubscriptionRepository_DeleteExpired_RemovesExpiredOnly_2()
         );
 
         // Act
@@ -762,12 +666,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void TombstoneManager_CalculateSafeVersion_WithClients_ReturnsMinVersion()
     {
         // Arrange
-        var clients = new List<SyncClient>
-        {
-            new("client-1", 100, Timestamp, Timestamp),
-            new("client-2", 200, Timestamp, Timestamp),
-            new("client-3", 300, Timestamp, Timestamp),
-        };
+        var clients =
+            Dataset_TombstoneManager_CalculateSafeVersion_WithClients_ReturnsMinVersion_1();
 
         // Act
         var result = TombstoneManager.CalculateSafePurgeVersion(clients);

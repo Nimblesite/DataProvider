@@ -437,13 +437,10 @@ public sealed partial class CodeGenerationExtendedE2ETests
     > GenerateConfiguredTableOperation(string value0, string value2, bool value4)
     {
         var generator = new DefaultTableOperationGenerator(connectionType: value0);
-        var tableConfig = new TableConfig
-        {
-            Name = "Products",
-            Schema = value2,
-            GenerateInsert = true,
-            GenerateUpdate = value4,
-        };
+        var tableConfig = Dataset_GenerateConfiguredTableOperation_1(
+            value2: value2,
+            value4: value4
+        );
 
         var result = generator.GenerateTableOperations(
             table: CreateTableWithIdentity(),

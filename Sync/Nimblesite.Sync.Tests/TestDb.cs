@@ -11,10 +11,7 @@ namespace Nimblesite.Sync.Tests;
 /// </summary>
 public sealed partial class TestDb : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"testdb_{Guid.NewGuid()}.db"
-    );
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("testdb");
 
     public SqliteConnection Connection { get; }
 

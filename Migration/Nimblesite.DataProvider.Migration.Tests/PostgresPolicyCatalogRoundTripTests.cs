@@ -53,13 +53,17 @@ public sealed class PostgresPolicyCatalogRoundTripTests(PostgresContainerFixture
 
     private static string ReadPredicate(NpgsqlConnection connection, string name)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT qual FROM pg_policies
-            WHERE schemaname = 'public' AND tablename = 'children' AND policyname = @name
-            """;
-        command.Parameters.AddWithValue("name", name);
-        return Assert.IsType<string>(command.ExecuteScalar());
+        return Assert.IsType<string>(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command =>
+                    command.CommandText = """
+                    SELECT qual FROM pg_policies
+                    WHERE schemaname = 'public' AND tablename = 'children' AND policyname = @name
+                    """,
+                parameters: () => [("name", name)]
+            )
+        );
     }
 
     private static SchemaDefinition PolicySchema(string secondRole) =>

@@ -438,40 +438,7 @@ public sealed partial class SqlModelE2ETests : IDisposable
     [Fact]
     public void DatabaseTableRecord_Properties_WorkCorrectly()
     {
-        var table = new DatabaseTable
-        {
-            Name = "TestTable",
-            Schema = "dbo",
-            Columns =
-            [
-                ColumnTestData.Create(
-                    name: "Id",
-                    cSharpType: "Guid",
-                    sqlType: "TEXT",
-                    isPrimaryKey: true
-                ),
-                ColumnTestData.Create(
-                    name: "AutoId",
-                    cSharpType: "int",
-                    sqlType: "INTEGER",
-                    isIdentity: true
-                ),
-                ColumnTestData.Create(
-                    name: "Computed",
-                    cSharpType: "string",
-                    sqlType: "TEXT",
-                    isComputed: true
-                ),
-                ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
-                ColumnTestData.Create(
-                    name: "Email",
-                    cSharpType: "string",
-                    sqlType: "TEXT",
-                    isNullable: true,
-                    maxLength: 255
-                ),
-            ],
-        };
+        var table = Dataset_DatabaseTableRecord_Properties_WorkCorrectly_1();
 
         Assert.Equal("TestTable", table.Name);
         Assert.Equal("dbo", table.Schema);

@@ -20,8 +20,9 @@ public sealed partial class CoreCoverageTests : IDisposable
 
     public CoreCoverageTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"core_coverage_tests_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.CreateClosed(
+            "core_coverage_tests"
+        );
     }
 
     #region DbConnectionExtensions.Query
@@ -706,19 +707,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     [Fact]
     public void DatabaseColumn_CanBeCreated()
     {
-        var column = new Nimblesite.DataProvider.Core.DatabaseColumn
-        {
-            Name = "Id",
-            SqlType = "TEXT",
-            CSharpType = "string",
-            IsNullable = false,
-            IsPrimaryKey = true,
-            IsIdentity = false,
-            IsComputed = false,
-            MaxLength = 50,
-            Precision = 10,
-            Scale = 2,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreated_1();
         Assert.Equal("Id", column.Name);
         Assert.True(column.IsPrimaryKey);
         Assert.Equal(50, column.MaxLength);
@@ -731,36 +720,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         {
             Schema = "main",
             Name = "TestTable",
-            Columns = new List<Nimblesite.DataProvider.Core.DatabaseColumn>
-            {
-                new()
-                {
-                    Name = "Id",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                    IsPrimaryKey = true,
-                },
-                new()
-                {
-                    Name = "Name",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                },
-                new()
-                {
-                    Name = "AutoId",
-                    SqlType = "INTEGER",
-                    CSharpType = "int",
-                    IsIdentity = true,
-                },
-                new()
-                {
-                    Name = "Computed",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                    IsComputed = true,
-                },
-            }.AsReadOnly(),
+            Columns = Dataset_DatabaseTable_ComputedProperties_Work_1().AsReadOnly(),
         };
 
         Assert.Equal("main", table.Schema);
@@ -777,15 +737,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         var metadata = new Nimblesite.DataProvider.Core.SqlQueryMetadata
         {
             SqlText = "SELECT * FROM Test",
-            Columns = new List<Nimblesite.DataProvider.Core.DatabaseColumn>
-            {
-                new()
-                {
-                    Name = "Id",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                },
-            }.AsReadOnly(),
+            Columns = Dataset_SqlQueryMetadata_CanBeCreated_1().AsReadOnly(),
         };
 
         Assert.Equal("SELECT * FROM Test", metadata.SqlText);
@@ -806,12 +758,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             Columns: new List<string> { "Id", "InvoiceId" }.AsReadOnly(),
             ParentKeyColumns: new List<string> { "InvoiceId" }.AsReadOnly()
         );
-        var config = new Nimblesite.DataProvider.Core.GroupingConfig(
-            QueryName: "GetInvoices",
-            GroupingStrategy: "ParentChild",
-            ParentEntity: parent,
-            ChildEntity: child
-        );
+        var config = Dataset_GroupingConfig_CanBeCreated_1(parent: parent, child: child);
 
         Assert.Equal("Invoice", config.ParentEntity.Name);
         Assert.Equal("GetInvoices", config.QueryName);
@@ -821,12 +768,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     [Fact]
     public void QueryConfigItem_CanBeCreated()
     {
-        var item = new Nimblesite.DataProvider.Core.QueryConfigItem
-        {
-            Name = "GetInvoices",
-            SqlFile = "GetInvoices.sql",
-            GroupingFile = "GetInvoices.grouping.json",
-        };
+        var item = Dataset_QueryConfigItem_CanBeCreated_1();
         Assert.Equal("GetInvoices", item.Name);
         Assert.Equal("GetInvoices.sql", item.SqlFile);
         Assert.Equal("GetInvoices.grouping.json", item.GroupingFile);
@@ -835,16 +777,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     [Fact]
     public void TableConfigItem_CanBeCreated()
     {
-        var item = new Nimblesite.DataProvider.Core.TableConfigItem
-        {
-            Name = "Invoice",
-            Schema = "main",
-            GenerateInsert = true,
-            GenerateUpdate = true,
-            GenerateDelete = false,
-            ExcludeColumns = ["computed"],
-            PrimaryKeyColumns = ["Id"],
-        };
+        var item = Dataset_TableConfigItem_CanBeCreated_1();
         Assert.Equal("Invoice", item.Name);
         Assert.Equal("main", item.Schema);
         Assert.True(item.GenerateInsert);
@@ -854,10 +787,7 @@ public sealed partial class CoreCoverageTests : IDisposable
     [Fact]
     public void SourceGeneratorConfig_CanBeCreated()
     {
-        var config = new Nimblesite.DataProvider.Core.SourceGeneratorDataProviderConfiguration
-        {
-            ConnectionString = "test",
-        };
+        var config = Dataset_SourceGeneratorConfig_CanBeCreated_1();
         Assert.Equal("test", config.ConnectionString);
     }
 

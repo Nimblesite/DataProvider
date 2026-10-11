@@ -1,5 +1,6 @@
-// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+
 using SchemaIntegrityOk = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -56,10 +57,10 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
 
         Assert.Empty(mismatches);
 
-        var missingAdminGrant = SchemaTestData.Schema(
-            name: "missing-admin-grant",
-            grants: [live.Grants[0]]
-        );
+        var missingAdminGrant =
+            Dataset_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1(
+                live: live
+            );
 
         var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
 
@@ -80,11 +81,10 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
 
         Assert.Empty(mismatches);
 
-        var missingTableGrant = SchemaTestData.Schema(
-            name: "missing-table-grant",
-            tables: live.Tables,
-            grants: [live.Grants[0]]
-        );
+        var missingTableGrant =
+            Dataset_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1(
+                live: live
+            );
 
         var missingTableMismatches = Verify(live: missingTableGrant, desired: desired);
 

@@ -181,9 +181,13 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
     {
         ApplyAndForceRls(BuildOwnerIsolationSchema(), "documents");
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = Data_EnableRls_TableHasRlsEnabled_1;
-        Assert.True((bool)cmd.ExecuteScalar()!);
+        Assert.True(
+            (bool)
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _connection,
+                    configure: command => command.CommandText = Data_EnableRls_TableHasRlsEnabled_1
+                )!
+        );
     }
 
     [Fact]

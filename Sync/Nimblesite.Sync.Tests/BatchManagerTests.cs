@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Nimblesite.Sync.Tests;
 
-public sealed class BatchManagerTests : IDisposable
+public sealed partial class BatchManagerTests : IDisposable
 {
     private readonly TestDb _db = new();
     private readonly NullLogger _logger = NullLogger.Instance;
@@ -139,9 +139,7 @@ public sealed class BatchManagerTests : IDisposable
             batch =>
             {
                 appliedBatches.Add(batch);
-                return new BatchApplyResultOk(
-                    new BatchApplyResult(batch.Changes.Count, 0, batch.ToVersion)
-                );
+                return Dataset_ProcessAllBatches_ProcessesMultipleBatches_1(batch: batch);
             },
             version => lastVersion = version,
             _logger

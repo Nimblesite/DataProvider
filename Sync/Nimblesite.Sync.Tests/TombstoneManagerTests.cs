@@ -1,6 +1,6 @@
 namespace Nimblesite.Sync.Tests;
 
-public sealed class TombstoneManagerTests
+public sealed partial class TombstoneManagerTests
 {
     [Fact]
     public void CalculateSafePurgeVersion_EmptyClients_ReturnsZero()
@@ -177,12 +177,7 @@ public sealed class TombstoneManagerTests
     [Fact]
     public void UpdateClientSyncState_ExistingClient_UpdatesVersionAndTimestamp()
     {
-        var existing = new SyncClient(
-            "origin-1",
-            50,
-            "2024-12-01T00:00:00.000Z",
-            "2024-01-01T00:00:00.000Z"
-        );
+        var existing = Dataset_UpdateClientSyncState_ExistingClient_UpdatesVersionAndTimestamp_1();
 
         var result = TombstoneManager.UpdateClientSyncState(
             "origin-1",

@@ -54,12 +54,7 @@ public sealed partial class HashVerifierTests
     [Fact]
     public void ToCanonicalJson_SortsKeysAlphabetically()
     {
-        var data = new Dictionary<string, object?>
-        {
-            ["Zebra"] = "last",
-            ["Apple"] = "first",
-            ["Mango"] = "middle",
-        };
+        var data = Dataset_ToCanonicalJson_SortsKeysAlphabetically_1();
 
         var json = HashVerifier.ToCanonicalJson(data);
 
@@ -135,11 +130,7 @@ public sealed partial class HashVerifierTests
     public void ComputeDatabaseHash_SameTables_SameHash()
     {
         var tables = new[] { "Person", "Order" };
-        var rows = new Dictionary<string, List<Dictionary<string, object?>>>
-        {
-            ["Order"] = [new() { ["Id"] = "1", ["Total"] = 100 }],
-            ["Person"] = [new() { ["Id"] = "1", ["Name"] = "Alice" }],
-        };
+        var rows = Dataset_ComputeDatabaseHash_SameTables_SameHash_1();
 
         var hash1 = HashVerifier.ComputeDatabaseHash(tables, t => rows[t]);
         var hash2 = HashVerifier.ComputeDatabaseHash(tables, t => rows[t]);
@@ -151,11 +142,7 @@ public sealed partial class HashVerifierTests
     public void ComputeDatabaseHash_TablesProcessedAlphabetically()
     {
         // Even if passed in different order, same hash due to alphabetical sorting
-        var rows = new Dictionary<string, List<Dictionary<string, object?>>>
-        {
-            ["Zebra"] = [new() { ["Id"] = "z1" }],
-            ["Apple"] = [new() { ["Id"] = "a1" }],
-        };
+        var rows = Dataset_ComputeDatabaseHash_TablesProcessedAlphabetically_1();
 
         var hash1 = HashVerifier.ComputeDatabaseHash(["Zebra", "Apple"], t => rows[t]);
         var hash2 = HashVerifier.ComputeDatabaseHash(["Apple", "Zebra"], t => rows[t]);

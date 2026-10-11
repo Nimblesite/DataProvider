@@ -23,13 +23,11 @@ namespace Nimblesite.Sync.Tests;
 public sealed class SyncCoordinatorTests : IDisposable
 {
     private static readonly ILogger Logger = NullLogger.Instance;
-    private readonly string _serverDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"synccoord_server_{Guid.NewGuid()}.db"
+    private readonly string _serverDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "synccoord_server"
     );
-    private readonly string _clientDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"synccoord_client_{Guid.NewGuid()}.db"
+    private readonly string _clientDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "synccoord_client"
     );
     private readonly SqliteConnection _serverDb;
     private readonly SqliteConnection _clientDb;
@@ -704,10 +702,12 @@ public sealed class SyncCoordinatorTests : IDisposable
 
     private static string? GetName(SqliteConnection db, string table, string id)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = $"SELECT Name FROM {table} WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: db,
+                configure: command =>
+                    command.CommandText = $"SELECT Name FROM {table} WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private static string? GetPersonName(SqliteConnection db, string id) =>

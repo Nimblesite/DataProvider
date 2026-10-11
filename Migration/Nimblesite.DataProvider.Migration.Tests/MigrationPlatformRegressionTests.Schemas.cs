@@ -64,10 +64,7 @@ public sealed partial record MigrationPlatformRegressionTests
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
             foreignKeys: fk ? [EndUserForeignKey()] : []
         );
-        return SchemaTestData.Schema(
-            name: "issues79_80",
-            tables: parent ? [endUser, events] : [events]
-        );
+        return Dataset_ForeignKeySchema_1(parent: parent, endUser: endUser, events: events);
     }
 
     private static ForeignKeyDefinition EndUserForeignKey() =>

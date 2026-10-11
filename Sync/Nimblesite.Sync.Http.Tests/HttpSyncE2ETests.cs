@@ -29,15 +29,15 @@ public sealed partial class HttpSyncE2ETests
         _client = factory.CreateClient();
 
         // Create server database
-        _serverDbPath = Path.Combine(Path.GetTempPath(), $"sync_server_{Guid.NewGuid()}.db");
-        _serverConn = new SqliteConnection($"Data Source={_serverDbPath}");
-        _serverConn.Open();
+        (_serverDbPath, _serverConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "sync_server"
+        );
         InitializeDatabase(_serverConn, _serverOriginId);
 
         // Create client database
-        _clientDbPath = Path.Combine(Path.GetTempPath(), $"sync_client_{Guid.NewGuid()}.db");
-        _clientConn = new SqliteConnection($"Data Source={_clientDbPath}");
-        _clientConn.Open();
+        (_clientDbPath, _clientConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "sync_client"
+        );
         InitializeDatabase(_clientConn, _clientOriginId);
     }
 
@@ -184,12 +184,13 @@ public sealed partial class HttpSyncE2ETests
         );
         Assert.True(repeat.IsSuccessStatusCode, await repeat.Content.ReadAsStringAsync());
         AssertPerson(_serverConn, "http1", "HTTP Test", "http@test.com");
-        using var count = _serverConn.CreateCommand();
-        count.CommandText = "SELECT COUNT(*) FROM Person";
         Assert.Equal(
             1L,
             Convert.ToInt64(
-                count.ExecuteScalar(),
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _serverConn,
+                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+                ),
                 System.Globalization.CultureInfo.InvariantCulture
             )
         );
@@ -362,25 +363,28 @@ public sealed partial class HttpSyncE2ETests
         Assert.True(pushResponse.IsSuccessStatusCode);
 
         // Assert - both databases have both records
-        using var serverCmd = _serverConn.CreateCommand();
-        serverCmd.CommandText = "SELECT COUNT(*) FROM Person";
         Assert.Equal(
             2L,
             Convert.ToInt64(
-                serverCmd.ExecuteScalar(),
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _serverConn,
+                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+                ),
                 System.Globalization.CultureInfo.InvariantCulture
             )
         );
 
-        using var clientCmd = _clientConn.CreateCommand();
-        clientCmd.CommandText = "SELECT COUNT(*) FROM Person";
         Assert.Equal(
             2L,
             Convert.ToInt64(
-                clientCmd.ExecuteScalar(),
+                global::Tests.Shared.DatabaseCommands.Scalar(
+                    connection: _clientConn,
+                    configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+                ),
                 System.Globalization.CultureInfo.InvariantCulture
             )
         );
+
         AssertPerson(_serverConn, "bidir_server", "Server Record", "server@test.com");
         AssertPerson(_serverConn, "bidir_client", "Client Record", "client@test.com");
         AssertPerson(_clientConn, "bidir_server", "Server Record", "server@test.com");

@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for source generator types
 /// </summary>
-public sealed class SourceGeneratorTypesTests
+public sealed partial class SourceGeneratorTypesTests
 {
     [Fact]
     public void ColumnInfo_CanBeCreatedWithBasicProperties()
@@ -147,11 +147,7 @@ public sealed class SourceGeneratorTypesTests
 
         var tables = new List<TableInfo> { new("Invoice", "i"), new("Customer", "c") }.AsReadOnly();
 
-        var parameters = new List<ParameterInfo>
-        {
-            new("id", "INT"),
-            new("name", "NVARCHAR"),
-        }.AsReadOnly();
+        var parameters = Dataset_SqlStatement_CanBeCreatedWithCustomProperties_1().AsReadOnly();
 
         var joinGraph = new JoinGraph();
         joinGraph.Add("Invoice", "Customer", "i.CustomerId = c.Id");
@@ -234,12 +230,7 @@ public sealed class SourceGeneratorTypesTests
     public void JoinRelationship_CanBeCreatedWithCustomJoinType()
     {
         // Arrange & Act
-        var relationship = new JoinRelationship(
-            "Invoice",
-            "Customer",
-            "i.CustomerId = c.Id",
-            "LEFT"
-        );
+        var relationship = Dataset_JoinRelationship_CanBeCreatedWithCustomJoinType_1();
 
         // Assert
         Assert.Equal("Invoice", relationship.LeftTable);

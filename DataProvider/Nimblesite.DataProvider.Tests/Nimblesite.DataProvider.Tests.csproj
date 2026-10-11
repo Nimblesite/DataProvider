@@ -29,7 +29,11 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../DataProvider/DataProvider.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference
+      Include="../DataProvider/DataProvider.csproj"
+      ReferenceOutputAssembly="false"
+      SkipGetTargetFrameworkProperties="true"
+    />
     <ProjectReference Include="../Nimblesite.DataProvider.Core/Nimblesite.DataProvider.Core.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.SQLite/Nimblesite.DataProvider.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Postgres/Nimblesite.DataProvider.Postgres.csproj" />
@@ -50,11 +54,21 @@
     <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="../../Tests.Shared/GeneratedCodeCompiler.cs" Link="Shared/GeneratedCodeCompiler.cs" />
-    <Compile Include="../../Tests.Shared/SqlServerContainerFixture.cs" Link="Shared/SqlServerContainerFixture.cs" />
+    <Compile
+      Include="../../Tests.Shared/GeneratedCodeCompiler.cs"
+      Link="Shared/GeneratedCodeCompiler.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/SqlServerContainerFixture.cs"
+      Link="Shared/SqlServerContainerFixture.cs"
+    />
     <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
+    />
   </ItemGroup>
 </Project>

@@ -11,10 +11,7 @@ namespace Nimblesite.DataProvider.Tests;
 
 public sealed partial class SQLiteContextE2ETests : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"ctx_e2e_{Guid.NewGuid()}.db"
-    );
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("ctx_e2e");
     private readonly SqliteConnection _connection;
 
     public SQLiteContextE2ETests()
@@ -149,12 +146,7 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
             new JoinStep
             {
                 Base = Id("users"),
-                JoinRelationship = new JoinRelationship(
-                    LeftTable: "users",
-                    RightTable: "orders",
-                    Condition: "users.id = orders.user_id",
-                    JoinType: "INNER"
-                ),
+                JoinRelationship = Dataset_PipelineProcessor_JoinStep_GeneratesJoinSql_1(),
             }
         );
         pipeline.Steps.Add(

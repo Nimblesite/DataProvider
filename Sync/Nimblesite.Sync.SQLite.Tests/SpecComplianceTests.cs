@@ -17,9 +17,8 @@ namespace Nimblesite.Sync.SQLite.Tests;
 public sealed partial class SpecComplianceTests : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"speccompliancetests_{Guid.NewGuid()}.db"
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "speccompliancetests"
     );
     private readonly string _originId = Guid.NewGuid().ToString();
 
@@ -633,12 +632,7 @@ public sealed partial class SpecComplianceTests : IDisposable
     public void Spec_S15_CanonicalJson_SortedKeys()
     {
         // Spec S15.2: Keys sorted alphabetically
-        var data = new Dictionary<string, object?>
-        {
-            ["Zebra"] = "last",
-            ["Alpha"] = "first",
-            ["Middle"] = "middle",
-        };
+        var data = Dataset_Spec_S15_CanonicalJson_SortedKeys_1();
 
         var json = HashVerifier.ToCanonicalJson(data);
 

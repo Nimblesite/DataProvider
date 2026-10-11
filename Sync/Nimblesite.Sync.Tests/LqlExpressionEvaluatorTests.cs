@@ -19,10 +19,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     [Fact]
     public void MappingEngine_LqlTransform_AppliesUppercase()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("Name", "DisplayName", TransformType.Lql, null, "upper(Name)"),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_AppliesUppercase_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -37,10 +34,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     {
         // Source DB has FirstName, LastName
         // Target DB has FullName
-        var columnMappings = new List<ColumnMapping>
-        {
-            Fixture_MappingEngine_LqlTransform_ConcatNamesForDifferentSchema_1(),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_ConcatNamesForDifferentSchema_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -55,11 +49,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     {
         // Extract domain from email using substring functions
         // This demonstrates complex data transformation
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("Email", "Email"),
-            new("Email", "Domain", TransformType.Lql, null, "right(Email, 11)"),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_ExtractDomainFromEmail_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -73,10 +63,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     public void MappingEngine_LqlTransform_NormalizeAndFormat()
     {
         // Trim whitespace and convert to lowercase
-        var columnMappings = new List<ColumnMapping>
-        {
-            Fixture_MappingEngine_LqlTransform_NormalizeAndFormat_1(),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_NormalizeAndFormat_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -92,10 +79,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     public void MappingEngine_LqlTransform_FormatDatesForDifferentSystem()
     {
         // Transform ISO date to different format
-        var columnMappings = new List<ColumnMapping>
-        {
-            Fixture_MappingEngine_LqlTransform_FormatDatesForDifferentSystem_1(),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_FormatDatesForDifferentSystem_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -110,12 +94,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     public void MappingEngine_LqlTransform_MultipleTransformsInSameMapping()
     {
         // Multiple LQL transforms in one mapping
-        var columnMappings = new List<ColumnMapping>
-        {
-            Fixture_MappingEngine_LqlTransform_MultipleTransformsInSameMapping_1(),
-            new("Email", "NormalizedEmail", TransformType.Lql, null, "lower(Email)"),
-            new("Username", "DisplayName", TransformType.Lql, null, "upper(Username)"),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_MultipleTransformsInSameMapping_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -129,12 +108,7 @@ public sealed partial class LqlExpressionEvaluatorTests
     public void MappingEngine_LqlTransform_WithConstantsAndLql()
     {
         // Mix of constant transforms and LQL transforms
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("Name", "DisplayName", TransformType.Lql, null, "upper(Name)"),
-            new(null, "SyncSource", TransformType.Constant, "mobile-app"),
-            new(null, "Version", TransformType.Constant, "1.0"),
-        };
+        var columnMappings = Dataset_MappingEngine_LqlTransform_WithConstantsAndLql_1();
 
         var success = MapUser(
             columnMappings: columnMappings,
@@ -156,26 +130,12 @@ public sealed partial class LqlExpressionEvaluatorTests
     [Fact]
     public void E2E_MobileToServerSchemaTransform()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            // Combine first_name + last_name into FullName
-            Fixture_E2E_MobileToServerSchemaTransform_1(),
-            // Keep email as-is
-            new("email_address", "Email"),
-            // Normalize email to lowercase
-            Fixture_E2E_MobileToServerSchemaTransform_2(),
-            // Pass through created_date
-            new("created_date", "CreatedAt"),
-        };
+        var columnMappings = Dataset_E2E_MobileToServerSchemaTransform_1();
 
         var mapping = Fixture_E2E_MobileToServerSchemaTransform_3(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var mobileEntry = MappingTestData.Entry(
-            table: "MobileUser",
-            pk: """{"Id":"u123"}""",
-            payload: """{"Id":"u123","first_name":"Jane","last_name":"Smith","email_address":"Jane.Smith@Company.COM","created_date":"2024-01-15"}"""
-        );
+        var mobileEntry = Dataset_E2E_MobileToServerSchemaTransform_2();
 
         var success = Expected<MappingSuccess>(entry: mobileEntry, config: config, logger: _logger);
         Assert.Single(success.Entries);
@@ -204,28 +164,12 @@ public sealed partial class LqlExpressionEvaluatorTests
     [Fact]
     public void E2E_LegacyCRMToModernERPTransform()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            // Rename CustomerNumber to CustomerId
-            new("CustomerNumber", "CustomerId"),
-            // Trim and titlecase the name
-            new("CUST_NAME", "DisplayName", TransformType.Lql, null, "trim(CUST_NAME)"),
-            // Combine address lines
-            Fixture_E2E_LegacyCRMToModernERPTransform_1(),
-            // Simple renames
-            new("CITY_NAME", "City"),
-            new("STATE_CD", "State"),
-            new("ZIP_5", "PostalCode"),
-        };
+        var columnMappings = Dataset_E2E_LegacyCRMToModernERPTransform_1();
 
         var mapping = Fixture_E2E_LegacyCRMToModernERPTransform_2(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var legacyEntry = MappingTestData.Entry(
-            table: "LegacyCustomer",
-            pk: """{"CustomerNumber":"C-12345"}""",
-            payload: """{"CustomerNumber":"C-12345","CUST_NAME":"  ACME CORPORATION  ","ADDR_LINE_1":"123 Main St","ADDR_LINE_2":"Suite 100","CITY_NAME":"Springfield","STATE_CD":"IL","ZIP_5":"62701"}"""
-        );
+        var legacyEntry = Dataset_E2E_LegacyCRMToModernERPTransform_2();
 
         var success = Expected<MappingSuccess>(entry: legacyEntry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
@@ -247,23 +191,12 @@ public sealed partial class LqlExpressionEvaluatorTests
     [Fact]
     public void E2E_OrderToAuditLogTransform()
     {
-        var columnMappings = new List<ColumnMapping>
-        {
-            new("OrderId", "EntityId"),
-            new(null, "EntityType", TransformType.Constant, "Order"),
-            new("Status", "Action", TransformType.Lql, null, "upper(Status)"),
-            new("OrderDate", "Timestamp"),
-            new("Total", "Details", TransformType.Lql, null, "concat('Order total: $', Total)"),
-        };
+        var columnMappings = Dataset_E2E_OrderToAuditLogTransform_1();
 
         var mapping = Fixture_E2E_OrderToAuditLogTransform_1(columnMappings: columnMappings);
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var orderEntry = MappingTestData.Entry(
-            table: "Order",
-            pk: """{"OrderId":"ORD-001"}""",
-            payload: """{"OrderId":"ORD-001","Total":"199.99","Status":"completed","CustomerId":"C-123","OrderDate":"2024-06-15T14:30:00Z"}"""
-        );
+        var orderEntry = Dataset_E2E_OrderToAuditLogTransform_2();
 
         var success = Expected<MappingSuccess>(entry: orderEntry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
@@ -282,10 +215,6 @@ public sealed partial class LqlExpressionEvaluatorTests
     {
         var mapping = Fixture_MapUser_1(columnMappings: columnMappings);
         var entry = MappingTestData.Entry(table: "User", pk: """{"Id":"u1"}""", payload: payload);
-        return Expected<MappingSuccess>(
-            entry: entry,
-            config: MappingTestData.Strict(mappings: [mapping]),
-            logger: _logger
-        );
+        return Dataset_MapUser_1(entry: entry, mapping: mapping);
     }
 }

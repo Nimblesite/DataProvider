@@ -1,211 +1,161 @@
-# DataProvider — Agent Instructions
+# DataProvider — Agent instructions
 
-⚠️ CRITICAL: **Reduce token usage.** Check file size before loading. Write less. Delete fluff and dead code. Alert user when context is loaded with pointless files. ⚠️ 
+## Before starting
 
-> Read this entire file before writing any code.
-> These rules are NON-NEGOTIABLE. Violations will be rejected in review.
+Read this entire file before writing code. These rules are mandatory.
 
-⚠️ NEVER KILL ANY VSCODE PROCESS ⚠️
+- **Reduce token usage:** Check file sizes before loading. Write less, delete fluff and dead code, and alert the user when pointless files consume context.
+- **Never kill a VS Code process.**
 
 <!-- agent-pmo:795a9c2 -->
 
-## Project Overview
+## Project overview
 
-DataProvider is a comprehensive .NET database access toolkit: source generation for SQL extension methods, the Lambda Query Language (LQL) transpiler, bidirectional offline-first sync, WebAuthn + RBAC auth, and an embeddable reporting platform. The LQL LSP is implemented in Rust with a VS Code extension in TypeScript. Healthcare sample applications live in a separate repo: [Nimblesite/ClinicalCoding](https://github.com/Nimblesite/ClinicalCoding).
+DataProvider is a .NET database access toolkit covering source generation for SQL extension methods, the Lambda Query Language (LQL) transpiler, offline-first bidirectional sync, WebAuthn + RBAC authentication, and an embeddable reporting platform. The LQL language server is implemented in Rust with a VS Code extension in TypeScript. Healthcare sample applications live in a separate repository: [Nimblesite/ClinicalCoding](https://github.com/Nimblesite/ClinicalCoding).
 
-**Primary language(s):** C#, Rust, TypeScript, F#
-**Build command:** `make ci`
-**Test command:** `make test`
-**Lint command:** `make lint`
+Languages: C#, Rust, TypeScript, F#. Full CI validation: `make ci`; tests: `make test`; lint: `make lint`.
 
-The LQL parser is ANTLR generated in Rust. We don't use manually generated parsers. Always upgrade to the latest version of ANTLR to make sure the parser is correct.
+## Agent workflow
 
+- Act autonomously. Resolve ambiguity with the most reasonable default, record assumptions, and complete the task without asking questions or pausing for confirmation, clarification, or approval. Deliver finished work with a short assumptions summary.
+- Auto-memory is off. Persistent rules require a reviewed PR to this file. Keep `"autoMemoryEnabled": false` in committed `.claude/settings.local.json`.
+- Use Too Many Cooks (TMC) for file locks and messages across agent boundaries.
+- Codex subagents are forbidden. Delegate parallel code work only to Pi instances and monitor them closely. Start each in this checkout, verify its branch before edits, and assign nonoverlapping files. Never create a branch or worktree for a Pi agent.
+- Do not use Git without explicit user authorization; do not use Docker commands. Leave Git operations to the user and CI unless authorized under [Git discipline](#git-discipline).
+- Search for existing implementations before writing code. Move code instead of copying it; run Deslop before and after changes as specified under [Duplication](#duplication).
 
-## Invariants (no exceptions)
+## Git discipline
 
-- **Parsing SQL with anything other than the ⭐️ OFFICIAL 👨🏼‍⚖️ ⭐️ platform specific parser = ⛔️ILLEGAL** - Use the actual .NET parser specified by the DB maintainer
-- **DO NOT use git or Docker commands.** No `git add`, `git commit`, `git push`, or any git/Docker command. CI and GitHub Actions handle these.
-- **ZERO DUPLICATION.** Before writing any code, search the codebase for existing implementations. Move code, don't copy it. Run the Deslop MCP tools before AND after every change — see [Duplication — Deslop](#duplication--deslop-mandatory).
-- **DATA MODELS — generate with typeDiagram, NEVER by hand.** Define every data model (domain types, DTOs, entities, enums, ADTs) in [typeDiagram](https://typediagram.dev/docs/) and generate the language code from it. The committed model is the source of truth; `make build` regenerates the types — never edit generated files, never hand-craft a model. If typeDiagram can't express a case, file an issue on its repo and reference it at a minimal temporary shim. Implements `[MODEL-TYPEDIAGRAM]`.
-- Use Too Many Cooks to coordinate file locks and message across agent boundaries
-- Spawning sub-agents is ⛔️ illegal. Spawn instances of Pi instead. Watch them like a hawk
-- **NEVER THROW** — Return `Result<T,E>`. Wrap failures in try/catch
-- **No casting/!** — Pattern match on type only
-- **No suppressing warnings** — Illegal. Fix the code, not the linter.
-- **No raw SQL inserts/updates** — Use generated extensions
-- **Use DataProvider Migrations to spin up DBs** — SQL for creating db schema = ILLEGAL (schema.sql = ILLEGAL). Use the Migration.CLI with YAML. This is the ONLY valid tool to migrate dbs unless the app itself spins up the migrations in code.
-- **NO CLASSES** — Records + static methods (FP style)
-- **PRIVATE/INTERNAL BY DEFAULT** — Don't expose types/members that users don't need
-- **NO INTERFACES** — Use `Action<T>`/`Func<T>`
-- **Expressions over assignments** — Pure functions over statements
-- **Named parameters** — No ordinal calls
-- **Close type hierarchies** — Private constructors:
-```csharp
-public abstract partial record Result<TSuccess, TFailure> { private Result() { } }
-```
-- **No singletons** — Inject `Func` into static methods
-- **Immutable types!** — Use records. Don't use `List<T>`. Use `ImmutableList` `FrozenSet` or `ImmutableArray`
-- **Always use type aliases (using) for result types** — Don't write like this: `new Result<string, SqlError>.Ok`
-- **All tables must have a SINGLE primary key**
-- **Primary keys MUST be UUIDs**
-- **No in-memory dbs** — Real dbs all the way
-- **NO REGEX** — Parse SQL with ANTLR .g4 grammars or SqlParserCS library. Never parse JSON, YAML, TOML, code, or any structured format with regex.
-- **All public members require XMLDOC** — Except in test projects
-- **One type per file** (except small records)
-- **No commented-out code** — Delete it
-- **No consecutive Console.WriteLine** — Use single string interpolation
-- **No placeholders** — If incomplete, leave LOUD compilation error with TODO
-- **Never use Fluent Assertions**
-- **Keep files under 450 LOC and functions under 20 LOC**
-- **100% test coverage is the goal.** Never delete or skip tests. Never remove assertions.
-- **Prefer E2E/integration tests.** Unit tests are acceptable only for isolating problems.
-- **Routinely format with CSharpier** — `dotnet csharpier .` in root folder
-- **Every spec section MUST have a unique, hierarchical, non-numeric ID.** Format: `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]` (e.g., `[AUTH-TOKEN-VERIFY]`, `[CI-TIMEOUT]`). NEVER use sequential numbers like `[SPEC-001]`. All code, tests, and design docs that implement or relate to a spec section MUST reference its ID in a comment (e.g., `// Implements [AUTH-TOKEN-VERIFY]`).
+Git requires explicit user authorization for the task; otherwise, leave operations to the user and CI.
 
-## Autonomy
+- Never push directly to `main`; always PR → green CI → merge.
+- Own opened PRs until all required checks pass. Enable auto-merge where allowed (`gh pr merge --auto --squash`); monitor, fetch failure logs, fix, push, and repeat. Never hand back red or running checks.
+- Never add agent attribution or `Co-Authored-By` trailers; this is non-overridable.
+- Use TMC to coordinate exactly one shared branch. Check first and reuse existing feature branches; merge multiple feature branches immediately before other work.
+- No worktrees; all agents share this checkout. Follow [Pi delegation rules](#agent-workflow), including branch verification and nonoverlapping files; never create agent branches/worktrees.
 
-- **Act autonomously. Do NOT stop to ask the user questions.** When something is ambiguous, choose the most reasonable default, record the assumption, and continue to completion.
-- **No mid-task pauses for confirmation, clarification, or approval.** Deliver finished work plus a short summary of any assumptions made.
-- **Auto-memory is OFF.** All persistent rules go through a reviewed PR to this file — never auto-captured memory. (Claude Code: `"autoMemoryEnabled": false` in committed `.claude/settings.local.json`.)
+## Duplication
 
-## Git discipline — only when you've been given the green light to use git
+Implements `[CI-DESLOP]`. Read [Deslop docs](https://deslop.live/docs/for-ai/); report [false positives](https://github.com/Nimblesite/Deslop/issues). Use MCP tools on every code change:
 
-- **Default to NOT touching git at all.** Use git only when the user has explicitly green-lit it for the task. Absent that, leave commits, branches, pushes, and merges to the user and CI.
-- **NEVER push to the default branch (`main`) directly.** Always PR → CI green → merge. No exceptions.
-- **Once you open a PR, OWN it until it's green.** Enable auto-merge where allowed (`gh pr merge --auto --squash`) so it lands when checks pass — then keep monitoring: on a failure, pull the logs, fix it, push, and loop until every required check passes. Never hand back a red or still-running PR.
-- **NEVER list yourself (the agent) as a commit co-author.** No `Co-Authored-By` trailer, no agent attribution. This is never overridable.
-- **Work on exactly ONE branch at a time, always** — even with multiple agents working concurrently (coordinate via TMC). Reuse the open feature branch.
-- **NEVER start a new branch when a feature branch already exists.** Check first; work on the open one. If multiple feature branches exist, merge them into one IMMEDIATELY before doing any other work.
-- **Worktrees are forbidden.** All agents work in this checkout on the same open feature branch.
-- **Codex subagents are forbidden.** Delegate parallel code work only to Pi. Start every Pi agent in this checkout, verify its branch before it edits, and assign nonoverlapping files. Never create a branch or worktree for a Pi agent.
+- Before authoring functions, methods, classes, helpers, fixtures, or test setup, call `find-similar`:
+  - `signals.fused ≥ 0.85` or `identical` / `nearly_identical`: reuse; never duplicate.
+  - `0.6 ≤ fused < 0.85`: open the canonical occurrence; strongly prefer reuse/extension.
+  - `fused < 0.6` or empty: proceed.
+- After changes: `rescan`, then `top-offenders` (worst clusters ranked by severity); `cluster-by-id` for merge candidates' full members/signals. Inspect files/ranges with `report-for-file` / `report-for-range`. Read `schema-doc` once per session to learn the report shape.
+- Never game the gate: no widening `max_duplication_percent`, marking code `hidden`, or trivial variations.
 
-## Duplication — Deslop (MANDATORY)
+Committed `.deslop.toml` sets `max_duplication_percent`. CI runs `deslop .`; exceeding the budget fails with exit 3. Lower the threshold in the same PR when reducing duplication; never raise it without written justification.
 
-Spec: `[CI-DESLOP]`. Read the [docs](https://deslop.live/docs/for-ai/). False positives → log an issue with [Deslop](https://github.com/Nimblesite/Deslop/issues). Deslop earns its keep through **prevention, not cleanup.** Use its MCP tools on every code change:
+## Database and model rules
 
-- **BEFORE you author** any function, method, class, helper, fixture, or test setup → call the **`find-similar`** MCP tool.
-  - `signals.fused ≥ 0.85`, or an `identical` / `nearly_identical` bucket → **REUSE the existing code. Do NOT write a duplicate.**
-  - `0.6 ≤ fused < 0.85` → open the canonical occurrence and bias hard toward reusing/extending it.
-  - `fused < 0.6` or empty → proceed and write the new code.
-- **AFTER you change code** → call **`rescan`**, then **`top-offenders`** (worst clusters by severity) and **`cluster-by-id`** (full members + signals for a cluster you intend to merge). Use **`report-for-file`** / **`report-for-range`** to inspect a specific file or selection. Call **`schema-doc`** once per session to learn the report shape.
-- **NEVER game the gate.** Do not silence findings by widening `max_duplication_percent`, marking code `hidden`, or splitting it into trivially different shapes.
+- Parse SQL only with the official platform-specific .NET parser specified by the database maintainer.
+- Never parse structured formats with regex, including SQL, JSON, YAML, TOML, or code. Use ANTLR `.g4` grammars or SqlParserCS for SQL, subject to the official-parser requirement above.
+- Generate the Rust LQL parser with ANTLR; never write a parser manually. Always upgrade ANTLR to its latest version.
+- LQL must behave identically across all target database platforms. Log any platform-independence violation as a GitHub issue.
+- **Generate every data model with [typeDiagram](https://typediagram.dev/docs/).** Define domain types, DTOs, entities, enums, and algebraic data types (ADTs) in the model, then generate language code from it. The committed model is the source of truth; `make build` regenerates language types. Never hand-craft models or edit generated files. If typeDiagram cannot express a case, file an upstream issue and reference it at a minimal temporary shim. Implements `[MODEL-TYPEDIAGRAM]`.
+- Use generated extensions for inserts and updates; never use raw SQL inserts or updates.
+- Create and migrate database schemas through DataProvider Migration.CLI with YAML, or through the application's migration code. Schema SQL, including `schema.sql`, is forbidden.
+- Every table must have exactly one primary key, and it must be a UUID.
+- Use real databases; in-memory databases are forbidden.
 
-The duplication budget lives in committed `.deslop.toml` (`max_duplication_percent`). CI runs `deslop .` and the build **TANKS** (exit 3) if duplication exceeds it. The threshold ratchets **DOWN only** — lower it in the same PR when you reduce duplication; never raise it without written justification.
+## Coding rules
 
-## Logging Standards
+- Never throw. Return `Result<T, E>`; wrap failures in `try`/`catch`.
+- Use type pattern matching instead of casts or null-forgiving operators. See the language-specific rules for prohibited syntax and documented exceptions.
+- Never suppress warnings. Fix the code instead of disabling the linter.
+- Use records and static methods; no classes, interfaces, or singletons. Replace interfaces with `Action<T>` / `Func<T>`; inject `Func` into static methods.
+- Keep types and members private or internal by default. Expose only the types and members that users need to consume the toolkit.
+- Prefer expressions over assignments and pure functions over statements.
+- Use named parameters; no ordinal calls.
+- Close type hierarchies with private constructors:
 
-- **Use structured logging libraries.** Never use `Console.WriteLine`, `println!`, or `console.log` for diagnostics.
-- **Log at entry/exit of all significant operations.** Use levels: `error`, `warn`, `info`, `debug`, `trace`.
-- **Structured fields over string interpolation.** Log `{ "userId": 42, "action": "checkout" }` not `"User 42 performed checkout"`.
-- **Copious ILogger** — Especially sync projects. Every service, handler, and non-trivial operation should log.
-- **VS Code extensions:** Write detailed logs to a file in the extension's state folder. Basic errors and diagnostics MUST also appear in the extension's VS Code Output Channel.
-- **SaaS / server apps:** Log writes to database/file MUST be async or on a background thread — never block the request path.
-- **NEVER log personal data.** No PII: names, emails, addresses, phone numbers, IP addresses.
-- **NEVER log secrets.** No API keys, tokens, passwords, connection strings. Log `"API key: present"` instead.
+  ```csharp
+  public abstract partial record Result<TSuccess, TFailure> { private Result() { } }
+  ```
+- Use immutable records for data. Choose immutable collections such as `ImmutableList`, `FrozenSet`, or `ImmutableArray` instead of mutable `List<T>`.
+- Always declare result type aliases with `using`; do not write `new Result<string, SqlError>.Ok`.
+- Document all public members with XML documentation, except in test projects. Follow language-specific documentation rules below.
+- Keep one type per file, except small records. Keep files under 450 LOC and functions under 20 LOC.
+- Delete commented-out code. No placeholders: incomplete work must produce a loud compilation error with a TODO.
+- Never use consecutive `Console.WriteLine` calls; combine output into one interpolated string. Diagnostic output must use structured logging.
+- Routinely format C# with CSharpier: `dotnet csharpier .` from the root.
 
-### Logging Libraries
+### Spec traceability
 
-| Language | Library |
-|----------|---------|
-| C# | `Microsoft.Extensions.Logging` + Serilog |
-| Rust | `tracing` + `tracing-subscriber` |
-| TypeScript | `pino` |
+Every spec section must have a unique, hierarchical, non-numeric ID: `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`, such as `[AUTH-TOKEN-VERIFY]` or `[CI-TIMEOUT]`. Never use sequential IDs such as `[SPEC-001]`. All related code, tests, and design documents must reference the section ID in a comment, such as `// Implements [AUTH-TOKEN-VERIFY]`.
 
-## Hard Rules — Language-Specific
+## Language-specific rules
 
-### C# / F#
+### C# and F#
 
-- No throwing exceptions — return `Result<T,E>` or `Option<T>`
-- No `!` null-forgiving operator
-- No `as` casts — use pattern matching
-- No `dynamic`
-- Nullable reference types enabled everywhere
-- Records for immutable data (C#)
-- F#: prefer discriminated unions, pipe operators, computation expressions
-- Avoid classes. Use static methods as pure functions
-
-#### Mandatory Packages (C#)
-
-Always include these in `Directory.Build.props`:
-- `Microsoft.CodeAnalysis.NetAnalyzers` — .NET analyzers
-- `Outcome` — Result types for Railway Oriented Programming
-- `Exhaustion` 1.0.1 or later — bounded exhaustive switch analysis
-
-Do not downgrade `Exhaustion` to 1.0.0: its recursive AST analysis can exhaust
-compiler memory ([upstream issue #146](https://github.com/MelbourneDeveloper/RestClient.Net/issues/146), fixed in 1.0.1).
-Keep the .NET analyzers and warnings enabled. Use `make` for bounded build/test
-execution; direct commands must also limit the .NET GC heap and build concurrency.
+- Return `Result<T, E>` or `Option<T>` for failures; never throw exceptions.
+- No `!` null-forgiving operator, `as` casts, or `dynamic`; use pattern matching.
+- Enable nullable reference types everywhere. Use immutable records in C# and pure static methods instead of classes.
+- In F#, prefer discriminated unions, pipe operators, and computation expressions.
+- Use the latest .NET and C#, with nullable enabled and warnings as errors. Keep central configuration in `Directory.Build.props`.
 
 ### Rust
 
-- No `unwrap()` — use `?` or explicit `match`
-- No `expect()` in production code (tests may use it)
-- No `panic!()`, `todo!()`, `unimplemented!()`, `unreachable!()` in production code
-- No `unsafe {}` blocks without documented justification reviewed by a human
-- No `allow(clippy::...)` attributes without documented justification
-- All public items must have doc comments (`///`)
-- Use `thiserror` for error types; `anyhow` only in application code (not libraries)
+- No `unwrap()`; use `?` or explicit `match`.
+- No `expect()` in production code; tests may use it.
+- No `panic!()`, `todo!()`, `unimplemented!()`, or `unreachable!()` in production code.
+- No `unsafe {}` without documented justification reviewed by a human.
+- No `allow(clippy::...)` without documented justification.
+- Document every public item with `///` comments.
+- Use `thiserror` for error types; use `anyhow` only in applications, never libraries.
 
 ### TypeScript
 
-- No `any` — use `unknown` and narrow explicitly
-- No `!` (non-null assertion) — use optional chaining or explicit guards
-- No implicit `any` — all function parameters and return types must be annotated
-- No `// @ts-ignore` or `// @ts-nocheck`
-- No `as Type` casts without a comment explaining why it's safe
-- Strict mode always on (`tsconfig.json` must have `"strict": true`)
-- No throwing — return `Result<T, E>` using a Result type library or discriminated union
+- No `any`; use `unknown` and narrow explicitly.
+- No non-null assertion (`!`); use optional chaining or explicit guards.
+- Annotate all function parameters and return types; no implicit `any`.
+- No `// @ts-ignore` or `// @ts-nocheck`.
+- No `as Type` casts without a comment explaining why they are safe.
+- Keep `"strict": true` in `tsconfig.json`.
+- Never throw; return `Result<T, E>` through a Result library or discriminated union.
 
-## LQL
+## Testing
 
-- LQL is database platform INDEPENDENT. It MUST work exactly the same on whatever platform it is transpiled to. Failure for this to happen must be logged as a GitHub issue
+- Target 100% coverage and a Stryker score of at least 70%.
+- Never delete or skip tests, or remove assertions. Restore skipped tests aggressively.
+- Failing tests are acceptable; tests that do not enforce behavior are forbidden.
+- Never swallow exceptions in `try`/`catch` and assert success.
+- Tests must be deterministic: no `sleep()`, timing dependencies, or random state. A timeout is a failure.
+- For bugs: write a test that fails because of the bug, verify that failure, fix the bug, then verify the test passes.
+- Prefer E2E/integration tests at the highest level: exercise the full integration with zero mocking. Unit tests are acceptable only when needed to isolate problems.
+- Never use Fluent Assertions.
+- Use the [FHIR specification](https://build.fhir.org/resourcelist.html) for medical data.
+- VS Code extension E2E tests must interact only through `vscode.commands.executeCommand`; never call provider methods directly.
 
-## CSS
+## Logging standards
 
-- **MINIMAL CSS** — Do not duplicate CSS classes
-- **Aggressively merge duplicate CSS** — consistency is key
-- **Name classes after component, NOT section** — Sections should not have their own CSS classes
+- Structured fields; no interpolated diagnostics, `Console.WriteLine`, `println!`, or `console.log`.
+- Log significant operation/service/handler entry/exit, especially sync; levels: `error`, `warn`, `info`, `debug`, `trace`.
+- VS Code: detailed file logs in extension state folders; basic errors/diagnostics also in Output Channel.
+- Servers: async/background database/file log writes; never block requests.
+- Never log PII (names, emails, addresses, phones, IPs) or secrets (keys, tokens, passwords, connection strings); record presence only.
+- Libraries: C# — `Microsoft.Extensions.Logging` + Serilog; Rust — `tracing` + `tracing-subscriber`; TypeScript — `pino`.
+## Web and CSS
 
-## Testing Rules
+- Minimize CSS classes and aggressively merge duplicates. Name classes after components, never sections.
+- Optimize website content for AI search performance and search engine optimization (SEO). All web work must conform to Google's [AI search guidance](https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search) and [SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide).
 
-- **NEVER remove assertions**
-- **FAILING TEST = OK. TEST THAT DOESN'T ENFORCE BEHAVIOR = ILLEGAL**
-- **Skipping tests = ILLEGAL** — Failing tests = OK. Aggressively unskip tests
-- **No try/catch in tests** that swallows the exception and asserts success
-- **Tests must be deterministic.** No sleep(), no relying on timing, no random state
-- **Timeout = FAILURE**
-- **Bug fix process:** write test that fails because of bug -> verify test fails because of bug -> fix bug -> verify that test passes
-- **E2E with zero mocking** — Test at the highest level. Avoid mocks. Only full integration testing
-- **100% coverage, Stryker score 70%+**
-- **Medical data:** use [FHIR spec](https://build.fhir.org/resourcelist.html)
-- **VSCode extension E2E:** interact only via `vscode.commands.executeCommand`. Never call provider methods directly.
+## Build commands
 
-
-
-## Web
-
-- Minimise CSS classes. We want as few as possible
-- Optimise for AI and SEO. Must conform to these:
-
-[Top ways to ensure your content performs well in Google's AI experiences on Search](https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search)
-
-[Search Engine Optimization (SEO) Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)
-
-## Build Commands (exact — cross-platform via GNU Make)
-
-The 7 standard portfolio targets:
+Use these exact GNU Make targets for cross-platform execution. The seven standard portfolio targets below are the supported build interface. `make test` is the only test entry point.
 
 ```bash
 make build          # compile everything
-make test           # fail-fast tests + coverage + threshold (the only test entry point)
-make lint           # run all linters/analyzers (no formatting)
-make fmt            # format all code in-place (CHECK=1 for read-only verify, used in CI)
+make test           # fail-fast tests + coverage + threshold
+make lint           # all linters/analyzers, no formatting
+make fmt            # format in-place; CHECK=1 verifies without edits (CI)
 make clean          # remove build artifacts
 make ci             # lint + test + build (full CI simulation)
 make setup          # post-create dev environment setup
 ```
 
-Repo-specific targets (this repo only):
+Repository-specific targets:
 
 ```bash
 make check          # lint + test (pre-commit shortcut)
@@ -213,55 +163,26 @@ make coverage       # generate and open HTML coverage report
 make vsix           # build LSP + package VS Code extension
 ```
 
-## Architecture
+## Repository map
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| DataProvider | `DataProvider/` | Source gen for SQL -> extension methods |
-| LQL | `Lql/` | Lambda Query Language -> SQL transpiler |
-| LQL LSP | `Lql/lql-lsp-rust/` | Language server (Rust workspace: lql-parser, lql-analyzer, lql-lsp) |
-| LQL Extension | `Lql/LqlExtension/` | VS Code extension (TypeScript) |
-| Migration | `Migration/` | Schema migration framework (YAML -> SQL DDL) |
+| DataProvider | `DataProvider/` | SQL extension source generator + CLI tools |
+| LQL | `Lql/Lql/` | Lambda Query Language → SQL transpiler |
+| LQL LSP | `Lql/lql-lsp-rust/` | Rust workspace: lql-parser, lql-analyzer, lql-lsp |
+| LQL extension | `Lql/LqlExtension/` | TypeScript VS Code extension |
+| Migration | `Migration/` | YAML schema migrations → SQL DDL |
 | Sync | `Sync/` | Offline-first bidirectional sync |
-| Gatekeeper | `Gatekeeper/` | WebAuthn + RBAC auth |
-| Reporting | `Reporting/` | Embeddable reporting platform (SQL/LQL data sources, JSON config, React renderer) |
-| Website | `Website/` | Documentation site (Eleventy + DocFX) |
+| Gatekeeper | `Gatekeeper/` | WebAuthn + RBAC authentication |
+| Reporting | `Reporting/` | SQL/LQL sources, JSON config, React renderer |
+| Website | `Website/` | Eleventy + DocFX documentation |
+| CI | `.github/workflows/` | CI/CD pipelines |
+| Specs and plans | `docs/specs/`, `docs/plans/` | Specifications and implementation plans |
+| Instructions | `AGENTS.md`, `CLAUDE.md` | Canonical instructions; Claude pointer to `AGENTS.md` |
+| Build | `Makefile` | Cross-platform build interface |
 
-## Repo Structure
+## Agent skills
 
-```
-DataProvider/
-├── .github/workflows/     # CI/CD pipelines
-├── .agents/skills/        # Shared agent skills
-├── .claude/skills/        # Claude Code skill pointer files
-├── DataProvider/           # Core source generator + CLI tools
-├── Lql/                   # Lambda Query Language
-│   ├── Lql/               # Core transpiler library
-│   ├── lql-lsp-rust/      # Language server (Rust)
-│   └── LqlExtension/      # VS Code extension (TypeScript)
-├── Migration/             # Schema migration framework
-├── Sync/                  # Bidirectional sync engine
-├── Gatekeeper/            # WebAuthn auth + RBAC
-├── Reporting/             # Embeddable reporting platform
-├── Website/               # Documentation site
-├── docs/
-│   ├── specs/             # Specification documents
-│   └── plans/             # Implementation plans
-├── CLAUDE.md              # This file (canonical instructions)
-├── AGENTS.md              # Pointer → CLAUDE.md
-└── Makefile               # Cross-platform build interface
-```
-
-## Config
-
-- .NET, C# latest, nullable, warnings as errors
-- Central config in `Directory.Build.props`
-- Format: `dotnet csharpier .`
-
-## Agent Skills
-
-- Canonical project skills live in `.agents/skills/` so Codex can load them from the repository scope.
-- `.claude/skills/*/SKILL.md` files are thin `@../../../.agents/skills/.../SKILL.md` pointers for Claude Code. Do not duplicate full skill bodies there.
-- [Claude Code Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-- [Codex Skills](https://developers.openai.com/codex/skills)
-- [The Complete Guide to Building Skills for Claude (PDF)](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf)
+- Canonical project skills live in `.agents/skills/` so Codex can load shared instructions from repository scope. Keep full skill bodies in this location.
+- `.claude/skills/*/SKILL.md` files contain thin `@../../../.agents/skills/.../SKILL.md` pointers for Claude Code. Never duplicate skill bodies.
+- References: [Claude Code skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview), [Codex skills](https://developers.openai.com/codex/skills), [skills guide (PDF)](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf).

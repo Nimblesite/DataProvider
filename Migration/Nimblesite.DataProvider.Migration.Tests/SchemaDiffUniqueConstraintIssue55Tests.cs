@@ -34,7 +34,7 @@ public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
             ]
         );
         var desired =
-            Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
+            Dataset_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
                 current: current
             );
 
@@ -56,10 +56,8 @@ public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
     [Fact]
     public void Calculate_ReplayAfterUniqueConstraintApplied_YieldsNoUniqueOperation()
     {
-        var unique = SchemaTestData.UniqueConstraint(
-            name: "uq_agent_configs_tenant_name",
-            columns: ["tenant_id", "name"]
-        );
+        var unique =
+            Dataset_Calculate_ReplayAfterUniqueConstraintApplied_YieldsNoUniqueOperation_1();
         var converged = SchemaTestData.Schema(
             name: "live",
             tables:
