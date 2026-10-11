@@ -13,44 +13,26 @@ public static class SyncSessionManager
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult EnableSuppression(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE _sync_session SET sync_active = 1";
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to enable trigger suppression: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult EnableSuppression(SqliteConnection connection) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command => command.CommandText = "UPDATE _sync_session SET sync_active = 1",
+            parameters: () => [],
+            failurePrefix: "Failed to enable trigger suppression"
+        );
 
     /// <summary>
     /// Disables trigger suppression. Call after sync completes.
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult DisableSuppression(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE _sync_session SET sync_active = 0";
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to disable trigger suppression: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult DisableSuppression(SqliteConnection connection) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command => command.CommandText = "UPDATE _sync_session SET sync_active = 0",
+            parameters: () => [],
+            failurePrefix: "Failed to disable trigger suppression"
+        );
 
     /// <summary>
     /// Checks if trigger suppression is currently active.

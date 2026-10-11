@@ -141,12 +141,10 @@ public sealed partial class SqlModelE2ETests : IDisposable
         );
         var ltSqlOk = Assert.IsType<StringOk>(ltBuilder.Build().ToSQLite());
         var ltSql = ltSqlOk.Value;
-        var ltResult = _connection.Query<string>(sql: ltSql, mapper: r => r.GetString(0));
-        var ltOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(ltResult);
-        var ltRows = ltOk.Value;
+        var ltRows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () => _connection.Query<string>(sql: ltSql, mapper: r => r.GetString(0)),
+            exactType: true
+        );
         Assert.Equal(2, ltRows.Count); // Charlie (75k), Eve (70k)
 
         // Test GreaterOrEq
@@ -162,12 +160,10 @@ public sealed partial class SqlModelE2ETests : IDisposable
         );
         var geSqlOk = Assert.IsType<StringOk>(geBuilder.Build().ToSQLite());
         var geSql = geSqlOk.Value;
-        var geResult = _connection.Query<string>(sql: geSql, mapper: r => r.GetString(0));
-        var geOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(geResult);
-        var geRows = geOk.Value;
+        var geRows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () => _connection.Query<string>(sql: geSql, mapper: r => r.GetString(0)),
+            exactType: true
+        );
         Assert.Equal(3, geRows.Count); // Alice (95k), Bob (105k), Frank (120k)
 
         // Test LIKE
@@ -183,12 +179,10 @@ public sealed partial class SqlModelE2ETests : IDisposable
         );
         var likeSqlOk = Assert.IsType<StringOk>(likeBuilder.Build().ToSQLite());
         var likeSql = likeSqlOk.Value;
-        var likeResult = _connection.Query<string>(sql: likeSql, mapper: r => r.GetString(0));
-        var likeOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(likeResult);
-        var likeRows = likeOk.Value;
+        var likeRows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () => _connection.Query<string>(sql: likeSql, mapper: r => r.GetString(0)),
+            exactType: true
+        );
         // Grace, Diana, Frank, Charlie, Hank all contain 'a'
         Assert.True(likeRows.Count >= 3);
     }
@@ -423,15 +417,14 @@ public sealed partial class SqlModelE2ETests : IDisposable
         Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("AVG(Salary) > 80000", sql);
 
-        var result = _connection.Query<(string, double)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
+        var rows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () =>
+                _connection.Query<(string, double)>(
+                    sql: sql,
+                    mapper: r => (r.GetString(0), r.GetDouble(1))
+                ),
+            exactType: true
         );
-        var havingOk = Assert.IsType<Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-            IReadOnlyList<(string, double)>,
-            SqlError
-        >>(result);
-        var rows = havingOk.Value;
 
         // Engineering avg = (95k+105k+120k)/3 = 106.67k > 80k
         // Sales avg = (75k+85k+90k)/3 = 83.33k > 80k

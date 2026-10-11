@@ -29,4 +29,22 @@ internal static class DatabaseCommands
         parameter.Value = value;
         command.Parameters.Add(parameter);
     }
+
+    // Implements [CI-TEST-SHARED-READ-COLUMN]. Reads every value of one result
+    // column into a list, preserving the caller's original iteration order.
+    internal static List<string> ReadStrings(DbCommand command, int ordinal = 0) =>
+        ReadAll(command: command, read: reader => reader.GetString(ordinal));
+
+    // Implements [CI-TEST-SHARED-READ-COLUMN]. Projects every row through a
+    // reader callback so callers keep their original per-row conversions.
+    internal static List<T> ReadAll<T>(DbCommand command, Func<DbDataReader, T> read)
+    {
+        var values = new List<T>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            values.Add(read(reader));
+        }
+        return values;
+    }
 }

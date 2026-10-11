@@ -1,3 +1,4 @@
+using Tests.Shared;
 using static global::Tests.Shared.StringAssertions;
 
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
@@ -282,12 +283,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
             using var sel = _connection.CreateCommand();
             sel.Transaction = tx;
             sel.CommandText = "SELECT id FROM docs_iso";
-            var ids = new List<Guid>();
-            using var rdr = sel.ExecuteReader();
-            while (rdr.Read())
-            {
-                ids.Add(rdr.GetGuid(0));
-            }
+            var ids = DatabaseCommands.ReadAll(sel, reader => reader.GetGuid(0));
             Assert.Single(ids);
             Assert.Equal(docA, ids[0]);
         }
@@ -498,12 +494,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
             using var sel = _connection.CreateCommand();
             sel.Transaction = tx;
             sel.CommandText = "SELECT id FROM messages";
-            var ids = new List<Guid>();
-            using var rdr = sel.ExecuteReader();
-            while (rdr.Read())
-            {
-                ids.Add(rdr.GetGuid(0));
-            }
+            var ids = DatabaseCommands.ReadAll(sel, reader => reader.GetGuid(0));
             Assert.Single(ids);
             Assert.Equal(msgA, ids[0]);
         }

@@ -85,6 +85,14 @@ pub fn lex_tokens(source: &str) -> Vec<LqlToken> {
     tokens
 }
 
+/// Collects references to every token whose type matches `token_type`.
+pub fn tokens_of_type(tokens: &[LqlToken], token_type: isize) -> Vec<&LqlToken> {
+    tokens
+        .iter()
+        .filter(|token| token.token_type == token_type)
+        .collect()
+}
+
 /// Get positions of all |> pipe tokens using the ANTLR lexer.
 /// More accurate than text scanning since it respects string literals and comments.
 pub fn lex_pipe_positions(source: &str) -> Vec<PipeTokenPosition> {
@@ -348,10 +356,7 @@ mod tests {
     #[test]
     fn test_lex_tokens_finds_pipe() {
         let tokens = lex_tokens("a |> b");
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 1);
         assert_eq!(pipes[0].text, "|>");
     }
@@ -359,14 +364,8 @@ mod tests {
     #[test]
     fn test_lex_tokens_finds_parens() {
         let tokens = lex_tokens("select(x)");
-        let opens: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::OPEN_PAREN)
-            .collect();
-        let closes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::CLOSE_PAREN)
-            .collect();
+        let opens = tokens_of_type(&tokens, token_types::OPEN_PAREN);
+        let closes = tokens_of_type(&tokens, token_types::CLOSE_PAREN);
         assert_eq!(opens.len(), 1);
         assert_eq!(closes.len(), 1);
     }
@@ -387,16 +386,10 @@ mod tests {
         let tokens = lex_tokens("-- hello\nusers");
         // Comments are on a hidden channel. CommonTokenStream's `get()`
         // returns ALL buffered tokens including hidden channel.
-        let comments: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::COMMENT)
-            .collect();
+        let comments = tokens_of_type(&tokens, token_types::COMMENT);
         // Comments may or may not appear depending on antlr-rust channel filtering.
         // What matters is that the lexer doesn't crash and finds "users".
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert_eq!(idents.len(), 1);
         assert_eq!(idents[0].text, "users");
         // If comments are included, verify position
@@ -411,10 +404,7 @@ mod tests {
         // `get()` returns all buffered tokens including hidden channel.
         let tokens = lex_tokens("a b");
         // We should at least get the two IDENT tokens
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert_eq!(idents.len(), 2);
     }
 
@@ -422,10 +412,7 @@ mod tests {
     fn test_lex_tokens_complex_pipeline() {
         let source = "users\n|> filter(fn(r) => r.age > 18)\n|> select(users.id)";
         let tokens = lex_tokens(source);
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 2);
         assert_eq!(pipes[0].line, 1);
         assert_eq!(pipes[1].line, 2);

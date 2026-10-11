@@ -877,12 +877,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         pkCmd.Parameters.AddWithValue("@schema", schema);
         pkCmd.Parameters.AddWithValue("@table", tableName);
 
-        var pkColumns = new List<string>();
-        using var pkReader = pkCmd.ExecuteReader();
-        while (pkReader.Read())
-        {
-            pkColumns.Add(pkReader.GetString(0));
-        }
+        var pkColumns = DatabaseCommands.ReadStrings(pkCmd);
 
         ddlParts.Add(string.Join(",\n", columns));
         if (pkColumns.Count > 0)
@@ -920,13 +915,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         cmd.Parameters.AddWithValue("@schema", schema);
         cmd.Parameters.AddWithValue("@table", tableName);
 
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(0));
-        }
-        return columns;
+        return DatabaseCommands.ReadStrings(cmd);
     }
 
     /// <summary>
@@ -937,14 +926,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"PRAGMA table_info({tableName})";
 
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            // Column name is at index 1 in pragma table_info
-            columns.Add(reader.GetString(1));
-        }
-        return columns;
+        return DatabaseCommands.ReadStrings(cmd, ordinal: 1);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

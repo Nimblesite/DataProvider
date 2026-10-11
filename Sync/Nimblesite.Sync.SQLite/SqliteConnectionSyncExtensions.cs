@@ -106,51 +106,34 @@ public static class SqliteConnectionSyncExtensions
     /// <summary>
     /// Purges tombstones (delete entries) below a given version.
     /// </summary>
-    public static IntSyncResult PurgeTombstones(this SqliteConnection connection, long belowVersion)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static IntSyncResult PurgeTombstones(
+        this SqliteConnection connection,
+        long belowVersion
+    ) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 DELETE FROM _sync_log
                 WHERE operation = 'delete'
                   AND version < @belowVersion
-                """;
-            cmd.Parameters.AddWithValue("@belowVersion", belowVersion);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to purge tombstones: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () => [("@belowVersion", belowVersion)],
+            failurePrefix: "Failed to purge tombstones"
+        );
 
     /// <summary>
     /// Purges all sync log entries below a given version.
     /// Use with caution - only after all clients have synced past this version.
     /// </summary>
-    public static IntSyncResult PurgeSyncLog(this SqliteConnection connection, long belowVersion)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_log WHERE version < @belowVersion";
-            cmd.Parameters.AddWithValue("@belowVersion", belowVersion);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to purge sync log: {ex.Message}")
-            );
-        }
-    }
+    public static IntSyncResult PurgeSyncLog(this SqliteConnection connection, long belowVersion) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "DELETE FROM _sync_log WHERE version < @belowVersion",
+            parameters: () => [("@belowVersion", belowVersion)],
+            failurePrefix: "Failed to purge sync log"
+        );
 
     // === Client Tracking Operations ===
 

@@ -99,33 +99,27 @@ public static class MappingStateRepository
     public static BoolSyncResult UpsertMappingState(
         SqliteConnection connection,
         MappingStateEntry state
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 INSERT INTO _sync_mapping_state (mapping_id, last_synced_version, last_sync_timestamp, records_synced)
                 VALUES (@mappingId, @version, @timestamp, @records)
                 ON CONFLICT(mapping_id) DO UPDATE SET
                     last_synced_version = @version,
                     last_sync_timestamp = @timestamp,
                     records_synced = @records
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", state.MappingId);
-            cmd.Parameters.AddWithValue("@version", state.LastSyncedVersion);
-            cmd.Parameters.AddWithValue("@timestamp", state.LastSyncTimestamp);
-            cmd.Parameters.AddWithValue("@records", state.RecordsSynced);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to upsert mapping state: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () =>
+                [
+                    ("@mappingId", state.MappingId),
+                    ("@version", state.LastSyncedVersion),
+                    ("@timestamp", state.LastSyncTimestamp),
+                    ("@records", state.RecordsSynced),
+                ],
+            failurePrefix: "Failed to upsert mapping state"
+        );
 
     /// <summary>
     /// Deletes a mapping state entry.
@@ -133,23 +127,18 @@ public static class MappingStateRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="mappingId">Mapping identifier to delete.</param>
     /// <returns>Success or error.</returns>
-    public static BoolSyncResult DeleteMappingState(SqliteConnection connection, string mappingId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_mapping_state WHERE mapping_id = @mappingId";
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to delete mapping state: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult DeleteMappingState(
+        SqliteConnection connection,
+        string mappingId
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "DELETE FROM _sync_mapping_state WHERE mapping_id = @mappingId",
+            parameters: () => [("@mappingId", mappingId)],
+            failurePrefix: "Failed to delete mapping state"
+        );
 
     /// <summary>
     /// Gets record hash for hash-based sync tracking.
@@ -207,32 +196,26 @@ public static class MappingStateRepository
     public static BoolSyncResult UpsertRecordHash(
         SqliteConnection connection,
         RecordHashEntry entry
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 INSERT INTO _sync_record_hashes (mapping_id, source_pk, payload_hash, synced_at)
                 VALUES (@mappingId, @sourcePk, @hash, @syncedAt)
                 ON CONFLICT(mapping_id, source_pk) DO UPDATE SET
                     payload_hash = @hash,
                     synced_at = @syncedAt
-                """;
-            cmd.Parameters.AddWithValue("@mappingId", entry.MappingId);
-            cmd.Parameters.AddWithValue("@sourcePk", entry.SourcePk);
-            cmd.Parameters.AddWithValue("@hash", entry.PayloadHash);
-            cmd.Parameters.AddWithValue("@syncedAt", entry.SyncedAt);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to upsert record hash: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () =>
+                [
+                    ("@mappingId", entry.MappingId),
+                    ("@sourcePk", entry.SourcePk),
+                    ("@hash", entry.PayloadHash),
+                    ("@syncedAt", entry.SyncedAt),
+                ],
+            failurePrefix: "Failed to upsert record hash"
+        );
 
     /// <summary>
     /// Deletes record hashes for a mapping.
@@ -243,23 +226,15 @@ public static class MappingStateRepository
     public static IntSyncResult DeleteRecordHashesForMapping(
         SqliteConnection connection,
         string mappingId
-    )
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_record_hashes WHERE mapping_id = @mappingId";
-            cmd.Parameters.AddWithValue("@mappingId", mappingId);
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete record hashes: {ex.Message}")
-            );
-        }
-    }
+    ) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "DELETE FROM _sync_record_hashes WHERE mapping_id = @mappingId",
+            parameters: () => [("@mappingId", mappingId)],
+            failurePrefix: "Failed to delete record hashes"
+        );
 
     /// <summary>
     /// Gets the minimum last_synced_version across all active mappings.

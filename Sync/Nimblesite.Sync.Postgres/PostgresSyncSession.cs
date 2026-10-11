@@ -11,42 +11,24 @@ public static class PostgresSyncSession
     /// </summary>
     /// <param name="connection">PostgreSQL connection.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult EnableSuppression(NpgsqlConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE _sync_session SET sync_active = 1";
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to enable suppression: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult EnableSuppression(NpgsqlConnection connection) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command => command.CommandText = "UPDATE _sync_session SET sync_active = 1",
+            parameters: () => [],
+            failurePrefix: "Failed to enable suppression"
+        );
 
     /// <summary>
     /// Disables suppression (sets sync_active = 0).
     /// </summary>
     /// <param name="connection">PostgreSQL connection.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult DisableSuppression(NpgsqlConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE _sync_session SET sync_active = 0";
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to disable suppression: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult DisableSuppression(NpgsqlConnection connection) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command => command.CommandText = "UPDATE _sync_session SET sync_active = 0",
+            parameters: () => [],
+            failurePrefix: "Failed to disable suppression"
+        );
 }

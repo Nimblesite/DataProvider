@@ -1122,3 +1122,10 @@ SQLite and PostgreSQL reuse client lookup, upsert, deletion and row mapping.
 Provider-typed public APIs and exception handling remain intact. Command factories
 create native provider parameters with the same names and string/integer values;
 SQL text, row ordering and caller-specific error prefixes remain unchanged.
+
+### Shared repository writes [SYNC-REPOSITORY-SHARED-WRITES]
+
+SQLite and Postgres repository mutations share command lifetime, parameter binding,
+execution and typed exception conversion in Core. Each caller retains its SQL,
+parameter order, Boolean or row-count result and original failure prefix.
+Parameter factories evaluate after the SQL is assigned inside the exception scope.

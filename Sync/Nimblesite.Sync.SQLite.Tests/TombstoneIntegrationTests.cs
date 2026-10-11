@@ -44,12 +44,7 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
         // Act: Query table info
         using var cmd = _serverDb.CreateCommand();
         cmd.CommandText = "PRAGMA table_info(_sync_clients)";
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
+        var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
         Assert.Contains("origin_id", columns);

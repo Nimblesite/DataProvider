@@ -214,6 +214,16 @@ impl Drop for LspClient {
 
 const DOC_URI: &str = "file:///test.lql";
 
+/// Spawns an LSP client, initializes it, opens `source`, and drains the
+/// initial publishDiagnostics notification so tests start from a clean state.
+fn open_client(source: &str) -> LspClient {
+    let mut client = LspClient::spawn();
+    client.initialize();
+    client.open_document(DOC_URI, source);
+    let _ = client.read_notification("textDocument/publishDiagnostics");
+    client
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -333,10 +343,7 @@ fn test_did_change_introduces_diagnostics() {
 
 #[test]
 fn test_completion_after_pipe_returns_pipeline_ops() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> ");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> ");
 
     let resp = client.request_completion(DOC_URI, 0, 9);
     let items = resp["result"].as_array().unwrap();
@@ -357,10 +364,7 @@ fn test_completion_after_pipe_returns_pipeline_ops() {
 
 #[test]
 fn test_completion_with_prefix_filters() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> sel");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> sel");
 
     let resp = client.request_completion(DOC_URI, 0, 12);
     let items = resp["result"].as_array().unwrap();
@@ -380,10 +384,7 @@ fn test_completion_with_prefix_filters() {
 
 #[test]
 fn test_completion_in_lambda() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> filter(fn(r) => r.");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> filter(fn(r) => r.");
 
     let resp = client.request_completion(DOC_URI, 0, 26);
     // Result is an array (CompletionResponse::Array) or null
@@ -398,10 +399,7 @@ fn test_completion_in_lambda() {
 
 #[test]
 fn test_completion_at_beginning_returns_items() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("");
 
     let resp = client.request_completion(DOC_URI, 0, 0);
     // Result is an array or null
@@ -416,10 +414,7 @@ fn test_completion_at_beginning_returns_items() {
 
 #[test]
 fn test_hover_on_keyword() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> select(users.id)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> select(users.id)");
 
     // Hover over "select" (position 9-14 on line 0)
     let resp = client.request_hover(DOC_URI, 0, 10);
@@ -438,10 +433,7 @@ fn test_hover_on_keyword() {
 
 #[test]
 fn test_hover_on_non_keyword() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> select(users.id)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> select(users.id)");
 
     // Hover over "users" — no schema, so table hover won't have info
     let resp = client.request_hover(DOC_URI, 0, 2);
@@ -478,10 +470,7 @@ fn test_hover_multiline() {
 
 #[test]
 fn test_document_symbols_let_bindings() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "let x = users |> select(users.id)\nlet y = orders");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("let x = users |> select(users.id)\nlet y = orders");
 
     let resp = client.request_document_symbols(DOC_URI);
     let symbols = resp["result"].as_array().unwrap();
@@ -499,10 +488,7 @@ fn test_document_symbols_let_bindings() {
 
 #[test]
 fn test_document_symbols_empty() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> select(users.id)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> select(users.id)");
 
     let resp = client.request_document_symbols(DOC_URI);
     let symbols = resp["result"].as_array().unwrap();
@@ -514,10 +500,7 @@ fn test_document_symbols_empty() {
 
 #[test]
 fn test_formatting_indents_pipeline() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users\n|> select(users.id)\n|> limit(10)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users\n|> select(users.id)\n|> limit(10)");
 
     let resp = client.request_formatting(DOC_URI);
     let edits = resp["result"].as_array().unwrap();
@@ -561,10 +544,7 @@ fn test_formatting_already_formatted() {
 
 #[test]
 fn test_formatting_nested_parens() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "select(\nusers.id,\nusers.name\n)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("select(\nusers.id,\nusers.name\n)");
 
     let resp = client.request_formatting(DOC_URI);
     let edits = resp["result"].as_array().unwrap();
@@ -611,10 +591,7 @@ fn test_diagnostics_source_is_lql() {
 
 #[test]
 fn test_completion_items_have_kind() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> ");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> ");
 
     let resp = client.request_completion(DOC_URI, 0, 9);
     let items = resp["result"].as_array().unwrap();
@@ -652,10 +629,7 @@ fn test_completion_scope_bindings() {
 
 #[test]
 fn test_did_close_removes_document() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> select(users.id)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> select(users.id)");
 
     // Close the document
     client.send_notification(
@@ -723,10 +697,7 @@ fn test_completion_complex_pipeline() {
 
 #[test]
 fn test_hover_on_filter_keyword() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> filter(fn(r) => r.age > 18)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> filter(fn(r) => r.age > 18)");
 
     let resp = client.request_hover(DOC_URI, 0, 10);
     let result = &resp["result"];
@@ -821,10 +792,7 @@ fn test_initialize_with_ai_config() {
 
 #[test]
 fn test_hover_on_space_returns_null() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "users |> select(users.id)");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("users |> select(users.id)");
 
     // Hover on the space between "users" and "|>"
     let resp = client.request_hover(DOC_URI, 0, 5);
@@ -1064,10 +1032,7 @@ fn test_initialize_with_connection_string_only_loads_schema() {
 
 #[test]
 fn test_document_symbols_positions() {
-    let mut client = LspClient::spawn();
-    client.initialize();
-    client.open_document(DOC_URI, "let x = users\nlet y = orders");
-    let _ = client.read_notification("textDocument/publishDiagnostics");
+    let mut client = open_client("let x = users\nlet y = orders");
 
     let resp = client.request_document_symbols(DOC_URI);
     let symbols = resp["result"].as_array().unwrap();

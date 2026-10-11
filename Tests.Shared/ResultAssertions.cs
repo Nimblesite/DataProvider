@@ -17,6 +17,7 @@ internal static class ResultAssertions
             actual: actual,
             message: message
         );
+
     internal static IReadOnlyList<T> Rows<T>(
         Func<Outcome.Result<IReadOnlyList<T>, Nimblesite.Sql.Model.SqlError>> read,
         bool exactType = false
@@ -24,7 +25,12 @@ internal static class ResultAssertions
     {
         var result = read();
         return exactType
-            ? Xunit.Assert.IsType<Outcome.Result<IReadOnlyList<T>, Nimblesite.Sql.Model.SqlError>.Ok<IReadOnlyList<T>, Nimblesite.Sql.Model.SqlError>>(@object: result).Value
+            ? Xunit
+                .Assert.IsType<Outcome.Result<IReadOnlyList<T>, Nimblesite.Sql.Model.SqlError>.Ok<
+                    IReadOnlyList<T>,
+                    Nimblesite.Sql.Model.SqlError
+                >>(@object: result)
+                .Value
             : Ok(actual: result).Value;
     }
 }

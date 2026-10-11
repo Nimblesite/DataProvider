@@ -180,12 +180,7 @@ public sealed partial class SpecConformanceTests : IDisposable
         // Act: Query table info
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "PRAGMA table_info(_sync_log)";
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
+        var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All required columns exist
         Assert.Contains("version", columns);
@@ -351,12 +346,7 @@ public sealed partial class SpecConformanceTests : IDisposable
         using var cmd = _db.CreateCommand();
         cmd.CommandText =
             "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'Person'";
-        var triggers = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            triggers.Add(reader.GetString(0));
-        }
+        var triggers = DatabaseCommands.ReadStrings(cmd);
 
         Assert.Contains("Person_sync_insert", triggers);
         Assert.Contains("Person_sync_update", triggers);

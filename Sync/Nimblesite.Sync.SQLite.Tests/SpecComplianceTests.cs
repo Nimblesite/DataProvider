@@ -727,12 +727,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         // Spec: origin_id, last_server_version, last_push_version initialized
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT key FROM _sync_state";
-        var keys = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            keys.Add(reader.GetString(0));
-        }
+        var keys = DatabaseCommands.ReadStrings(cmd);
 
         Assert.Contains("origin_id", keys);
         Assert.Contains("last_server_version", keys);

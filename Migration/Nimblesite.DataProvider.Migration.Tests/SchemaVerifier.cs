@@ -1,3 +1,5 @@
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -484,13 +486,7 @@ public static partial class SchemaVerifier
             """;
         cmd.Parameters.AddWithValue("@schema", schema);
 
-        var tables = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            tables.Add(reader.GetString(0));
-        }
-        return tables;
+        return DatabaseCommands.ReadStrings(cmd);
     }
 
     private static List<string> GetPostgresColumns(
@@ -507,13 +503,7 @@ public static partial class SchemaVerifier
         cmd.Parameters.AddWithValue("@schema", schema);
         cmd.Parameters.AddWithValue("@table", tableName);
 
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(0));
-        }
-        return columns;
+        return DatabaseCommands.ReadStrings(cmd);
     }
 
     internal static bool SqliteTableExists(SqliteConnection conn, string tableName)
@@ -530,13 +520,7 @@ public static partial class SchemaVerifier
         cmd.CommandText =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
 
-        var tables = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            tables.Add(reader.GetString(0));
-        }
-        return tables;
+        return DatabaseCommands.ReadStrings(cmd);
     }
 
     private static string? GetSqliteTableDdl(SqliteConnection conn, string tableName)

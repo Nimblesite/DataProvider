@@ -42,12 +42,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_CreateSchema_EmptyDatabase_CreatesAllTables_1;
 
-        var tables = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            tables.Add(reader.GetString(0));
-        }
+        var tables = DatabaseCommands.ReadStrings(cmd);
 
         Assert.Contains("_sync_clients", tables);
         Assert.Contains("_sync_log", tables);
@@ -174,12 +169,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         using var cmd = _db.CreateCommand();
         cmd.CommandText = caseValue0;
 
-        var indexes = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            indexes.Add(reader.GetString(0));
-        }
+        var indexes = DatabaseCommands.ReadStrings(cmd);
 
         Assert.Contains(caseValue2, indexes);
         Assert.Contains(caseValue3, indexes);
@@ -334,12 +324,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         // Verify triggers exist
         cmd.CommandText = Data_CreateTriggers_ValidTable_CreatesTriggers_2;
 
-        var triggers = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            triggers.Add(reader.GetString(0));
-        }
+        var triggers = DatabaseCommands.ReadStrings(cmd);
 
         Assert.Contains("Orders_sync_delete", triggers);
         Assert.Contains("Orders_sync_insert", triggers);

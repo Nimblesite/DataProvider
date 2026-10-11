@@ -96,24 +96,18 @@ public static class SyncLogRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="version">New last server version.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult UpdateLastServerVersion(SqliteConnection connection, long version)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "UPDATE _sync_state SET value = @version WHERE key = 'last_server_version'";
-            cmd.Parameters.AddWithValue("@version", version.ToString(CultureInfo.InvariantCulture));
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to update last server version: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult UpdateLastServerVersion(
+        SqliteConnection connection,
+        long version
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "UPDATE _sync_state SET value = @version WHERE key = 'last_server_version'",
+            parameters: () => [("@version", version.ToString(CultureInfo.InvariantCulture))],
+            failurePrefix: "Failed to update last server version"
+        );
 
     /// <summary>
     /// Gets the maximum version in the sync log.

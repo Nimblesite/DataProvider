@@ -1436,24 +1436,18 @@ mod tests {
 
     #[test]
     fn test_lex_tokens_pipeline() {
-        use lql_parser::tokens::{lex_tokens, token_types};
+        use lql_parser::tokens::{lex_tokens, token_types, tokens_of_type};
         let tokens = lex_tokens("users |> select(users.id)");
         assert!(!tokens.is_empty());
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 1);
     }
 
     #[test]
     fn test_lex_tokens_multiline() {
-        use lql_parser::tokens::{lex_tokens, token_types};
+        use lql_parser::tokens::{lex_tokens, token_types, tokens_of_type};
         let tokens = lex_tokens("users\n|> select(x)\n|> limit(10)");
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 2);
         assert_eq!(pipes[0].line, 1);
         assert_eq!(pipes[1].line, 2);
@@ -1461,17 +1455,11 @@ mod tests {
 
     #[test]
     fn test_lex_tokens_parens_and_idents() {
-        use lql_parser::tokens::{lex_tokens, token_types};
+        use lql_parser::tokens::{lex_tokens, token_types, tokens_of_type};
         let tokens = lex_tokens("select(x, y)");
-        let opens: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::OPEN_PAREN)
-            .collect();
+        let opens = tokens_of_type(&tokens, token_types::OPEN_PAREN);
         assert_eq!(opens.len(), 1);
-        let closes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::CLOSE_PAREN)
-            .collect();
+        let closes = tokens_of_type(&tokens, token_types::CLOSE_PAREN);
         assert_eq!(closes.len(), 1);
     }
 

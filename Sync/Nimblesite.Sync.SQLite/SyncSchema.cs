@@ -136,32 +136,24 @@ public static class SyncSchema
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "SQL is composed from const strings only"
     )]
-    public static BoolSyncResult CreateSchema(SqliteConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = string.Join(
-                "\n",
-                CreateSyncStateTable,
-                CreateSyncSessionTable,
-                CreateSyncLogTable,
-                CreateSyncClientsTable,
-                CreateSyncSubscriptionsTable,
-                CreateMappingStateTable,
-                CreateRecordHashesTable,
-                InitializeSyncState
-            );
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to create sync schema: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult CreateSchema(SqliteConnection connection) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = string.Join(
+                    "\n",
+                    CreateSyncStateTable,
+                    CreateSyncSessionTable,
+                    CreateSyncLogTable,
+                    CreateSyncClientsTable,
+                    CreateSyncSubscriptionsTable,
+                    CreateMappingStateTable,
+                    CreateRecordHashesTable,
+                    InitializeSyncState
+                ),
+            parameters: () => [],
+            failurePrefix: "Failed to create sync schema"
+        );
 
     /// <summary>
     /// Sets the origin ID for this replica. Should be called once on first sync.
@@ -169,23 +161,15 @@ public static class SyncSchema
     /// <param name="connection">SQLite connection.</param>
     /// <param name="originId">UUID v4 origin ID.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult SetOriginId(SqliteConnection connection, string originId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE _sync_state SET value = @origin WHERE key = 'origin_id'";
-            cmd.Parameters.AddWithValue("@origin", originId);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to set origin ID: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult SetOriginId(SqliteConnection connection, string originId) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "UPDATE _sync_state SET value = @origin WHERE key = 'origin_id'",
+            parameters: () => [("@origin", originId)],
+            failurePrefix: "Failed to set origin ID"
+        );
 
     /// <summary>
     /// Gets the origin ID for this replica.

@@ -19,11 +19,20 @@ namespace Nimblesite.Sync.Tests;
 
 // Implements [SYNC-CLIENT-SHARED-STORAGE]. Identical persistence assertions on all three databases.
 [Collection(PostgresTestSuite.Name)]
-public sealed record SyncClientStoragePlatformTests(
-    PostgresContainerFixture Postgres,
-    SqlServerContainerFixture SqlServer
-) : IClassFixture<SqlServerContainerFixture>
+public sealed record SyncClientStoragePlatformTests : IClassFixture<SqlServerContainerFixture>
 {
+    private readonly PostgresContainerFixture _postgres;
+    private readonly SqlServerContainerFixture _sqlServer;
+
+    public SyncClientStoragePlatformTests(
+        PostgresContainerFixture postgres,
+        SqlServerContainerFixture sqlServer
+    )
+    {
+        _postgres = postgres;
+        _sqlServer = sqlServer;
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("postgres")]
@@ -31,8 +40,8 @@ public sealed record SyncClientStoragePlatformTests(
     public Task ClientStorage_RoundTripsOrdersUpdatesAndDeletes(string provider) =>
         SyncDatabaseTargets.WithTargetAsync(
             provider: provider,
-            postgres: Postgres,
-            sqlServer: SqlServer,
+            postgres: _postgres,
+            sqlServer: _sqlServer,
             run: async value =>
             {
                 using DbConnection connection = provider switch

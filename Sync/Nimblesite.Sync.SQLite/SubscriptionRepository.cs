@@ -107,41 +107,31 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="subscription">Subscription to insert.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Insert(SqliteConnection connection, SyncSubscription subscription)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static BoolSyncResult Insert(
+        SqliteConnection connection,
+        SyncSubscription subscription
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 INSERT INTO _sync_subscriptions
                     (subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at)
                 VALUES
                     (@subscriptionId, @originId, @subscriptionType, @tableName, @filter, @createdAt, @expiresAt)
-                """;
-            cmd.Parameters.AddWithValue("@subscriptionId", subscription.SubscriptionId);
-            cmd.Parameters.AddWithValue("@originId", subscription.OriginId);
-            cmd.Parameters.AddWithValue(
-                "@subscriptionType",
-                subscription.Type.ToString().ToLowerInvariant()
-            );
-            cmd.Parameters.AddWithValue("@tableName", subscription.TableName);
-            cmd.Parameters.AddWithValue("@filter", subscription.Filter ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@createdAt", subscription.CreatedAt);
-            cmd.Parameters.AddWithValue(
-                "@expiresAt",
-                subscription.ExpiresAt ?? (object)DBNull.Value
-            );
-
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to insert subscription: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () =>
+                [
+                    ("@subscriptionId", subscription.SubscriptionId),
+                    ("@originId", subscription.OriginId),
+                    ("@subscriptionType", subscription.Type.ToString().ToLowerInvariant()),
+                    ("@tableName", subscription.TableName),
+                    ("@filter", subscription.Filter ?? (object)DBNull.Value),
+                    ("@createdAt", subscription.CreatedAt),
+                    ("@expiresAt", subscription.ExpiresAt ?? (object)DBNull.Value),
+                ],
+            failurePrefix: "Failed to insert subscription"
+        );
 
     /// <summary>
     /// Deletes a subscription by ID.
@@ -149,24 +139,15 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="subscriptionId">Subscription ID to delete.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Delete(SqliteConnection connection, string subscriptionId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "DELETE FROM _sync_subscriptions WHERE subscription_id = @subscriptionId";
-            cmd.Parameters.AddWithValue("@subscriptionId", subscriptionId);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to delete subscription: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult Delete(SqliteConnection connection, string subscriptionId) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "DELETE FROM _sync_subscriptions WHERE subscription_id = @subscriptionId",
+            parameters: () => [("@subscriptionId", subscriptionId)],
+            failurePrefix: "Failed to delete subscription"
+        );
 
     /// <summary>
     /// Deletes all subscriptions for an origin.
@@ -174,24 +155,14 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="originId">Origin ID to delete subscriptions for.</param>
     /// <returns>Number of deleted subscriptions or database error.</returns>
-    public static IntSyncResult DeleteByOrigin(SqliteConnection connection, string originId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_subscriptions WHERE origin_id = @originId";
-            cmd.Parameters.AddWithValue("@originId", originId);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static IntSyncResult DeleteByOrigin(SqliteConnection connection, string originId) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "DELETE FROM _sync_subscriptions WHERE origin_id = @originId",
+            parameters: () => [("@originId", originId)],
+            failurePrefix: "Failed to delete subscriptions"
+        );
 
     /// <summary>
     /// Deletes expired subscriptions.
@@ -199,27 +170,20 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="currentTimestamp">Current timestamp to compare against.</param>
     /// <returns>Number of deleted subscriptions or database error.</returns>
-    public static IntSyncResult DeleteExpired(SqliteConnection connection, string currentTimestamp)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static IntSyncResult DeleteExpired(
+        SqliteConnection connection,
+        string currentTimestamp
+    ) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 DELETE FROM _sync_subscriptions
                 WHERE expires_at IS NOT NULL AND expires_at < @currentTimestamp
-                """;
-            cmd.Parameters.AddWithValue("@currentTimestamp", currentTimestamp);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete expired subscriptions: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () => [("@currentTimestamp", currentTimestamp)],
+            failurePrefix: "Failed to delete expired subscriptions"
+        );
 
     [SuppressMessage(
         "Security",

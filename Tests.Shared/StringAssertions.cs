@@ -6,7 +6,11 @@ namespace Tests.Shared;
 internal static class StringAssertions
 {
     internal static void ContainsAll(string? actual, ImmutableArray<string> expected) =>
-        ContainsAll(actual: actual, expected: expected, comparison: StringComparison.CurrentCulture);
+        ContainsAll(
+            actual: actual,
+            expected: expected,
+            comparison: StringComparison.CurrentCulture
+        );
 
     internal static void ContainsAll(
         string? actual,

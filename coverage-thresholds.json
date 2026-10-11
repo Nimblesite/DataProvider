@@ -22,11 +22,11 @@
       "include": "[Nimblesite.DataProvider.Migration.Core]*,[Nimblesite.DataProvider.Migration.SQLite]*,[Nimblesite.DataProvider.Migration.Postgres]*"
     },
     "Sync/Nimblesite.Sync.Core": {
-      "threshold": 67,
+      "threshold": 74,
       "include": "[Nimblesite.Sync.Core]*"
     },
     "Sync/Nimblesite.Sync.SQLite": {
-      "threshold": 42,
+      "threshold": 43,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Postgres": {
@@ -38,7 +38,7 @@
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Sync/Nimblesite.Sync.Http": {
-      "threshold": 42,
+      "threshold": 43,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Reporting/Nimblesite.Reporting": {

@@ -1,13 +1,14 @@
 using Microsoft.Data.SqlClient;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging.Abstractions;
-using Nimblesite.Sync.Postgres;
-using Nimblesite.Sync.SQLite;
-using Xunit;
 using DatabaseSetupOk = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.Ok<
     bool,
     Nimblesite.Sync.Core.SyncError
 >;
+using PostgresSetup = Nimblesite.Sync.Postgres.PostgresSyncSchema;
+using PostgresTriggers = Nimblesite.Sync.Postgres.PostgresTriggerGenerator;
+using SetupLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger;
+using SetupSqliteConnection = Microsoft.Data.Sqlite.SqliteConnection;
+using SqliteSetup = Nimblesite.Sync.SQLite.SyncSchema;
+using SqliteTriggers = Nimblesite.Sync.SQLite.TriggerGenerator;
 
 namespace Nimblesite.TestSupport;
 
@@ -53,12 +54,12 @@ internal static class SyncDatabaseTargets
                 .CreateDatabaseAsync("sync_http")
                 .ConfigureAwait(false);
             CreatePersonTable("postgres", connection.ConnectionString, "public", tableChecks);
-            Assert.IsType<DatabaseSetupOk>(PostgresSyncSchema.CreateSchema(connection));
-            Assert.IsType<DatabaseSetupOk>(
-                PostgresSyncSchema.SetOriginId(connection, "server-origin")
+            Xunit.Assert.IsType<DatabaseSetupOk>(PostgresSetup.CreateSchema(connection));
+            Xunit.Assert.IsType<DatabaseSetupOk>(
+                PostgresSetup.SetOriginId(connection, "server-origin")
             );
-            Assert.IsType<DatabaseSetupOk>(
-                PostgresTriggerGenerator.CreateTriggers(connection, "person", NullLogger.Instance)
+            Xunit.Assert.IsType<DatabaseSetupOk>(
+                PostgresTriggers.CreateTriggers(connection, "person", SetupLogger.Instance)
             );
             return (connection.ConnectionString, FilePath: null);
         }
@@ -68,33 +69,36 @@ internal static class SyncDatabaseTargets
                 .CreateDatabaseConnectionStringAsync()
                 .ConfigureAwait(false);
             CreatePersonTable("sqlserver", connectionString, "dbo", tableChecks);
-            using var sqlServer = new SqlConnection(connectionString);
-            await sqlServer.OpenAsync().ConfigureAwait(false);
-            Assert.IsType<DatabaseSetupOk>(
-                Nimblesite.Sync.SqlServer.SqlServerSyncSchema.CreateSchema(sqlServer)
+            using var serverConnection = new SqlConnection(connectionString);
+            await serverConnection.OpenAsync().ConfigureAwait(false);
+            Xunit.Assert.IsType<DatabaseSetupOk>(
+                Nimblesite.Sync.SqlServer.SqlServerSyncSchema.CreateSchema(serverConnection)
             );
-            Assert.IsType<DatabaseSetupOk>(
-                Nimblesite.Sync.SqlServer.SqlServerSyncStore.SetOriginId(sqlServer, "server-origin")
+            Xunit.Assert.IsType<DatabaseSetupOk>(
+                Nimblesite.Sync.SqlServer.SqlServerSyncStore.SetOriginId(
+                    serverConnection,
+                    "server-origin"
+                )
             );
-            Assert.IsType<DatabaseSetupOk>(
+            Xunit.Assert.IsType<DatabaseSetupOk>(
                 Nimblesite.Sync.SqlServer.SqlServerTriggerGenerator.CreateTriggers(
-                    sqlServer,
+                    serverConnection,
                     "person",
-                    NullLogger.Instance
+                    SetupLogger.Instance
                 )
             );
             return (connectionString, FilePath: null);
         }
-        Assert.Equal("sqlite", provider);
+        Xunit.Assert.Equal("sqlite", provider);
         var path = Path.Combine(Path.GetTempPath(), $"sync_http_{Guid.NewGuid():N}.db");
         var sqliteConnectionString = $"Data Source={path};Pooling=False";
         CreatePersonTable("sqlite", path, "main", tableChecks);
-        using var sqlite = new SqliteConnection(sqliteConnectionString);
+        using var sqlite = new SetupSqliteConnection(sqliteConnectionString);
         await sqlite.OpenAsync().ConfigureAwait(false);
-        Assert.IsType<DatabaseSetupOk>(SyncSchema.CreateSchema(sqlite));
-        Assert.IsType<DatabaseSetupOk>(SyncSchema.SetOriginId(sqlite, "server-origin"));
-        Assert.IsType<DatabaseSetupOk>(
-            TriggerGenerator.CreateTriggers(sqlite, "person", NullLogger.Instance)
+        Xunit.Assert.IsType<DatabaseSetupOk>(SqliteSetup.CreateSchema(sqlite));
+        Xunit.Assert.IsType<DatabaseSetupOk>(SqliteSetup.SetOriginId(sqlite, "server-origin"));
+        Xunit.Assert.IsType<DatabaseSetupOk>(
+            SqliteTriggers.CreateTriggers(sqlite, "person", SetupLogger.Instance)
         );
         return (sqliteConnectionString, path);
     }
@@ -146,7 +150,7 @@ internal static class SyncDatabaseTargets
         try
         {
             File.WriteAllText(path, yaml);
-            Assert.Equal(
+            Xunit.Assert.Equal(
                 0,
                 DataProviderMigrate.Program.Main([
                     "migrate",

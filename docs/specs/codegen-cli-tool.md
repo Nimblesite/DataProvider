@@ -276,3 +276,10 @@ DatabaseColumn construction continue to instantiate the model directly.
 
 The PostgreSQL CLI appends fixed consecutive template lines through one ordered
 line writer. Each original line and line ending is retained in the emitted code.
+
+### Shared write overload emission [DP-CLI-SHARED-WRITE-OVERLOADS]
+
+Postgres update and delete generation share connection and transaction overload
+emission. SQL quoting, signatures, parameter binding, exception handling and
+generated output order are preserved. Insert and write overloads share their
+command-result emitter with the original result types and expressions.

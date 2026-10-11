@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -227,12 +228,7 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
         // Act: Query table info
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "PRAGMA table_info(_sync_subscriptions)";
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
+        var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
         Assert.Contains("subscription_id", columns);

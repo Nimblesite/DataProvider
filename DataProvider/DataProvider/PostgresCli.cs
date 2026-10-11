@@ -801,19 +801,8 @@ internal static class PostgresCli
         _ = sb.AppendLine("    {");
 
         EmitInsertSql(sb, table, insertable);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn);",
-            ]
-        );
-
+        EmitCommandOpen(sb, transaction: false);
         EmitParameterBindings(sb, insertable);
-
         EmitInsertResult(sb);
 
         // Bug #16: also emit an IDbTransaction overload that delegates to
@@ -850,27 +839,8 @@ internal static class PostgresCli
         _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
         _ = sb.AppendLine("    {");
         EmitInsertSql(sb, table, insertable);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        if (transaction.Connection is not NpgsqlConnection conn)",
-                "        {",
-                "            return new Result<Guid?, SqlError>.Error<Guid?, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);",
-            ]
-        );
+        EmitTransactionGuard(sb, resultType: "Guid?");
+        EmitCommandOpen(sb, transaction: true);
         EmitParameterBindings(sb, insertable);
         EmitInsertResult(sb);
     }
@@ -902,27 +872,13 @@ internal static class PostgresCli
 
     private static void EmitInsertResult(StringBuilder sb)
     {
-        _ = sb.AppendLine();
-        AppendLines(
+        EmitCommandResult(
             builder: sb,
-            lines:
-            [
-                "            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);",
-                "            return new Result<Guid?, SqlError>.Ok<Guid?, SqlError>(result is Guid g ? g : null);",
-                "        }",
-            ]
+            resultType: "Guid?",
+            execution: "ExecuteScalarAsync",
+            success: "result is Guid g ? g : null",
+            variable: "result"
         );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<Guid?, SqlError>.Error<Guid?, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
     }
 
     private static void GenerateUpdateMethod(
@@ -936,147 +892,29 @@ internal static class PostgresCli
         var updateable = columns
             .Where(c => !c.IsPrimaryKey && !c.IsIdentity && !c.IsComputed)
             .ToList();
-
         if (pkCols.Count == 0 || updateable.Count == 0)
             return;
-
         var allParams = pkCols.Concat(updateable).ToList();
-        var parameters = string.Join(", ", allParams.Select(c => $"{c.CSharpType} {c.Name}"));
-
-        // BUG6 fix: quote SET + WHERE column idents in UPDATE codegen so
-        // mixed-case columns (Active, ChapterNumber) survive PG case-folding.
-        // Same reasoning as BUG3 INSERT/DELETE quoting. The strings are
-        // embedded in a C# verbatim string `@"..."` so use the `""` escape
-        // form (two double-quotes inside @"..." represent a single literal ").
         var setClauses = string.Join(", ", updateable.Select(c => $"\"\"{c.Name}\"\" = @{c.Name}"));
         var whereClauses = string.Join(
             " AND ",
             pkCols.Select(c => $"\"\"{c.Name}\"\" = @{c.Name}")
         );
-
-        // NpgsqlConnection overload
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Updates a row in {table.Name} by primary key."
-        );
-        _ = sb.AppendLine("    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> Update{pascalName}Async("
-        );
-        _ = sb.AppendLine("        this NpgsqlConnection conn,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        const string sql = @\"");
-        // BUG6 fix: quote schema + table in UPDATE so mixed-case identifiers
-        // round-trips through PG. Verbatim string -> use `""` escape form.
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            UPDATE \"\"{table.Schema}\"\".\"\"{table.Name}\"\""
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            SET {setClauses}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            WHERE {whereClauses}\";");
-        _ = sb.AppendLine();
-        AppendLines(
+        EmitWriteOverloads(
             builder: sb,
-            lines:
+            operation: "Update",
+            table: table,
+            pascalName: pascalName,
+            columns: allParams,
+            summary: $"Updates a row in {table.Name} by primary key.",
+            sqlLines:
             [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn);",
+                "        const string sql = @\"",
+                $"            UPDATE \"\"{table.Schema}\"\".\"\"{table.Name}\"\"",
+                $"            SET {setClauses}",
+                $"            WHERE {whereClauses}\";",
             ]
         );
-        EmitParameterBindings(sb, allParams);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "        }",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
-
-        // Bug #16: IDbTransaction overload, matching old SQLite.Cli shape.
-        _ = sb.AppendLine();
-        _ = sb.AppendLine("    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// IDbTransaction overload of Update{pascalName}Async."
-        );
-        _ = sb.AppendLine("    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> Update{pascalName}Async("
-        );
-        _ = sb.AppendLine("        this System.Data.IDbTransaction transaction,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine("        const string sql = @\"");
-        // BUG6 fix: same UPDATE quoting in transaction overload.
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"            UPDATE \"\"{table.Schema}\"\".\"\"{table.Name}\"\""
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            SET {setClauses}");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"            WHERE {whereClauses}\";");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        if (transaction.Connection is not NpgsqlConnection conn)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);",
-            ]
-        );
-        EmitParameterBindings(sb, allParams);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "        }",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
     }
 
     /// <summary>
@@ -1106,6 +944,74 @@ internal static class PostgresCli
         }
     }
 
+    /// <summary>
+    /// Emits the shared `try { await using var cmd = ... }` opener used by
+    /// every generated CRUD method, choosing the transaction-aware ctor.
+    /// </summary>
+    private static void EmitCommandOpen(StringBuilder sb, bool transaction)
+    {
+        _ = sb.AppendLine();
+        AppendLines(
+            builder: sb,
+            lines:
+            [
+                "        try",
+                "        {",
+                transaction
+                    ? "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);"
+                    : "            await using var cmd = new NpgsqlCommand(sql, conn);",
+            ]
+        );
+    }
+
+    /// <summary>
+    /// Emits the shared `transaction.Connection` type guard used by every
+    /// generated IDbTransaction overload.
+    /// </summary>
+    private static void EmitTransactionGuard(StringBuilder sb, string resultType)
+    {
+        _ = sb.AppendLine();
+        AppendLines(
+            builder: sb,
+            lines:
+            [
+                "        if (transaction.Connection is not NpgsqlConnection conn)",
+                "        {",
+                $"            return new Result<{resultType}, SqlError>.Error<{resultType}, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
+            ]
+        );
+        _ = sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// Emits the shared non-query result, catch handler and method close for
+    /// every generated int-returning CRUD method.
+    /// </summary>
+    private static void EmitNonQueryClose(StringBuilder sb)
+    {
+        _ = sb.AppendLine();
+        AppendLines(
+            builder: sb,
+            lines:
+            [
+                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
+                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
+                "        }",
+            ]
+        );
+        AppendLines(
+            builder: sb,
+            lines:
+            [
+                "        catch (Exception ex)",
+                "        {",
+                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
+            ]
+        );
+        _ = sb.AppendLine("        }");
+        _ = sb.AppendLine("    }");
+    }
+
     private static void GenerateDeleteMethod(
         StringBuilder sb,
         TableConfigItem table,
@@ -1116,133 +1022,18 @@ internal static class PostgresCli
         var pkCols = columns.Where(c => c.IsPrimaryKey).ToList();
         if (pkCols.Count == 0)
             return;
-
-        var parameters = string.Join(", ", pkCols.Select(c => $"{c.CSharpType} {c.Name}"));
-        // BUG3 fix: quote WHERE-clause column idents + table name so mixed-case
-        // tables/columns survive PG case-folding.
         var whereClauses = string.Join(" AND ", pkCols.Select(c => $"\"{c.Name}\" = @{c.Name}"));
         var sqlLine = $"DELETE FROM \"{table.Schema}\".\"{table.Name}\" WHERE {whereClauses}";
-        // BUG5 fix: sqlLine now contains literal `"` characters from BUG3 fix
-        // and gets embedded in a C# verbatim string `@"..."`. Inside @"...",
-        // a single `"` closes the literal. Escape every `"` to `""` for the
-        // verbatim form, otherwise the generated .g.cs is uncompilable
-        // (CS1022 unexpected token / CS1003 syntax error / CS1010 newline).
         var sqlLineVerbatim = sqlLine.Replace("\"", "\"\"", StringComparison.Ordinal);
-
-        // NpgsqlConnection overload
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Deletes a row from {table.Name} by primary key."
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> Delete{pascalName}Async("
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        this NpgsqlConnection conn,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        const string sql = @\"{sqlLineVerbatim}\";"
-        );
-        _ = sb.AppendLine();
-        AppendLines(
+        EmitWriteOverloads(
             builder: sb,
-            lines:
-            [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn);",
-            ]
+            operation: "Delete",
+            table: table,
+            pascalName: pascalName,
+            columns: pkCols,
+            summary: $"Deletes a row from {table.Name} by primary key.",
+            sqlLines: [$"        const string sql = @\"{sqlLineVerbatim}\";"]
         );
-        EmitParameterBindings(sb, pkCols);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "        }",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
-
-        // Bug #16: IDbTransaction overload, matching old SQLite.Cli shape.
-        _ = sb.AppendLine();
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// <summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// IDbTransaction overload of Delete{pascalName}Async."
-        );
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"    /// </summary>");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> Delete{pascalName}Async("
-        );
-        _ = sb.AppendLine("        this System.Data.IDbTransaction transaction,");
-        _ = sb.AppendLine(CultureInfo.InvariantCulture, $"        {parameters})");
-        _ = sb.AppendLine("    {");
-        _ = sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        const string sql = @\"{sqlLineVerbatim}\";"
-        );
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        if (transaction.Connection is not NpgsqlConnection conn)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        try",
-                "        {",
-                "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);",
-            ]
-        );
-        EmitParameterBindings(sb, pkCols);
-        _ = sb.AppendLine();
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "            var rows = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);",
-                "            return new Result<int, SqlError>.Ok<int, SqlError>(rows);",
-                "        }",
-            ]
-        );
-        AppendLines(
-            builder: sb,
-            lines:
-            [
-                "        catch (Exception ex)",
-                "        {",
-                "            return new Result<int, SqlError>.Error<int, SqlError>(SqlError.FromException(ex));",
-            ]
-        );
-        _ = sb.AppendLine("        }");
-        _ = sb.AppendLine("    }");
     }
 
     private static void GenerateBulkInsertMethod(
@@ -2052,6 +1843,110 @@ internal static class PostgresCli
         {
             builder.AppendLine(value: line);
         }
+    }
+
+    // Implements [DP-CLI-SHARED-WRITE-OVERLOADS].
+    private static void EmitWriteOverloads(
+        StringBuilder builder,
+        string operation,
+        TableConfigItem table,
+        string pascalName,
+        List<DatabaseColumn> columns,
+        string summary,
+        System.Collections.Immutable.ImmutableArray<string> sqlLines
+    )
+    {
+        var parameters = string.Join(", ", columns.Select(c => $"{c.CSharpType} {c.Name}"));
+        foreach (var transaction in new[] { false, true })
+        {
+            builder.AppendLine();
+            AppendLines(
+                builder: builder,
+                lines:
+                [
+                    "    /// <summary>",
+                    transaction
+                        ? $"    /// IDbTransaction overload of {operation}{pascalName}Async."
+                        : $"    /// {summary}",
+                    "    /// </summary>",
+                    $"    public static async Task<Result<int, SqlError>> {operation}{pascalName}Async(",
+                    transaction
+                        ? "        this System.Data.IDbTransaction transaction,"
+                        : "        this NpgsqlConnection conn,",
+                    $"        {parameters})",
+                    "    {",
+                ]
+            );
+            AppendLines(builder: builder, lines: sqlLines);
+            builder.AppendLine();
+            EmitWriteCommand(builder: builder, columns: columns, transaction: transaction);
+        }
+    }
+
+    private static void EmitWriteCommand(
+        StringBuilder builder,
+        List<DatabaseColumn> columns,
+        bool transaction
+    )
+    {
+        if (transaction)
+        {
+            AppendLines(
+                builder: builder,
+                lines:
+                [
+                    "        if (transaction.Connection is not NpgsqlConnection conn)",
+                    "        {",
+                    "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Transaction.Connection must be NpgsqlConnection\"));",
+                    "        }",
+                ]
+            );
+            builder.AppendLine();
+        }
+        AppendLines(
+            builder: builder,
+            lines:
+            [
+                "        try",
+                "        {",
+                transaction
+                    ? "            await using var cmd = new NpgsqlCommand(sql, conn, (NpgsqlTransaction)transaction);"
+                    : "            await using var cmd = new NpgsqlCommand(sql, conn);",
+            ]
+        );
+        EmitParameterBindings(sb: builder, cols: columns);
+        EmitCommandResult(
+            builder: builder,
+            resultType: "int",
+            execution: "ExecuteNonQueryAsync",
+            success: "rows",
+            variable: "rows"
+        );
+    }
+
+    private static void EmitCommandResult(
+        StringBuilder builder,
+        string resultType,
+        string execution,
+        string success,
+        string variable
+    )
+    {
+        builder.AppendLine();
+        AppendLines(
+            builder: builder,
+            lines:
+            [
+                $"            var {variable} = await cmd.{execution}().ConfigureAwait(false);",
+                $"            return new Result<{resultType}, SqlError>.Ok<{resultType}, SqlError>({success});",
+                "        }",
+                "        catch (Exception ex)",
+                "        {",
+                $"            return new Result<{resultType}, SqlError>.Error<{resultType}, SqlError>(SqlError.FromException(ex));",
+                "        }",
+                "    }",
+            ]
+        );
     }
 }
 

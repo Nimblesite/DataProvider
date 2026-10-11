@@ -1,3 +1,5 @@
+using Tests.Shared;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -194,12 +196,7 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
             using var sel = _connection.CreateCommand();
             sel.Transaction = tx;
             sel.CommandText = "SELECT id FROM public.agent_configs";
-            var ids = new List<Guid>();
-            using var reader = sel.ExecuteReader();
-            while (reader.Read())
-            {
-                ids.Add(reader.GetGuid(0));
-            }
+            var ids = DatabaseCommands.ReadAll(sel, reader => reader.GetGuid(0));
             Assert.Single(ids);
             Assert.Equal(configA, ids[0]);
         }

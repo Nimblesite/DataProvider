@@ -1203,6 +1203,7 @@ mod parser_integration_tests {
     use lql_parser::span::Span;
     use lql_parser::tokens::{
         get_pipe_token_positions, get_token_structure, lex_pipe_positions, lex_tokens, token_types,
+        tokens_of_type,
     };
 
     // ── lex_tokens ────────────────────────────────────────────────────────
@@ -1210,10 +1211,7 @@ mod parser_integration_tests {
     fn lex_tokens_simple_pipeline() {
         let tokens = lex_tokens("users |> select(users.id)");
         assert!(!tokens.is_empty());
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert!(idents.len() >= 2);
         assert_eq!(idents[0].text, "users");
     }
@@ -1221,10 +1219,7 @@ mod parser_integration_tests {
     #[test]
     fn lex_tokens_finds_pipe_token() {
         let tokens = lex_tokens("a |> b");
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 1);
         assert_eq!(pipes[0].text, "|>");
     }
@@ -1238,14 +1233,8 @@ mod parser_integration_tests {
     #[test]
     fn lex_tokens_parens() {
         let tokens = lex_tokens("select(x)");
-        let opens: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::OPEN_PAREN)
-            .collect();
-        let closes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::CLOSE_PAREN)
-            .collect();
+        let opens = tokens_of_type(&tokens, token_types::OPEN_PAREN);
+        let closes = tokens_of_type(&tokens, token_types::CLOSE_PAREN);
         assert_eq!(opens.len(), 1);
         assert_eq!(closes.len(), 1);
     }
@@ -1262,10 +1251,7 @@ mod parser_integration_tests {
     fn lex_tokens_complex_source() {
         let source = "users\n|> filter(fn(r) => r.age > 18)\n|> select(users.id)";
         let tokens = lex_tokens(source);
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 2);
     }
 

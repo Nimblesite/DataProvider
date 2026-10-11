@@ -179,7 +179,7 @@ internal static class SyncClientStorage
             CreatedAt: reader.GetString(3)
         );
 
-    private static void Bind(DbCommand command, string name, object value)
+    internal static void Bind(DbCommand command, string name, object value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;

@@ -58,35 +58,25 @@ public static class PostgresSyncLogRepository
     /// <param name="connection">PostgreSQL connection.</param>
     /// <param name="entry">Entry to insert.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Insert(NpgsqlConnection connection, SyncLogEntry entry)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static BoolSyncResult Insert(NpgsqlConnection connection, SyncLogEntry entry) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
                 VALUES (@tableName, @pkValue, @operation, @payload, @origin, @timestamp)
-                """;
-            cmd.Parameters.AddWithValue("@tableName", entry.TableName);
-            cmd.Parameters.AddWithValue("@pkValue", entry.PkValue);
-            cmd.Parameters.AddWithValue(
-                "@operation",
-                entry.Operation.ToString().ToLowerInvariant()
-            );
-            cmd.Parameters.AddWithValue("@payload", entry.Payload ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@origin", entry.Origin);
-            cmd.Parameters.AddWithValue("@timestamp", entry.Timestamp);
-
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to insert change: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () =>
+                [
+                    ("@tableName", entry.TableName),
+                    ("@pkValue", entry.PkValue),
+                    ("@operation", entry.Operation.ToString().ToLowerInvariant()),
+                    ("@payload", entry.Payload ?? (object)DBNull.Value),
+                    ("@origin", entry.Origin),
+                    ("@timestamp", entry.Timestamp),
+                ],
+            failurePrefix: "Failed to insert change"
+        );
 
     /// <summary>
     /// Gets the last server version from _sync_state.
@@ -140,26 +130,20 @@ public static class PostgresSyncLogRepository
     /// <param name="connection">PostgreSQL connection.</param>
     /// <param name="version">Version to set.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult UpdateLastServerVersion(NpgsqlConnection connection, long version)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static BoolSyncResult UpdateLastServerVersion(
+        NpgsqlConnection connection,
+        long version
+    ) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 INSERT INTO _sync_state (key, value) VALUES ('last_server_version', @version)
                 ON CONFLICT (key) DO UPDATE SET value = @version
-                """;
-            cmd.Parameters.AddWithValue("@version", version.ToString(CultureInfo.InvariantCulture));
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to update last server version: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () => [("@version", version.ToString(CultureInfo.InvariantCulture))],
+            failurePrefix: "Failed to update last server version"
+        );
 
     private static SyncLogEntry ReadSyncLogEntry(NpgsqlDataReader reader) =>
         new(
