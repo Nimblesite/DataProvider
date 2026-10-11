@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using Nimblesite.Sql.Model;
 using Outcome;
@@ -31,6 +32,8 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
 
     private readonly Func<string, DbConnection> _connectionFactory;
     private readonly TypeMapper _typeMapper;
+    private readonly CommandBehavior _behavior;
+    private readonly Func<ParameterInfo, object> _parameterValue;
 
     /// <summary>
     /// Creates a new <see cref="AdoNetDatabaseEffects"/>.
@@ -40,13 +43,19 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
     /// string (e.g. <c>cs =&gt; new SqliteConnection(cs)</c>).
     /// </param>
     /// <param name="typeMapper">Resolves a C# type literal from a reader column.</param>
+    /// <param name="behavior">Reader behavior for metadata discovery.</param>
+    /// <param name="parameterValue">Optional provider-specific dummy value resolver.</param>
     public AdoNetDatabaseEffects(
         Func<string, DbConnection> connectionFactory,
-        TypeMapper typeMapper
+        TypeMapper typeMapper,
+        CommandBehavior behavior = CommandBehavior.Default,
+        Func<ParameterInfo, object>? parameterValue = null
     )
     {
         _connectionFactory = connectionFactory;
         _typeMapper = typeMapper;
+        _behavior = behavior;
+        _parameterValue = parameterValue ?? DummyParameterValues.GetDummyValueForParameter;
     }
 
     /// <inheritdoc />
@@ -79,7 +88,7 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
 
             BindDummyParameters(command, parameters);
 
-            using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            using var reader = await command.ExecuteReaderAsync(behavior: _behavior).ConfigureAwait(false);
             var columns = ReadColumns(reader);
             return Ok(columns);
         }
@@ -93,7 +102,7 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
         }
     }
 
-    private static void BindDummyParameters(
+    private void BindDummyParameters(
         DbCommand command,
         IEnumerable<ParameterInfo> parameters
     )
@@ -102,7 +111,7 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
         {
             var dbParam = command.CreateParameter();
             dbParam.ParameterName = $"@{param.Name}";
-            dbParam.Value = DummyParameterValues.GetDummyValueForParameter(param);
+            dbParam.Value = _parameterValue(arg: param);
             command.Parameters.Add(dbParam);
         }
     }
@@ -110,13 +119,13 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
     private IReadOnlyList<DatabaseColumn> ReadColumns(DbDataReader reader)
     {
         var columns = new List<DatabaseColumn>(reader.FieldCount);
+        var schema = reader.GetColumnSchema();
         for (int i = 0; i < reader.FieldCount; i++)
         {
             var columnName = reader.GetName(i);
             var fieldType = reader.GetFieldType(i);
             var dataTypeName = reader.GetDataTypeName(i);
-            var isNullable =
-                !fieldType.IsValueType || Nullable.GetUnderlyingType(fieldType) != null;
+            var isNullable = schema[i].AllowDBNull ?? (!fieldType.IsValueType || Nullable.GetUnderlyingType(fieldType) != null);
             var csharpType = _typeMapper(fieldType, dataTypeName, isNullable);
 
             columns.Add(
@@ -126,9 +135,9 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
                     SqlType = dataTypeName,
                     CSharpType = csharpType,
                     IsNullable = isNullable,
-                    IsPrimaryKey = false,
-                    IsIdentity = false,
-                    IsComputed = false,
+                    IsPrimaryKey = schema[i].IsKey ?? false,
+                    IsIdentity = schema[i].IsIdentity ?? false,
+                    IsComputed = schema[i].IsExpression ?? false,
                 }
             );
         }

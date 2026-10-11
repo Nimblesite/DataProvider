@@ -12,7 +12,9 @@ public static class SqlServerCodeGenerator
 {
     /// <summary>Creates SQL Server metadata inspection and shared source generation functions.</summary>
     public static CodeGenerationConfig CreateConfig(string targetNamespace = "Generated") => new(
-        getColumnMetadata: new AdoNetDatabaseEffects(connectionFactory: value => new SqlConnection(value), typeMapper: MapType).GetColumnMetadataFromSqlAsync,
+        getColumnMetadata: new AdoNetDatabaseEffects(connectionFactory: value => new SqlConnection(value), typeMapper: MapType,
+            behavior: System.Data.CommandBehavior.SchemaOnly | System.Data.CommandBehavior.KeyInfo,
+            parameterValue: parameter => parameter.Name.Contains("id", StringComparison.OrdinalIgnoreCase) ? Guid.Empty : DummyParameterValues.GetDummyValueForParameter(parameter: parameter)).GetColumnMetadataFromSqlAsync,
         tableOperationGenerator: new DefaultTableOperationGenerator(connectionType: "SqlConnection"))
     {
         ConnectionType = "Microsoft.Data.SqlClient.SqlConnection",

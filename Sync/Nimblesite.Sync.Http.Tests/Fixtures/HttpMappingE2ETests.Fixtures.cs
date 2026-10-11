@@ -1,5 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using System.Text.Json;
 using Tests.Shared;
 
 namespace Nimblesite.Sync.Http.Tests;

@@ -117,15 +117,6 @@ public sealed record HttpEndpointPlatformTests
         }
     }
 
-    private static void AssertSqlServerCatalogIsEmpty(string connectionString)
-    {
-        using var connection = new SqlConnection(connectionString);
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sys.objects WHERE is_ms_shipped = 0";
-        Assert.Equal(0, Assert.IsType<int>(command.ExecuteScalar()));
-    }
-
     private static async Task AssertPersonAsync(string provider, string connectionString, Guid id)
     {
         using DbConnection connection = provider switch
