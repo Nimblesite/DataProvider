@@ -2,6 +2,8 @@
 using Microsoft.Data.Sqlite;
 using Tests.Shared;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -156,26 +158,9 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
 
     [Theory]
     // CreateSchema_CreatesSyncLogIndexes
-    [InlineData(
-        """
-            SELECT name FROM sqlite_master
-            WHERE type='index'
-            AND name LIKE 'idx_sync_log%'
-            """,
-        "idx_sync_log_version",
-        "idx_sync_log_table"
-    )]
+    [MemberData(nameof(CreateSchema_CreatesSyncLogIndexes_CasesInlineCases))]
     // CreateSchema_CreatesSubscriptionIndexes
-    [InlineData(
-        """
-            SELECT name FROM sqlite_master
-            WHERE type='index'
-            AND name LIKE 'idx_subscriptions%'
-            ORDER BY name
-            """,
-        "idx_subscriptions_origin",
-        "idx_subscriptions_table"
-    )]
+
     public void CreateSchema_CreatesSyncLogIndexes_Cases(
         string caseValue0,
         string caseValue2,
@@ -229,12 +214,18 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var triggers = TriggerGenerator.GenerateTriggers("Person", columns, pkColumn);
 
         // Assert
-        Assert.Contains("Person_sync_insert", triggers);
-        Assert.Contains("Person_sync_update", triggers);
-        Assert.Contains("Person_sync_delete", triggers);
-        Assert.Contains("AFTER INSERT ON Person", triggers);
-        Assert.Contains("AFTER UPDATE ON Person", triggers);
-        Assert.Contains("AFTER DELETE ON Person", triggers);
+        ContainsAll(
+            actual: triggers,
+            expected:
+            [
+                "Person_sync_insert",
+                "Person_sync_update",
+                "Person_sync_delete",
+                "AFTER INSERT ON Person",
+                "AFTER UPDATE ON Person",
+                "AFTER DELETE ON Person",
+            ]
+        );
     }
 
     [Fact]
@@ -248,8 +239,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
 
         // Assert
         // Should check sync_active flag to prevent trigger firing during sync
-        Assert.Contains("sync_active", triggers);
-        Assert.Contains("_sync_session", triggers);
+        ContainsAll(actual: triggers, expected: ["sync_active", "_sync_session"]);
     }
 
     [Fact]
@@ -262,10 +252,10 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var triggers = TriggerGenerator.GenerateTriggers("Users", columns, "Id");
 
         // Assert
-        Assert.Contains("json_object", triggers);
-        Assert.Contains("'Id', NEW.Id", triggers);
-        Assert.Contains("'Name', NEW.Name", triggers);
-        Assert.Contains("'Email', NEW.Email", triggers);
+        ContainsAll(
+            actual: triggers,
+            expected: ["json_object", "'Id', NEW.Id", "'Name', NEW.Name", "'Email', NEW.Email"]
+        );
     }
 
     [Fact]
@@ -300,11 +290,12 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         );
 
         // Assert
-        Assert.True(result is StringSyncOk);
-        var triggers = ((StringSyncOk)result).Value;
-        Assert.Contains("Products_sync_insert", triggers);
-        Assert.Contains("Products_sync_update", triggers);
-        Assert.Contains("Products_sync_delete", triggers);
+
+        var triggers = Ok(actual: result).Value;
+        ContainsAll(
+            actual: triggers,
+            expected: ["Products_sync_insert", "Products_sync_update", "Products_sync_delete"]
+        );
     }
 
     [Fact]
@@ -417,8 +408,8 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = TriggerGenerator.GetTableColumns(_db, "Customers");
 
         // Assert
-        Assert.True(result is ColumnInfoListOk);
-        var columns = ((ColumnInfoListOk)result).Value;
+
+        var columns = Ok(actual: result).Value;
         Assert.Equal(4, columns.Count);
 
         var pk = columns.First(c => c.IsPrimaryKey);
@@ -444,15 +435,12 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.SetOriginId(_db, OriginId);
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_Triggers_InsertLogsToSyncLog_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Events", NullLogger.Instance);
-
-        // Act
-        cmd.CommandText = "INSERT INTO Events (EventId, Title) VALUES ('e1', 'Meeting')";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText = "SELECT COUNT(*) FROM _sync_log WHERE table_name = 'Events'";
+        CreateTriggersAndPrepareInsert(
+            input0: cmd,
+            value0: "Events",
+            value1: "INSERT INTO Events (EventId, Title) VALUES ('e1', 'Meeting')",
+            value2: "SELECT COUNT(*) FROM _sync_log WHERE table_name = 'Events'"
+        );
         Assert.Equal(1L, cmd.ExecuteScalar());
 
         cmd.CommandText =
@@ -548,20 +536,16 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.SetOriginId(_db, OriginId);
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_Triggers_LogPrimaryKeyAsJson_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Records", NullLogger.Instance);
-
-        // Act
-        cmd.CommandText = "INSERT INTO Records (RecordId, Data) VALUES ('r123', 'test data')";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText = "SELECT pk_value FROM _sync_log WHERE table_name = 'Records' LIMIT 1";
+        CreateTriggersAndPrepareInsert(
+            input0: cmd,
+            value0: "Records",
+            value1: "INSERT INTO Records (RecordId, Data) VALUES ('r123', 'test data')",
+            value2: "SELECT pk_value FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
+        );
         var pkValue = cmd.ExecuteScalar() as string;
 
         Assert.NotNull(pkValue);
-        Assert.Contains("RecordId", pkValue);
-        Assert.Contains("r123", pkValue);
+        ContainsAll(actual: pkValue, expected: ["RecordId", "r123"]);
     }
 
     [Fact]
@@ -572,23 +556,16 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.SetOriginId(_db, OriginId);
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_Triggers_LogPayloadAsJson_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Records", NullLogger.Instance);
-
-        // Act
-        cmd.CommandText =
-            "INSERT INTO Records (RecordId, Name, Value) VALUES ('r1', 'TestName', 42)";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText = "SELECT payload FROM _sync_log WHERE table_name = 'Records' LIMIT 1";
+        CreateTriggersAndPrepareInsert(
+            input0: cmd,
+            value0: "Records",
+            value1: "INSERT INTO Records (RecordId, Name, Value) VALUES ('r1', 'TestName', 42)",
+            value2: "SELECT payload FROM _sync_log WHERE table_name = 'Records' LIMIT 1"
+        );
         var payload = cmd.ExecuteScalar() as string;
 
         Assert.NotNull(payload);
-        Assert.Contains("RecordId", payload);
-        Assert.Contains("Name", payload);
-        Assert.Contains("Value", payload);
-        Assert.Contains("TestName", payload);
+        ContainsAll(actual: payload, expected: ["RecordId", "Name", "Value", "TestName"]);
     }
 
     [Fact]
@@ -600,15 +577,12 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.SetOriginId(_db, myOrigin);
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_Triggers_LogOriginId_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Tasks", NullLogger.Instance);
-
-        // Act
-        cmd.CommandText = "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Do something')";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText = "SELECT origin FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1";
+        CreateTriggersAndPrepareInsert(
+            input0: cmd,
+            value0: "Tasks",
+            value1: "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Do something')",
+            value2: "SELECT origin FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1"
+        );
         var origin = cmd.ExecuteScalar() as string;
 
         Assert.Equal(myOrigin, origin);
@@ -622,15 +596,12 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.SetOriginId(_db, OriginId);
         using var cmd = _db.CreateCommand();
         cmd.CommandText = Data_Triggers_LogTimestamp_1;
-        cmd.ExecuteNonQuery();
-        TriggerGenerator.CreateTriggers(_db, "Tasks", NullLogger.Instance);
-
-        // Act
-        cmd.CommandText = "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Task')";
-        cmd.ExecuteNonQuery();
-
-        // Assert
-        cmd.CommandText = "SELECT timestamp FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1";
+        CreateTriggersAndPrepareInsert(
+            input0: cmd,
+            value0: "Tasks",
+            value1: "INSERT INTO Tasks (TaskId, Title) VALUES ('t1', 'Task')",
+            value2: "SELECT timestamp FROM _sync_log WHERE table_name = 'Tasks' LIMIT 1"
+        );
         var timestamp = cmd.ExecuteScalar() as string;
 
         Assert.NotNull(timestamp);
@@ -660,8 +631,8 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         );
 
         // Assert
-        Assert.True(result is StringSyncError);
-        var error = ((StringSyncError)result).Value;
+
+        var error = Expected<StringSyncError>(actual: result).Value;
         Assert.True(error is SyncErrorDatabase);
         Assert.Contains("no primary key", ((SyncErrorDatabase)error).Message.ToLowerInvariant());
     }
@@ -770,5 +741,24 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
                 /* File may be locked */
             }
         }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void CreateTriggersAndPrepareInsert(
+        global::Microsoft.Data.Sqlite.SqliteCommand input0,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        input0.ExecuteNonQuery();
+        TriggerGenerator.CreateTriggers(_db, value0, NullLogger.Instance);
+
+        // Act
+        input0.CommandText = value1;
+        input0.ExecuteNonQuery();
+
+        // Assert
+        input0.CommandText = value2;
     }
 }

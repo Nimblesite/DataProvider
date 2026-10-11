@@ -1,7 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Microsoft.Extensions.Logging.Abstractions;
-using static Nimblesite.Sync.Tests.MappingTestData;
-
 namespace Nimblesite.Sync.Tests;
 
 public partial class LqlMappingCornerCaseTests
@@ -28,7 +25,9 @@ public partial class LqlMappingCornerCaseTests
             Timestamp: "2024-01-01T00:00:00Z"
         );
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "test",
             sourceTable: "Source",
@@ -36,7 +35,9 @@ public partial class LqlMappingCornerCaseTests
             columnMappings: columnMappings
         );
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "test",
             sourceTable: "Source",
@@ -45,15 +46,11 @@ public partial class LqlMappingCornerCaseTests
         );
 
     private static global::Nimblesite.Sync.Core.ColumnMapping Fixture_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1() =>
-        new ColumnMapping(
-                        "Name",
-                        "DisplayName",
-                        TransformType.Lql,
-                        null,
-                        "upper(Name)"
-                    );
+        new ColumnMapping("Name", "DisplayName", TransformType.Lql, null, "upper(Name)");
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_E2E_FullAddressNormalization_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_E2E_FullAddressNormalization_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "address-norm",
             sourceTable: "RawAddress",
@@ -61,7 +58,9 @@ public partial class LqlMappingCornerCaseTests
             columnMappings: columnMappings
         );
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_E2E_UserDataSanitization_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_E2E_UserDataSanitization_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "user-sanitize",
             sourceTable: "LegacyUser",

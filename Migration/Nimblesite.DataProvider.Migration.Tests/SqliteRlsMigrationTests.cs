@@ -148,8 +148,9 @@ public sealed partial class SqliteRlsMigrationTests
 
     // Implements [RLS-DIFF]: SELECT-only policies must replace stale secure-view predicates.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [MemberData(
+        nameof(Sqlite_SelectPolicy_ChangedUsingPredicateBlocksPreviouslyVisibleRowsInlineCases)
+    )]
     public void Sqlite_SelectPolicy_ChangedUsingPredicateBlocksPreviouslyVisibleRows(
         bool legacyView
     )

@@ -88,7 +88,9 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
 
             BindDummyParameters(command, parameters);
 
-            using var reader = await command.ExecuteReaderAsync(behavior: _behavior).ConfigureAwait(false);
+            using var reader = await command
+                .ExecuteReaderAsync(behavior: _behavior)
+                .ConfigureAwait(false);
             var columns = ReadColumns(reader);
             return Ok(columns);
         }
@@ -102,10 +104,7 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
         }
     }
 
-    private void BindDummyParameters(
-        DbCommand command,
-        IEnumerable<ParameterInfo> parameters
-    )
+    private void BindDummyParameters(DbCommand command, IEnumerable<ParameterInfo> parameters)
     {
         foreach (var param in parameters)
         {
@@ -122,10 +121,15 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
         var schema = reader.GetColumnSchema();
         for (int i = 0; i < reader.FieldCount; i++)
         {
+            if (schema[i].IsHidden == true)
+                continue;
             var columnName = reader.GetName(i);
             var fieldType = reader.GetFieldType(i);
             var dataTypeName = reader.GetDataTypeName(i);
-            var isNullable = schema[i].AllowDBNull ?? (!fieldType.IsValueType || Nullable.GetUnderlyingType(fieldType) != null);
+            var isNullable =
+                schema[i].AllowDBNull != false
+                || schema[i].IsExpression == true
+                || string.IsNullOrEmpty(schema[i].BaseColumnName);
             var csharpType = _typeMapper(fieldType, dataTypeName, isNullable);
 
             columns.Add(

@@ -6,7 +6,7 @@ using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed class SqlStatementGenerationTests
+public sealed partial class SqlStatementGenerationTests
 {
     // Implements [DP-SQL-MODEL-DIALECTS]. A missing provider renderer fails this same test.
     private static void AssertDialect(
@@ -47,9 +47,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_SimpleSelectFromSingleTable_GeneratesExpectedSqlInlineCases))]
     public void AllDialects_SimpleSelectFromSingleTable_GeneratesExpectedSql(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -66,9 +64,9 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(
+        nameof(AllDialects_SelectAllWildcard_WhenNoColumnsSelected_GeneratesStarInlineCases)
+    )]
     public void AllDialects_SelectAllWildcard_WhenNoColumnsSelected_GeneratesStar(string provider)
     {
         var stmt = new SelectStatementBuilder().AddTable("Users").Build();
@@ -81,9 +79,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithWhereComparison_FormatsConditionInlineCases))]
     public void AllDialects_WithWhereComparison_FormatsCondition(string provider)
     {
         var where = WhereCondition.Comparison(
@@ -103,9 +99,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithWhereLogicalOperators_FormatsSequenceInlineCases))]
     public void AllDialects_WithWhereLogicalOperators_FormatsSequence(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -134,9 +128,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithParenthesesInWhere_FormatsParensInlineCases))]
     public void AllDialects_WithParenthesesInWhere_FormatsParens(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -174,9 +166,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithJoin_OutputsInnerJoinInlineCases))]
     public void AllDialects_WithJoin_OutputsInnerJoin(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -197,9 +187,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithGroupByAndHaving_OutputsClausesInlineCases))]
     public void AllDialects_WithGroupByAndHaving_OutputsClauses(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -219,9 +207,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithOrderBy_OutputsOrderByInlineCases))]
     public void AllDialects_WithOrderBy_OutputsOrderBy(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -237,9 +223,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithDistinctAndPaging_OutputsDistinctLimitOffsetInlineCases))]
     public void AllDialects_WithDistinctAndPaging_OutputsDistinctLimitOffset(string provider)
     {
         var stmt = new SelectStatementBuilder()
@@ -256,9 +240,7 @@ public sealed class SqlStatementGenerationTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AllDialects_WithWildcardAndAlias_FormatsCorrectlyInlineCases))]
     public void AllDialects_WithWildcardAndAlias_FormatsCorrectly(string provider)
     {
         var stmt = new SelectStatementBuilder()

@@ -2,6 +2,8 @@ using System.Collections.Frozen;
 using Nimblesite.DataProvider.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 #pragma warning disable CA1307 // Specify StringComparison for clarity
 
@@ -93,24 +95,12 @@ public class {typeName}Data
             TargetNamespace = "CustomGenerated",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomModelGenerator_GeneratesClassesInsteadOfRecords_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            Data_CustomModelGenerator_GeneratesClassesInsteadOfRecords_1;
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -183,24 +173,12 @@ public class {methodName}Query
             TargetNamespace = "FluentGenerated",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomDataAccessGenerator_GeneratesFluentAPI_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            Data_CustomDataAccessGenerator_GeneratesFluentAPI_1;
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -302,24 +280,12 @@ public record Create{typeName}Request(
             TargetNamespace = "MyAPI",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomSourceFileGenerator_GeneratesModernMinimalAPI_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            Data_CustomSourceFileGenerator_GeneratesModernMinimalAPI_1;
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -333,11 +299,35 @@ public record Create{typeName}Request(
 
         var result = customTableGenerator.GenerateTableOperations(table, config);
 
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
+        var generatedCode = Ok(actual: result).Value;
 
-        var expectedCode =
-            Data_CustomTableOperationGenerator_GeneratesRepositoryPattern_1;
+        var expectedCode = Data_CustomTableOperationGenerator_GeneratesRepositoryPattern_1;
+
+        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void GenerateMetadataAndAssertExpectedCode(
+        SelectStatement input0,
+        List<DatabaseColumn> input1,
+        CodeGenerationConfig input2,
+        string input3
+    )
+    {
+        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
+            "User",
+            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
+            input0,
+            "test.db",
+            input1,
+            false,
+            null,
+            input2
+        );
+
+        var generatedCode = Ok(actual: result).Value;
+
+        var expectedCode = input3;
 
         Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
@@ -492,7 +482,7 @@ internal static class StringExtensions
 /// <summary>
 /// Tests for non-query (UPDATE/DELETE/INSERT) SQL statement code generation.
 /// </summary>
-public class NonQueryCodeGenerationTests
+public partial class NonQueryCodeGenerationTests
 {
     [Fact]
     public void GenerateNonQueryMethod_UpdateStatement_GeneratesCorrectExtension()
@@ -508,16 +498,21 @@ public class NonQueryCodeGenerationTests
             "SqliteConnection"
         );
 
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
+        var code = Ok(actual: result).Value;
 
         // Verify key parts of generated code
-        Assert.Contains("public static partial class RevokeSessionExtensions", code);
-        Assert.Contains("public static async Task<Result<int, SqlError>> RevokeSessionAsync", code);
-        Assert.Contains("this SqliteConnection connection", code);
-        Assert.Contains("object jti", code);
-        Assert.Contains("ExecuteNonQueryAsync", code);
-        Assert.Contains("UPDATE gk_session SET is_revoked = 1 WHERE id = @jti", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public static partial class RevokeSessionExtensions",
+                "public static async Task<Result<int, SqlError>> RevokeSessionAsync",
+                "this SqliteConnection connection",
+                "object? jti",
+                "ExecuteNonQueryAsync",
+                "UPDATE gk_session SET is_revoked = 1 WHERE id = @jti",
+            ]
+        );
     }
 
     [Fact]
@@ -534,12 +529,12 @@ public class NonQueryCodeGenerationTests
             "SqliteConnection"
         );
 
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
+        var code = Ok(actual: result).Value;
 
-        Assert.Contains("PurgeSyncLogAsync", code);
-        Assert.Contains("DELETE FROM sync_log", code);
-        Assert.Contains("@cutoff", code);
+        ContainsAll(
+            actual: code,
+            expected: ["PurgeSyncLogAsync", "DELETE FROM sync_log", "@cutoff"]
+        );
     }
 
     [Fact]
@@ -561,15 +556,20 @@ public class NonQueryCodeGenerationTests
             "SqliteConnection"
         );
 
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
+        var code = Ok(actual: result).Value;
 
-        Assert.Contains("object name", code);
-        Assert.Contains("object email", code);
-        Assert.Contains("object id", code);
-        Assert.Contains("AddWithValue(\"@name\"", code);
-        Assert.Contains("AddWithValue(\"@email\"", code);
-        Assert.Contains("AddWithValue(\"@id\"", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "object? name",
+                "object? email",
+                "object? id",
+                "AddWithValue(\"@name\"",
+                "AddWithValue(\"@email\"",
+                "AddWithValue(\"@id\"",
+            ]
+        );
     }
 
     [Fact]
@@ -586,8 +586,7 @@ public class NonQueryCodeGenerationTests
             "SqliteConnection"
         );
 
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
+        var code = Ok(actual: result).Value;
 
         // Should have connection param only
         Assert.Contains("ClearTempDataAsync(this SqliteConnection connection)", code);
@@ -596,11 +595,11 @@ public class NonQueryCodeGenerationTests
 
     [Theory]
     // GenerateNonQueryMethod_EmptyClassName_ReturnsError
-    [InlineData("", "Test", "UPDATE x SET y = 1")]
+    [MemberData(nameof(GenerateNonQueryMethod_EmptyClassName_ReturnsError_CasesInlineCases))]
     // GenerateNonQueryMethod_EmptyMethodName_ReturnsError
-    [InlineData("TestExtensions", "", "UPDATE x SET y = 1")]
+
     // GenerateNonQueryMethod_EmptySql_ReturnsError
-    [InlineData("TestExtensions", "Test", "")]
+
     public void GenerateNonQueryMethod_EmptyClassName_ReturnsError_Cases(
         string caseValue0,
         string caseValue1,

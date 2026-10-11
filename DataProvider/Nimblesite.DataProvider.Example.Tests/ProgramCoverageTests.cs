@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -126,8 +127,10 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapBasicOrder
         );
 
-        Assert.True(result is BasicOrderListOk, $"Expected success but got {result.GetType()}");
-        var orders = ((BasicOrderListOk)result).Value;
+        var orders = Ok(
+            actual: result,
+            message: $"Expected success but got {result.GetType()}"
+        ).Value;
         Assert.Equal(2, orders.Count);
 
         var firstOrder = orders[0];
@@ -169,8 +172,7 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapBasicOrder
         );
 
-        Assert.True(result is BasicOrderListOk);
-        var orders = ((BasicOrderListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
         Assert.Equal("ORD-002", orders[0].OrderNumber);
         Assert.Equal(750.00, orders[0].TotalAmount);
@@ -191,11 +193,10 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapCustomer
         );
 
-        Assert.True(
-            result is CustomerReadOnlyListOk,
-            $"Expected success but got {result.GetType()}"
-        );
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = Ok(
+            actual: result,
+            message: $"Expected success but got {result.GetType()}"
+        ).Value;
 
         var nullEmailCustomer = customers.First(c => c.CustomerName == "No Email Corp");
         Assert.Null(nullEmailCustomer.Email);
@@ -217,8 +218,7 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapCustomer
         );
 
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = Ok(actual: result).Value;
 
         var nullPhoneCustomer = customers.First(c => c.CustomerName == "No Phone Corp");
         Assert.Equal("nophone@test.com", nullPhoneCustomer.Email);
@@ -240,8 +240,7 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapCustomer
         );
 
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = Ok(actual: result).Value;
 
         var nullBothCustomer = customers.First(c => c.CustomerName == "No Contact Corp");
         Assert.Null(nullBothCustomer.Email);
@@ -283,8 +282,7 @@ public sealed partial class ProgramCoverageTests : IDisposable
             MapBasicOrder
         );
 
-        Assert.True(result is BasicOrderListOk);
-        var orders = ((BasicOrderListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.NotEmpty(orders);
 
         foreach (var order in orders)

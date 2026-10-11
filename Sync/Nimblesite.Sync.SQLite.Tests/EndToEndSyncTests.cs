@@ -240,8 +240,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
         // Create Person table
         DatabaseCommands.Execute(
             connection: connection,
-            configure: command =>
-                command.CommandText = Data_SetupSchema_1
+            configure: command => command.CommandText = Data_SetupSchema_1
         );
 
         // Use TriggerGenerator to create sync triggers (spec Section 9)

@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -74,8 +76,8 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
             logger: NullLogger.Instance
         );
 
-        Assert.True(result is MigrationApplyResultError);
-        var error = ((MigrationApplyResultError)result).Value;
+        var error = Expected<MigrationApplyResultError>(actual: result)
+            .Value;
         Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", error.Message);
         Assert.Contains($"GRANT \"{owner}\" TO \"{migrate}\"", error.Message);
     }

@@ -180,7 +180,7 @@ internal static class SqlServerCatalogQueries
                 r.GetString(1),
                 r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetString(3),
-                SqlExpressionText.StripOuterParens(r.GetString(4))
+                SqlServerExpressionNormalizer.Normalize(expression: r.GetString(4))
             )
         );
 

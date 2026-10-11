@@ -4,6 +4,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -36,14 +37,12 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_1
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_2
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
     }
 
@@ -72,17 +71,13 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             }
         );
 
-        if (
-            queryResult
-            is not Result<IReadOnlyList<TestProduct>, SqlError>.Ok<
-                IReadOnlyList<TestProduct>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<TestProduct>,
+            SqlError
+        >.Ok<IReadOnlyList<TestProduct>, SqlError>>(
+            actual: queryResult,
+            message: "Expected Ok result"
+        );
 
         var rows = ok.Value;
         Assert.Equal(3, rows.Count);
@@ -105,25 +100,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         var sql = ToSqliteSql(statement);
         Assert.Contains(">", sql);
 
-        var queryResult = _connection.Query<(string Name, double Price)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
-        );
-
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double Price)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
-
-        var rows = ok.Value;
-        Assert.Equal(3, rows.Count);
+        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
         Assert.Equal("Gadget X", rows[0].Name);
         Assert.Equal(99.99, rows[0].Price);
         Assert.Equal("Gadget Y", rows[1].Name);
@@ -143,25 +120,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         var sql = ToSqliteSql(statement);
         Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
 
-        var queryResult = _connection.Query<(string Name, double Price)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
-        );
-
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double Price)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
-
-        var rows = ok.Value;
-        Assert.Equal(3, rows.Count);
+        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
         Assert.Equal("Tool Gamma", rows[0].Name);
         Assert.Equal(15.00, rows[0].Price);
         Assert.Equal("Tool Alpha", rows[1].Name);
@@ -181,25 +140,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         var sql = ToSqliteSql(statement);
         Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
 
-        var queryResult = _connection.Query<(string Name, double Price)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
-        );
-
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double Price)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
-
-        var rows = ok.Value;
-        Assert.Equal(4, rows.Count);
+        var rows = QueryProductsAndAssertCount(input0: sql, value3: 4);
         Assert.Equal("Widget A", rows[0].Name);
         Assert.Equal(10.00, rows[0].Price);
         Assert.Equal("Tool Gamma", rows[1].Name);
@@ -222,8 +163,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
         var sql = ToSqliteSql(statement);
         Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Widget", sql);
-        Assert.Contains("Name", sql);
+        ContainsAll(actual: sql, expected: ["Widget", "Name"]);
     }
 
     [Fact]
@@ -238,8 +178,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
         var sql = ToSqliteSql(statement);
         Assert.Contains("LIKE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Tool", sql);
-        Assert.Contains("Name", sql);
+        ContainsAll(actual: sql, expected: ["Tool", "Name"]);
     }
 
     [Fact]
@@ -254,14 +193,10 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
         var queryResult = _connection.Query<string>(sql: sql, mapper: r => r.GetString(0));
 
-        if (
-            queryResult
-            is not Result<IReadOnlyList<string>, SqlError>.Ok<IReadOnlyList<string>, SqlError> ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<string>,
+            SqlError
+        >.Ok<IReadOnlyList<string>, SqlError>>(actual: queryResult, message: "Expected Ok result");
 
         Assert.Equal(8, ok.Value.Count);
         Assert.Contains("Widget A", ok.Value);
@@ -281,25 +216,7 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Price", sql);
 
-        var queryResult = _connection.Query<(string Name, double Price)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
-        );
-
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double Price)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
-
-        var rows = ok.Value;
-        Assert.Equal(8, rows.Count);
+        var rows = QueryProductsAndAssertCount(input0: sql, value3: 8);
         Assert.Equal("Widget A", rows[0].Name);
         Assert.Equal(10.00, rows[0].Price);
         Assert.Equal("Premium Widget", rows[7].Name);
@@ -324,30 +241,13 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
             .ToSqlStatement();
 
         var sql = ToSqliteSql(statement);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("OFFSET", sql, StringComparison.OrdinalIgnoreCase);
-
-        var queryResult = _connection.Query<(string Name, double Price)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
+        ContainsAll(
+            actual: sql,
+            expected: ["WHERE", "ORDER BY", "LIMIT", "OFFSET"],
+            comparison: StringComparison.OrdinalIgnoreCase
         );
 
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string Name, double Price)>, SqlError>.Ok<
-                IReadOnlyList<(string Name, double Price)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result");
-            return;
-        }
-
-        var rows = ok.Value;
-        Assert.Equal(3, rows.Count);
+        var rows = QueryProductsAndAssertCount(input0: sql, value3: 3);
 
         // Products with Price > 10 ordered by Price ASC:
         // Tool Gamma (15), Widget B (25.5), Tool Alpha (35), Tool Beta (45),
@@ -369,5 +269,30 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
         var sqlResult = statement.ToSQLite();
         var sqlOk = Assert.IsType<StringOk>(sqlResult);
         return sqlOk.Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<(string Name, double Price)> QueryProductsAndAssertCount(
+        string input0,
+        int value3
+    )
+    {
+        var queryResult = _connection.Query<(string Name, double Price)>(
+            sql: input0,
+            mapper: r => (r.GetString(0), r.GetDouble(1))
+        );
+
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<(string Name, double Price)>,
+            SqlError
+        >.Ok<IReadOnlyList<(string Name, double Price)>, SqlError>>(
+            actual: queryResult,
+            message: "Expected Ok result"
+        );
+
+        var rows = ok.Value;
+        Assert.Equal(value3, rows.Count);
+
+        return rows;
     }
 }

@@ -61,8 +61,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
 
         DatabaseCommands.Execute(
             connection: conn,
-            configure: command =>
-                command.CommandText = Data_CreateSourceDb_1
+            configure: command => command.CommandText = Data_CreateSourceDb_1
         );
 
         TriggerGenerator.CreateTriggers(conn, "User", NullLogger.Instance);

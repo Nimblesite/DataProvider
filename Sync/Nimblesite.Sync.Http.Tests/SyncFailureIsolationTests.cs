@@ -1,6 +1,8 @@
+using global::Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
+
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
-using Tests.Shared;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -42,8 +44,7 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
 
         DatabaseCommands.Execute(
             connection: conn,
-            configure: command =>
-                command.CommandText = Data_InitializeDatabase_1
+            configure: command => command.CommandText = Data_InitializeDatabase_1
         );
 
         TriggerGenerator.CreateTriggers(conn, "fhir_Encounter", NullLogger.Instance);
@@ -126,8 +127,8 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
 
         // Get the change
         var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        Assert.True(changes is SyncLogListOk);
-        var changesList = ((SyncLogListOk)changes).Value;
+
+        var changesList = Ok(actual: changes).Value;
         Assert.Single(changesList);
         var encounterChange = changesList[0];
 
@@ -403,8 +404,8 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
 
         // Get the change
         var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
-        Assert.True(changes is SyncLogListOk);
-        var changesList = ((SyncLogListOk)changes).Value;
+
+        var changesList = Ok(actual: changes).Value;
         Assert.Single(changesList);
 
         var appointmentChange = changesList[0];

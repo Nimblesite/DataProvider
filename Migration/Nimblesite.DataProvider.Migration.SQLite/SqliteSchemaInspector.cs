@@ -244,12 +244,18 @@ public static class SqliteSchemaInspector
                 }
             }
 
+            var checks = SqliteColumnChecks.Read(
+                connection: connection,
+                tableName: tableName,
+                columns: columns.AsReadOnly()
+            );
             return new TableResult.Ok<TableDefinition, MigrationError>(
                 new TableDefinition
                 {
                     Schema = "main",
                     Name = tableName,
-                    Columns = columns.AsReadOnly(),
+                    Columns = checks.Columns,
+                    CheckConstraints = checks.Checks,
                     Indexes = indexes.AsReadOnly(),
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,

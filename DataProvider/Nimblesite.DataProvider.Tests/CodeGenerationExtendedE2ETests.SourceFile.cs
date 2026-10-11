@@ -1,4 +1,5 @@
 using Nimblesite.Sql.Model;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -6,20 +7,7 @@ public sealed partial class CodeGenerationExtendedE2ETests
 {
     // Implements [DP-CODEGEN-SOURCE-VALIDATION].
     [Theory]
-    [InlineData("", "record Test();", "", "namespaceName cannot be null or empty")]
-    [InlineData(" ", "", "class Foo { }", "namespaceName cannot be null or empty")]
-    [InlineData(
-        "Generated",
-        "",
-        "",
-        "At least one of modelCode or dataAccessCode must be provided"
-    )]
-    [InlineData(
-        "Generated",
-        " ",
-        " ",
-        "At least one of modelCode or dataAccessCode must be provided"
-    )]
+    [MemberData(nameof(DefaultConfig_SourceFile_RejectsInvalidInputInlineCases))]
     public void DefaultConfig_SourceFile_RejectsInvalidInput(
         string namespaceName,
         string modelCode,
@@ -54,8 +42,14 @@ public sealed partial class CodeGenerationExtendedE2ETests
             connectionType: "NpgsqlConnection"
         );
         var code = Assert.IsType<StringOk>(result).Value;
-        Assert.Contains("NpgsqlTypes.NpgsqlDbType.Numeric", code);
-        Assert.Contains("Value = DBNull.Value", code);
-        Assert.Contains("new NpgsqlCommand(sql, connection)", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "NpgsqlTypes.NpgsqlDbType.Numeric",
+                "Value = DBNull.Value",
+                "new NpgsqlCommand(sql, connection)",
+            ]
+        );
     }
 }

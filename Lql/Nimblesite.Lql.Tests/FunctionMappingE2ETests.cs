@@ -3,6 +3,7 @@ using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Xunit;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -10,7 +11,7 @@ namespace Nimblesite.Lql.Tests;
 /// E2E tests for function mapping providers across all SQL dialects.
 /// Tests function lookup, transpilation, syntax mapping, and special handlers.
 /// </summary>
-public sealed class FunctionMappingE2ETests
+public sealed partial class FunctionMappingE2ETests
 {
     private static readonly IFunctionMappingProvider[] AllProviders =
     [
@@ -21,12 +22,7 @@ public sealed class FunctionMappingE2ETests
     ];
 
     [Theory]
-    [InlineData("count")]
-    [InlineData("sum")]
-    [InlineData("avg")]
-    [InlineData("min")]
-    [InlineData("max")]
-    [InlineData("coalesce")]
+    [MemberData(nameof(CoreAggregateFunctions_AllProviders_AreMappedInlineCases))]
     public void CoreAggregateFunctions_AllProviders_AreMapped(string functionName)
     {
         foreach (var provider in AllProviders)
@@ -39,8 +35,7 @@ public sealed class FunctionMappingE2ETests
     }
 
     [Theory]
-    [InlineData("upper")]
-    [InlineData("lower")]
+    [MemberData(nameof(StringFunctions_AllProviders_AreMappedInlineCases))]
     public void StringFunctions_AllProviders_AreMapped(string functionName)
     {
         foreach (var provider in AllProviders)
@@ -63,15 +58,15 @@ public sealed class FunctionMappingE2ETests
 
     [Theory]
     // CountWithColumn_AllProviders_ProducesCorrectSQL
-    [InlineData("count", "user_id", "COUNT", "user_id")]
+    [MemberData(nameof(CountWithColumn_AllProviders_ProducesCorrectSQL_CasesInlineCases))]
     // SumFunction_AllProviders_TranspilesCorrectly
-    [InlineData("sum", "amount", "SUM", "amount")]
+
     // UpperFunction_AllProviders_TranspilesCorrectly
-    [InlineData("upper", "name", "UPPER", "name")]
+
     // LowerFunction_AllProviders_TranspilesCorrectly
-    [InlineData("lower", "email", "LOWER", "email")]
+
     // AvgFunction_AllProviders_TranspilesCorrectly
-    [InlineData("avg", "rating", "AVG", "rating")]
+
     public void CountWithColumn_AllProviders_ProducesCorrectSQL_Cases(
         string caseValue0,
         string caseValue1,
@@ -94,8 +89,11 @@ public sealed class FunctionMappingE2ETests
         {
             var result = provider.TranspileFunction("nonexistent_func", "arg1", "arg2");
             Assert.Contains("NONEXISTENT_FUNC", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("arg1", result, StringComparison.Ordinal);
-            Assert.Contains("arg2", result, StringComparison.Ordinal);
+            ContainsAll(
+                actual: result,
+                expected: ["arg1", "arg2"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 
@@ -230,9 +228,11 @@ public sealed class FunctionMappingE2ETests
         {
             var result = provider.TranspileFunction("coalesce", "col1", "col2", "'default'");
             Assert.Contains("COALESCE", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("col1", result, StringComparison.Ordinal);
-            Assert.Contains("col2", result, StringComparison.Ordinal);
-            Assert.Contains("'default'", result, StringComparison.Ordinal);
+            ContainsAll(
+                actual: result,
+                expected: ["col1", "col2", "'default'"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 

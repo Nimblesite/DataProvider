@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -27,8 +29,11 @@ public sealed partial class SchemaSupportYamlSerializerTests
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
-        Assert.Contains("functions:", yaml, StringComparison.Ordinal);
-        Assert.Contains("name: app_user_id", yaml, StringComparison.Ordinal);
+        ContainsAll(
+            actual: yaml,
+            expected: ["functions:", "name: app_user_id"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("language: sql", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("volatility: stable", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("revokePublicExecute: true", yaml, StringComparison.Ordinal);

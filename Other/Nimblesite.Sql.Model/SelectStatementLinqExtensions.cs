@@ -20,7 +20,7 @@ public static class SelectStatementLinqExtensions
     /// </summary>
     public static SelectStatementBuilder Select<T>(
         this SelectStatementBuilder builder,
-        Expression<Func<T, object>> selector
+        Expression<Func<T, object?>> selector
     )
     {
         var columns = ExtractColumns(selector);
@@ -185,7 +185,7 @@ public static class SelectStatementLinqExtensions
     /// </summary>
     public static SelectStatementBuilder OrderBy<T>(
         this SelectStatementBuilder builder,
-        Expression<Func<T, object>> selector
+        Expression<Func<T, object?>> selector
     )
     {
         var columns = ExtractColumns(selector);
@@ -296,7 +296,7 @@ public static class SelectStatementLinqExtensions
         // For now, returning empty string - you may want to enhance this
         string.Empty;
 
-    private static IEnumerable<ColumnInfo> ExtractColumns<T>(Expression<Func<T, object>> selector)
+    private static IEnumerable<ColumnInfo> ExtractColumns<T>(Expression<Func<T, object?>> selector)
     {
         var body = selector.Body;
 

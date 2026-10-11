@@ -44,9 +44,7 @@ public sealed partial class MigrationCornerCaseTests
         {
             var schema = Fixture_TableName_WithUnderscores_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
             VerifyTableExists(connection, "user_roles_history");
         }
         finally
@@ -64,9 +62,7 @@ public sealed partial class MigrationCornerCaseTests
             // Common reserved words as column names
             var schema = Fixture_ColumnName_IsReservedWord_HandledCorrectly_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -88,9 +84,7 @@ public sealed partial class MigrationCornerCaseTests
         {
             var schema = Fixture_TableName_CamelCase_PreservedCorrectly_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -103,22 +97,13 @@ public sealed partial class MigrationCornerCaseTests
         }
     }
 
-    [Fact]
-    public void ColumnName_WithNumbers_Success()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(ColumnName_WithNumbers_Success_CasesData))]
+    public void ColumnName_WithNumbers_Success_Cases(string caseName, Func<SchemaDefinition> input0)
     {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_ColumnName_WithNumbers_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseCaseMatrix1(input0: input0);
     }
 
     #endregion
@@ -134,50 +119,12 @@ public sealed partial class MigrationCornerCaseTests
             // Build wide table with many columns
             var schema = Fixture_Table_ManyColumns_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
             ).Value;
             Assert.Equal(21, inspected.Tables.Single().Columns.Count);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
-    [Fact]
-    public void Column_MaximumVarCharLength_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_Column_MaximumVarCharLength_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
-    [Fact]
-    public void Decimal_ExtremeScaleAndPrecision_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_Decimal_ExtremeScaleAndPrecision_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
         }
         finally
         {
@@ -198,9 +145,7 @@ public sealed partial class MigrationCornerCaseTests
             // Test multi-column unique constraint (composite PK requires different builder API)
             var schema = Fixture_Table_MultiColumnUniqueConstraint_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
         }
         finally
         {
@@ -216,9 +161,7 @@ public sealed partial class MigrationCornerCaseTests
         {
             var schema = Fixture_Table_MultiColumnIndex_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -246,9 +189,7 @@ public sealed partial class MigrationCornerCaseTests
 
             var schema = Fixture_Table_SelfReferencingForeignKey_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -271,9 +212,7 @@ public sealed partial class MigrationCornerCaseTests
         {
             var schema = Fixture_Table_MultipleIndexesOnSameColumn_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -298,9 +237,7 @@ public sealed partial class MigrationCornerCaseTests
         {
             var schema = Fixture_AllColumnsNullable_ExceptPrimaryKey_Success_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Verify all columns except Id are nullable
             var inspected = (
@@ -318,99 +255,10 @@ public sealed partial class MigrationCornerCaseTests
         }
     }
 
-    [Fact]
-    public void AllColumnsNotNull_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_AllColumnsNotNull_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
     #endregion
 
     #region Default Value Edge Cases
 
-    [Fact]
-    public void DefaultValue_StringWithQuotes_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_DefaultValue_StringWithQuotes_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
-    [Fact]
-    public void DefaultValue_NumericZero_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_DefaultValue_NumericZero_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
-    [Fact]
-    public void DefaultValue_BooleanFalse_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_DefaultValue_BooleanFalse_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
-
-    [Fact]
-    public void DefaultValue_CurrentTimestamp_Success()
-    {
-        var (connection, dbPath) = CreateTestDb();
-        try
-        {
-            var schema = Fixture_DefaultValue_CurrentTimestamp_Success_1();
-
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
-        }
-        finally
-        {
-            CleanupTestDb(connection, dbPath);
-        }
-    }
 
     #endregion
 
@@ -451,9 +299,7 @@ public sealed partial class MigrationCornerCaseTests
                 .Table("Simple", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
                 .Build();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
         }
         finally
         {
@@ -477,9 +323,7 @@ public sealed partial class MigrationCornerCaseTests
             // Create tables without FK first, then add FKs
             var schema = Fixture_MultipleTables_CircularForeignKeys_DeferredConstraints_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
         }
         finally
         {
@@ -599,9 +443,7 @@ public sealed partial class MigrationCornerCaseTests
             // SQLite only allows one ROWID alias (INTEGER PRIMARY KEY)
             var schema = Fixture_Table_MultipleIdentityColumns_OnePerTable_1();
 
-            var result = ApplySchema(connection, schema);
-
-            Assert.True(result is MigrationApplyResultOk);
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
         }
         finally
         {
@@ -640,4 +482,31 @@ public sealed partial class MigrationCornerCaseTests
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ApplySchemaAndAssertSuccess(
+        global::Microsoft.Data.Sqlite.SqliteConnection input0,
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input1
+    )
+    {
+        var result = ApplySchema(input0, input1);
+
+        Assert.True(result is MigrationApplyResultOk);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private void ExerciseCaseMatrix1(Func<SchemaDefinition> input0)
+    {
+        var (connection, dbPath) = CreateTestDb();
+        try
+        {
+            var schema = input0();
+
+            ApplySchemaAndAssertSuccess(input0: connection, input1: schema);
+        }
+        finally
+        {
+            CleanupTestDb(connection, dbPath);
+        }
+    }
 }

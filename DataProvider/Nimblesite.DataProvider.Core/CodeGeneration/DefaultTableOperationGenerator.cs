@@ -50,6 +50,8 @@ public class DefaultTableOperationGenerator : ITableOperationGenerator
         sb.AppendLine(CultureInfo.InvariantCulture, $"using {GetConnectionNamespace()};");
         sb.AppendLine("using Outcome;");
         sb.AppendLine("using Nimblesite.Sql.Model;");
+        if (GetConnectionNamespace() == "Microsoft.Data.SqlClient")
+            sb.AppendLine("using SqlError = Nimblesite.Sql.Model.SqlError;");
         sb.AppendLine();
         sb.AppendLine("namespace Generated");
         sb.AppendLine("{");
@@ -90,6 +92,18 @@ public class DefaultTableOperationGenerator : ITableOperationGenerator
             }
         }
 
+        if (config.GenerateDelete)
+        {
+            var deleteResult = DataAccessGenerator.GenerateDeleteMethod(
+                table: table,
+                connectionType: _connectionType
+            );
+            if (deleteResult is Result<string, SqlError>.Error<string, SqlError> failure)
+                return failure;
+            if (deleteResult is Result<string, SqlError>.Ok<string, SqlError> success)
+                sb.AppendLine(success.Value);
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
@@ -112,7 +126,10 @@ public class DefaultTableOperationGenerator : ITableOperationGenerator
     /// Gets the namespace for the connection type
     /// </summary>
     protected virtual string GetConnectionNamespace() =>
-        _connectionType switch
+        ResolveConnectionNamespace(connectionType: _connectionType);
+
+    internal static string ResolveConnectionNamespace(string connectionType) =>
+        connectionType.Split('.').Last() switch
         {
             "SqliteConnection" => "Microsoft.Data.Sqlite",
             "SqlConnection" => "Microsoft.Data.SqlClient",

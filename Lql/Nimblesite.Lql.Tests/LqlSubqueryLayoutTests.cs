@@ -26,9 +26,7 @@ namespace Nimblesite.Lql.Tests;
 public sealed partial class LqlSubqueryLayoutTests
 {
     [Theory]
-    [InlineData("SQLite")]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
+    [MemberData(nameof(ExistsBody_WithTwoFilters_KeepsBothAndGroupsEachInlineCases))]
     public void ExistsBody_WithTwoFilters_KeepsBothAndGroupsEach(string dialect) =>
         Assert.Equal(
             Data_ExistsBody_WithTwoFilters_KeepsBothAndGroupsEach_1,
@@ -39,9 +37,7 @@ public sealed partial class LqlSubqueryLayoutTests
         );
 
     [Theory]
-    [InlineData("SQLite", "", "ORDER BY a.id ASC\nLIMIT 5")]
-    [InlineData("PostgreSql", "", "ORDER BY a.id ASC\nLIMIT 5")]
-    [InlineData("SqlServer", "TOP 5 ", "ORDER BY a.id ASC")]
+    [MemberData(nameof(TwoCtes_JoinedAndPaged_RenderPerDialectPagingInlineCases))]
     public void TwoCtes_JoinedAndPaged_RenderPerDialectPaging(
         string dialect,
         string selectPrefix,
@@ -71,9 +67,7 @@ public sealed partial class LqlSubqueryLayoutTests
         );
 
     [Theory]
-    [InlineData("SQLite", "LIMIT 5\nOFFSET 10")]
-    [InlineData("PostgreSql", "LIMIT 5\nOFFSET 10")]
-    [InlineData("SqlServer", "OFFSET 10 ROWS\nFETCH NEXT 5 ROWS ONLY")]
+    [MemberData(nameof(DerivedTableJoin_WithOffsetAndLimit_RendersPagingAfterJoinInlineCases))]
     public void DerivedTableJoin_WithOffsetAndLimit_RendersPagingAfterJoin(
         string dialect,
         string paging

@@ -1,20 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using System.Collections.Immutable;
-using SchemaIntegrityError = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Error<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
-using SchemaIntegrityOk = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaIntegrityVerifierTests

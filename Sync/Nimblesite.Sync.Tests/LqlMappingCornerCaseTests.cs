@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
 namespace Nimblesite.Sync.Tests;
@@ -36,19 +37,14 @@ public sealed partial class LqlMappingCornerCaseTests
             sourceTable: "Source",
             targetTable: "Target"
         );
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "Source",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","Name":"Test","Value":123}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "Source",
+            value1: """{"Id":"1"}""",
+            value2: """{"Id":"1","Name":"Test","Value":123}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
-        Assert.Contains("Name", payload);
-        Assert.Contains("Test", payload);
-        Assert.Contains("Value", payload);
+        ContainsAll(actual: payload, expected: ["Name", "Test", "Value"]);
     }
 
     [Fact]
@@ -59,7 +55,9 @@ public sealed partial class LqlMappingCornerCaseTests
             new("NonExistent", "DisplayName", TransformType.Lql, null, "upper(NonExistent)"),
         };
 
-        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(columnMappings: columnMappings);
+        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(
+            columnMappings: columnMappings
+        );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
         var entry = MappingTestData.Entry(
@@ -84,21 +82,17 @@ public sealed partial class LqlMappingCornerCaseTests
             new("Status", "StatusCode"), // Direct mapping
         };
 
-        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(columnMappings: columnMappings);
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "Source",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","Name":"Alice","Email":"ALICE@TEST.COM","Status":"active"}"""
+        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(
+            columnMappings: columnMappings
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "Source",
+            value1: """{"Id":"1"}""",
+            value2: """{"Id":"1","Name":"Alice","Email":"ALICE@TEST.COM","Status":"active"}"""
+        );
         var payload = success.Entries[0].MappedPayload!;
-        Assert.Contains("Alice", payload); // Direct
-        Assert.Contains("alice@test.com", payload); // LQL lowercase
-        Assert.Contains("mobile-app", payload); // Constant
-        Assert.Contains("active", payload); // Direct
+        ContainsAll(actual: payload, expected: ["Alice", "alice@test.com", "mobile-app", "active"]); // Direct
     }
 
     [Fact]
@@ -112,20 +106,15 @@ public sealed partial class LqlMappingCornerCaseTests
         {
             ExcludedColumns = ["Password", "Salt", "SecurityToken", "InternalNotes"],
         };
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","Name":"Alice","Email":"a@test.com","Password":"secret123","Salt":"xyz","SecurityToken":"abc","InternalNotes":"admin notes","PublicBio":"Hello!"}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "User",
+            value1: """{"Id":"1"}""",
+            value2: """{"Id":"1","Name":"Alice","Email":"a@test.com","Password":"secret123","Salt":"xyz","SecurityToken":"abc","InternalNotes":"admin notes","PublicBio":"Hello!"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
-        Assert.Contains("Name", payload);
-        Assert.Contains("Email", payload);
-        Assert.Contains("PublicBio", payload);
+        ContainsAll(actual: payload, expected: ["Name", "Email", "PublicBio"]);
         Assert.DoesNotContain("Password", payload);
         Assert.DoesNotContain("Salt", payload);
         Assert.DoesNotContain("SecurityToken", payload);
@@ -143,15 +132,12 @@ public sealed partial class LqlMappingCornerCaseTests
         {
             PkMapping = new PkMapping("UserId", "CustomerId"),
         };
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "Source",
-            pk: """{"UserId":"user-123"}""",
-            payload: """{"Name":"Test"}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "Source",
+            value1: """{"UserId":"user-123"}""",
+            value2: """{"Name":"Test"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("CustomerId", success.Entries[0].TargetPkValue);
         Assert.Contains("user-123", success.Entries[0].TargetPkValue);
         Assert.DoesNotContain("UserId", success.Entries[0].TargetPkValue);
@@ -187,15 +173,12 @@ public sealed partial class LqlMappingCornerCaseTests
             IsMultiTarget = true,
             Targets = targets,
         };
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","Name":"alice","Email":"alice@test.com"}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "User",
+            value1: """{"Id":"1"}""",
+            value2: """{"Id":"1","Name":"alice","Email":"alice@test.com"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Equal(2, success.Entries.Count);
 
         var profile = success.Entries.First(e => e.TargetTable == "UserProfile");
@@ -223,21 +206,15 @@ public sealed partial class LqlMappingCornerCaseTests
         };
 
         var mapping = Fixture_E2E_FullAddressNormalization_1(columnMappings: columnMappings);
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "RawAddress",
-            pk: """{"Id":"1"}""",
-            payload: """{"Id":"1","street":"  123 Main St  ","city":"  springfield  ","state":"il","zip":"62701-1234"}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "RawAddress",
+            value1: """{"Id":"1"}""",
+            value2: """{"Id":"1","street":"  123 Main St  ","city":"  springfield  ","state":"il","zip":"62701-1234"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
-        Assert.Contains("123 Main St", payload); // Trimmed street
-        Assert.Contains("SPRINGFIELD", payload); // Trimmed + uppercased city
-        Assert.Contains("IL", payload); // Uppercased state
-        Assert.Contains("62701", payload); // First 5 chars of zip
+        ContainsAll(actual: payload, expected: ["123 Main St", "SPRINGFIELD", "IL", "62701"]); // First 5 chars of zip
         Assert.DoesNotContain("-1234", payload); // ZIP+4 removed
     }
 
@@ -259,15 +236,12 @@ public sealed partial class LqlMappingCornerCaseTests
             PkMapping = new PkMapping("legacy_id", "Id"),
             ExcludedColumns = ["password_hash", "ssn", "credit_card"],
         };
-        var config = MappingTestData.Strict(mappings: [mapping]);
-
-        var entry = MappingTestData.Entry(
-            table: "LegacyUser",
-            pk: """{"legacy_id":"USR-001"}""",
-            payload: """{"legacy_id":"USR-001","username":"JohnDoe123","email":"John.Doe@Example.COM","display_name":"  John Doe  ","password_hash":"abc123","ssn":"123-45-6789","credit_card":"4111111111111111"}"""
+        var success = ApplyMappingToEntry(
+            input0: mapping,
+            value0: "LegacyUser",
+            value1: """{"legacy_id":"USR-001"}""",
+            value2: """{"legacy_id":"USR-001","username":"JohnDoe123","email":"John.Doe@Example.COM","display_name":"  John Doe  ","password_hash":"abc123","ssn":"123-45-6789","credit_card":"4111111111111111"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
         // PK renamed
@@ -275,9 +249,7 @@ public sealed partial class LqlMappingCornerCaseTests
         Assert.Contains("USR-001", success.Entries[0].TargetPkValue);
 
         // Normalized fields
-        Assert.Contains("johndoe123", payload); // Lowercase username
-        Assert.Contains("john.doe@example.com", payload); // Lowercase email
-        Assert.Contains("John Doe", payload); // Trimmed display name
+        ContainsAll(actual: payload, expected: ["johndoe123", "john.doe@example.com", "John Doe"]); // Trimmed display name
 
         // Sensitive fields excluded
         Assert.DoesNotContain("password", payload);
@@ -287,4 +259,21 @@ public sealed partial class LqlMappingCornerCaseTests
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.Sync.Core.MappingSuccess ApplyMappingToEntry(
+        global::Nimblesite.Sync.Core.TableMapping input0,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var config = MappingTestData.Strict(mappings: [input0]);
+
+        var entry = MappingTestData.Entry(table: value0, pk: value1, payload: value2);
+
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
+
+        return success;
+    }
 }

@@ -1,3 +1,6 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
@@ -21,18 +24,24 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("UserRecord", columns);
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
-        Assert.Contains("public record UserRecord", code);
-        Assert.Contains("public int Id { get; init; }", code);
-        Assert.Contains("public string Name { get; init; }", code);
-        Assert.Contains("public string? Email { get; init; }", code);
-        Assert.Contains("public int? Age { get; init; }", code);
-        Assert.Contains("public UserRecord(", code);
-        Assert.Contains("this.Id = Id;", code);
-        Assert.Contains("this.Name = Name;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record UserRecord",
+                "public int Id { get; init; }",
+                "public string Name { get; init; }",
+                "public string? Email { get; init; }",
+                "public int? Age { get; init; }",
+                "public UserRecord(",
+                "this.Id = Id;",
+                "this.Name = Name;",
+            ]
+        );
     }
 
     [Fact]
@@ -48,8 +57,8 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType(null!, columns);
 
         // Assert
-        Assert.True(result is StringError);
-        var failure = (StringError)result;
+
+        var failure = Expected<StringError>(actual: result);
         Assert.Contains("typeName cannot be null or empty", failure.Value.Message);
     }
 
@@ -60,8 +69,8 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("TestRecord", []);
 
         // Assert
-        Assert.True(result is StringError);
-        var failure = (StringError)result;
+
+        var failure = Expected<StringError>(actual: result);
         Assert.Contains("columns cannot be null or empty", failure.Value.Message);
     }
 
@@ -91,25 +100,27 @@ public sealed class ModelGenerationIntegrationTests
         );
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
         // Check parent record
-        Assert.Contains("public record Customer", code);
-        Assert.Contains("public int Id { get; init; }", code);
-        Assert.Contains("public string Name { get; init; }", code);
-        Assert.Contains("public IReadOnlyList<Order> Orders { get; init; }", code);
-
-        // Check child record
-        Assert.Contains("public record Order", code);
-        Assert.Contains("public int OrderId { get; init; }", code);
-        Assert.Contains("public decimal Amount { get; init; }", code);
-        Assert.Contains("public string Status { get; init; }", code);
-
-        // Check constructors
-        Assert.Contains("public Customer(", code);
-        Assert.Contains("public Order(", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record Customer",
+                "public int Id { get; init; }",
+                "public string Name { get; init; }",
+                "public IReadOnlyList<Order> Orders { get; init; }",
+                "public record Order",
+                "public int OrderId { get; init; }",
+                "public decimal Amount { get; init; }",
+                "public string Status { get; init; }",
+                "public Customer(",
+                "public Order(",
+            ]
+        );
     }
 
     [Fact]
@@ -127,15 +138,21 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns);
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
-        Assert.Contains("internal record UserOrderRaw(", code);
-        Assert.Contains("int UserId,", code);
-        Assert.Contains("string UserName,", code);
-        Assert.Contains("int OrderCount", code); // No comma on last parameter
-        Assert.Contains(");", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "internal record UserOrderRaw(",
+                "int UserId,",
+                "string UserName,",
+                "int OrderCount",
+                ");",
+            ]
+        );
     }
 
     [Fact]
@@ -154,16 +171,22 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("UserProfile", columns);
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
-        Assert.Contains("public int user_id { get; init; }", code);
-        Assert.Contains("public string first_name { get; init; }", code);
-        Assert.Contains("public bool is_active { get; init; }", code);
-        Assert.Contains("public DateTime created_at { get; init; }", code);
-        Assert.Contains("this.user_id = user_id;", code);
-        Assert.Contains("this.first_name = first_name;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public int user_id { get; init; }",
+                "public string first_name { get; init; }",
+                "public bool is_active { get; init; }",
+                "public DateTime created_at { get; init; }",
+                "this.user_id = user_id;",
+                "this.first_name = first_name;",
+            ]
+        );
     }
 
     [Fact]
@@ -186,17 +209,21 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("LargeRecord", columns);
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
-        Assert.Contains("public record LargeRecord", code);
-        Assert.Contains("public string Column2 { get; init; }", code);
-        Assert.Contains("public int Column19 { get; init; }", code);
-        Assert.Contains("public string Column20 { get; init; }", code);
-
-        // Verify constructor has all parameters
-        Assert.Contains("public LargeRecord(", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record LargeRecord",
+                "public string Column2 { get; init; }",
+                "public int Column19 { get; init; }",
+                "public string Column20 { get; init; }",
+                "public LargeRecord(",
+            ]
+        );
         for (int i = 1; i <= 20; i++)
         {
             var expectedType = i % 2 == 0 ? "string" : "int";
@@ -288,24 +315,34 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("TestEntity", columns);
 
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+
+        var success = Ok(actual: result);
         var code = success.Value;
 
         // Verify proper C# syntax elements
-        Assert.Contains("/// <summary>", code);
-        Assert.Contains("/// Result row for 'TestEntity' query.", code);
-        Assert.Contains("/// </summary>", code);
-        Assert.Contains("public record TestEntity", code);
-        Assert.Contains("get; init;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "/// <summary>",
+                "/// Result row for 'TestEntity' query.",
+                "/// </summary>",
+                "public record TestEntity",
+                "get; init;",
+            ]
+        );
         // Records don't have constructor parameters in doc comments, so remove this assertion
         Assert.DoesNotContain(",,", code); // No double commas
         Assert.DoesNotContain(";;", code); // No double semicolons
-        Assert.Contains("}", code); // Proper closing braces
-
-        // Verify XML documentation is properly formatted
-        Assert.Contains("/// <summary>Column 'Id'.</summary>", code);
-        Assert.Contains("/// <summary>Column 'Name'.</summary>", code);
-        Assert.Contains("/// <summary>Column 'CreatedAt'.</summary>", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "}",
+                "/// <summary>Column 'Id'.</summary>",
+                "/// <summary>Column 'Name'.</summary>",
+                "/// <summary>Column 'CreatedAt'.</summary>",
+            ]
+        );
     }
 }

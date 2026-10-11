@@ -1,7 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Microsoft.Data.Sqlite;
-using Xunit;
-
 namespace Nimblesite.Sync.SQLite.Tests;
 
 public partial class SubscriptionIntegrationTests

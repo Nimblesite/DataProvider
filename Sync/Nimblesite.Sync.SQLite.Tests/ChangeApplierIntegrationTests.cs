@@ -32,8 +32,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         // Create test table
         DatabaseCommands.Execute(
             connection: _db,
-            configure: command =>
-                command.CommandText = Data_Shared_1
+            configure: command => command.CommandText = Data_Shared_1
         );
     }
 
@@ -61,30 +60,16 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         Assert.Equal("alice@example.com", reader.GetString(2));
     }
 
-    [Fact]
-    public void ApplyChange_Insert_WithNullPayload_ReturnsError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(ApplyChange_Insert_WithNullPayload_ReturnsError_CasesData))]
+    public void ApplyChange_Insert_WithNullPayload_ReturnsError_Cases(
+        string caseName,
+        Func<SyncLogEntry> input0
+    )
     {
-        // Arrange
-        var entry = Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1();
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
-    }
-
-    [Fact]
-    public void ApplyChange_Insert_WithEmptyPayload_ReturnsError()
-    {
-        // Arrange
-        var entry = Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1();
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseCaseMatrix1(input0: input0, input1: _db);
     }
 
     [Fact]
@@ -122,10 +107,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Update_ModifiesExistingRecord_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'";
@@ -143,10 +125,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
@@ -166,10 +145,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Delete_RemovesExistingRecord_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
@@ -183,23 +159,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-    }
-
-    [Fact]
-    public void ApplyChange_Delete_InvalidPkValue_ReturnsError()
-    {
-        // Arrange
-        var entry = Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1();
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
+        ApplyChangeAndAssertSuccess(input0: entry);
     }
 
     #endregion
@@ -213,10 +173,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesStringValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
     }
 
     [Fact]
@@ -226,10 +183,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesIntegerValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Age FROM Person WHERE Id = 'p1'";
@@ -243,10 +197,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesNullValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Email FROM Person WHERE Id = 'p1'";
@@ -266,10 +217,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesBooleanValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
@@ -289,10 +237,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
@@ -312,10 +257,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         var entry = Fixture_ApplyChange_Insert_HandlesDoubleValues_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
+        ApplyChangeAndAssertSuccess(input0: entry);
 
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT Price FROM Product WHERE Id = 'prod1'";
@@ -435,4 +377,26 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ApplyChangeAndAssertSuccess(global::Nimblesite.Sync.Core.SyncLogEntry input0)
+    {
+        // Act
+        var result = ChangeApplierSQLite.ApplyChange(_db, input0);
+
+        // Assert
+        Assert.True(result is BoolSyncOk);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseCaseMatrix1(Func<SyncLogEntry> input0, SqliteConnection input1)
+    { // Arrange
+        var entry = input0();
+
+        // Act
+        var result = ChangeApplierSQLite.ApplyChange(input1, entry);
+
+        // Assert
+        Assert.True(result is BoolSyncError);
+    }
 }

@@ -1,6 +1,6 @@
 namespace Nimblesite.Sync.Tests;
 
-public sealed class ConflictResolverTests
+public sealed partial class ConflictResolverTests
 {
     private static SyncLogEntry CreateEntry(
         long version,
@@ -32,11 +32,11 @@ public sealed class ConflictResolverTests
 
     [Theory]
     // IsConflict_SameTableSamePkSameOrigin_ReturnsFalse
-    [InlineData("Person", "pk-1", "origin-A")]
+    [MemberData(nameof(IsConflict_SameTableSamePkSameOrigin_ReturnsFalse_CasesInlineCases))]
     // IsConflict_DifferentTable_ReturnsFalse
-    [InlineData("Order", "pk-1", "origin-B")]
+
     // IsConflict_DifferentPk_ReturnsFalse
-    [InlineData("Person", "pk-2", "origin-B")]
+
     public void IsConflict_SameTableSamePkSameOrigin_ReturnsFalse_Cases(
         string caseValue6,
         string caseValue7,

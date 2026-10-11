@@ -174,3 +174,9 @@ Rust completion, hover and schema tests reuse one test-only column constructor, 
 LSP protocol tests share the hover request and non-null result assertion. Every
 document URI, line, character, failure message, and content assertion remains
 unchanged, including multi-line document positions.
+
+### Shared LSP protocol scenarios [LQL-PROTOCOL-SHARED-SCENARIOS]
+
+Protocol tests reuse document initialization, completion requests, hover requests,
+diagnostics updates and formatting validation. Every original test and assertion
+remains active; helpers accept the original documents, positions and messages.

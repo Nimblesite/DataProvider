@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -44,9 +46,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
                 $"GetInvoicesAsync failed: {failure.Value.Message}"
             );
         }
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (InvoiceListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var invoices = success.Value;
 
         Assert.NotEmpty(invoices);
@@ -90,12 +91,11 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
                 $"Full exception: {failure.Value.Exception?.ToString() ?? "No exception details"}"
             );
         }
-        Assert.True(
-            result is CustomerListOk,
-            $"Expected Success but got {result.GetType()}, Error: {(result as CustomerListError)?.Value.Message ?? "No error message"}"
-        );
 
-        var success = (CustomerListOk)result;
+        var success = Ok(
+            actual: result,
+            message: $"Expected Success but got {result.GetType()}, Error: {(result as CustomerListError)?.Value.Message ?? "No error message"}"
+        );
         var customers = success.Value;
 
         Assert.NotEmpty(customers);
@@ -137,9 +137,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         );
 
         // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (OrderListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var orders = success.Value;
 
         Assert.NotEmpty(orders);
@@ -218,9 +217,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetInvoicesAsync("Acme Corp", "2024-01-01", "2024-12-31");
 
         // Assert
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (InvoiceListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var invoices = success.Value;
 
         Assert.Equal(3, invoices.Count);
@@ -246,9 +244,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetCustomersLqlAsync(null);
 
         // Assert
-        Assert.True(result is CustomerListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (CustomerListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var customers = success.Value;
 
         Assert.Equal(2, customers.Count);
@@ -272,9 +269,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetOrdersAsync(null, null, "2024-01-01", "2024-12-31");
 
         // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (OrderListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var orders = success.Value;
 
         Assert.Equal(2, orders.Count);
@@ -297,9 +293,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetInvoicesAsync("Acme Corp", "2024-01-01", "2024-12-31");
 
         // Assert
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (InvoiceListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var invoices = success.Value;
 
         Assert.Empty(invoices);
@@ -315,9 +310,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetCustomersLqlAsync(null);
 
         // Assert
-        Assert.True(result is CustomerListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (CustomerListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var customers = success.Value;
 
         Assert.Empty(customers);
@@ -338,9 +332,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         );
 
         // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (OrderListOk)result;
+        var success = Ok(actual: result, message: $"Expected Success but got {result.GetType()}");
         var orders = success.Value;
 
         Assert.Empty(orders);
@@ -457,21 +450,24 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
+
+        var sql = Ok(actual: sqlResult).Value;
 
         // Test that all parts of the fluent API are preserved in the generated SQL
-        Assert.Contains(
-            "SELECT o.OrderNumber, c.CustomerName, o.TotalAmount",
-            sql,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: sql,
+            expected:
+            [
+                "SELECT o.OrderNumber, c.CustomerName, o.TotalAmount",
+                "FROM Orders o",
+                "INNER JOIN Customer c",
+                "ON o.CustomerId = c.Id",
+                "WHERE o.Status = 'Completed'",
+                "ORDER BY c.CustomerName ASC",
+                "LIMIT 10",
+            ],
+            comparison: StringComparison.Ordinal
         );
-        Assert.Contains("FROM Orders o", sql, StringComparison.Ordinal);
-        Assert.Contains("INNER JOIN Customer c", sql, StringComparison.Ordinal);
-        Assert.Contains("ON o.CustomerId = c.Id", sql, StringComparison.Ordinal);
-        Assert.Contains("WHERE o.Status = 'Completed'", sql, StringComparison.Ordinal);
-        Assert.Contains("ORDER BY c.CustomerName ASC", sql, StringComparison.Ordinal);
-        Assert.Contains("LIMIT 10", sql, StringComparison.Ordinal);
     }
 
     private async Task SetupTestDatabase()
@@ -525,8 +521,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Equal(2, customers.Count);
     }
 
@@ -546,8 +542,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Empty(customers);
     }
 
@@ -572,8 +568,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Equal(2, customers.Count);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
         Assert.Equal("Tech Solutions", customers[1].CustomerName);
@@ -597,8 +593,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Single(customers);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
     }
@@ -621,8 +617,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Single(customers);
         Assert.Equal("Tech Solutions", customers[0].CustomerName);
     }
@@ -650,8 +646,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Single(customers); // Only customer "Acme Corp" exists
         Assert.Equal("Acme Corp", customers[0].CustomerName);
     }
@@ -679,8 +675,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Equal(2, customers.Count); // Both customers have email and are in range
     }
 
@@ -710,8 +706,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Single(customers); // Only "Acme Corp" exists and has email
         Assert.Equal("Acme Corp", customers[0].CustomerName);
     }
@@ -745,8 +741,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
 
         // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+
+        var customers = Ok(actual: result).Value;
         Assert.Single(customers);
         Assert.Equal("Tech Solutions", customers[0].CustomerName);
     }
@@ -777,8 +773,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapOrder);
 
         // Assert
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+
+        var orders = Ok(actual: result).Value;
         Assert.Equal(2, orders.Count); // Both orders match the criteria
         Assert.Equal("Completed", orders[0].Status);
         Assert.Equal("Processing", orders[1].Status);

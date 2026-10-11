@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Tests.Shared;
-
 namespace Nimblesite.Sync.Postgres.Tests;
 
 public partial class PostgresRepositoryTests

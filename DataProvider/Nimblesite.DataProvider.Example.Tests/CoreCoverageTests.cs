@@ -4,6 +4,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
 
@@ -141,8 +142,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             sql: "UPDATE Customer SET Email = 'updated@test.com' WHERE CustomerName = 'Acme Corp'"
         );
 
-        Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-        var ok = (Result<int, SqlError>.Ok<int, SqlError>)result;
+        var ok = Ok(actual: result);
         Assert.Equal(1, ok.Value);
     }
 
@@ -204,8 +204,7 @@ public sealed partial class CoreCoverageTests : IDisposable
 
         var result = _connection.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer");
 
-        Assert.True(result is Result<object?, SqlError>.Ok<object?, SqlError>);
-        var ok = (Result<object?, SqlError>.Ok<object?, SqlError>)result;
+        var ok = Ok(actual: result);
         Assert.Equal(2L, ok.Value);
     }
 
@@ -219,8 +218,7 @@ public sealed partial class CoreCoverageTests : IDisposable
             parameters: [new SqliteParameter("@name", "Acme Corp")]
         );
 
-        Assert.True(result is Result<object?, SqlError>.Ok<object?, SqlError>);
-        var ok = (Result<object?, SqlError>.Ok<object?, SqlError>)result;
+        var ok = Ok(actual: result);
         Assert.Equal(1L, ok.Value);
     }
 
@@ -552,8 +550,8 @@ public sealed partial class CoreCoverageTests : IDisposable
                 var result = tx.Execute(
                     sql: "UPDATE Customer SET Phone = '555-9999' WHERE CustomerName = 'Acme Corp'"
                 );
-                Assert.True(result is Result<int, SqlError>.Ok<int, SqlError>);
-                var ok = (Result<int, SqlError>.Ok<int, SqlError>)result;
+
+                var ok = Ok(actual: result);
                 Assert.Equal(1, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -616,8 +614,8 @@ public sealed partial class CoreCoverageTests : IDisposable
             .Transact(async tx =>
             {
                 var result = tx.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer");
-                Assert.True(result is Result<object?, SqlError>.Ok<object?, SqlError>);
-                var ok = (Result<object?, SqlError>.Ok<object?, SqlError>)result;
+
+                var ok = Ok(actual: result);
                 Assert.Equal(2L, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })
@@ -636,8 +634,8 @@ public sealed partial class CoreCoverageTests : IDisposable
                     sql: "SELECT COUNT(*) FROM Customer WHERE CustomerName = @name",
                     parameters: [new SqliteParameter("@name", "Acme Corp")]
                 );
-                Assert.True(result is Result<object?, SqlError>.Ok<object?, SqlError>);
-                var ok = (Result<object?, SqlError>.Ok<object?, SqlError>)result;
+
+                var ok = Ok(actual: result);
                 Assert.Equal(1L, ok.Value);
                 await Task.CompletedTask.ConfigureAwait(false);
             })

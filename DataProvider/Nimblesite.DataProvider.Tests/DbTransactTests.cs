@@ -231,11 +231,7 @@ public sealed partial class DbTransactTests : IDisposable
 
     private async Task CreateTestTable(SqliteTransaction? transaction = null)
     {
-        using var command = new SqliteCommand(
-            Data_CreateTestTable_1,
-            _connection,
-            transaction
-        );
+        using var command = new SqliteCommand(Data_CreateTestTable_1, _connection, transaction);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 

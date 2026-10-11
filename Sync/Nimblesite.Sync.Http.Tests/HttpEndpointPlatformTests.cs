@@ -6,18 +6,18 @@ using Microsoft.Data.SqlClient;
 namespace Nimblesite.Sync.Http.Tests;
 
 [Collection(PostgresTestSuite.Name)]
-public sealed record HttpEndpointPlatformTests
+public sealed partial record HttpEndpointPlatformTests
     : IClassFixture<SyncApiWebApplicationFactory>,
-        IClassFixture<HttpSqlServerContainerFixture>
+        IClassFixture<SqlServerContainerFixture>
 {
     private readonly SyncApiWebApplicationFactory _factory;
     private readonly PostgresContainerFixture _postgres;
-    private readonly HttpSqlServerContainerFixture _sqlServer;
+    private readonly SqlServerContainerFixture _sqlServer;
 
     public HttpEndpointPlatformTests(
         SyncApiWebApplicationFactory factory,
         PostgresContainerFixture postgres,
-        HttpSqlServerContainerFixture sqlServer
+        SqlServerContainerFixture sqlServer
     )
     {
         _factory = factory;
@@ -26,9 +26,7 @@ public sealed record HttpEndpointPlatformTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(HttpStateAndPull_ReturnEmptyStateAndChangesInlineCases))]
     // Implements [SYNC-HTTP-PROVIDERS].
     public async Task HttpStateAndPull_ReturnEmptyStateAndChanges(string provider)
     {
@@ -66,9 +64,7 @@ public sealed record HttpEndpointPlatformTests
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(HttpPush_AppliesChangeOnEveryProviderInlineCases))]
     // Implements [SYNC-HTTP-PROVIDERS].
     public async Task HttpPush_AppliesChangeOnEveryProvider(string provider)
     {
@@ -117,7 +113,12 @@ public sealed record HttpEndpointPlatformTests
         }
     }
 
-    private static async Task AssertPersonAsync(string provider, string connectionString, Guid id)
+    private static async Task AssertPersonAsync(
+        string provider,
+        string connectionString,
+        Guid id,
+        string expectedName = "Ada"
+    )
     {
         using DbConnection connection = provider switch
         {
@@ -131,89 +132,19 @@ public sealed record HttpEndpointPlatformTests
         using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         Assert.True(reader.Read(), $"{provider} did not receive the pushed person");
         Assert.Equal(id, Guid.Parse(reader.GetValue(0).ToString() ?? string.Empty));
-        Assert.Equal("Ada", reader.GetString(1));
+        Assert.Equal(expectedName, reader.GetString(1));
         Assert.Equal("ada@example.test", reader.GetString(2));
         Assert.False(reader.Read(), $"{provider} inserted more than one person");
     }
 
-    private async Task<HttpTarget> CreateTargetAsync(string provider)
-    {
-        if (provider == "postgres")
-        {
-            using var connection = await _postgres
-                .CreateDatabaseAsync("sync_http")
-                .ConfigureAwait(false);
-            CreatePersonTable("postgres", connection.ConnectionString, "public");
-            Assert.IsType<BoolSyncOk>(PostgresSyncSchema.CreateSchema(connection));
-            Assert.IsType<BoolSyncOk>(PostgresSyncSchema.SetOriginId(connection, "server-origin"));
-            return new HttpTarget(connection.ConnectionString, FilePath: null);
-        }
-        if (provider == "sqlserver")
-        {
-            var connectionString = await _sqlServer
-                .CreateDatabaseConnectionStringAsync()
-                .ConfigureAwait(false);
-            CreatePersonTable("sqlserver", connectionString, "dbo");
-            using var sqlServer = new SqlConnection(connectionString);
-            await sqlServer.OpenAsync().ConfigureAwait(false);
-            Assert.IsType<BoolSyncOk>(Nimblesite.Sync.SqlServer.SqlServerSyncSchema.CreateSchema(sqlServer));
-            Assert.IsType<BoolSyncOk>(Nimblesite.Sync.SqlServer.SqlServerSyncStore.SetOriginId(sqlServer, "server-origin"));
-            return new HttpTarget(connectionString, FilePath: null);
-        }
-        Assert.Equal("sqlite", provider);
-        var path = Path.Combine(Path.GetTempPath(), $"sync_http_{Guid.NewGuid():N}.db");
-        var sqliteConnectionString = $"Data Source={path};Pooling=False";
-        CreatePersonTable("sqlite", path, "main");
-        using var sqlite = new SqliteConnection(sqliteConnectionString);
-        await sqlite.OpenAsync().ConfigureAwait(false);
-        Assert.IsType<BoolSyncOk>(SyncSchema.CreateSchema(sqlite));
-        Assert.IsType<BoolSyncOk>(SyncSchema.SetOriginId(sqlite, "server-origin"));
-        return new HttpTarget(sqliteConnectionString, path);
-    }
-
-    private static void CreatePersonTable(string provider, string output, string schema)
-    {
-        var yaml = $$"""
-            name: sync_http_person
-            tables:
-              - name: person
-                schema: {{schema}}
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                  - name: email
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-            """;
-        var path = Path.GetTempFileName();
-        try
-        {
-            File.WriteAllText(path, yaml);
-            Assert.Equal(
-                0,
-                DataProviderMigrate.Program.Main([
-                    "migrate",
-                    "--schema",
-                    path,
-                    "--provider",
-                    provider,
-                    "--output",
-                    output,
-                ])
-            );
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    private sealed record HttpTarget(string ConnectionString, string? FilePath);
+    private Task<(string ConnectionString, string? FilePath)> CreateTargetAsync(
+        string provider,
+        bool tableChecks = false
+    ) =>
+        SyncDatabaseTargets.CreateAsync(
+            provider: provider,
+            postgres: _postgres,
+            sqlServer: _sqlServer,
+            tableChecks: tableChecks
+        );
 }

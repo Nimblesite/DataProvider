@@ -151,7 +151,7 @@ internal static class SchemaTestData
     internal static RlsPolicyDefinition RlsPolicy(
         string name = "",
         bool isPermissive = true,
-        IReadOnlyList<RlsOperation> operations = [RlsOperation.All],
+        IReadOnlyList<RlsOperation>? operations = null,
         IReadOnlyList<string>? roles = null,
         string? usingLql = null,
         string? withCheckLql = null,
@@ -162,7 +162,7 @@ internal static class SchemaTestData
         {
             Name = name,
             IsPermissive = isPermissive,
-            Operations = operations,
+            Operations = operations ?? [RlsOperation.All],
             Roles = roles ?? [],
             UsingLql = usingLql,
             WithCheckLql = withCheckLql,

@@ -1,3 +1,4 @@
+using static global::Tests.Shared.StringAssertions;
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 using BodyError = Outcome.Result<
     string,
@@ -13,19 +14,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 public sealed partial class PostgresFunctionBodyLqlTests
 {
     [Theory]
-    [InlineData(
-        "current_setting('app.tenant_id')::uuid",
-        "SELECT current_setting('app.tenant_id', true)::uuid"
-    )]
-    [InlineData(
-        "SELECT current_setting('app.user_id')::uuid",
-        "SELECT current_setting('app.user_id', true)::uuid"
-    )]
-    [InlineData("true", "SELECT true")]
-    [InlineData(
-        "is_member(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "SELECT is_member(current_setting('app.user_id', true)::uuid, current_setting('app.tenant_id', true)::uuid)"
-    )]
+    [MemberData(nameof(TranslatePostgresBody_NapScalarShapes_EmitsSqlBodyInlineCases))]
     public void TranslatePostgresBody_NapScalarShapes_EmitsSqlBody(string bodyLql, string expected)
     {
         var sql = Body(bodyLql);
@@ -36,23 +25,21 @@ public sealed partial class PostgresFunctionBodyLqlTests
     [Fact]
     public void TranslatePostgresBody_ExistsPipeline_EmitsSelectExists()
     {
-        var sql = Body(
-            Data_TranslatePostgresBody_ExistsPipeline_EmitsSelectExists_1
-        );
+        var sql = Body(Data_TranslatePostgresBody_ExistsPipeline_EmitsSelectExists_1);
 
         Assert.StartsWith("SELECT EXISTS (", sql, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", sql, StringComparison.Ordinal);
-        Assert.Contains("user_id = u", sql, StringComparison.Ordinal);
-        Assert.Contains("tenant_id = t", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["FROM tenant_members", "user_id = u", "tenant_id = t"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
     public void TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate()
     {
         // Implements [LQL-PREDICATE-IN-LIST].
-        var sql = Body(
-            Data_TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate_1
-        );
+        var sql = Body(Data_TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate_1);
 
         Assert.Contains("role IN ('owner', 'admin')", sql, StringComparison.Ordinal);
     }
@@ -60,9 +47,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     [Fact]
     public void FromYaml_FunctionBodyLql_Deserializes()
     {
-        var schema = SchemaYamlSerializer.FromYaml(
-            Data_FromYaml_FunctionBodyLql_Deserializes_1
-        );
+        var schema = SchemaYamlSerializer.FromYaml(Data_FromYaml_FunctionBodyLql_Deserializes_1);
 
         Assert.Single(schema.Functions);
         Assert.Equal("current_setting('app.tenant_id')::uuid", schema.Functions[0].BodyLql);
@@ -73,9 +58,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void FromYaml_FunctionBodyAndBodyLql_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            SchemaYamlSerializer.FromYaml(
-                Data_FromYaml_FunctionBodyAndBodyLql_Throws_1
-            )
+            SchemaYamlSerializer.FromYaml(Data_FromYaml_FunctionBodyAndBodyLql_Throws_1)
         );
 
         Assert.Contains("mutually exclusive", ex.Message, StringComparison.Ordinal);
@@ -106,11 +89,10 @@ public sealed partial class PostgresFunctionBodyLqlTests
             )
         );
 
-        Assert.Contains("AS $function$", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "SELECT current_setting('app.tenant_id', true)::uuid",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected: ["AS $function$", "SELECT current_setting('app.tenant_id', true)::uuid"],
+            comparison: StringComparison.Ordinal
         );
         Assert.DoesNotContain("bodyLql", ddl, StringComparison.Ordinal);
     }
@@ -134,10 +116,11 @@ public sealed partial class PostgresFunctionBodyLqlTests
             )
         );
 
-        Assert.Contains("SELECT EXISTS (", ddl, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", ddl, StringComparison.Ordinal);
-        Assert.Contains("user_id = u", ddl, StringComparison.Ordinal);
-        Assert.Contains("tenant_id = t", ddl, StringComparison.Ordinal);
+        ContainsAll(
+            actual: ddl,
+            expected: ["SELECT EXISTS (", "FROM tenant_members", "user_id = u", "tenant_id = t"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]

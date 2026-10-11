@@ -2,6 +2,8 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Text.Json;
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -21,7 +23,9 @@ namespace Nimblesite.Sync.Http.Tests;
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture)
+    : IAsyncLifetime,
+        IDisposable
 {
     private string _postgresConnectionString = null!;
     private string _sqliteDbPath = null!;
@@ -47,6 +51,12 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
 
     public Task DisposeAsync()
     {
+        Dispose();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
         _sqliteConn.Close();
         _sqliteConn.Dispose();
         _postgresConn.Close();
@@ -57,7 +67,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             File.Delete(_sqliteDbPath);
         }
 
-        return Task.CompletedTask;
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -70,8 +80,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
 
         DatabaseCommands.Execute(
             connection: _sqliteConn,
-            configure: command =>
-                command.CommandText = Data_SetupSqliteSource_1
+            configure: command => command.CommandText = Data_SetupSqliteSource_1
         );
 
         TriggerGenerator.CreateTriggers(_sqliteConn, "User", _logger);
@@ -307,126 +316,27 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
     // Implements [SYNC-TEST-STRING-TRANSFORMS].
     [Theory]
     // MappingEngine_WithConcatTransform_CombinesColumns
-    [InlineData(
-        "name-concat",
-        "Person",
-        "person",
-        "{\"Id\":\"p1\"}",
-        "full_name",
-        "concat(FirstName, ' ', LastName)",
-        "{\"Id\":\"p1\",\"FirstName\":\"John\",\"LastName\":\"Doe\"}",
-        "John Doe"
-    )]
+    [MemberData(nameof(LqlExpression_StringTransform_ReturnsExpectedPayloadInlineCases))]
     // MappingEngine_WithCoalesceTransform_ReturnsFirstNonNull
-    [InlineData(
-        "coalesce-test",
-        "Contact",
-        "contact",
-        "{\"Id\":\"c1\"}",
-        "phone",
-        "coalesce(Mobile, Home, Office)",
-        "{\"Id\":\"c1\",\"Mobile\":\"\",\"Home\":\"555-1234\",\"Office\":\"555-5678\"}",
-        "555-1234"
-    )]
+
     // MappingEngine_WithSubstringTransform_ExtractsText
-    [InlineData(
-        "substring-test",
-        "Product",
-        "product",
-        "{\"Id\":\"p1\"}",
-        "sku_prefix",
-        "substring(SKU, 1, 3)",
-        "{\"Id\":\"p1\",\"SKU\":\"ABC-12345\"}",
-        "ABC"
-    )]
+
     // LqlExpression_WithEmptyString_ReturnsEmpty
-    [InlineData(
-        "empty-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "upper_name",
-        "upper(Name)",
-        "{\"Id\":\"1\",\"Name\":\"\"}",
-        ""
-    )]
+
     // LqlExpression_ReplaceFunction_WorksCorrectly
-    [InlineData(
-        "replace-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "clean_phone",
-        "replace(Phone, '-', '')",
-        "{\"Id\":\"1\",\"Phone\":\"555-123-4567\"}",
-        "5551234567"
-    )]
+
     // LqlExpression_LeftFunction_ExtractsPrefix
-    [InlineData(
-        "left-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "initials",
-        "left(Name, 2)",
-        "{\"Id\":\"1\",\"Name\":\"Alexander\"}",
-        "Al"
-    )]
+
     // LqlExpression_RightFunction_ExtractsSuffix
-    [InlineData(
-        "right-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "last_four",
-        "right(CardNumber, 4)",
-        "{\"Id\":\"1\",\"CardNumber\":\"1234567890123456\"}",
-        "3456"
-    )]
+
     // LqlExpression_TrimFunction_RemovesWhitespace
-    [InlineData(
-        "trim-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "clean_name",
-        "trim(Name)",
-        "{\"Id\":\"1\",\"Name\":\"  Hello World  \"}",
-        "Hello World"
-    )]
+
     // LqlExpression_NestedConcat_BuildsComplexString
-    [InlineData(
-        "nested-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "display",
-        "concat(Title, ': ', FirstName, ' ', LastName, ' (', Department, ')')",
-        "{\"Id\":\"1\",\"Title\":\"Dr\",\"FirstName\":\"John\",\"LastName\":\"Smith\",\"Department\":\"Engineering\"}",
-        "Dr: John Smith (Engineering)"
-    )]
+
     // LqlExpression_DateFormatWithDifferentTimezones_PreservesUtc
-    [InlineData(
-        "tz-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "date_only",
-        "CreatedAt |> dateFormat('yyyy-MM-dd')",
-        "{\"Id\":\"1\",\"CreatedAt\":\"2024-12-25T23:30:00+00:00\"}",
-        "2024-12-25"
-    )]
+
     // LqlExpression_PipelineWithMultipleSteps_TransformsCorrectly
-    [InlineData(
-        "pipeline-test",
-        "Source",
-        "target",
-        "{\"Id\":\"1\"}",
-        "clean_name",
-        "Name |> trim() |> upper()",
-        "{\"Id\":\"1\",\"Name\":\"  hello world  \"}",
-        "HELLO WORLD"
-    )]
+
     public void LqlExpression_StringTransform_ReturnsExpectedPayload(
         string mappingId,
         string sourceTable,
@@ -474,10 +384,12 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
                 """
         );
 
-        // Fetch changes from SQLite
-        var changes = SyncLogRepository.FetchChanges(_sqliteConn, 0, 100);
-        Assert.True(changes is SyncLogListOk, $"Fetch failed: {changes}");
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changes = SyncLogRepository.FetchChanges(
+            connection: _sqliteConn,
+            fromVersion: 0,
+            batchSize: 100
+        );
+        var changesList = Ok(actual: changes, message: $"Fetch failed: {changes}").Value;
         Assert.Single(changesList);
 
         // Apply mapping to transform the entry
@@ -492,7 +404,11 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
             // Create a new SyncLogEntry with the mapped data
-            var targetEntry = Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(changesList: changesList, entry: entry, mergedPayload: mergedPayload);
+            var targetEntry = Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
+                changesList: changesList,
+                entry: entry,
+                mergedPayload: mergedPayload
+            );
 
             var applyResult = PostgresChangeApplier.ApplyChange(
                 _postgresConn,
@@ -559,7 +475,11 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
                 // Merge PK into payload - PostgresChangeApplier expects PK in payload for inserts
                 var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
 
-                var targetEntry = Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(change: change, entry: entry, mergedPayload: mergedPayload);
+                var targetEntry = Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(
+                    change: change,
+                    entry: entry,
+                    mergedPayload: mergedPayload
+                );
                 PostgresChangeApplier.ApplyChange(_postgresConn, targetEntry, _logger);
             }
         }
@@ -637,10 +557,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         // Arrange - payload with null field
         var config = MappingConfig(mappingId: "null-test", LqlColumn("upper_name", "upper(Name)"));
 
-        var entry = SourceEntry("""{"Id":"1","Name":null}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Name":null}"""
+        );
 
         // Assert - should handle null gracefully
         var success = Assert.IsType<MappingSuccess>(result);
@@ -656,10 +576,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             LqlColumn("name_length", "length(Name)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Name":"Hello"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Name":"Hello"}"""
+        );
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -676,10 +596,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             LqlColumn("phone", "coalesce(Mobile, Home, Work)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Mobile":"","Home":"","Work":""}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Mobile":"","Home":"","Work":""}"""
+        );
 
         // Assert - coalesce returns null/empty when all values are empty
         var success = Assert.IsType<MappingSuccess>(result);
@@ -742,10 +662,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         // Arrange
         var config = Fixture_MappingEngine_DisabledMapping_ReturnsSkipped_1();
 
-        var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Data":"test"}"""
+        );
 
         // Assert
         var skipped = Assert.IsType<MappingSkipped>(result);
@@ -796,10 +716,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             new ColumnMapping("Count", "count")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Amount":123.45,"Count":42}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Amount":123.45,"Count":42}"""
+        );
 
         // Assert - numeric values preserved
         var success = Assert.IsType<MappingSuccess>(result);
@@ -818,10 +738,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             new ColumnMapping("IsVerified", "is_verified")
         );
 
-        var entry = SourceEntry("""{"Id":"1","IsActive":true,"IsVerified":false}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","IsActive":true,"IsVerified":false}"""
+        );
 
         // Assert
         var success = Assert.IsType<MappingSuccess>(result);
@@ -839,18 +759,16 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             new ColumnMapping("Description", "description")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}"""
+        );
 
         // Assert - special chars preserved
         var success = Assert.IsType<MappingSuccess>(result);
         using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
         var desc = doc.RootElement.GetProperty("description").GetString();
-        Assert.Contains("\n", desc);
-        Assert.Contains("\t", desc);
-        Assert.Contains("\"quoted\"", desc);
+        ContainsAll(actual: desc, expected: ["\n", "\t", "\"quoted\""]);
     }
 
     [Fact]
@@ -886,18 +804,16 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             LqlColumn("name_upper", "upper(Name)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}"""
+        );
 
         // Assert - Unicode preserved
         var success = Assert.IsType<MappingSuccess>(result);
         using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
         var name = doc.RootElement.GetProperty("name").GetString();
-        Assert.Contains("日本語", name);
-        Assert.Contains("中文", name);
-        Assert.Contains("🎉", name);
+        ContainsAll(actual: name, expected: ["日本語", "中文", "🎉"]);
     }
 
     [Fact]
@@ -915,12 +831,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
             LqlColumn("computed", "concat(Col1, '-', Col2)")
         );
 
-        var entry = SourceEntry(
-            """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}"""
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}"""
         );
-
-        // Act
-        var result = ApplyMapping(entry, config);
 
         // Assert - all mappings applied
         var success = Assert.IsType<MappingSuccess>(result);
@@ -940,12 +854,10 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         // Arrange - exclude many columns
         var config = Fixture_MappingEngine_ExcludeMultipleColumns_AllExcluded_1();
 
-        var entry = SourceEntry(
-            """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}"""
+        var result = ApplyConfiguredPayloadMapping(
+            input0: config,
+            value0: """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}"""
         );
-
-        // Act
-        var result = ApplyMapping(entry, config);
 
         // Assert - excluded columns not in output
         var success = Assert.IsType<MappingSuccess>(result);
@@ -956,5 +868,19 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         Assert.False(doc.RootElement.TryGetProperty("Token", out _));
         Assert.False(doc.RootElement.TryGetProperty("Secret", out _));
         Assert.False(doc.RootElement.TryGetProperty("PrivateKey", out _));
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.Sync.Core.MappingResult ApplyConfiguredPayloadMapping(
+        global::Nimblesite.Sync.Core.SyncMappingConfig input0,
+        string value0
+    )
+    {
+        var entry = SourceEntry(value0);
+
+        // Act
+        var result = ApplyMapping(entry, input0);
+
+        return result;
     }
 }

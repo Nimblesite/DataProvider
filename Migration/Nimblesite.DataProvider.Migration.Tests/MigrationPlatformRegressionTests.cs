@@ -18,15 +18,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     // Implements [MIG-DIFF-ADDITIVE]. Regression: #109.
     [Theory]
-    [InlineData("sqlite", true, false)]
-    [InlineData("postgres", true, false)]
-    [InlineData("sqlserver", true, false)]
-    [InlineData("sqlite", false, true)]
-    [InlineData("postgres", false, true)]
-    [InlineData("sqlserver", false, true)]
-    [InlineData("sqlite", true, true)]
-    [InlineData("postgres", true, true)]
-    [InlineData("sqlserver", true, true)]
+    [MemberData(nameof(AdditiveMigration_RelaxesNotNullWithoutDroppingOtherConstraintsInlineCases))]
     public async Task AdditiveMigration_RelaxesNotNullWithoutDroppingOtherConstraints(
         string provider,
         bool stripeIdNullable,
@@ -84,15 +76,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     // Implements [MIG-DIFF-FOREIGN-KEY]. Regression: #79 and #80.
     [Theory]
-    [InlineData("sqlite", false, false)]
-    [InlineData("postgres", false, false)]
-    [InlineData("sqlserver", false, false)]
-    [InlineData("sqlite", true, false)]
-    [InlineData("postgres", true, false)]
-    [InlineData("sqlserver", true, false)]
-    [InlineData("sqlite", false, true)]
-    [InlineData("postgres", false, true)]
-    [InlineData("sqlserver", false, true)]
+    [MemberData(nameof(AdditiveMigration_AddsForeignKeyWhenParentOrColumnIsNewInlineCases))]
     public async Task AdditiveMigration_AddsForeignKeyWhenParentOrColumnIsNew(
         string provider,
         bool parentInitiallyExists,
@@ -139,9 +123,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     // Implements [MIG-DIFF-FOREIGN-KEY]. Regression: #79 and #80, including a rerun after the column was already added.
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AdditiveMigration_RepairsPartiallyMigratedForeignKeyInlineCases))]
     public async Task AdditiveMigration_RepairsPartiallyMigratedForeignKey(string provider)
     {
         await WithTargetAsync(provider, AssertPartialForeignKeyMigration).ConfigureAwait(true);
@@ -175,12 +157,9 @@ public sealed partial record MigrationPlatformRegressionTests
 
     // Implements [MIG-DIFF-DESTRUCTIVE]. Regression: #105. Either obsolete FK may be removed.
     [Theory]
-    [InlineData("sqlite", true, false)]
-    [InlineData("postgres", true, false)]
-    [InlineData("sqlserver", true, false)]
-    [InlineData("sqlite", false, true)]
-    [InlineData("postgres", false, true)]
-    [InlineData("sqlserver", false, true)]
+    [MemberData(
+        nameof(DestructiveMigration_KeepsDeclaredForeignKeysAndRemovesOnlyObsoleteOneInlineCases)
+    )]
     public async Task DestructiveMigration_KeepsDeclaredForeignKeysAndRemovesOnlyObsoleteOne(
         string provider,
         bool keepTenantForeignKey,
@@ -303,15 +282,9 @@ public sealed partial record MigrationPlatformRegressionTests
     // Implements [RLS-DIFF] and [RLS-MSSQL]. Regression: #98. Supported providers
     // reconcile each predicate; unsupported SQL Server RLS must fail closed.
     [Theory]
-    [InlineData("sqlite", false, true)]
-    [InlineData("postgres", false, true)]
-    [InlineData("sqlserver", false, true)]
-    [InlineData("sqlite", true, false)]
-    [InlineData("postgres", true, false)]
-    [InlineData("sqlserver", true, false)]
-    [InlineData("sqlite", false, false)]
-    [InlineData("postgres", false, false)]
-    [InlineData("sqlserver", false, false)]
+    [MemberData(
+        nameof(RlsMigration_ReconcilesSupportedPredicatesAndRejectsUnsupportedProviderInlineCases)
+    )]
     public async Task RlsMigration_ReconcilesSupportedPredicatesAndRejectsUnsupportedProvider(
         string provider,
         bool usingAllowed,

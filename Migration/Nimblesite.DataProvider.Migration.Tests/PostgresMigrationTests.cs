@@ -1,5 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -13,7 +15,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -43,9 +46,8 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             schema,
             logger: _logger
         );
-        Assert.True(operations is OperationsResultOk);
 
-        var ops = ((OperationsResultOk)operations).Value;
+        var ops = Ok(actual: operations).Value;
 
         var result = Apply(operations: ops);
 
@@ -57,8 +59,8 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify table exists
         var inspected = PostgresSchemaInspector.Inspect(_connection, "public", _logger);
-        Assert.True(inspected is SchemaResultOk);
-        var inspectedSchema = ((SchemaResultOk)inspected).Value;
+
+        var inspectedSchema = Ok(actual: inspected).Value;
         Assert.Contains(inspectedSchema.Tables, t => t.Name == "users");
     }
 
@@ -71,11 +73,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Act
         var emptySchema = InspectPublic();
 
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         // Assert
         Assert.True(
@@ -98,10 +96,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange - Create initial schema
         var v1 = Fixture_UpgradeExistingDatabase_AddColumn_Success_1();
 
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
         _ = Apply(operations: v1Ops);
 
         // Define v2 with new columns
@@ -134,10 +129,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange
         var v1 = Fixture_UpgradeExistingDatabase_AddTable_Success_1();
 
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
         _ = Apply(operations: v1Ops);
 
         // v2 adds a new table
@@ -168,10 +160,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange
         var v1 = Fixture_UpgradeExistingDatabase_AddIndex_Success_1();
 
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
         _ = Apply(operations: v1Ops);
 
         // v2 adds an index
@@ -206,11 +195,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Act - Run migration twice
         for (var i = 0; i < 2; i++)
         {
-            var currentSchema = InspectPublic();
-
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-            ).Value;
+            var operations = InspectAndApplyInitialSchema(input0: schema);
 
             var result = Apply(operations: operations);
 
@@ -232,11 +217,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         // Assert
         Assert.True(result is MigrationApplyResultOk);
@@ -264,11 +245,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var schema = Fixture_CreateTable_MixedCaseColumnCheckConstraint_PreservesIdentifierCase_1();
 
         var current = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: current, input1: schema);
 
         Assert.True(
             result is MigrationApplyResultOk,
@@ -287,11 +264,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         // Assert - Migration succeeded
         Assert.True(
@@ -306,8 +279,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         Assert.True(reader.Read(), "Expression index should exist");
         var indexDef = reader.GetString(1);
-        Assert.Contains("UNIQUE", indexDef);
-        Assert.Contains("lower", indexDef);
+        ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower"]);
     }
 
     [Fact]
@@ -316,10 +288,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange - Create table with expression index
         var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1();
 
-        var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
+        var operations = InspectAndApplyInitialSchema(input0: schema);
         _ = Apply(operations: operations);
 
         // Act - Insert first venue
@@ -346,11 +315,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         // Assert
         Assert.True(
@@ -364,9 +329,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var indexDef = (string?)cmd.ExecuteScalar();
 
         Assert.NotNull(indexDef);
-        Assert.Contains("UNIQUE", indexDef);
-        Assert.Contains("lower", indexDef);
-        Assert.Contains("suburb_id", indexDef);
+        ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "suburb_id"]);
     }
 
     [Fact]
@@ -375,22 +338,21 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange - Create tables with composite expression index
         var schema = Fixture_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1();
 
-        var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
+        var operations = InspectAndApplyInitialSchema(input0: schema);
         _ = Apply(operations: operations);
 
         // Create two regions
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1
+                command.CommandText =
+                    Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1
         );
 
         // Act - Insert same name in different regions (should succeed)
         using var insertCmd = _connection.CreateCommand();
-        insertCmd.CommandText = Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_2;
+        insertCmd.CommandText =
+            Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_2;
         var rowsAffected = insertCmd.ExecuteNonQuery();
 
         // Assert - Both inserts should succeed
@@ -420,11 +382,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         {
             var currentSchema = InspectPublic();
 
-            var operations = (
-                (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-            ).Value;
-
-            var result = Apply(operations: operations);
+            var result = CalculateAndApplySchemaChanges(input0: currentSchema, input1: schema);
 
             // Both runs should succeed - IF NOT EXISTS handles already-existing index
             Assert.True(
@@ -551,10 +509,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange - Create table with regular column index
         var v1 = Fixture_UpgradeIndex_SameNameDifferentType_NotDetectedWithoutDestructive_1();
 
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
         _ = Apply(operations: v1Ops);
 
         // v2 wants to change to expression index with SAME name
@@ -579,10 +534,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // Arrange - Create initial tables
         var v1 = Fixture_Destructive_DropTable_AllowedWithOption_1();
 
-        var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, v1, logger: _logger)
-        ).Value;
+        var v1Ops = InspectAndApplyInitialSchema(input0: v1);
         _ = Apply(operations: v1Ops);
 
         // v2 removes dropme table
@@ -621,11 +573,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -655,11 +603,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -667,8 +611,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText =
-                    Data_LqlDefault_GenUuidFunction_GeneratesValidUuid_1
+                command.CommandText = Data_LqlDefault_GenUuidFunction_GeneratesValidUuid_1
         );
 
         // Verify UUIDs were generated and are unique
@@ -695,11 +638,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -728,11 +667,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -762,11 +697,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -795,11 +726,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Act
         var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
-
-        var result = Apply(operations: operations);
+        var result = CalculateAndApplySchemaChanges(input0: emptySchema, input1: schema);
 
         Assert.True(result is MigrationApplyResultOk);
 
@@ -847,7 +774,8 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     {
         // Arrange — a Documents table with a 384-dim embedding, the
         // sentence-transformers default.
-        var schema = Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1();
+        var schema =
+            Fixture_CreateTableWithVectorColumn_MigratesAgainstPgvectorContainer_Success_1();
 
         // The pgvector extension must exist in the database before any
         // vector(N) column can be created. The migration pipeline is
@@ -934,10 +862,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         // the high end of the dimension range.
         var schema = Fixture_CreateTableWithVectorColumn_OpenAiLargeDim_Success_1();
 
-        var emptySchema = InspectPublic();
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, schema, logger: _logger)
-        ).Value;
+        var operations = InspectAndApplyInitialSchema(input0: schema);
 
         // Act
         var result = Apply(operations: operations);
@@ -981,4 +906,35 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
     private SchemaDefinition InspectPublic() =>
         ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)).Value;
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Outcome.Result<
+        global::System.Boolean,
+        global::Nimblesite.DataProvider.Migration.Core.MigrationError
+    > CalculateAndApplySchemaChanges(
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input0,
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input1
+    )
+    {
+        var operations = (
+            (OperationsResultOk)SchemaDiff.Calculate(input0, input1, logger: _logger)
+        ).Value;
+
+        var result = Apply(operations: operations);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.SchemaOperation> InspectAndApplyInitialSchema(
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input0
+    )
+    {
+        var emptySchema = InspectPublic();
+        var v1Ops = (
+            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, input0, logger: _logger)
+        ).Value;
+
+        return v1Ops;
+    }
 }

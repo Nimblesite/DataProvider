@@ -169,7 +169,7 @@ public static class SqlServerDdlGenerator
         }
         var unique = index.IsUnique ? "UNIQUE " : "";
         var filter = index.Filter is null ? "" : $" WHERE {index.Filter}";
-        return $"CREATE {unique}INDEX {Quote(index.Name)} ON {Table(schema, tableName)} ({Columns(index.Columns)}){filter}";
+        return $"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID({Literal(Table(schema, tableName))}) AND name = {Literal(index.Name)}) CREATE {unique}INDEX {Quote(index.Name)} ON {Table(schema, tableName)} ({Columns(index.Columns)}){filter}";
     }
 
     private static string ForeignKey(string tableName, ForeignKeyDefinition fk) =>

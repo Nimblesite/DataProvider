@@ -4,6 +4,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -27,14 +28,12 @@ public sealed partial class SqlModelE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_1
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_2
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
     }
 
@@ -89,10 +88,12 @@ public sealed partial class SqlModelE2ETests : IDisposable
 
         var sqlOk = Assert.IsType<StringOk>(stmt.ToSQLite());
         var sql = sqlOk.Value;
-        Assert.Contains("(", sql);
-        Assert.Contains(")", sql);
-        Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(actual: sql, expected: ["(", ")"]);
+        ContainsAll(
+            actual: sql,
+            expected: ["AND", "OR"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         var result = _connection.Query<(string, double, string)>(
             sql: sql,

@@ -25,8 +25,7 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchema_1
+            configure: command => command.CommandText = Data_CreateSchema_1
         );
     }
 

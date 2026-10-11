@@ -29,8 +29,7 @@ public sealed partial class TestDb : IDisposable
     {
         DatabaseCommands.Execute(
             connection: Connection,
-            configure: command =>
-                command.CommandText = Data_InitializeSyncSchema_1
+            configure: command => command.CommandText = Data_InitializeSyncSchema_1
         );
     }
 

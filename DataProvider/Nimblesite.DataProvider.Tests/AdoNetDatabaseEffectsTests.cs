@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Tests;
 // AdoNetDatabaseEffects through a real in-memory SQLite connection so the
 // happy path, validation branches, and DbException / InvalidOperationException
 // catch arms are all exercised.
-public sealed class AdoNetDatabaseEffectsTests
+public sealed partial class AdoNetDatabaseEffectsTests
 {
     private static string MapType(Type fieldType, string dataTypeName, bool isNullable) =>
         fieldType == typeof(long) ? (isNullable ? "long?" : "long")
@@ -23,11 +23,11 @@ public sealed class AdoNetDatabaseEffectsTests
 
     [Theory]
     // Rejects_null_connection_string
-    [InlineData("", "SELECT 1")]
+    [MemberData(nameof(Rejects_null_connection_string_CasesInlineCases))]
     // Rejects_whitespace_sql
-    [InlineData("Data Source=:memory:", "   ")]
+
     // Returns_error_for_invalid_sql
-    [InlineData("Data Source=:memory:", "SELECT * FROM table_that_does_not_exist")]
+
     public async Task Rejects_null_connection_string_Cases(string caseValue0, string caseValue1)
     {
         var effects = CreateSqliteEffects();

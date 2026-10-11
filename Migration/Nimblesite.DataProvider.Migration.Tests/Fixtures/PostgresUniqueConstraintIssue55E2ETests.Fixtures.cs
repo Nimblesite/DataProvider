@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresUniqueConstraintIssue55E2ETests
@@ -16,7 +14,9 @@ public partial class PostgresUniqueConstraintIssue55E2ETests
             primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
         );
 
-    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_2(global::System.Boolean includeUnique) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.TableDefinition Fixture_Schema_2(
+        global::System.Boolean includeUnique
+    ) =>
         SchemaTestData.Table(
             schema: SchemaName,
             name: "agent_configs",

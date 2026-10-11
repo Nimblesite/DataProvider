@@ -329,11 +329,7 @@ public sealed class SqlQueryableTests
     {
         // Arrange & Act
         var predicate = PredicateBuilder.True<User>();
-        var query = SelectStatement.From<User>().Where(predicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(predicate);
+        var statement = BuildAndAssertQueryStatement(input0: predicate);
         Assert.NotNull(statement);
     }
 
@@ -342,11 +338,7 @@ public sealed class SqlQueryableTests
     {
         // Arrange & Act
         var predicate = PredicateBuilder.False<User>();
-        var query = SelectStatement.From<User>().Where(predicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(predicate);
+        var statement = BuildAndAssertQueryStatement(input0: predicate);
         Assert.NotNull(statement);
     }
 
@@ -359,11 +351,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var combined = predicate1.Or(predicate2);
-        var query = SelectStatement.From<User>().Where(combined);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(combined);
+        var statement = BuildAndAssertQueryStatement(input0: combined);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions);
     }
@@ -377,11 +365,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var combined = predicate1.And(predicate2);
-        var query = SelectStatement.From<User>().Where(combined);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(combined);
+        var statement = BuildAndAssertQueryStatement(input0: combined);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions);
     }
@@ -394,11 +378,7 @@ public sealed class SqlQueryableTests
 
         // Act
         var negated = predicate.Not();
-        var query = SelectStatement.From<User>().Where(negated);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(negated);
+        var statement = BuildAndAssertQueryStatement(input0: negated);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions);
     }
@@ -417,11 +397,7 @@ public sealed class SqlQueryableTests
             predicate = predicate.Or(u => u.Id == tempId);
         }
 
-        var query = SelectStatement.From<User>().Where(predicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(predicate);
+        var statement = BuildAndAssertQueryStatement(input0: predicate);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions); // Complex condition gets flattened
     }
@@ -439,11 +415,7 @@ public sealed class SqlQueryableTests
         predicate = predicate.And(u => u.Age <= maxAge);
         predicate = predicate.And(u => u.Email != null);
 
-        var query = SelectStatement.From<User>().Where(predicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(predicate);
+        var statement = BuildAndAssertQueryStatement(input0: predicate);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions); // Complex condition gets flattened
     }
@@ -466,11 +438,7 @@ public sealed class SqlQueryableTests
         // Combine with age filter using AND
         var finalPredicate = namePredicate.And(u => u.Age >= minAge);
 
-        var query = SelectStatement.From<User>().Where(finalPredicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(finalPredicate);
+        var statement = BuildAndAssertQueryStatement(input0: finalPredicate);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions);
     }
@@ -518,14 +486,27 @@ public sealed class SqlQueryableTests
         }
         predicate = predicate.And(u => u.Email != null);
 
-        var query = SelectStatement.From<User>().Where(predicate);
-        var statement = query.ToSqlStatement();
-
-        // Assert
-        Assert.NotNull(predicate);
+        var statement = BuildAndAssertQueryStatement(input0: predicate);
         Assert.NotNull(statement);
         Assert.Single(statement.WhereConditions);
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::Nimblesite.Sql.Model.SelectStatement BuildAndAssertQueryStatement(
+        global::System.Linq.Expressions.Expression<global::System.Func<
+            global::Nimblesite.DataProvider.Tests.SqlQueryableTests.User,
+            global::System.Boolean
+        >> input0
+    )
+    {
+        var query = SelectStatement.From<User>().Where(input0);
+        var statement = query.ToSqlStatement();
+
+        // Assert
+        Assert.NotNull(input0);
+
+        return statement;
+    }
 }

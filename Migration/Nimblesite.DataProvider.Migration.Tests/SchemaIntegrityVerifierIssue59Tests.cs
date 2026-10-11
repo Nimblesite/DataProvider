@@ -34,7 +34,8 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
 
         Assert.Empty(mismatches);
 
-        var changedDefault = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3();
+        var changedDefault =
+            Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3();
 
         var changedDefaultMismatches = Verify(live: live, desired: changedDefault);
 
@@ -46,8 +47,10 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector()
     {
-        var live = Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1();
-        var desired = Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2();
+        var live =
+            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1();
+        var desired =
+            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -68,8 +71,10 @@ public sealed partial class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector()
     {
-        var live = Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1();
-        var desired = Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2();
+        var live =
+            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1();
+        var desired =
+            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2();
 
         var mismatches = Verify(live: live, desired: desired);
 

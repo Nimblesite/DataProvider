@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaSupportYamlSerializerTests

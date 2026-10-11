@@ -1,7 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Microsoft.Extensions.Logging.Abstractions;
-using static Nimblesite.Sync.Tests.MappingTestData;
-
 namespace Nimblesite.Sync.Tests;
 
 public partial class MappingEngineTests
@@ -54,7 +51,9 @@ public partial class MappingEngineTests
             direction: MappingDirection.Push
         );
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_ApplyMapping_SingleTarget_MapsColumns_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_ApplyMapping_SingleTarget_MapsColumns_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "user-mapping",
             sourceTable: "User",
@@ -62,7 +61,9 @@ public partial class MappingEngineTests
             columnMappings: columnMappings
         );
 
-    private static global::Nimblesite.Sync.Core.TableMapping Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings) =>
+    private static global::Nimblesite.Sync.Core.TableMapping Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(
+        global::System.Collections.Generic.List<global::Nimblesite.Sync.Core.ColumnMapping> columnMappings
+    ) =>
         MappingTestData.Mapping(
             id: "user-mapping",
             sourceTable: "User",

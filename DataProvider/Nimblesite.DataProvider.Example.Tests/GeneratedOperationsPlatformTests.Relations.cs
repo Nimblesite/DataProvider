@@ -12,9 +12,7 @@ public sealed partial class GeneratedOperationsPlatformTests
 {
     /// <summary>Inserts, updates, and reads every generated related entity on all providers.</summary>
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(GeneratedRelatedOperations_PersistAndUpdateEveryEntityInlineCases))]
     public async Task GeneratedRelatedOperations_PersistAndUpdateEveryEntity(string provider) =>
         await WithProviderAsync(provider, VerifyRelationsAsync).ConfigureAwait(false);
 

@@ -43,13 +43,25 @@ public record CodeGenerationConfig
     /// <summary>
     /// Function to generate complete source files
     /// </summary>
-    public Func<
-        string,
-        string,
-        string,
-        Result<string, SqlError>
-    > GenerateSourceFile { get; init; } = (namespaceName, model, methods) => GenerateSourceForConnection(
-        namespaceName: namespaceName, modelCode: model, dataAccessCode: methods, connectionNamespace: "Microsoft.Data.Sqlite");
+    public Func<string, string, string, Result<string, SqlError>> GenerateSourceFile
+    {
+        get =>
+            _generateSourceFile
+            ?? (
+                (namespaceName, model, methods) =>
+                    GenerateSourceForConnection(
+                        namespaceName: namespaceName,
+                        modelCode: model,
+                        dataAccessCode: methods,
+                        connectionNamespace: DefaultTableOperationGenerator.ResolveConnectionNamespace(
+                            connectionType: ConnectionType
+                        )
+                    )
+            );
+        init => _generateSourceFile = value;
+    }
+
+    private readonly Func<string, string, string, Result<string, SqlError>>? _generateSourceFile;
 
     /// <summary>
     /// Function to generate grouped model types
@@ -130,9 +142,6 @@ public record CodeGenerationConfig
         TableOperationGenerator = tableOperationGenerator ?? new DefaultTableOperationGenerator();
     }
 
-    /// <summary>
-    /// Default source file generator
-    /// </summary>
     /// <summary>Emits a shared source file with the selected database driver's namespace.</summary>
     public static Result<string, SqlError> GenerateSourceForConnection(
         string namespaceName,
@@ -152,15 +161,21 @@ public record CodeGenerationConfig
             );
 
         var sb = new System.Text.StringBuilder();
+        sb.AppendLine("#nullable enable");
 
         // Generate using statements
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Collections.Immutable;");
         sb.AppendLine("using System.Threading.Tasks;");
-        sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"using {connectionNamespace};");
+        sb.AppendLine(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"using {connectionNamespace};"
+        );
         sb.AppendLine("using Outcome;");
         sb.AppendLine("using Nimblesite.Sql.Model;");
+        if (connectionNamespace == "Microsoft.Data.SqlClient")
+            sb.AppendLine("using SqlError = Nimblesite.Sql.Model.SqlError;");
         sb.AppendLine();
 
         // Generate namespace

@@ -1,3 +1,4 @@
+using static global::Tests.Shared.StringAssertions;
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 using TranspileError = Outcome.Result<
     string,
@@ -13,27 +14,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 public sealed partial class RlsCurrentSettingLqlTests
 {
     [Theory]
-    [InlineData("tenant_id = current_setting('app.tenant_id')::uuid", "'app.tenant_id'")]
-    [InlineData("user_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("workspace_id = current_setting('app.workspace_id')::uuid", "'app.workspace_id'")]
-    [InlineData("api_key_id = current_setting('app.api_key_id')::uuid", "'app.api_key_id'")]
-    [InlineData("role = current_setting('app.role')", "'app.role'")]
-    [InlineData(
-        "tenant_id = current_setting('request.jwt.claims.tenant_id')::uuid",
-        "'request.jwt.claims.tenant_id'"
-    )]
-    [InlineData("created_by = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("updated_by = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("owner_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("actor_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData(
-        "tenant_id = current_setting('app.tenant_id')::uuid and is_member(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "'app.tenant_id'"
-    )]
-    [InlineData(
-        "user_id = current_setting('app.user_id')::uuid or is_owner(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "'app.user_id'"
-    )]
+    [MemberData(nameof(Translate_CurrentSetting_NapPolicyShapes_EmitsMissingOkArgumentInlineCases))]
     public void Translate_CurrentSetting_NapPolicyShapes_EmitsMissingOkArgument(
         string lql,
         string keyLiteral
@@ -50,11 +31,10 @@ public sealed partial class RlsCurrentSettingLqlTests
     {
         var sql = Pg("tenant_id = current_setting('app.tenant_id')::uuid");
 
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: sql,
+            expected: ["\"tenant_id\"", "current_setting('app.tenant_id', true)::uuid"],
+            comparison: StringComparison.Ordinal
         );
         Assert.DoesNotContain("\"uuid\"", sql, StringComparison.Ordinal);
     }
@@ -66,15 +46,14 @@ public sealed partial class RlsCurrentSettingLqlTests
             "tenant_id = current_setting('app.tenant_id')::uuid and user_id = current_setting('app.user_id')::uuid"
         );
 
-        Assert.Contains(
-            "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: sql,
+            expected:
+            [
+                "current_setting('app.tenant_id', true)::uuid",
+                "current_setting('app.user_id', true)::uuid",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -95,16 +74,15 @@ public sealed partial class RlsCurrentSettingLqlTests
         );
 
         Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", sql, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: sql,
+            expected:
+            [
+                "FROM tenant_members",
+                "current_setting('app.tenant_id', true)::uuid",
+                "current_setting('app.user_id', true)::uuid",
+            ],
+            comparison: StringComparison.Ordinal
         );
         Assert.DoesNotContain("__RLS_CURRENT_SETTING_", sql, StringComparison.Ordinal);
     }
@@ -112,9 +90,7 @@ public sealed partial class RlsCurrentSettingLqlTests
     [Fact]
     public void Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting()
     {
-        var sql = Pg(
-            Data_Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting_1
-        );
+        var sql = Pg(Data_Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting_1);
 
         Assert.Contains(
             "is_member(current_setting('app.user_id', true)::uuid",

@@ -61,6 +61,5 @@ public sealed partial class DataProviderMigrateRlsUnsupportedTests
         return schemaPath;
     }
 
-    private static string RlsSchemaYaml() =>
-        Data_RlsSchemaYaml_1;
+    private static string RlsSchemaYaml() => Data_RlsSchemaYaml_1;
 }

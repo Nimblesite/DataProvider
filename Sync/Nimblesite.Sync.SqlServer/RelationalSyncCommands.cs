@@ -1,15 +1,21 @@
 using System.Collections.Immutable;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
+using Nimblesite.Sync.Core;
 using Outcome;
 
-namespace Nimblesite.Sync.Core;
+namespace Nimblesite.Sync.SqlServer;
 
 // Implements [SYNC-HTTP-PROVIDERS]. Driver-independent binding and error handling.
 internal static class RelationalSyncCommands
 {
-    internal static Result<T, SyncError> Run<T>(DbConnection connection, Action<DbCommand> configure,
-        ImmutableArray<(string Name, object? Value)> parameters, Func<DbCommand, T> execute, ILogger? logger = null)
+    internal static Result<T, SyncError> Run<T>(
+        DbConnection connection,
+        Action<DbCommand> configure,
+        ImmutableArray<(string Name, object? Value)> parameters,
+        Func<DbCommand, T> execute,
+        ILogger? logger = null
+    )
     {
         try
         {
@@ -22,7 +28,9 @@ internal static class RelationalSyncCommands
         catch (Exception exception)
         {
             logger?.LogError(exception, "Sync database operation failed");
-            return new Result<T, SyncError>.Error<T, SyncError>(new SyncErrorDatabase(exception.Message));
+            return new Result<T, SyncError>.Error<T, SyncError>(
+                new SyncErrorDatabase(exception.Message)
+            );
         }
     }
 

@@ -1,4 +1,4 @@
-using Testcontainers.MsSql;
+using Nimblesite.TestSupport;
 using Testcontainers.PostgreSql;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Tests;
 public sealed record QueryBuilderDatabaseContainers : IAsyncLifetime
 {
     private readonly Lazy<Task<PostgreSqlContainer>> _postgres = new(StartPostgresAsync);
-    private readonly Lazy<Task<MsSqlContainer>> _sqlServer = new(StartSqlServerAsync);
+    private readonly SqlServerContainerFixture _sqlServer = new();
 
     public Task InitializeAsync() => Task.CompletedTask;
 
@@ -17,17 +17,18 @@ public sealed record QueryBuilderDatabaseContainers : IAsyncLifetime
             var postgres = await _postgres.Value.ConfigureAwait(false);
             await postgres.DisposeAsync().ConfigureAwait(false);
         }
-        if (_sqlServer.IsValueCreated && _sqlServer.Value.IsCompletedSuccessfully)
-        {
-            var sqlServer = await _sqlServer.Value.ConfigureAwait(false);
-            await sqlServer.DisposeAsync().ConfigureAwait(false);
-        }
+        await _sqlServer.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task<string> GetConnectionStringAsync(string provider) =>
         provider == "postgres"
-            ? (await _postgres.Value.ConfigureAwait(false)).GetConnectionString()
-            : (await _sqlServer.Value.ConfigureAwait(false)).GetConnectionString();
+            ? new Npgsql.NpgsqlConnectionStringBuilder(
+                (await _postgres.Value.ConfigureAwait(false)).GetConnectionString()
+            )
+            {
+                PersistSecurityInfo = true,
+            }.ConnectionString
+            : await _sqlServer.CreateDatabaseConnectionStringAsync().ConfigureAwait(false);
 
     private static async Task<PostgreSqlContainer> StartPostgresAsync()
     {
@@ -37,13 +38,6 @@ public sealed record QueryBuilderDatabaseContainers : IAsyncLifetime
             .WithUsername("test")
             .WithPassword("test")
             .Build();
-        await container.StartAsync().ConfigureAwait(false);
-        return container;
-    }
-
-    private static async Task<MsSqlContainer> StartSqlServerAsync()
-    {
-        var container = new MsSqlBuilder().Build();
         await container.StartAsync().ConfigureAwait(false);
         return container;
     }

@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../DataProvider/Nimblesite.DataProvider.SQLite/Nimblesite.DataProvider.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Migration.Core/Nimblesite.DataProvider.Migration.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@ using Microsoft.Data.SqlClient;
 using Nimblesite.Sql.Model;
 using Npgsql;
 using NpgsqlTypes;
+using static global::Tests.Shared.StringAssertions;
 using NamesOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<string>,
     Nimblesite.Sql.Model.SqlError
@@ -20,7 +21,8 @@ using ProductRowsOk = Outcome.Result<
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed record QueryBuilderPlatformE2ETests : IClassFixture<QueryBuilderDatabaseContainers>
+public sealed partial record QueryBuilderPlatformE2ETests
+    : IClassFixture<QueryBuilderDatabaseContainers>
 {
     private readonly QueryBuilderDatabaseContainers _containers;
 
@@ -47,35 +49,42 @@ public sealed record QueryBuilderPlatformE2ETests : IClassFixture<QueryBuilderDa
 
     // Implements [LQL-OUTPUT-DIALECTS]. The same builder and model queries must execute on all platforms.
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
-    public async Task ProductFilterAndPagination_ReturnExactRows(string provider)
+    [MemberData(nameof(ProductFilterAndPagination_ReturnExactRowsInlineCases))]
+    public Task ProductFilterAndPagination_ReturnExactRows(string provider) =>
+        WithProductsAsync(
+            provider: provider,
+            run: async connection =>
+            {
+                AssertProductQueries(connection, provider);
+                await AssertGeneratedCodeAsync(connection: connection, provider: provider)
+                    .ConfigureAwait(true);
+                await AssertCliAsync(connection: connection, provider: provider)
+                    .ConfigureAwait(true);
+            }
+        );
+
+    private async Task WithProductsAsync(string provider, Func<DbConnection, Task> run)
     {
         if (provider == "sqlite")
         {
             using var seeded = new QueryBuilderE2ETests();
-            AssertProductQueries(seeded.Connection, provider);
+            await run(seeded.Connection).ConfigureAwait(true);
             return;
         }
-
         var connectionString = await _containers
             .GetConnectionStringAsync(provider)
             .ConfigureAwait(true);
         CreateProductSchema(provider, connectionString);
-        if (provider == "postgres")
-        {
-            using var postgres = new NpgsqlConnection(connectionString);
-            await postgres.OpenAsync().ConfigureAwait(true);
+        using DbConnection connection =
+            provider == "postgres"
+                ? new NpgsqlConnection(connectionString)
+                : new SqlConnection(connectionString);
+        await connection.OpenAsync().ConfigureAwait(true);
+        if (connection is NpgsqlConnection postgres)
             SeedPostgres(postgres);
-            AssertProductQueries(postgres, provider);
-            return;
-        }
-        Assert.Equal("sqlserver", provider);
-        using var sqlServer = new SqlConnection(connectionString);
-        await sqlServer.OpenAsync().ConfigureAwait(true);
-        SeedSqlServer(sqlServer);
-        AssertProductQueries(sqlServer, provider);
+        if (connection is SqlConnection sqlServer)
+            SeedSqlServer(sqlServer);
+        await run(connection).ConfigureAwait(true);
     }
 
     private static void AssertProductQueries(DbConnection connection, string provider)
@@ -125,8 +134,11 @@ public sealed record QueryBuilderPlatformE2ETests : IClassFixture<QueryBuilderDa
             .WithOffset(offset.ToString(CultureInfo.InvariantCulture))
             .Build();
         var sql = GenerateSql(statement, provider);
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("products", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["SELECT", "products"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
         Assert.Contains(
             provider == "sqlserver" ? "OFFSET" : "LIMIT",
             sql,

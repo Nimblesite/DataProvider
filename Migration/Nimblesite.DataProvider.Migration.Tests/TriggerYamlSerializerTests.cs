@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -17,14 +19,21 @@ public sealed partial class TriggerYamlSerializerTests
         var schema = SchemaYamlSerializer.FromYaml(TriggerYaml);
         var back = SchemaYamlSerializer.ToYaml(schema);
 
-        Assert.Contains("triggers:", back, StringComparison.Ordinal);
-        Assert.Contains("assert_not_last_owner", back, StringComparison.Ordinal);
-        Assert.Contains("Update", back, StringComparison.Ordinal);
-        Assert.Contains("Delete", back, StringComparison.Ordinal);
-        Assert.Contains("raiseWhen", back, StringComparison.Ordinal);
-        Assert.Contains("not exists", back, StringComparison.Ordinal);
-        Assert.Contains("errorMessage", back, StringComparison.Ordinal);
-        Assert.Contains("cannot remove the last owner", back, StringComparison.Ordinal);
+        ContainsAll(
+            actual: back,
+            expected:
+            [
+                "triggers:",
+                "assert_not_last_owner",
+                "Update",
+                "Delete",
+                "raiseWhen",
+                "not exists",
+                "errorMessage",
+                "cannot remove the last owner",
+            ],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
+using Nimblesite.DataProvider.Core.CodeGeneration;
 using Nimblesite.DataProvider.Migration.Core;
 using Npgsql;
 using Testcontainers.MsSql;
@@ -10,6 +11,13 @@ using Testcontainers.PostgreSql;
 using Xunit;
 using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
     int,
+    Nimblesite.Sql.Model.SqlError
+>;
+using ColumnsOk = Outcome.Result<
+    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Core.DatabaseColumn>,
+    Nimblesite.Sql.Model.SqlError
+>.Ok<
+    System.Collections.Generic.IReadOnlyList<Nimblesite.DataProvider.Core.DatabaseColumn>,
     Nimblesite.Sql.Model.SqlError
 >;
 
@@ -20,9 +28,9 @@ public sealed partial class GeneratedOperationsPlatformTests
 {
     /// <summary>Inserts, updates, and reads customers on every database provider.</summary>
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(
+        nameof(GeneratedCustomerOperations_PersistTwoCustomersAndOnlyUpdateTheTargetInlineCases)
+    )]
     public async Task GeneratedCustomerOperations_PersistTwoCustomersAndOnlyUpdateTheTarget(
         string provider
     ) => await WithProviderAsync(provider, VerifyOperationsAsync).ConfigureAwait(false);
@@ -124,6 +132,21 @@ public sealed partial class GeneratedOperationsPlatformTests
     )
     {
         MigrateCustomerSchema(provider, output, schema);
+        var metadata = await new AdoNetDatabaseEffects(
+            connectionFactory: value =>
+                provider switch
+                {
+                    "sqlite" => new SqliteConnection(value),
+                    "postgres" => new NpgsqlConnection(value),
+                    _ => new SqlConnection(value),
+                },
+            typeMapper: (type, _, nullable) => type.FullName + (nullable ? "?" : ""),
+            behavior: System.Data.CommandBehavior.SchemaOnly | System.Data.CommandBehavior.KeyInfo
+        ).GetColumnMetadataFromSqlAsync(connectionString: provider == "sqlite" ? connection.ConnectionString : output, sql: $"SELECT * FROM \"{schema}\".\"Customer\"", parameters: []).ConfigureAwait(false);
+        Assert.Equal(
+            ["Id", "CustomerName", "Email", "Phone", "CreatedDate"],
+            Assert.IsType<ColumnsOk>(metadata).Value.Select(column => column.Name)
+        );
         var firstId = Guid.NewGuid();
         var secondId = Guid.NewGuid();
 

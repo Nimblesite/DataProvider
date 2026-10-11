@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
 namespace Nimblesite.Sync.Tests;
@@ -121,9 +122,7 @@ public sealed partial class LqlExpressionEvaluatorTests
             payload: """{"Id":"u1","FirstName":"John","LastName":"Doe","Email":"John@Example.COM","Username":"johndoe"}"""
         );
         var payload = success.Entries[0].MappedPayload!;
-        Assert.Contains("John Doe", payload);
-        Assert.Contains("john@example.com", payload);
-        Assert.Contains("JOHNDOE", payload);
+        ContainsAll(actual: payload, expected: ["John Doe", "john@example.com", "JOHNDOE"]);
     }
 
     [Fact]
@@ -142,9 +141,7 @@ public sealed partial class LqlExpressionEvaluatorTests
             payload: """{"Id":"u1","Name":"alice"}"""
         );
         var payload = success.Entries[0].MappedPayload!;
-        Assert.Contains("ALICE", payload);
-        Assert.Contains("mobile-app", payload);
-        Assert.Contains("Version", payload);
+        ContainsAll(actual: payload, expected: ["ALICE", "mobile-app", "Version"]);
     }
 
     #endregion
@@ -187,10 +184,16 @@ public sealed partial class LqlExpressionEvaluatorTests
         Assert.Equal("ServerUser", mapped.TargetTable);
 
         var payload = mapped.MappedPayload!;
-        Assert.Contains("Jane Smith", payload); // Concatenated name
-        Assert.Contains("Jane.Smith@Company.COM", payload); // Original email preserved
-        Assert.Contains("jane.smith@company.com", payload); // Normalized lowercase email
-        Assert.Contains("2024-01-15", payload); // Created date passed through
+        ContainsAll(
+            actual: payload,
+            expected:
+            [
+                "Jane Smith",
+                "Jane.Smith@Company.COM",
+                "jane.smith@company.com",
+                "2024-01-15",
+            ]
+        ); // Created date passed through
     }
 
     /// <summary>
@@ -228,14 +231,12 @@ public sealed partial class LqlExpressionEvaluatorTests
         var payload = success.Entries[0].MappedPayload!;
 
         Assert.Equal("ModernCustomer", success.Entries[0].TargetTable);
-        Assert.Contains("CustomerId", payload);
-        Assert.Contains("C-12345", payload);
-        Assert.Contains("ACME CORPORATION", payload); // Trimmed
+        ContainsAll(actual: payload, expected: ["CustomerId", "C-12345", "ACME CORPORATION"]); // Trimmed
         Assert.DoesNotContain("  ACME", payload); // No leading spaces
-        Assert.Contains("123 Main St, Suite 100", payload); // Combined address
-        Assert.Contains("Springfield", payload);
-        Assert.Contains("IL", payload);
-        Assert.Contains("62701", payload);
+        ContainsAll(
+            actual: payload,
+            expected: ["123 Main St, Suite 100", "Springfield", "IL", "62701"]
+        );
     }
 
     /// <summary>
@@ -268,11 +269,10 @@ public sealed partial class LqlExpressionEvaluatorTests
         var payload = success.Entries[0].MappedPayload!;
 
         Assert.Equal("AuditLog", success.Entries[0].TargetTable);
-        Assert.Contains("EntityId", payload);
-        Assert.Contains("ORD-001", payload);
-        Assert.Contains("Order", payload); // EntityType constant
-        Assert.Contains("COMPLETED", payload); // Uppercased status
-        Assert.Contains("Order total: $199.99", payload); // Formatted details
+        ContainsAll(
+            actual: payload,
+            expected: ["EntityId", "ORD-001", "Order", "COMPLETED", "Order total: $199.99"]
+        ); // Formatted details
     }
 
     #endregion

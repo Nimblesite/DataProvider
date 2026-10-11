@@ -10,7 +10,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// case where a foreign key was declared in the same table.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;

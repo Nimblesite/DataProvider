@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Nimblesite.Sql.Model;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -11,19 +12,9 @@ public sealed partial class CodeGenerationE2ETests
 {
     // Implements [DP-CODEGEN-SHARED-BULK-LOOP].
     [Theory]
-    [InlineData("int", "Integer")]
-    [InlineData("int?", "Integer")]
-    [InlineData("long", "Bigint")]
-    [InlineData("short", "Smallint")]
-    [InlineData("bool", "Boolean")]
-    [InlineData("float", "Real")]
-    [InlineData("double", "Double")]
-    [InlineData("decimal", "Numeric")]
-    [InlineData("DateTime", "Timestamp")]
-    [InlineData("Guid", "Uuid")]
-    [InlineData("Guid?", "Uuid")]
-    [InlineData("byte[]", "Bytea")]
-    [InlineData("string", "Text")]
+    [MemberData(
+        nameof(GenerateQueryMethod_PostgresNullParameter_UsesMatchingColumnTypeInlineCases)
+    )]
     public void GenerateQueryMethod_PostgresNullParameter_UsesMatchingColumnType(
         string cSharpType,
         string databaseType
@@ -88,23 +79,21 @@ public sealed partial class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify class structure
-        Assert.Contains("public static partial class PatientQueries", code);
-        Assert.Contains("GetActivePatients", code);
-        Assert.Contains("SqliteConnection", code);
-
-        // Verify parameter handling
-        Assert.Contains("minAge", code);
-        Assert.Contains("status", code);
-
-        // Verify SQL embedding
-        Assert.Contains("SELECT Id, Name, Age, Email FROM Patients", code);
-
-        // Verify mapper generation
-        Assert.Contains("PatientRecord", code);
-
-        // Verify XML docs
-        Assert.Contains("/// <summary>", code);
-        Assert.Contains("/// </summary>", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public static partial class PatientQueries",
+                "GetActivePatients",
+                "SqliteConnection",
+                "minAge",
+                "status",
+                "SELECT Id, Name, Age, Email FROM Patients",
+                "PatientRecord",
+                "/// <summary>",
+                "/// </summary>",
+            ]
+        );
     }
 
     [Fact]
@@ -191,11 +180,17 @@ public sealed partial class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify it generates non-query method
-        Assert.Contains("PatientCommands", code);
-        Assert.Contains("DeactivatePatient", code);
-        Assert.Contains("UPDATE Patients", code);
-        Assert.Contains("@id", code);
-        Assert.Contains("SqliteConnection", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "PatientCommands",
+                "DeactivatePatient",
+                "UPDATE Patients",
+                "@id",
+                "SqliteConnection",
+            ]
+        );
     }
 
     [Fact]
@@ -215,13 +210,7 @@ public sealed partial class CodeGenerationE2ETests
 
         // Verify INSERT statement
         Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Patients", code);
-
-        // Verify non-identity columns are included
-        Assert.Contains("Name", code);
-        Assert.Contains("Age", code);
-        Assert.Contains("Email", code);
-        Assert.Contains("IsActive", code);
+        ContainsAll(actual: code, expected: ["Patients", "Name", "Age", "Email", "IsActive"]);
     }
 
     [Fact]
@@ -233,8 +222,7 @@ public sealed partial class CodeGenerationE2ETests
 
         // Single parameter
         var single = DataAccessGenerator.GenerateParameterList([new ParameterInfo(Name: "userId")]);
-        Assert.Contains("userId", single);
-        Assert.Contains("object", single);
+        ContainsAll(actual: single, expected: ["userId", "object"]);
 
         // Multiple parameters
         var multi = DataAccessGenerator.GenerateParameterList([
@@ -242,10 +230,7 @@ public sealed partial class CodeGenerationE2ETests
             new ParameterInfo(Name: "age", SqlType: "INTEGER"),
             new ParameterInfo(Name: "email", SqlType: "TEXT"),
         ]);
-        Assert.Contains("name", multi);
-        Assert.Contains("age", multi);
-        Assert.Contains("email", multi);
-        Assert.Contains(",", multi);
+        ContainsAll(actual: multi, expected: ["name", "age", "email", ","]);
     }
 
     [Fact]
@@ -266,8 +251,7 @@ public sealed partial class CodeGenerationE2ETests
             return;
         var code = ok.Value;
         // Reserved keywords should be escaped with @
-        Assert.Contains("@class", code);
-        Assert.Contains("@int", code);
+        ContainsAll(actual: code, expected: ["@class", "@int"]);
     }
 
     [Fact]
@@ -350,10 +334,10 @@ public sealed partial class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify columns appear in the generated code (may use reader ordinal or column name)
-        Assert.Contains("WideRecord", code);
-        Assert.Contains("WideTableQueries", code);
-        Assert.Contains("GetWideData", code);
-        Assert.Contains("SELECT * FROM WideTable", code);
+        ContainsAll(
+            actual: code,
+            expected: ["WideRecord", "WideTableQueries", "GetWideData", "SELECT * FROM WideTable"]
+        );
     }
 
     [Fact]

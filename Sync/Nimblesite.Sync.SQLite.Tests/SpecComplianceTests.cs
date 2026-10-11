@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 using Tests.Shared;
 using Xunit;
+using static global::Tests.Shared.StringAssertions;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -133,11 +134,10 @@ public sealed partial class SpecComplianceTests : IDisposable
         Assert.Single(changes);
 
         var payload = changes[0].Payload!;
-        Assert.Contains("\"Id\":", payload);
-        Assert.Contains("\"Name\":", payload);
-        Assert.Contains("\"Email\":", payload);
-        Assert.Contains("\"Alice\"", payload);
-        Assert.Contains("\"alice@example.com\"", payload);
+        ContainsAll(
+            actual: payload,
+            expected: ["\"Id\":", "\"Name\":", "\"Email\":", "\"Alice\"", "\"alice@example.com\""]
+        );
     }
 
     #endregion
@@ -747,8 +747,7 @@ public sealed partial class SpecComplianceTests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _db,
-            configure: command =>
-                command.CommandText = Data_CreateTestTable_1
+            configure: command => command.CommandText = Data_CreateTestTable_1
         );
     }
 

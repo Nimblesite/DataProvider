@@ -1198,3 +1198,9 @@ Migration tests share constructors for schema, table, column, and constraint
 fixtures. Each supplied field is retained at its call site, including order and
 provider expressions. Defaults match the existing records; explicit null
 collection inputs remain direct model constructions.
+
+### Shared PostgreSQL catalog reader [MIG-PG-SHARED-CATALOG-READER]
+
+Schema inspectors share command creation, reader iteration, and disposal. Every
+catalog query, parameter binding, row projection, and error boundary is retained
+in its inspector. Readers are disposed before commands.

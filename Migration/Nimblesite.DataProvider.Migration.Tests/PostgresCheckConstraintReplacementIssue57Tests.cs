@@ -9,7 +9,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// because the diff matched on name only.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(PostgresContainerFixture fixture)
+public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;

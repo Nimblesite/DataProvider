@@ -4,6 +4,7 @@ using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using static global::Tests.Shared.StringAssertions;
 using LqlStatementOk = Outcome.Result<
     Nimblesite.Lql.Core.LqlStatement,
     Nimblesite.Sql.Model.SqlError
@@ -158,9 +159,7 @@ public partial class LqlFileBasedTests
     }
 
     [Theory]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
-    [InlineData("SQLite")]
+    [MemberData(nameof(LargeQuery_TranspilesCompleteShapeForEveryDialectInlineCases))]
     public void LargeQuery_TranspilesCompleteShapeForEveryDialect(string dialect)
     {
         // Arrange
@@ -170,16 +169,15 @@ public partial class LqlFileBasedTests
         var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
         var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
         Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["SELECT", "JOIN", "GROUP BY", "ORDER BY"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Theory]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
-    [InlineData("SQLite")]
+    [MemberData(nameof(RepeatedQueries_GenerateStableSqlForEveryDialectInlineCases))]
     public void RepeatedQueries_GenerateStableSqlForEveryDialect(string dialect)
     {
         // Arrange
@@ -194,8 +192,11 @@ public partial class LqlFileBasedTests
             var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
             var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
             Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
-            Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
+            ContainsAll(
+                actual: sql,
+                expected: ["users", "orders"],
+                comparison: StringComparison.OrdinalIgnoreCase
+            );
             if (baseline is string original)
             {
                 Assert.Equal(original, sql);

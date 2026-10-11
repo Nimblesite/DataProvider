@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -39,8 +41,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
         Assert.Equal(500.00, orders[0].TotalAmount);
     }
@@ -59,8 +60,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
     }
 
@@ -78,8 +78,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
         Assert.Equal(750.00, orders[0].TotalAmount);
     }
@@ -99,8 +98,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Equal(2, orders.Count);
     }
 
@@ -118,8 +116,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
         Assert.Equal("Completed", orders[0].Status);
     }
@@ -138,8 +135,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
         Assert.Equal("Processing", orders[0].Status);
     }
@@ -172,8 +168,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapCustomer
         );
 
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = Ok(actual: result).Value;
         Assert.Equal(2, customers.Count);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
     }
@@ -309,8 +304,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Equal(2, orders.Count);
         Assert.True(orders[0].TotalAmount >= orders[1].TotalAmount);
     }
@@ -331,8 +325,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Single(orders);
     }
 
@@ -446,11 +439,10 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         };
 
         var detailed = error.DetailedMessage;
-        Assert.Contains("Parse failed", detailed);
-        Assert.Contains("line 1", detailed);
-        Assert.Contains("outer", detailed);
-        Assert.Contains("inner", detailed);
-        Assert.Contains("SELECT * FROM bad_table", detailed);
+        ContainsAll(
+            actual: detailed,
+            expected: ["Parse failed", "line 1", "outer", "inner", "SELECT * FROM bad_table"]
+        );
     }
 
     [Fact]
@@ -535,7 +527,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         var query = SelectStatement
             .From<Customer>()
-            .Where(c => c.CustomerName.Contains("Acme"))
+            .Where(c => c.CustomerName != null && c.CustomerName.Contains("Acme"))
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
@@ -547,7 +539,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
     {
         var query = SelectStatement
             .From<Customer>()
-            .Where(c => c.CustomerName.StartsWith("Tech"))
+            .Where(c => c.CustomerName != null && c.CustomerName.StartsWith("Tech"))
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
@@ -571,8 +563,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Equal(2, orders.Count);
     }
 
@@ -809,8 +800,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
             MapOrder
         );
 
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = Ok(actual: result).Value;
         Assert.Equal(2, orders.Count);
     }
 

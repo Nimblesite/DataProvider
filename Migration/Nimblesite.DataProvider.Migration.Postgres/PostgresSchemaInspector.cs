@@ -23,24 +23,25 @@ public static partial class PostgresSchemaInspector
             var tables = new List<TableDefinition>();
 
             // Get all user tables
-            using var tablesCmd = connection.CreateCommand();
-            tablesCmd.CommandText = """
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = @schema 
-                AND table_type = 'BASE TABLE'
-                ORDER BY table_name
-                """;
-            tablesCmd.Parameters.AddWithValue("@schema", schemaName);
-
             var tableNames = new List<string>();
-            using (var reader = tablesCmd.ExecuteReader())
-            {
-                while (reader.Read())
+            PostgresCatalogQuery.Read(
+                connection: connection,
+                configure: tablesCmd =>
+                {
+                    tablesCmd.CommandText = """
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = @schema 
+                    AND table_type = 'BASE TABLE'
+                    ORDER BY table_name
+                    """;
+                    tablesCmd.Parameters.AddWithValue("@schema", schemaName);
+                },
+                read: reader =>
                 {
                     tableNames.Add(reader.GetString(0));
                 }
-            }
+            );
 
             foreach (var tableName in tableNames)
             {
@@ -109,34 +110,36 @@ public static partial class PostgresSchemaInspector
             // mapping. pgvector stores the dimension raw in atttypmod, no
             // VARHDRSZ offset. Non-vector rows get atttypmod = NULL here and
             // the switch ignores it.
-            using var colCmd = connection.CreateCommand();
-            colCmd.CommandText = """
-                SELECT
-                    c.column_name,
-                    c.data_type,
-                    c.is_nullable,
-                    c.column_default,
-                    c.character_maximum_length,
-                    c.numeric_precision,
-                    c.numeric_scale,
-                    c.udt_name,
-                    a.atttypmod
-                FROM information_schema.columns c
-                LEFT JOIN pg_catalog.pg_namespace n
-                    ON n.nspname = c.table_schema
-                LEFT JOIN pg_catalog.pg_class cls
-                    ON cls.relname = c.table_name AND cls.relnamespace = n.oid
-                LEFT JOIN pg_catalog.pg_attribute a
-                    ON a.attrelid = cls.oid AND a.attname = c.column_name AND a.attnum > 0
-                WHERE c.table_schema = @schema AND c.table_name = @table
-                ORDER BY c.ordinal_position
-                """;
-            colCmd.Parameters.AddWithValue("@schema", schemaName);
-            colCmd.Parameters.AddWithValue("@table", tableName);
 
-            using (var reader = colCmd.ExecuteReader())
-            {
-                while (reader.Read())
+            PostgresCatalogQuery.Read(
+                connection: connection,
+                configure: colCmd =>
+                {
+                    colCmd.CommandText = """
+                    SELECT
+                        c.column_name,
+                        c.data_type,
+                        c.is_nullable,
+                        c.column_default,
+                        c.character_maximum_length,
+                        c.numeric_precision,
+                        c.numeric_scale,
+                        c.udt_name,
+                        a.atttypmod
+                    FROM information_schema.columns c
+                    LEFT JOIN pg_catalog.pg_namespace n
+                        ON n.nspname = c.table_schema
+                    LEFT JOIN pg_catalog.pg_class cls
+                        ON cls.relname = c.table_name AND cls.relnamespace = n.oid
+                    LEFT JOIN pg_catalog.pg_attribute a
+                        ON a.attrelid = cls.oid AND a.attname = c.column_name AND a.attnum > 0
+                    WHERE c.table_schema = @schema AND c.table_name = @table
+                    ORDER BY c.ordinal_position
+                    """;
+                    colCmd.Parameters.AddWithValue("@schema", schemaName);
+                    colCmd.Parameters.AddWithValue("@table", tableName);
+                },
+                read: reader =>
                 {
                     var name = reader.GetString(0);
                     var dataType = reader.GetString(1);
@@ -170,32 +173,33 @@ public static partial class PostgresSchemaInspector
                         }
                     );
                 }
-            }
+            );
 
             // Get primary key
-            using var pkCmd = connection.CreateCommand();
-            pkCmd.CommandText = """
-                SELECT kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu 
-                    ON tc.constraint_name = kcu.constraint_name 
-                    AND tc.table_schema = kcu.table_schema
-                WHERE tc.table_schema = @schema 
-                AND tc.table_name = @table 
-                AND tc.constraint_type = 'PRIMARY KEY'
-                ORDER BY kcu.ordinal_position
-                """;
-            pkCmd.Parameters.AddWithValue("@schema", schemaName);
-            pkCmd.Parameters.AddWithValue("@table", tableName);
-
             var pkColumns = new List<string>();
-            using (var reader = pkCmd.ExecuteReader())
-            {
-                while (reader.Read())
+            PostgresCatalogQuery.Read(
+                connection: connection,
+                configure: pkCmd =>
+                {
+                    pkCmd.CommandText = """
+                    SELECT kcu.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu 
+                        ON tc.constraint_name = kcu.constraint_name 
+                        AND tc.table_schema = kcu.table_schema
+                    WHERE tc.table_schema = @schema 
+                    AND tc.table_name = @table 
+                    AND tc.constraint_type = 'PRIMARY KEY'
+                    ORDER BY kcu.ordinal_position
+                    """;
+                    pkCmd.Parameters.AddWithValue("@schema", schemaName);
+                    pkCmd.Parameters.AddWithValue("@table", tableName);
+                },
+                read: reader =>
                 {
                     pkColumns.Add(reader.GetString(0));
                 }
-            }
+            );
 
             if (pkColumns.Count > 0)
             {
@@ -209,37 +213,39 @@ public static partial class PostgresSchemaInspector
             InspectUniqueConstraints(connection, schemaName, tableName, uniqueConstraints);
 
             // Get indexes (both column-based and expression indexes)
-            using var idxCmd = connection.CreateCommand();
-            idxCmd.CommandText = """
-                SELECT
-                    i.relname AS index_name,
-                    ix.indisunique AS is_unique,
-                    pg_get_indexdef(ix.indexrelid) AS index_def,
-                    (SELECT array_agg(a.attname ORDER BY ord.n)
-                     FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)
-                     LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ord.attnum
-                     WHERE ord.attnum > 0) AS column_names,
-                    (SELECT bool_or(ord.attnum = 0)
-                     FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)) AS has_expressions
-                FROM pg_class t
-                JOIN pg_index ix ON t.oid = ix.indrelid
-                JOIN pg_class i ON i.oid = ix.indexrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                LEFT JOIN pg_constraint owned_constraint
-                    ON owned_constraint.conindid = ix.indexrelid
-                    AND owned_constraint.contype IN ('p', 'u')
-                WHERE n.nspname = @schema
-                AND t.relname = @table
-                AND NOT ix.indisprimary
-                AND owned_constraint.oid IS NULL
-                ORDER BY i.relname
-                """;
-            idxCmd.Parameters.AddWithValue("@schema", schemaName);
-            idxCmd.Parameters.AddWithValue("@table", tableName);
 
-            using (var reader = idxCmd.ExecuteReader())
-            {
-                while (reader.Read())
+            PostgresCatalogQuery.Read(
+                connection: connection,
+                configure: idxCmd =>
+                {
+                    idxCmd.CommandText = """
+                    SELECT
+                        i.relname AS index_name,
+                        ix.indisunique AS is_unique,
+                        pg_get_indexdef(ix.indexrelid) AS index_def,
+                        (SELECT array_agg(a.attname ORDER BY ord.n)
+                         FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)
+                         LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ord.attnum
+                         WHERE ord.attnum > 0) AS column_names,
+                        (SELECT bool_or(ord.attnum = 0)
+                         FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)) AS has_expressions
+                    FROM pg_class t
+                    JOIN pg_index ix ON t.oid = ix.indrelid
+                    JOIN pg_class i ON i.oid = ix.indexrelid
+                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                    LEFT JOIN pg_constraint owned_constraint
+                        ON owned_constraint.conindid = ix.indexrelid
+                        AND owned_constraint.contype IN ('p', 'u')
+                    WHERE n.nspname = @schema
+                    AND t.relname = @table
+                    AND NOT ix.indisprimary
+                    AND owned_constraint.oid IS NULL
+                    ORDER BY i.relname
+                    """;
+                    idxCmd.Parameters.AddWithValue("@schema", schemaName);
+                    idxCmd.Parameters.AddWithValue("@table", tableName);
+                },
+                read: reader =>
                 {
                     var indexName = reader.GetString(0);
                     var isUnique = reader.GetBoolean(1);
@@ -274,57 +280,59 @@ public static partial class PostgresSchemaInspector
                         );
                     }
                 }
-            }
+            );
 
             // [MIG-EXISTING-DATABASE-UPGRADE] Keep each relationship intact,
             // including composite keys and references to another schema.
-            using var fkCmd = connection.CreateCommand();
-            fkCmd.CommandText = """
-                SELECT
-                    constraint_record.conname,
-                    array_agg(source_column.attname::text ORDER BY keys.n),
-                    referenced_table.relname,
-                    referenced_schema.nspname,
-                    array_agg(referenced_column.attname::text ORDER BY keys.n),
-                    CASE constraint_record.confdeltype
-                        WHEN 'c' THEN 'CASCADE'
-                        WHEN 'n' THEN 'SET NULL'
-                        WHEN 'd' THEN 'SET DEFAULT'
-                        WHEN 'r' THEN 'RESTRICT'
-                        ELSE 'NO ACTION'
-                    END,
-                    CASE constraint_record.confupdtype
-                        WHEN 'c' THEN 'CASCADE'
-                        WHEN 'n' THEN 'SET NULL'
-                        WHEN 'd' THEN 'SET DEFAULT'
-                        WHEN 'r' THEN 'RESTRICT'
-                        ELSE 'NO ACTION'
-                    END
-                FROM pg_constraint constraint_record
-                JOIN pg_class source_table ON source_table.oid = constraint_record.conrelid
-                JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
-                JOIN pg_class referenced_table ON referenced_table.oid = constraint_record.confrelid
-                JOIN pg_namespace referenced_schema ON referenced_schema.oid = referenced_table.relnamespace
-                JOIN unnest(constraint_record.conkey, constraint_record.confkey)
-                    WITH ORDINALITY AS keys(source_attnum, referenced_attnum, n) ON true
-                JOIN pg_attribute source_column
-                    ON source_column.attrelid = source_table.oid
-                    AND source_column.attnum = keys.source_attnum
-                JOIN pg_attribute referenced_column
-                    ON referenced_column.attrelid = referenced_table.oid
-                    AND referenced_column.attnum = keys.referenced_attnum
-                WHERE source_schema.nspname = @schema
-                AND source_table.relname = @table
-                AND constraint_record.contype = 'f'
-                GROUP BY constraint_record.oid, referenced_table.relname, referenced_schema.nspname
-                ORDER BY constraint_record.conname
-                """;
-            fkCmd.Parameters.AddWithValue("@schema", schemaName);
-            fkCmd.Parameters.AddWithValue("@table", tableName);
 
-            using (var reader = fkCmd.ExecuteReader())
-            {
-                while (reader.Read())
+            PostgresCatalogQuery.Read(
+                connection: connection,
+                configure: fkCmd =>
+                {
+                    fkCmd.CommandText = """
+                    SELECT
+                        constraint_record.conname,
+                        array_agg(source_column.attname::text ORDER BY keys.n),
+                        referenced_table.relname,
+                        referenced_schema.nspname,
+                        array_agg(referenced_column.attname::text ORDER BY keys.n),
+                        CASE constraint_record.confdeltype
+                            WHEN 'c' THEN 'CASCADE'
+                            WHEN 'n' THEN 'SET NULL'
+                            WHEN 'd' THEN 'SET DEFAULT'
+                            WHEN 'r' THEN 'RESTRICT'
+                            ELSE 'NO ACTION'
+                        END,
+                        CASE constraint_record.confupdtype
+                            WHEN 'c' THEN 'CASCADE'
+                            WHEN 'n' THEN 'SET NULL'
+                            WHEN 'd' THEN 'SET DEFAULT'
+                            WHEN 'r' THEN 'RESTRICT'
+                            ELSE 'NO ACTION'
+                        END
+                    FROM pg_constraint constraint_record
+                    JOIN pg_class source_table ON source_table.oid = constraint_record.conrelid
+                    JOIN pg_namespace source_schema ON source_schema.oid = source_table.relnamespace
+                    JOIN pg_class referenced_table ON referenced_table.oid = constraint_record.confrelid
+                    JOIN pg_namespace referenced_schema ON referenced_schema.oid = referenced_table.relnamespace
+                    JOIN unnest(constraint_record.conkey, constraint_record.confkey)
+                        WITH ORDINALITY AS keys(source_attnum, referenced_attnum, n) ON true
+                    JOIN pg_attribute source_column
+                        ON source_column.attrelid = source_table.oid
+                        AND source_column.attnum = keys.source_attnum
+                    JOIN pg_attribute referenced_column
+                        ON referenced_column.attrelid = referenced_table.oid
+                        AND referenced_column.attnum = keys.referenced_attnum
+                    WHERE source_schema.nspname = @schema
+                    AND source_table.relname = @table
+                    AND constraint_record.contype = 'f'
+                    GROUP BY constraint_record.oid, referenced_table.relname, referenced_schema.nspname
+                    ORDER BY constraint_record.conname
+                    """;
+                    fkCmd.Parameters.AddWithValue("@schema", schemaName);
+                    fkCmd.Parameters.AddWithValue("@table", tableName);
+                },
+                read: reader =>
                 {
                     var constraintName = reader.GetString(0);
                     var columnNames = reader.GetFieldValue<string[]>(1);
@@ -347,7 +355,7 @@ public static partial class PostgresSchemaInspector
                         }
                     );
                 }
-            }
+            );
 
             InspectCheckConstraints(connection, schemaName, tableName, columns, checkConstraints);
 
@@ -464,36 +472,40 @@ public static partial class PostgresSchemaInspector
     )
     {
         // Implements [MIG-PG-UNIQUE-CONSTRAINT-INSPECTION].
-        using var uniqueCmd = connection.CreateCommand();
-        uniqueCmd.CommandText = """
-            SELECT
-                c.conname,
-                array_agg(a.attname ORDER BY keys.n) AS columns
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            JOIN unnest(c.conkey) WITH ORDINALITY AS keys(attnum, n) ON true
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
-            WHERE n.nspname = @schema
-            AND t.relname = @table
-            AND c.contype = 'u'
-            GROUP BY c.conname
-            ORDER BY c.conname
-            """;
-        uniqueCmd.Parameters.AddWithValue("@schema", schemaName);
-        uniqueCmd.Parameters.AddWithValue("@table", tableName);
 
-        using var reader = uniqueCmd.ExecuteReader();
-        while (reader.Read())
-        {
-            uniqueConstraints.Add(
-                new UniqueConstraintDefinition
-                {
-                    Name = reader.GetString(0),
-                    Columns = ((string[])reader.GetValue(1)).ToList().AsReadOnly(),
-                }
-            );
-        }
+        PostgresCatalogQuery.Read(
+            connection: connection,
+            configure: uniqueCmd =>
+            {
+                uniqueCmd.CommandText = """
+                SELECT
+                    c.conname,
+                    array_agg(a.attname ORDER BY keys.n) AS columns
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN unnest(c.conkey) WITH ORDINALITY AS keys(attnum, n) ON true
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
+                WHERE n.nspname = @schema
+                AND t.relname = @table
+                AND c.contype = 'u'
+                GROUP BY c.conname
+                ORDER BY c.conname
+                """;
+                uniqueCmd.Parameters.AddWithValue("@schema", schemaName);
+                uniqueCmd.Parameters.AddWithValue("@table", tableName);
+            },
+            read: reader =>
+            {
+                uniqueConstraints.Add(
+                    new UniqueConstraintDefinition
+                    {
+                        Name = reader.GetString(0),
+                        Columns = ((string[])reader.GetValue(1)).ToList().AsReadOnly(),
+                    }
+                );
+            }
+        );
     }
 
     private static void InspectCheckConstraints(
@@ -505,47 +517,51 @@ public static partial class PostgresSchemaInspector
     )
     {
         // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT].
-        using var checkCmd = connection.CreateCommand();
-        checkCmd.CommandText = """
-            SELECT
-                c.conname,
-                pg_get_expr(c.conbin, c.conrelid, true),
-                COALESCE(array_length(c.conkey, 1), 0),
-                column_ref.attname
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            LEFT JOIN LATERAL (
-                SELECT a.attname
-                FROM unnest(c.conkey) AS keys(attnum)
-                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
-            ) AS column_ref ON COALESCE(array_length(c.conkey, 1), 0) = 1
-            WHERE n.nspname = @schema
-            AND t.relname = @table
-            AND c.contype = 'c'
-            ORDER BY c.conname
-            """;
-        checkCmd.Parameters.AddWithValue("@schema", schemaName);
-        checkCmd.Parameters.AddWithValue("@table", tableName);
 
-        using var reader = checkCmd.ExecuteReader();
-        while (reader.Read())
-        {
-            var name = reader.GetString(0);
-            var expression = PostgresCheckExpressionNormalizer.Normalize(reader.GetString(1));
-            var columnCount = reader.GetInt32(2);
+        PostgresCatalogQuery.Read(
+            connection: connection,
+            configure: checkCmd =>
+            {
+                checkCmd.CommandText = """
+                SELECT
+                    c.conname,
+                    pg_get_expr(c.conbin, c.conrelid, true),
+                    COALESCE(array_length(c.conkey, 1), 0),
+                    column_ref.attname
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                LEFT JOIN LATERAL (
+                    SELECT a.attname
+                    FROM unnest(c.conkey) AS keys(attnum)
+                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = keys.attnum
+                ) AS column_ref ON COALESCE(array_length(c.conkey, 1), 0) = 1
+                WHERE n.nspname = @schema
+                AND t.relname = @table
+                AND c.contype = 'c'
+                ORDER BY c.conname
+                """;
+                checkCmd.Parameters.AddWithValue("@schema", schemaName);
+                checkCmd.Parameters.AddWithValue("@table", tableName);
+            },
+            read: reader =>
+            {
+                var name = reader.GetString(0);
+                var expression = PostgresCheckExpressionNormalizer.Normalize(reader.GetString(1));
+                var columnCount = reader.GetInt32(2);
 
-            if (columnCount == 1 && !reader.IsDBNull(3))
-            {
-                ApplyColumnCheckConstraint(columns, reader.GetString(3), name, expression);
+                if (columnCount == 1 && !reader.IsDBNull(3))
+                {
+                    ApplyColumnCheckConstraint(columns, reader.GetString(3), name, expression);
+                }
+                else
+                {
+                    tableChecks.Add(
+                        new CheckConstraintDefinition { Name = name, Expression = expression }
+                    );
+                }
             }
-            else
-            {
-                tableChecks.Add(
-                    new CheckConstraintDefinition { Name = name, Expression = expression }
-                );
-            }
-        }
+        );
     }
 
     private static void ApplyColumnCheckConstraint(

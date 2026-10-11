@@ -1109,3 +1109,16 @@ Each provider uses one event template for INSERT and UPDATE. Event names and log
 operation values retain their original casing; JSON payloads, primary-key casing and
 SQL whitespace remain identical. DELETE retains its separate payload behavior.
 Existing trigger tests exercise both events through the public provider API.
+
+### Shared provider trigger workflow [SYNC-TRIGGER-SHARED-WORKFLOW]
+
+Providers reuse trigger composition, schema result handling and creation/error
+logging. SQLite retains drop-before-create; provider exception types, DDL execution
+and metadata extraction remain provider-specific.
+
+### Shared sync-client storage [SYNC-CLIENT-SHARED-STORAGE]
+
+SQLite and PostgreSQL reuse client lookup, upsert, deletion and row mapping.
+Provider-typed public APIs and exception handling remain intact. Command factories
+create native provider parameters with the same names and string/integer values;
+SQL text, row ordering and caller-specific error prefixes remain unchanged.

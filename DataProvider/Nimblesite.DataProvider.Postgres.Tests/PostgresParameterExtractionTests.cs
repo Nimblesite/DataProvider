@@ -2,6 +2,7 @@ using Nimblesite.DataProvider.Postgres.Parsing;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Postgres.Tests;
 
@@ -14,13 +15,13 @@ public sealed class PostgresParameterExtractionTests
     private static List<string> Extract(string sql)
     {
         var result = new PostgresAntlrParser().ParseSql(sql);
-        Assert.True(
-            result is Result<SelectStatement, string>.Ok<SelectStatement, string>,
-            result is Result<SelectStatement, string>.Error<SelectStatement, string> err
+
+        var stmt = Ok(
+            actual: result,
+            message: result is Result<SelectStatement, string>.Error<SelectStatement, string> err
                 ? $"Parse failed: {err.Value}"
                 : "Parse failed"
-        );
-        var stmt = ((Result<SelectStatement, string>.Ok<SelectStatement, string>)result).Value;
+        ).Value;
         return stmt.Parameters.Select(p => p.Name).ToList();
     }
 

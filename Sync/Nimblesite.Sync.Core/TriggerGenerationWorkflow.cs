@@ -27,6 +27,111 @@ internal static class TriggerGenerationWorkflow
         return builder.ToString();
     }
 
+    internal static string Compose(
+        string tableName,
+        IReadOnlyList<string> columns,
+        string pkColumn,
+        Func<string, IReadOnlyList<string>, string, string, string, string> change,
+        Func<string, string, string> delete
+    ) =>
+        Compose(
+            insert: change(
+                arg1: tableName,
+                arg2: columns,
+                arg3: pkColumn,
+                arg4: "insert",
+                arg5: "INSERT"
+            ),
+            update: change(
+                arg1: tableName,
+                arg2: columns,
+                arg3: pkColumn,
+                arg4: "update",
+                arg5: "UPDATE"
+            ),
+            delete: delete(arg1: tableName, arg2: pkColumn)
+        );
+
+    internal static StringSyncResult FromSchema<TColumn>(
+        string tableName,
+        Func<Outcome.Result<IReadOnlyList<TColumn>, SyncError>> readColumns,
+        Func<TColumn, bool> isPrimaryKey,
+        Func<TColumn, string> columnName,
+        Func<string, IReadOnlyList<string>, string, string> generate,
+        ILogger logger
+    )
+        where TColumn : class
+    {
+        logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
+        return readColumns() switch
+        {
+            Outcome.Result<IReadOnlyList<TColumn>, SyncError>.Error<
+                IReadOnlyList<TColumn>,
+                SyncError
+            > error => ColumnError(tableName: tableName, error: error.Value, logger: logger),
+            Outcome.Result<IReadOnlyList<TColumn>, SyncError>.Ok<
+                IReadOnlyList<TColumn>,
+                SyncError
+            > columns => Generate(
+                tableName: tableName,
+                columns: columns.Value,
+                isPrimaryKey: isPrimaryKey,
+                columnName: columnName,
+                generate: generate,
+                logger: logger
+            ),
+        };
+    }
+
+    internal static BoolSyncResult Create<TException>(
+        string tableName,
+        Func<StringSyncResult> generate,
+        Action<string> execute,
+        ILogger logger,
+        Func<BoolSyncResult>? prepare = null
+    )
+        where TException : Exception
+    {
+        logger.LogDebug("TRIGGER: Creating triggers for table {Table}", tableName);
+        if (prepare?.Invoke() is BoolSyncError dropError)
+        {
+            return dropError;
+        }
+        return generate() switch
+        {
+            StringSyncError error => new BoolSyncError(error.Value),
+            StringSyncOk triggers => ExecuteCreate<TException>(
+                tableName: tableName,
+                sql: triggers.Value,
+                execute: execute,
+                logger: logger
+            ),
+        };
+    }
+
+    private static BoolSyncResult ExecuteCreate<TException>(
+        string tableName,
+        string sql,
+        Action<string> execute,
+        ILogger logger
+    )
+        where TException : Exception
+    {
+        try
+        {
+            execute(obj: sql);
+            logger.LogInformation("TRIGGER: Created triggers for table {Table}", tableName);
+            return new BoolSyncOk(true);
+        }
+        catch (TException ex)
+        {
+            logger.LogError(ex, "TRIGGER: Failed to create triggers for {Table}", tableName);
+            return new BoolSyncError(
+                new SyncErrorDatabase($"Failed to create triggers: {ex.Message}")
+            );
+        }
+    }
+
     internal static StringSyncResult ColumnError(string tableName, SyncError error, ILogger logger)
     {
         logger.LogError("TRIGGER: Failed to get columns for {Table}: {Error}", tableName, error);

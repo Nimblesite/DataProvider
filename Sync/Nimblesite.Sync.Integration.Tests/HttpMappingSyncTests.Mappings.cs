@@ -1,5 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Integration.Tests;
 
@@ -43,8 +44,8 @@ public sealed partial class HttpMappingSyncTests
 
         // Fetch changes from source
         var changes = SyncLogRepository.FetchChanges(source, 0, 100);
-        Assert.True(changes is SyncLogListOk, $"FetchChanges failed: {changes}");
-        var changesList = ((SyncLogListOk)changes).Value;
+
+        var changesList = Ok(actual: changes, message: $"FetchChanges failed: {changes}").Value;
         Assert.Single(changesList);
 
         // Apply mapping to transform the entry

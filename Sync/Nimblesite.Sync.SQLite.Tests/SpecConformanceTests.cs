@@ -41,9 +41,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec4_1_SingleColumnUuidPrimaryKey_IsSupported()
     {
         // Arrange: Create table with UUID primary key (spec recommended)
-        ExecuteSql(
-            Data_Spec4_1_SingleColumnUuidPrimaryKey_IsSupported_1
-        );
+        ExecuteSql(Data_Spec4_1_SingleColumnUuidPrimaryKey_IsSupported_1);
         var triggerResult = TriggerGenerator.CreateTriggers(_db, "UuidTable", TestLogger.L);
         Assert.IsType<BoolSyncOk>(triggerResult);
 
@@ -547,10 +545,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec15_4_BatchHash_IsConsistent()
     {
         // Arrange
-        var entries = new[]
-        {
-            Fixture_Spec15_4_BatchHash_IsConsistent_1(),
-        };
+        var entries = new[] { Fixture_Spec15_4_BatchHash_IsConsistent_1() };
 
         // Act
         var hash1 = HashVerifier.ComputeBatchHash(entries);
@@ -572,9 +567,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec17_1_SingleColumnPrimaryKey_Required()
     {
         // Arrange: Table with composite PK
-        ExecuteSql(
-            Data_Spec17_1_SingleColumnPrimaryKey_Required_1
-        );
+        ExecuteSql(Data_Spec17_1_SingleColumnPrimaryKey_Required_1);
 
         // Act
         var result = TriggerGenerator.GetTableColumns(_db, "CompositePkTable");
@@ -638,10 +631,7 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     #region Helpers
 
-    private void CreatePersonTable() =>
-        ExecuteSql(
-            Data_CreatePersonTable_1
-        );
+    private void CreatePersonTable() => ExecuteSql(Data_CreatePersonTable_1);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Security",

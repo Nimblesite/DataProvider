@@ -16,6 +16,16 @@ public static class SqlServerSchemaNormalizer
                         table with
                         {
                             Columns = table.Columns.Select(RoundTrip).ToList(),
+                            CheckConstraints = table
+                                .CheckConstraints.Select(check =>
+                                    check with
+                                    {
+                                        Expression = SqlServerExpressionNormalizer.Normalize(
+                                            expression: check.Expression
+                                        ),
+                                    }
+                                )
+                                .ToArray(),
                         }
                     )
                     .ToList(),

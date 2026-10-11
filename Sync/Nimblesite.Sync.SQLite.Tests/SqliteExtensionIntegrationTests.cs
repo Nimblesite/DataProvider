@@ -1,6 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 using Tests.Shared;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -20,8 +21,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.GetAllSubscriptions();
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subscriptions = ((SubscriptionListOk)result).Value;
+
+        var subscriptions = Ok(actual: result).Value;
         Assert.Empty(subscriptions);
     }
 
@@ -80,8 +81,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.GetAllSubscriptions();
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subscriptions = ((SubscriptionListOk)result).Value;
+
+        var subscriptions = Ok(actual: result).Value;
         Assert.Equal(2, subscriptions.Count);
     }
 
@@ -114,8 +115,8 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         var result = _db.GetSubscriptionsByTable("Orders");
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subscriptions = ((SubscriptionListOk)result).Value;
+
+        var subscriptions = Ok(actual: result).Value;
         Assert.Single(subscriptions);
         Assert.Equal("sub-orders", subscriptions[0].SubscriptionId);
     }

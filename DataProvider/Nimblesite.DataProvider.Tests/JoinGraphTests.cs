@@ -2,7 +2,7 @@ using Nimblesite.Sql.Model;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public class JoinGraphTests
+public partial class JoinGraphTests
 {
     [Fact]
     public void New_JoinGraph_IsEmpty()
@@ -77,9 +77,7 @@ public class JoinGraphTests
     }
 
     [Theory]
-    [InlineData("", "Posts", "condition")]
-    [InlineData("Users", "", "condition")]
-    [InlineData("Users", "Posts", "")]
+    [MemberData(nameof(Add_EmptyParameters_StillAddsInlineCases))]
     public void Add_EmptyParameters_StillAdds(string leftTable, string rightTable, string condition)
     {
         // Arrange

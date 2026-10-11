@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using System.Globalization;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class DataProviderMigrateIntegrityTests

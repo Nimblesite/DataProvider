@@ -25,7 +25,7 @@ public sealed class SyncApiWebApplicationFactory : WebApplicationFactory<Program
 /// Tests the FULL HTTP stack including rate limiting, validation, and error handling.
 /// Uses WebApplicationFactory for real ASP.NET Core hosting.
 /// </summary>
-public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFactory>
+public sealed partial class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFactory>
 {
     private readonly SyncApiWebApplicationFactory _factory;
     private readonly HttpClient _client;
@@ -55,9 +55,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
     #region Pull Changes Endpoint
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(PullChanges_WithoutConnectionString_ReturnsBadRequestInlineCases))]
     public async Task PullChanges_WithoutConnectionString_ReturnsBadRequest(string provider)
     {
         // Act
@@ -86,9 +84,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
     #region Push Changes Endpoint
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(PushChanges_WithoutBody_ReturnsBadRequestInlineCases))]
     public async Task PushChanges_WithoutBody_ReturnsBadRequest(string provider)
     {
         // Arrange
@@ -147,9 +143,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
     #region Register Client Endpoint
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(RegisterClient_WithoutOriginId_ReturnsBadRequestInlineCases))]
     public async Task RegisterClient_WithoutOriginId_ReturnsBadRequest(string provider)
     {
         // Arrange
@@ -166,9 +160,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
     }
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(RegisterClient_WithoutConnectionString_ReturnsBadRequestInlineCases))]
     public async Task RegisterClient_WithoutConnectionString_ReturnsBadRequest(string provider)
     {
         // Arrange
@@ -191,9 +183,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
     #region Sync State Endpoint
 
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(SyncState_WithoutConnectionString_ReturnsBadRequestInlineCases))]
     public async Task SyncState_WithoutConnectionString_ReturnsBadRequest(string provider)
     {
         // Act
@@ -228,8 +218,7 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         // Create test table with triggers
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_Shared_1
+            configure: command => command.CommandText = Data_Shared_1
         );
 
         TriggerGenerator.CreateTriggers(_connection, "Person", NullLogger.Instance);
@@ -276,24 +265,10 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
     public void Update_CreatesChangelog()
     {
         // Arrange
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Bob', 'bob@test.com')"
+        var list = InsertAndFetchLogEntries(
+            value0: "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Bob', 'bob@test.com')",
+            value1: "UPDATE Person SET Name = 'Bob Updated' WHERE Id = 'p2'"
         );
-
-        // Act
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
-                cmd.CommandText = "UPDATE Person SET Name = 'Bob Updated' WHERE Id = 'p2'"
-        );
-
-        // Assert
-        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
-        Assert.Equal(2, list.Count);
         Assert.Equal(SyncOperation.Update, list[1].Operation);
     }
 
@@ -301,23 +276,10 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
     public void Delete_CreatesTombstone()
     {
         // Arrange
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Charlie', 'charlie@test.com')"
+        var list = InsertAndFetchLogEntries(
+            value0: "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Charlie', 'charlie@test.com')",
+            value1: "DELETE FROM Person WHERE Id = 'p3'"
         );
-
-        // Act
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = 'p3'"
-        );
-
-        // Assert
-        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
-        var list = ((SyncLogListOk)changes).Value;
-        Assert.Equal(2, list.Count);
         Assert.Equal(SyncOperation.Delete, list[1].Operation);
     }
 
@@ -370,5 +332,27 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT Name FROM Person WHERE Id = 'incoming1'";
         Assert.Equal("Incoming", cmd.ExecuteScalar()?.ToString());
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.Sync.Core.SyncLogEntry> InsertAndFetchLogEntries(
+        string value0,
+        string value1
+    )
+    { // Arrange
+        DatabaseCommands.Execute(connection: _connection, configure: cmd => cmd.CommandText = value0);
+
+        // Act
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd => cmd.CommandText = value1
+        );
+
+        // Assert
+        var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
+        var list = ((SyncLogListOk)changes).Value;
+        Assert.Equal(2, list.Count);
+
+        return list;
     }
 }

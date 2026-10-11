@@ -31,4 +31,10 @@
     <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
     <ProjectReference Include="../../Migration/Nimblesite.DataProvider.Migration.Core/Nimblesite.DataProvider.Migration.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+  </ItemGroup>
 </Project>

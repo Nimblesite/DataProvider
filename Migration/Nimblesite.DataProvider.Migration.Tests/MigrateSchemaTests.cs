@@ -146,13 +146,9 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     public void MigrateSchema_PartiallyMigrated_CreatesRemainingTables()
     {
         // Arrange - Create only the first two tables manually
-        ExecuteSql(
-            Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_1
-        );
+        ExecuteSql(Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_1);
 
-        ExecuteSql(
-            Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_2
-        );
+        ExecuteSql(Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_2);
 
         Assert.True(TableExists("countries"));
         Assert.True(TableExists("regions"));
@@ -183,9 +179,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     {
         // Arrange - Create a conflicting table that will cause FK failure
         // Create suburbs without its parent (regions) - this will cause venues to fail FK
-        ExecuteSql(
-            Data_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1
-        );
+        ExecuteSql(Data_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1);
 
         // Create a schema where one table references a non-existent table
         var schemaWithBadFk = Fixture_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1();

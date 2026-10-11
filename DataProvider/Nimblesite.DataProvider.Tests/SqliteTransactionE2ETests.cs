@@ -48,15 +48,13 @@ public sealed partial class SqliteTransactionE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchema_1
+            configure: command => command.CommandText = Data_CreateSchema_1
         );
 
         // Seed inventory
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchema_2
+            configure: command => command.CommandText = Data_CreateSchema_2
         );
     }
 

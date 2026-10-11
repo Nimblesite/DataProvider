@@ -271,3 +271,8 @@ query generator's null binding contract alongside the existing bulk generation t
 Code-generation tests share one column metadata constructor with the model's exact
 defaults. Every supplied property remains explicit at its test call site. Tests of
 DatabaseColumn construction continue to instantiate the model directly.
+
+### Shared CLI line emission [DP-CLI-SHARED-LINE-EMISSION]
+
+The PostgreSQL CLI appends fixed consecutive template lines through one ordered
+line writer. Each original line and line ending is retained in the emitted code.

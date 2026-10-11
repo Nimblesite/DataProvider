@@ -5,6 +5,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -30,15 +31,13 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_1
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         // Seed products (test-only constant SQL, not user input)
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_2
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
 
         // Seed categories
@@ -130,8 +129,11 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
 
         var pagedSqlOk = Assert.IsType<StringOk>(pagedStmt.ToSQLite());
         var pagedSql = pagedSqlOk.Value;
-        Assert.Contains("OFFSET", pagedSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", pagedSql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: pagedSql,
+            expected: ["OFFSET", "LIMIT"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         var pagedResult = _connection.Query<string>(
             sql: pagedSql,
@@ -264,8 +266,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
         // Simple select all
         var simple = "Products".From().SelectAll().ToSqlStatement();
         var simpleSql = ((StringOk)simple.ToSQLite()).Value;
-        Assert.Contains("SELECT *", simpleSql);
-        Assert.Contains("FROM Products", simpleSql);
+        ContainsAll(actual: simpleSql, expected: ["SELECT *", "FROM Products"]);
 
         // With specific columns
         var cols = "Products"
@@ -273,8 +274,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .Select(columns: [(null, "Name"), (null, "Price")])
             .ToSqlStatement();
         var colsSql = ((StringOk)cols.ToSQLite()).Value;
-        Assert.Contains("Name", colsSql);
-        Assert.Contains("Price", colsSql);
+        ContainsAll(actual: colsSql, expected: ["Name", "Price"]);
         Assert.DoesNotContain("*", colsSql);
 
         // With WHERE + AND
@@ -285,8 +285,11 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
             .And(columnName: "Price", value: 35.0)
             .ToSqlStatement();
         var filteredSql = ((StringOk)filtered.ToSQLite()).Value;
-        Assert.Contains("WHERE", filteredSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("AND", filteredSql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: filteredSql,
+            expected: ["WHERE", "AND"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         // Verify each generated SQL actually executes
         foreach (var sql in new[] { simpleSql, colsSql, filteredSql })
@@ -342,8 +345,7 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
         var stmt = builder.Build();
 
         var sql = ((StringOk)stmt.ToSQLite()).Value;
-        Assert.Contains("Price * Quantity", sql);
-        Assert.Contains("TotalValue", sql);
+        ContainsAll(actual: sql, expected: ["Price * Quantity", "TotalValue"]);
 
         var result = _connection.Query<(string Name, double TotalValue)>(
             sql: sql,

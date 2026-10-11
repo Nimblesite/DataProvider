@@ -338,8 +338,7 @@ public sealed partial class TombstoneIntegrationTests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: db,
-            configure: command =>
-                command.CommandText = Data_CreatePersonTable_1
+            configure: command => command.CommandText = Data_CreatePersonTable_1
         );
     }
 

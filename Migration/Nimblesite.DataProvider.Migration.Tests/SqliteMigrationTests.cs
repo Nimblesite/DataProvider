@@ -2,6 +2,8 @@
 // Implements [MIG-TEST-ID-NAME-COLUMNS].
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -42,9 +44,8 @@ public sealed partial class SqliteMigrationTests
                 schema,
                 logger: _logger
             );
-            Assert.True(operations is OperationsResultOk);
 
-            var ops = ((OperationsResultOk)operations).Value;
+            var ops = Ok(actual: operations).Value;
 
             var result = SqliteTestDb.TryApply(
                 connection: connection,
@@ -57,8 +58,8 @@ public sealed partial class SqliteMigrationTests
 
             // Verify table exists
             var inspected = SqliteSchemaInspector.Inspect(connection, _logger);
-            Assert.True(inspected is SchemaResultOk);
-            var inspectedSchema = ((SchemaResultOk)inspected).Value;
+
+            var inspectedSchema = Ok(actual: inspected).Value;
             Assert.Single(inspectedSchema.Tables);
             Assert.Equal("Users", inspectedSchema.Tables[0].Name);
             Assert.Equal(3, inspectedSchema.Tables[0].Columns.Count);
@@ -79,13 +80,11 @@ public sealed partial class SqliteMigrationTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema = Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
+            var schema =
+                Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -130,18 +129,7 @@ public sealed partial class SqliteMigrationTests
             Assert.Equal(2, upgradeOps.Count);
             Assert.All(upgradeOps, op => Assert.IsType<AddColumnOperation>(op));
 
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: upgradeOps,
-                logger: _logger
-            );
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
-
-            var finalSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
+            var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
             var users = finalSchema.Tables.Single(t => t.Name == "Users");
             Assert.Equal(4, users.Columns.Count);
             Assert.Contains(users.Columns, c => c.Name == "Name");
@@ -180,18 +168,7 @@ public sealed partial class SqliteMigrationTests
             Assert.Single(upgradeOps);
             Assert.IsType<CreateTableOperation>(upgradeOps[0]);
 
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: upgradeOps,
-                logger: _logger
-            );
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
-
-            var finalSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
+            var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
             Assert.Equal(2, finalSchema.Tables.Count);
             Assert.Contains(finalSchema.Tables, t => t.Name == "Products");
         });
@@ -224,18 +201,7 @@ public sealed partial class SqliteMigrationTests
             Assert.Single(upgradeOps);
             Assert.IsType<CreateIndexOperation>(upgradeOps[0]);
 
-            var result = SqliteTestDb.TryApply(
-                connection: connection,
-                operations: upgradeOps,
-                logger: _logger
-            );
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
-
-            var finalSchema = (
-                (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
-            ).Value;
+            var finalSchema = ApplyChangesAndInspectSchema(input0: connection, input1: upgradeOps);
             var users = finalSchema.Tables.Single(t => t.Name == "Users");
             Assert.Single(users.Indexes);
             Assert.Equal("idx_users_email", users.Indexes[0].Name);
@@ -290,10 +256,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_CreateTable_AllPortableTypes_Success_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             var inspected = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -446,8 +409,8 @@ public sealed partial class SqliteMigrationTests
             );
 
             // Assert - should fail with useful error message
-            Assert.True(result is MigrationApplyResultError);
-            var error = ((MigrationApplyResultError)result).Value;
+
+            var error = Expected<MigrationApplyResultError>(actual: result).Value;
             Assert.Contains("Destructive", error.Message);
             Assert.Contains("DropTableOperation", error.Message);
         });
@@ -492,15 +455,16 @@ public sealed partial class SqliteMigrationTests
             DatabaseCommands.Execute(
                 connection: connection,
                 configure: command =>
-                    command.CommandText = Data_SchemaCapture_ExistingDatabase_ReturnsCompleteSchema_1
+                    command.CommandText =
+                        Data_SchemaCapture_ExistingDatabase_ReturnsCompleteSchema_1
             );
 
             // Act - CAPTURE the existing schema
             var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
 
             // Assert - schema captured successfully
-            Assert.True(captureResult is SchemaResultOk);
-            var schema = ((SchemaResultOk)captureResult).Value;
+
+            var schema = Ok(actual: captureResult).Value;
 
             // Verify tables captured
             Assert.Equal(2, schema.Tables.Count);
@@ -538,16 +502,14 @@ public sealed partial class SqliteMigrationTests
 
             // Act - Capture and serialize to JSON
             var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
-            Assert.True(captureResult is SchemaResultOk);
-            var schema = ((SchemaResultOk)captureResult).Value;
+
+            var schema = Ok(actual: captureResult).Value;
 
             var json = SchemaSerializer.ToJson(schema);
 
             // Assert - JSON is valid and contains expected data
             Assert.NotNull(json);
-            Assert.Contains("products", json);
-            Assert.Contains("name", json);
-            Assert.Contains("idx_products_name", json);
+            ContainsAll(actual: json, expected: ["products", "name", "idx_products_name"]);
 
             // Deserialize and verify round-trip
             var restored = SchemaSerializer.FromJson(json);
@@ -588,8 +550,7 @@ public sealed partial class SqliteMigrationTests
             var indexDef = cmd.ExecuteScalar() as string;
 
             Assert.NotNull(indexDef);
-            Assert.Contains("UNIQUE", indexDef);
-            Assert.Contains("lower", indexDef);
+            ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower"]);
         });
     }
 
@@ -648,9 +609,7 @@ public sealed partial class SqliteMigrationTests
             var indexDef = cmd.ExecuteScalar() as string;
 
             Assert.NotNull(indexDef);
-            Assert.Contains("UNIQUE", indexDef);
-            Assert.Contains("lower", indexDef);
-            Assert.Contains("SuburbId", indexDef);
+            ContainsAll(actual: indexDef, expected: ["UNIQUE", "lower", "SuburbId"]);
         });
     }
 
@@ -704,15 +663,16 @@ public sealed partial class SqliteMigrationTests
             DatabaseCommands.Execute(
                 connection: connection,
                 configure: command =>
-                    command.CommandText = Data_ExpressionIndex_SchemaInspector_DetectsExpressionIndex_1
+                    command.CommandText =
+                        Data_ExpressionIndex_SchemaInspector_DetectsExpressionIndex_1
             );
 
             // Act - Inspect schema
             var result = SqliteSchemaInspector.Inspect(connection, _logger);
 
             // Assert
-            Assert.True(result is SchemaResultOk);
-            var schema = ((SchemaResultOk)result).Value;
+
+            var schema = Ok(actual: result).Value;
             var artists = schema.Tables.Single(t => t.Name == "artists");
 
             Assert.Single(artists.Indexes);
@@ -839,10 +799,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_NowFunction_TranslatesToCurrentTimestamp_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Verify table DDL contains datetime('now') - the SQLite translation of now()
             using var cmd = connection.CreateCommand();
@@ -875,18 +832,14 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_BooleanTrue_TranslatesTo1_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Verify table DDL contains 1 and 0 for boolean defaults
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='flags'";
             var tableDef = cmd.ExecuteScalar() as string;
             Assert.NotNull(tableDef);
-            Assert.Contains("DEFAULT 1", tableDef); // true -> 1
-            Assert.Contains("DEFAULT 0", tableDef); // false -> 0
+            ContainsAll(actual: tableDef, expected: ["DEFAULT 1", "DEFAULT 0"]); // false -> 0
 
             // Insert and verify defaults work
             DatabaseCommands.Execute(
@@ -913,10 +866,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_NumericValues_PassThrough_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Insert and verify defaults work
             DatabaseCommands.Execute(
@@ -944,10 +894,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_StringLiteral_PassThrough_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Insert and verify defaults work
             DatabaseCommands.Execute(
@@ -974,10 +921,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Insert multiple rows and verify UUIDs are generated and unique
             DatabaseCommands.Execute(
@@ -1019,10 +963,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Insert and verify default date
             DatabaseCommands.Execute(
@@ -1048,10 +989,7 @@ public sealed partial class SqliteMigrationTests
             var schema = Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1();
 
             // Act
-            var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
-
-            // Assert
-            Assert.True(result is MigrationApplyResultOk);
+            SeedSchemaAndAssertSuccess(input0: connection, input1: schema);
 
             // Insert with no columns specified - all defaults should apply
             DatabaseCommands.Execute(
@@ -1094,7 +1032,8 @@ public sealed partial class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Fixture_CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully_1();
+            var schema =
+                Fixture_CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully_1();
 
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
@@ -1148,5 +1087,34 @@ public sealed partial class SqliteMigrationTests
                 Assert.Equal(1536L, r.GetInt64(1));
             }
         });
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void SeedSchemaAndAssertSuccess(
+        global::Microsoft.Data.Sqlite.SqliteConnection input0,
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input1
+    )
+    {
+        // Act
+        var result = SeedSchema(connection: input0, schema: input1, logger: _logger);
+
+        // Assert
+        Assert.True(result is MigrationApplyResultOk);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition ApplyChangesAndInspectSchema(
+        global::Microsoft.Data.Sqlite.SqliteConnection input0,
+        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Migration.Core.SchemaOperation> input1
+    )
+    {
+        var result = SqliteTestDb.TryApply(connection: input0, operations: input1, logger: _logger);
+
+        // Assert
+        Assert.True(result is MigrationApplyResultOk);
+
+        var finalSchema = ((SchemaResultOk)SqliteSchemaInspector.Inspect(input0, _logger)).Value;
+
+        return finalSchema;
     }
 }

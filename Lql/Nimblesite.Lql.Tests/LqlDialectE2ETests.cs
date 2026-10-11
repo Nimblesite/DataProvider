@@ -4,6 +4,7 @@ using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Xunit;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -79,10 +80,12 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("SUM", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("AVG", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("total_amount", sql, StringComparison.Ordinal);
-            Assert.Contains("avg_amount", sql, StringComparison.Ordinal);
+            AssertBothSqlFragments(input0: sql, value0: "SUM", value1: "AVG");
+            ContainsAll(
+                actual: sql,
+                expected: ["total_amount", "avg_amount"],
+                comparison: StringComparison.Ordinal
+            );
             Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -95,10 +98,8 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("COUNT(DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "COUNT", value1: "DISTINCT");
+            AssertBothSqlFragments(input0: sql, value0: "COUNT(DISTINCT", value1: "product_id");
             Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("unique_products", sql, StringComparison.Ordinal);
         }
@@ -115,10 +116,12 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("UPPER", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("LOWER", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("upper_name", sql, StringComparison.Ordinal);
-            Assert.Contains("lower_email", sql, StringComparison.Ordinal);
+            AssertBothSqlFragments(input0: sql, value0: "UPPER", value1: "LOWER");
+            ContainsAll(
+                actual: sql,
+                expected: ["upper_name", "lower_email"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 
@@ -132,8 +135,7 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("SELECT DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("country", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "SELECT DISTINCT", value1: "country");
         }
     }
 
@@ -143,18 +145,13 @@ public sealed partial class LqlDialectE2ETests
         var lql = Data_OffsetAndLimit_AllDialects_GeneratesCorrectPagination_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
-        Assert.Contains("OFFSET", pg, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", pg, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", pg, StringComparison.Ordinal);
-        Assert.Contains("10", pg, StringComparison.Ordinal);
-        Assert.Contains("OFFSET", sl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", sl, StringComparison.Ordinal);
-        Assert.Contains("10", sl, StringComparison.Ordinal);
+        AssertBothSqlFragments(input0: pg, value0: "OFFSET", value1: "LIMIT");
+        ContainsAll(actual: pg, expected: ["20", "10"], comparison: StringComparison.Ordinal);
+        AssertBothSqlFragments(input0: sl, value0: "OFFSET", value1: "LIMIT");
+        ContainsAll(actual: sl, expected: ["20", "10"], comparison: StringComparison.Ordinal);
         // SQL Server uses OFFSET...FETCH or TOP
         Assert.Contains("OFFSET", ss, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", ss, StringComparison.Ordinal);
-        Assert.Contains("10", ss, StringComparison.Ordinal);
+        ContainsAll(actual: ss, expected: ["20", "10"], comparison: StringComparison.Ordinal);
         Assert.True(
             ss.Contains("FETCH", StringComparison.OrdinalIgnoreCase)
                 || ss.Contains("TOP", StringComparison.OrdinalIgnoreCase)
@@ -169,8 +166,7 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "HAVING", value1: "GROUP BY");
         }
     }
 
@@ -182,10 +178,8 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("LEFT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "LEFT", value1: "JOIN");
+            AssertBothSqlFragments(input0: sql, value0: "orders", value1: "user_id");
             Assert.Contains("total", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -198,12 +192,9 @@ public sealed partial class LqlDialectE2ETests
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("products", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "users", value1: "orders");
+            AssertBothSqlFragments(input0: sql, value0: "products", value1: "user_id");
+            AssertBothSqlFragments(input0: sql, value0: "product_id", value1: "JOIN");
             Assert.Equal(2, sql.Split("JOIN", StringSplitOptions.None).Length - 1);
         }
     }

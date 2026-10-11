@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Tests.Shared;
-
 namespace Nimblesite.Sync.Http.Tests;
 
 public partial class HttpMappingE2ETests
@@ -16,27 +14,35 @@ public partial class HttpMappingE2ETests
             Timestamp: "2024-06-15T10:30:00Z"
         );
 
-    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.Sync.Core.SyncLogEntry> changesList, global::Nimblesite.Sync.Core.MappedEntry entry, global::System.String mergedPayload) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
+        global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.Sync.Core.SyncLogEntry> changesList,
+        global::Nimblesite.Sync.Core.MappedEntry entry,
+        global::System.String mergedPayload
+    ) =>
         new SyncLogEntry(
-                Version: changesList[0].Version,
-                TableName: entry.TargetTable,
-                PkValue: entry.TargetPkValue,
-                Operation: changesList[0].Operation,
-                Payload: mergedPayload,
-                Origin: changesList[0].Origin,
-                Timestamp: changesList[0].Timestamp
-            );
+            Version: changesList[0].Version,
+            TableName: entry.TargetTable,
+            PkValue: entry.TargetPkValue,
+            Operation: changesList[0].Operation,
+            Payload: mergedPayload,
+            Origin: changesList[0].Origin,
+            Timestamp: changesList[0].Timestamp
+        );
 
-    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(global::Nimblesite.Sync.Core.SyncLogEntry change, global::Nimblesite.Sync.Core.MappedEntry entry, global::System.String mergedPayload) =>
+    private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_E2E_MultipleRecords_AllTransformedCorrectly_1(
+        global::Nimblesite.Sync.Core.SyncLogEntry change,
+        global::Nimblesite.Sync.Core.MappedEntry entry,
+        global::System.String mergedPayload
+    ) =>
         new SyncLogEntry(
-                    change.Version,
-                    entry.TargetTable,
-                    entry.TargetPkValue,
-                    change.Operation,
-                    mergedPayload,
-                    change.Origin,
-                    change.Timestamp
-                );
+            change.Version,
+            entry.TargetTable,
+            entry.TargetPkValue,
+            change.Operation,
+            mergedPayload,
+            change.Origin,
+            change.Timestamp
+        );
 
     private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_MappingEngine_DeleteOperation_TransformsTableAndPk_1() =>
         new SyncLogEntry(
@@ -125,11 +131,11 @@ public partial class HttpMappingE2ETests
 
     private static global::Nimblesite.Sync.Core.ColumnMapping Fixture_MappingEngine_MultipleColumnMappings_AllApplied_1() =>
         new ColumnMapping(
-                Source: null,
-                Target: "constant",
-                Transform: TransformType.Constant,
-                Value: "fixed"
-            );
+            Source: null,
+            Target: "constant",
+            Transform: TransformType.Constant,
+            Value: "fixed"
+        );
 
     private static global::Nimblesite.Sync.Core.SyncMappingConfig Fixture_MappingEngine_ExcludeMultipleColumns_AllExcluded_1() =>
         new SyncMappingConfig(

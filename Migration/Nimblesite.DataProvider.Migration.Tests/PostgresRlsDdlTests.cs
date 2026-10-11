@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -59,21 +61,20 @@ public sealed partial class PostgresRlsDdlTests
             )
         );
 
-        Assert.Contains(
-            "CREATE POLICY \"owner_isolation\" ON \"public\".\"Documents\"",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains("AS PERMISSIVE", ddl, StringComparison.Ordinal);
-        Assert.Contains("FOR ALL", ddl, StringComparison.Ordinal);
-        Assert.Contains("TO PUBLIC", ddl, StringComparison.Ordinal);
-        Assert.Contains("USING (", ddl, StringComparison.Ordinal);
-        Assert.Contains("WITH CHECK (", ddl, StringComparison.Ordinal);
-        Assert.Contains("\"OwnerId\"", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE POLICY \"owner_isolation\" ON \"public\".\"Documents\"",
+                "AS PERMISSIVE",
+                "FOR ALL",
+                "TO PUBLIC",
+                "USING (",
+                "WITH CHECK (",
+                "\"OwnerId\"",
+                "current_setting('rls.current_user_id', true)",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -88,10 +89,11 @@ public sealed partial class PostgresRlsDdlTests
             )
         );
 
-        Assert.Contains("AS RESTRICTIVE", ddl, StringComparison.Ordinal);
-        Assert.Contains("FOR SELECT", ddl, StringComparison.Ordinal);
-        Assert.Contains("TO \"admin\", \"auditor\"", ddl, StringComparison.Ordinal);
-        Assert.Contains("USING (", ddl, StringComparison.Ordinal);
+        ContainsAll(
+            actual: ddl,
+            expected: ["AS RESTRICTIVE", "FOR SELECT", "TO \"admin\", \"auditor\"", "USING ("],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("WITH CHECK", ddl, StringComparison.Ordinal);
     }
 
@@ -108,13 +110,16 @@ public sealed partial class PostgresRlsDdlTests
             )
         );
 
-        Assert.Contains("USING (EXISTS (", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "USING (EXISTS (",
+                "current_setting('rls.current_user_id', true)",
+                "UserGroupMemberships",
+            ],
+            comparison: StringComparison.Ordinal
         );
-        Assert.Contains("UserGroupMemberships", ddl, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -128,8 +133,11 @@ public sealed partial class PostgresRlsDdlTests
             )
         );
 
-        Assert.Contains("USING (is_member(\"GroupId\"))", ddl, StringComparison.Ordinal);
-        Assert.Contains("WITH CHECK (can_write(\"GroupId\"))", ddl, StringComparison.Ordinal);
+        ContainsAll(
+            actual: ddl,
+            expected: ["USING (is_member(\"GroupId\"))", "WITH CHECK (can_write(\"GroupId\"))"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain(
             "current_setting('rls.current_user_id', true)",
             ddl,

@@ -1,6 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -60,8 +61,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         // Create test table
         DatabaseCommands.Execute(
             connection: conn,
-            configure: command =>
-                command.CommandText = Data_CreateSqliteDb_1
+            configure: command => command.CommandText = Data_CreateSqliteDb_1
         );
 
         // Create triggers
@@ -121,8 +121,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Fetch changes from SQLite
         var changes = SyncLogRepository.FetchChanges(sqlite, 0, 100);
-        Assert.True(changes is SyncLogListOk, $"FetchChanges failed: {changes}");
-        var changesList = ((SyncLogListOk)changes).Value;
+
+        var changesList = Ok(actual: changes, message: $"FetchChanges failed: {changes}").Value;
         Assert.Single(changesList);
 
         // Apply changes to Postgres with suppression
@@ -165,8 +165,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Fetch changes from Postgres
         var changes = PostgresSyncLogRepository.FetchChanges(postgres, 0, 100);
-        Assert.True(changes is SyncLogListOk, $"FetchChanges failed: {changes}");
-        var changesList = ((SyncLogListOk)changes).Value;
+
+        var changesList = Ok(actual: changes, message: $"FetchChanges failed: {changes}").Value;
         Assert.Single(changesList);
 
         // Apply changes to SQLite with suppression
@@ -297,8 +297,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Sync update to Postgres
         var updateChanges = SyncLogRepository.FetchChanges(sqlite, versionAfterInsert, 100);
-        Assert.True(updateChanges is SyncLogListOk);
-        var updateList = ((SyncLogListOk)updateChanges).Value;
+
+        var updateList = Ok(actual: updateChanges).Value;
         Assert.Single(updateList);
         Assert.Equal(SyncOperation.Update, updateList[0].Operation);
 
@@ -352,8 +352,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Fetch tombstone
         var deleteChanges = SyncLogRepository.FetchChanges(sqlite, versionAfterInsert, 100);
-        Assert.True(deleteChanges is SyncLogListOk);
-        var deleteList = ((SyncLogListOk)deleteChanges).Value;
+
+        var deleteList = Ok(actual: deleteChanges).Value;
         Assert.Single(deleteList);
         Assert.Equal(SyncOperation.Delete, deleteList[0].Operation);
 

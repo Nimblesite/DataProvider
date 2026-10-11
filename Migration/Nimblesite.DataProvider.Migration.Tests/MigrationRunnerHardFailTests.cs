@@ -11,12 +11,7 @@ public sealed partial record MigrationPlatformRegressionTests
 {
     // Implements [MIG-RUNNER-HARD-FAIL] and [MIG-TEST-CROSS-PLATFORM].
     [Theory]
-    [InlineData("sqlite", false)]
-    [InlineData("postgres", false)]
-    [InlineData("sqlserver", false)]
-    [InlineData("sqlite", true)]
-    [InlineData("postgres", true)]
-    [InlineData("sqlserver", true)]
+    [MemberData(nameof(Runner_FailedOperationReturnsErrorAndHonorsContinueOnErrorInlineCases))]
     public async Task Runner_FailedOperationReturnsErrorAndHonorsContinueOnError(
         string provider,
         bool continueOnError

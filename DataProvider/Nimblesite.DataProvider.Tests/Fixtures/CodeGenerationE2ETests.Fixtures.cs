@@ -1,7 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using System.Collections.Immutable;
-using Nimblesite.Sql.Model;
-
 namespace Nimblesite.DataProvider.Tests;
 
 public partial class CodeGenerationE2ETests

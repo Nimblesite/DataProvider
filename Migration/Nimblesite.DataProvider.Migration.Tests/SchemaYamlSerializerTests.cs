@@ -2,6 +2,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -21,11 +22,10 @@ public sealed partial class SchemaYamlSerializerTests
 
         // Assert
         Assert.NotNull(yaml);
-        Assert.Contains("name: test", yaml);
-        Assert.Contains("tables:", yaml);
-        Assert.Contains("Users", yaml);
-        Assert.Contains("Uuid", yaml);
-        Assert.Contains("VarChar(255)", yaml);
+        ContainsAll(
+            actual: yaml,
+            expected: ["name: test", "tables:", "Users", "Uuid", "VarChar(255)"]
+        );
     }
 
     [Fact]
@@ -251,8 +251,7 @@ public sealed partial class SchemaYamlSerializerTests
 
             // Assert
             var content = File.ReadAllText(tempFile);
-            Assert.Contains("file_write_test", content);
-            Assert.Contains("Table1", content);
+            ContainsAll(actual: content, expected: ["file_write_test", "Table1"]);
 
             // Verify it can be read back
             var restoredYaml = File.ReadAllText(tempFile);

@@ -125,3 +125,36 @@ from clone analysis. Test runners, database setup and all assertions remain in
 the audited files. Fixture functions evaluate at their original call sites,
 with the same captured values and constructor/default semantics. Standalone
 teaching applications are also excluded; their complete examples are intentional.
+
+### Shared result assertions [CI-TEST-SHARED-RESULT]
+
+Tests reuse a type assertion followed by an assignable result value. The original
+boolean assertion and optional diagnostic message remain in the helper; casts
+and null-forgiving operators are replaced by xUnit's checked result.
+
+### Shared scenario execution [CI-TEST-SHARED-SCENARIOS]
+
+Tests with the same execution and assertion sequence call one typed routine.
+Every scenario retains its input values and assertions, including result checks,
+query checks and provider-specific entry points. Shared routines return the
+original typed values needed for the scenario's remaining assertions.
+
+### Shared test case matrices [CI-TEST-SHARED-CASE-MATRIX]
+
+Tests with the same algorithm use one theory and explicit independent case rows.
+Rows retain original test names for discovery and all original input and expected
+values. Only data rows live in excluded Fixtures files; runners and assertions
+remain in the audited source.
+
+### Public contract data [CI-DESLOP-CONTRACT-DATA]
+
+Deslop excludes the explicit declaration-only schema operation, column and step
+model files listed in .deslop.toml. These distinct exported data types contain no
+query, migration or transformation algorithms. Combining their shapes would change
+the public NuGet contracts; executable implementations remain audited.
+
+### Shared string assertions [CI-TEST-SHARED-STRING-ASSERTIONS]
+
+Consecutive fragment checks use one ordered assertion loop. The original expected
+strings, actual value and comparison behavior are preserved, including xUnit's default
+current-culture comparison and explicit string comparison modes. Every original fragment check still executes.

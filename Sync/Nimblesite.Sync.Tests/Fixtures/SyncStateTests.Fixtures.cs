@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-
-
 namespace Nimblesite.Sync.Tests;
 
 public partial class SyncStateTests

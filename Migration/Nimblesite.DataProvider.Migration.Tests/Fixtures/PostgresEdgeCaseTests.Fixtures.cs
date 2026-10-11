@@ -1,6 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresEdgeCaseTests
@@ -189,7 +187,9 @@ public partial class PostgresEdgeCaseTests
             )
             .Build();
 
-    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_VeryLongName_Success_1(global::System.String longName) =>
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_Index_VeryLongName_Success_1(
+        global::System.String longName
+    ) =>
         Schema
             .Define("Test")
             .Table(

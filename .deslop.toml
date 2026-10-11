@@ -11,6 +11,14 @@ exclude = [
   # Independent scenario datasets contain schema/configuration input, never runners
   # or assertions. Keep each scenario explicit to protect its test oracle.
   "**/Fixtures/*.Fixtures.cs",
+  # Fixed public model contracts contain declarations and data initialization only.
+  # Their distinct exported types must retain their API and cannot share one type.
+  "Migration/Nimblesite.DataProvider.Migration.Core/SchemaOperation.cs",
+  "Lql/Nimblesite.Lql.Core/SelectDistinctStep.cs",
+  "Lql/Nimblesite.Lql.Core/GroupByStep.cs",
+  "Lql/Nimblesite.Lql.Core/SelectStep.cs",
+  "Other/Nimblesite.Sql.Model/SubQueryColumn.cs",
+  "Other/Nimblesite.Sql.Model/ExpressionColumn.cs",
   # Standalone teaching projects intentionally show complete, independent usage.
   "DataProvider/Nimblesite.DataProvider.Example/**",
   "DataProvider/Nimblesite.DataProvider.Example.FSharp/**",
@@ -40,4 +48,4 @@ exclude = [
 # Initial adoption ceiling measured with Deslop 0.36.0; main was 44.20213%.
 # Written justification and reproduction: docs/specs/ci-spec.md [CI-DESLOP-BASELINE].
 # Keep all findings visible. Subsequent changes may only ratchet this DOWN.
-max_duplication_percent = 38.92
+max_duplication_percent = 32.73

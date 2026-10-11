@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
@@ -79,8 +81,11 @@ public sealed class SqlErrorTests
         var result = error.ToString();
 
         // Assert
-        Assert.Contains("Test error message", result, StringComparison.Ordinal);
-        Assert.Contains("InvalidOperationException", result, StringComparison.Ordinal);
+        ContainsAll(
+            actual: result,
+            expected: ["Test error message", "InvalidOperationException"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]

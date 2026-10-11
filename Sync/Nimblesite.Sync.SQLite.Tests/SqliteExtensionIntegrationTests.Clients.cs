@@ -1,6 +1,7 @@
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.SQLite;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 using ClientFailure = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
     Nimblesite.Sync.Core.SyncError
@@ -92,8 +93,8 @@ public sealed partial class SqliteExtensionIntegrationTests
         var result = _db.GetAllSyncClients();
 
         // Assert
-        Assert.True(result is SyncClientListOk);
-        var clients = ((SyncClientListOk)result).Value;
+
+        var clients = Ok(actual: result).Value;
         Assert.Equal(3, clients.Count);
         Assert.Equal("client-b", clients[0].OriginId); // Lowest version first
         Assert.Equal("client-c", clients[1].OriginId);
@@ -124,15 +125,7 @@ public sealed partial class SqliteExtensionIntegrationTests
     #endregion
 
     [Theory]
-    [InlineData("extension-list", "Failed to get clients:")]
-    [InlineData("repository-list", "Failed to get sync clients:")]
-    [InlineData("extension-upsert", "Failed to upsert client:")]
-    [InlineData("repository-upsert", "Failed to upsert sync client:")]
-    [InlineData("extension-delete", "Failed to delete stale clients:")]
-    [InlineData("repository-delete", "Failed to delete sync clients:")]
-    [InlineData("repository-origin", "Failed to get sync client:")]
-    [InlineData("repository-minimum", "Failed to get minimum sync version:")]
-    [InlineData("repository-delete-one", "Failed to delete sync client:")]
+    [MemberData(nameof(ClientApi_MissingTableRetainsDatabaseErrorInlineCases))]
     public void ClientApi_MissingTableRetainsDatabaseError(string api, string expectedPrefix)
     {
         var drop = MigrationRunner.Apply(

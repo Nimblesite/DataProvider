@@ -31,26 +31,14 @@ public static class PostgresTriggerGenerator
         string tableName,
         IReadOnlyList<string> columns,
         string pkColumn
-    )
-    {
-        return TriggerGenerationWorkflow.Compose(
-            insert: GenerateChangeTrigger(
-                tableName: tableName,
-                columns: columns,
-                pkColumn: pkColumn,
-                operation: "insert",
-                eventName: "INSERT"
-            ),
-            update: GenerateChangeTrigger(
-                tableName: tableName,
-                columns: columns,
-                pkColumn: pkColumn,
-                operation: "update",
-                eventName: "UPDATE"
-            ),
-            delete: GenerateDeleteTrigger(tableName: tableName, pkColumn: pkColumn)
+    ) =>
+        TriggerGenerationWorkflow.Compose(
+            tableName: tableName,
+            columns: columns,
+            pkColumn: pkColumn,
+            change: GenerateChangeTrigger,
+            delete: GenerateDeleteTrigger
         );
-    }
 
     /// <summary>
     /// Generates triggers for a table by reading schema from database.
@@ -68,27 +56,15 @@ public static class PostgresTriggerGenerator
         NpgsqlConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
-
-        return GetTableColumns(connection: connection, tableName: tableName) switch
-        {
-            ColumnInfoListError error => TriggerGenerationWorkflow.ColumnError(
-                tableName: tableName,
-                error: error.Value,
-                logger: logger
-            ),
-            ColumnInfoListOk columns => TriggerGenerationWorkflow.Generate(
-                tableName: tableName,
-                columns: columns.Value,
-                isPrimaryKey: column => column.IsPrimaryKey,
-                columnName: column => column.Name,
-                generate: GenerateTriggers,
-                logger: logger
-            ),
-        };
-    }
+    ) =>
+        TriggerGenerationWorkflow.FromSchema(
+            tableName: tableName,
+            readColumns: () => GetTableColumns(connection: connection, tableName: tableName),
+            isPrimaryKey: column => column.IsPrimaryKey,
+            columnName: column => column.Name,
+            generate: GenerateTriggers,
+            logger: logger
+        );
 
     /// <summary>
     /// Creates sync triggers in the database for a table.
@@ -106,36 +82,23 @@ public static class PostgresTriggerGenerator
         NpgsqlConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Creating triggers for table {Table}", tableName);
-
-        var triggersResult = GenerateTriggersFromSchema(connection, tableName, logger);
-
-        if (triggersResult is StringSyncError error)
-        {
-            return new BoolSyncError(error.Value);
-        }
-
-        var triggers = ((StringSyncOk)triggersResult).Value;
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = triggers;
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Created triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to create triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to create triggers: {ex.Message}")
-            );
-        }
-    }
+    ) =>
+        TriggerGenerationWorkflow.Create<NpgsqlException>(
+            tableName: tableName,
+            generate: () =>
+                GenerateTriggersFromSchema(
+                    connection: connection,
+                    tableName: tableName,
+                    logger: logger
+                ),
+            execute: sql =>
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            },
+            logger: logger
+        );
 
     /// <summary>
     /// Drops sync triggers for a table.

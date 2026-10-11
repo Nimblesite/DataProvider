@@ -32,7 +32,9 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
                 },
             ]
         );
-        var desired = Fixture_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(current: current);
+        var desired = Fixture_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(
+            current: current
+        );
 
         var ops = SchemaDiffAssertions.Diff(
             current: current,

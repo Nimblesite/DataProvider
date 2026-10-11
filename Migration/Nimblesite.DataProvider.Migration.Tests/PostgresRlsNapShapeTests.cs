@@ -17,7 +17,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -39,10 +40,7 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
     /// </summary>
     private static void BootstrapNapPrelude(NpgsqlConnection conn)
     {
-        PostgresTestDb.Exec(
-            conn,
-            Data_BootstrapNapPrelude_1
-        );
+        PostgresTestDb.Exec(conn, Data_BootstrapNapPrelude_1);
     }
 
     private static readonly string[] TenantTableNames =

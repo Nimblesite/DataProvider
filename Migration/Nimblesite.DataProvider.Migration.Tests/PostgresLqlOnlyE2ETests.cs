@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -19,7 +21,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -41,10 +44,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
     /// </summary>
     private static void BootstrapRolesAndGucReaders(NpgsqlConnection conn)
     {
-        PostgresTestDb.Exec(
-            conn,
-            Data_BootstrapRolesAndGucReaders_1
-        );
+        PostgresTestDb.Exec(conn, Data_BootstrapRolesAndGucReaders_1);
     }
 
     /// <summary>
@@ -52,10 +52,7 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
     /// membership fns that reference tenant_members.
     /// </summary>
     private static void BootstrapMembershipFns(NpgsqlConnection conn) =>
-        PostgresTestDb.Exec(
-            conn,
-            Data_BootstrapMembershipFns_1
-        );
+        PostgresTestDb.Exec(conn, Data_BootstrapMembershipFns_1);
 
     /// <summary>
     /// Inspects the live public schema, diffs it against the desired schema,
@@ -409,8 +406,11 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         var qual = r.GetString(0);
         var wc = r.GetString(1);
         Assert.Contains("is_member", qual, StringComparison.Ordinal);
-        Assert.Contains("is_member", wc, StringComparison.Ordinal);
-        Assert.Contains("tenant_id", wc, StringComparison.Ordinal);
+        ContainsAll(
+            actual: wc,
+            expected: ["is_member", "tenant_id"],
+            comparison: StringComparison.Ordinal
+        );
         // Asymmetry: with_check has tenant_id check, qual doesn't.
         Assert.DoesNotContain("\"tenant_id\"", qual, StringComparison.Ordinal);
     }
@@ -429,11 +429,13 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
         BootstrapMembershipFns(_connection);
 
         // Parent table: conversations.
-        var convSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1();
+        var convSchema =
+            Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1();
         ApplyAndGrant(convSchema, "conversations");
 
         // Child table: messages — RLS via exists() over conversations.
-        var msgSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2();
+        var msgSchema =
+            Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2();
         ApplyAndGrant(msgSchema, "messages");
 
         // Set up: tenantA has userA as member, tenantB has userB as member.

@@ -36,11 +36,7 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
     [Fact]
     public void SupportObjects_InspectAfterApply_DoesNotEmitSecondDiff()
     {
-        if (_connection is not NpgsqlConnection connection)
-        {
-            Assert.Fail("PostgreSQL connection not initialized.");
-            return;
-        }
+        var connection = global::Tests.Shared.ResultAssertions.Expected<NpgsqlConnection>(actual: _connection, message: "PostgreSQL connection not initialized.");
 
         var desired = SupportSchema();
         var current = Inspect(connection);

@@ -10,22 +10,11 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-DIFF]. Issue #119: view qualification must not become policy drift.
 [Collection(Postgres15TestSuite.Name)]
-public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fixture)
+public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fixture)
 {
     [Theory]
-    [InlineData("id = 1", "id = 2", null, null, false)]
-    [InlineData("id = 1", "items.id = 2", "id > 0", "id > 0", true)]
-    [InlineData("id > 0", "id > 0", "id = 1", "id = 2", false)]
-    [InlineData(null, null, "id = 1", "id = 2", false)]
-    [InlineData("NOT (id = 1)", "NOT (id = 2)", null, null, true)]
-    [InlineData("abs(id) = 1", "abs(id) = 2", null, null, true)]
-    [InlineData("\"id\" = 1", "\"id\" = 2", null, null, true)]
-    [InlineData(
-        "EXISTS (SELECT 1 FROM public.items AS other WHERE other.id = items.id)",
-        "EXISTS (SELECT 1 FROM public.items AS other WHERE other.id = id)",
-        null,
-        null,
-        true
+    [MemberData(
+        nameof(ColumnPredicates_CreateReapplyAndChangeWithoutFalseIntegrityDriftInlineCases)
     )]
     public void ColumnPredicates_CreateReapplyAndChangeWithoutFalseIntegrityDrift(
         string? initialUsing,

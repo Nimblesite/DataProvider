@@ -2,6 +2,7 @@
 using Microsoft.Data.Sqlite;
 using Tests.Shared;
 using Xunit;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -30,8 +31,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         // Create test table with triggers
         DatabaseCommands.Execute(
             connection: _db,
-            configure: command =>
-                command.CommandText = Data_Shared_1
+            configure: command => command.CommandText = Data_Shared_1
         );
         TriggerGenerator.CreateTriggers(_db, "Person", NullLogger.Instance);
     }
@@ -97,8 +97,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetByOrigin(_db, "client-1");
 
         // Assert
-        Assert.True(result is SyncClientOk);
-        var retrieved = ((SyncClientOk)result).Value;
+
+        var retrieved = Ok(actual: result).Value;
         Assert.NotNull(retrieved);
         Assert.Equal("client-1", retrieved.OriginId);
         Assert.Equal(100, retrieved.LastSyncVersion);
@@ -217,8 +217,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
 
         // Assert
-        Assert.True(result is SyncLogListOk);
-        var entries = ((SyncLogListOk)result).Value;
+
+        var entries = Ok(actual: result).Value;
         Assert.Single(entries);
         Assert.Equal("Person", entries[0].TableName);
     }
@@ -464,8 +464,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
 
         // Assert
-        Assert.True(result is SyncLogListOk);
-        var entries = ((SyncLogListOk)result).Value;
+
+        var entries = Ok(actual: result).Value;
         Assert.NotEmpty(entries);
 
         var entry = entries[^1];
@@ -536,8 +536,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetById(_db, "sub-1");
 
         // Assert
-        Assert.True(result is SubscriptionOk);
-        var retrieved = ((SubscriptionOk)result).Value;
+
+        var retrieved = Ok(actual: result).Value;
         Assert.NotNull(retrieved);
         Assert.Equal("sub-1", retrieved.SubscriptionId);
     }
@@ -586,8 +586,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetByTable(_db, "Person");
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subs = ((SubscriptionListOk)result).Value;
+
+        var subs = Ok(actual: result).Value;
         Assert.Single(subs);
         Assert.Equal("sub-1", subs[0].SubscriptionId);
     }
@@ -627,8 +627,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetByOrigin(_db, origin1);
 
         // Assert
-        Assert.True(result is SubscriptionListOk);
-        var subs = ((SubscriptionListOk)result).Value;
+
+        var subs = Ok(actual: result).Value;
         Assert.Single(subs);
         Assert.Equal("sub-1", subs[0].SubscriptionId);
     }

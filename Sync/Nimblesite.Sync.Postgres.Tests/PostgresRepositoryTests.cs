@@ -8,7 +8,8 @@ namespace Nimblesite.Sync.Postgres.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _conn = null!;
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -519,8 +520,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Create test table
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_ApplyChange_Insert_CreatesRow_1
+            configure: command => command.CommandText = Data_ApplyChange_Insert_CreatesRow_1
         );
 
         var entry = new SyncLogEntry(
@@ -549,8 +549,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Create and populate test table
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_ApplyChange_Update_UpdatesRow_1
+            configure: command => command.CommandText = Data_ApplyChange_Update_UpdatesRow_1
         );
 
         var entry = new SyncLogEntry(
@@ -607,8 +606,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_ApplyChange_Insert_Upserts_1
+            configure: command => command.CommandText = Data_ApplyChange_Insert_Upserts_1
         );
 
         var entry = new SyncLogEntry(
@@ -716,8 +714,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         // Create and setup test table with triggers
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_Triggers_LogInsert_1
+            configure: command => command.CommandText = Data_Triggers_LogInsert_1
         );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_insert", Logger);
@@ -749,8 +746,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_Triggers_LogUpdate_1
+            configure: command => command.CommandText = Data_Triggers_LogUpdate_1
         );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_update", Logger);
@@ -783,8 +779,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_Triggers_LogDelete_1
+            configure: command => command.CommandText = Data_Triggers_LogDelete_1
         );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_delete", Logger);
@@ -817,8 +812,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
     {
         DatabaseCommands.Execute(
             connection: _conn,
-            configure: command =>
-                command.CommandText = Data_Triggers_SuppressedWhenActive_1
+            configure: command => command.CommandText = Data_Triggers_SuppressedWhenActive_1
         );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_suppression", Logger);

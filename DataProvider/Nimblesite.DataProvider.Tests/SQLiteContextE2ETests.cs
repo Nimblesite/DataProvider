@@ -5,6 +5,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -64,50 +65,31 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_1
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_2
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
     }
 
     [Fact]
     public void ProcessPipeline_SelectFilterOrderLimit_GeneratesCorrectSql()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("age")])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(
-            new FilterStep
-            {
-                Base = Id("users"),
-                Condition = WhereCondition.Comparison(
-                    left: ColumnInfo.Named("age"),
-                    @operator: ComparisonOperator.GreaterThan,
-                    right: "25"
-                ),
-            }
-        );
-        pipeline.Steps.Add(new OrderByStep([("name", "ASC")]) { Base = Id("users") });
-        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = "10" });
+        var pipeline = BuildFilteredUserPipeline(value7: "name", value11: "10");
 
         var sql = new SQLiteContext().ProcessPipeline(pipeline);
 
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("age", sql);
+        ContainsAll(actual: sql, expected: ["name", "age"]);
         Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("> 25", sql);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT 10", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["ORDER BY", "LIMIT 10"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Fact]
@@ -120,8 +102,7 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
 
         Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("country", sql);
-        Assert.Contains("COUNT(*)", sql);
+        ContainsAll(actual: sql, expected: ["country", "COUNT(*)"]);
         Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("COUNT(*) > 1", sql);
     }
@@ -137,8 +118,11 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var context = new SQLiteContext();
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
 
-        Assert.Contains("OFFSET 5", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT 10", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["OFFSET 5", "LIMIT 10"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
         Assert.Contains("name", sql);
     }
 
@@ -187,10 +171,10 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
 
         Assert.Contains("INNER JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("orders", sql);
-        Assert.Contains("users.id = orders.user_id", sql);
-        Assert.Contains("users.name", sql);
-        Assert.Contains("orders.total", sql);
+        ContainsAll(
+            actual: sql,
+            expected: ["orders", "users.id = orders.user_id", "users.name", "orders.total"]
+        );
     }
 
     [Fact]
@@ -219,8 +203,7 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
 
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
+        ContainsAll(actual: sql, expected: ["name", "email"]);
         Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("= 'active'", sql);
     }
@@ -246,33 +229,13 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = context.GenerateSQL();
 
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("users", sql);
+        ContainsAll(actual: sql, expected: ["name", "users"]);
     }
 
     [Fact]
     public void FullPipeline_ExecuteAgainstRealDb_ReturnsCorrectResults()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("age")])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(
-            new FilterStep
-            {
-                Base = Id("users"),
-                Condition = WhereCondition.Comparison(
-                    left: ColumnInfo.Named("age"),
-                    @operator: ComparisonOperator.GreaterThan,
-                    right: "25"
-                ),
-            }
-        );
-        pipeline.Steps.Add(new OrderByStep([("age", "ASC")]) { Base = Id("users") });
-        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = "3" });
+        var pipeline = BuildFilteredUserPipeline(value7: "age", value11: "3");
 
         var context = new SQLiteContext();
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
@@ -281,17 +244,13 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
             sql: sql,
             mapper: r => (r.GetString(0), r.GetInt64(1))
         );
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result from query execution");
-            return;
-        }
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<(string, long)>,
+            SqlError
+        >.Ok<IReadOnlyList<(string, long)>, SqlError>>(
+            actual: queryResult,
+            message: "Expected Ok result from query execution"
+        );
 
         var rows = ok.Value;
         Assert.Equal(3, rows.Count);
@@ -313,14 +272,13 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
         var queryResult = _connection.Query<string>(sql: sql, mapper: r => r.GetString(0));
 
-        if (
-            queryResult
-            is not Result<IReadOnlyList<string>, SqlError>.Ok<IReadOnlyList<string>, SqlError> ok
-        )
-        {
-            Assert.Fail("Expected Ok result from distinct query");
-            return;
-        }
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<string>,
+            SqlError
+        >.Ok<IReadOnlyList<string>, SqlError>>(
+            actual: queryResult,
+            message: "Expected Ok result from distinct query"
+        );
 
         Assert.Equal(2, ok.Value.Count);
         Assert.Contains("Widget", ok.Value);
@@ -339,17 +297,13 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
             sql: sql,
             mapper: r => (r.GetString(0), r.GetInt64(1))
         );
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result from group by query");
-            return;
-        }
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<(string, long)>,
+            SqlError
+        >.Ok<IReadOnlyList<(string, long)>, SqlError>>(
+            actual: queryResult,
+            message: "Expected Ok result from group by query"
+        );
 
         Assert.Equal(3, ok.Value.Count);
         Assert.Equal("US", ok.Value[0].Item1);
@@ -407,9 +361,36 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         var sql = SQLiteContext.ToSQLiteSql(statement);
 
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
-        Assert.Contains("FROM users", sql);
-        Assert.Contains("LIMIT 5", sql);
+        ContainsAll(actual: sql, expected: ["name", "email", "FROM users", "LIMIT 5"]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::Nimblesite.Lql.Core.Pipeline BuildFilteredUserPipeline(
+        string value7,
+        string value11
+    )
+    {
+        var pipeline = WithIdentity("users");
+        pipeline.Steps.Add(
+            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("age")])
+            {
+                Base = Id("users"),
+            }
+        );
+        pipeline.Steps.Add(
+            new FilterStep
+            {
+                Base = Id("users"),
+                Condition = WhereCondition.Comparison(
+                    left: ColumnInfo.Named("age"),
+                    @operator: ComparisonOperator.GreaterThan,
+                    right: "25"
+                ),
+            }
+        );
+        pipeline.Steps.Add(new OrderByStep([(value7, "ASC")]) { Base = Id("users") });
+        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = value11 });
+
+        return pipeline;
     }
 }

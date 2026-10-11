@@ -1,13 +1,15 @@
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
+using Tests.Shared;
 
-namespace Nimblesite.Sync.Http.Tests;
+namespace Nimblesite.TestSupport;
 
-public sealed record HttpSqlServerContainerFixture : IAsyncLifetime
+public sealed record SqlServerContainerFixture : IAsyncLifetime
 {
     private readonly Lazy<Task<MsSqlContainer>> _container = new(StartContainerAsync);
     private long _databaseCounter;
 
+    // Implements [MIG-TEST-CROSS-PLATFORM]: other providers run before SQL Server starts.
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
@@ -22,17 +24,23 @@ public sealed record HttpSqlServerContainerFixture : IAsyncLifetime
     public async Task<string> CreateDatabaseConnectionStringAsync()
     {
         var container = await _container.Value.ConfigureAwait(false);
-        var name = $"sync_http_{Interlocked.Increment(ref _databaseCounter)}";
+        var name = $"migration_regression_{Interlocked.Increment(ref _databaseCounter)}";
         using var admin = new SqlConnection(container.GetConnectionString());
         await admin.OpenAsync().ConfigureAwait(false);
-        using var command = admin.CreateCommand();
-        command.CommandText = $"CREATE DATABASE [{name}]";
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-        return new SqlConnectionStringBuilder(container.GetConnectionString())
+        DatabaseCommands.Execute(
+            connection: admin,
+            configure: command =>
+                command.CommandText =
+                    "DECLARE @sql nvarchar(max) = N'CREATE DATABASE ' + QUOTENAME(@database); EXEC sys.sp_executesql @sql;",
+            parameters: () => [("@database", name)]
+        );
+        var builder = new SqlConnectionStringBuilder(container.GetConnectionString())
         {
             InitialCatalog = name,
             Pooling = false,
-        }.ConnectionString;
+            PersistSecurityInfo = true,
+        };
+        return builder.ConnectionString;
     }
 
     private static async Task<MsSqlContainer> StartContainerAsync()

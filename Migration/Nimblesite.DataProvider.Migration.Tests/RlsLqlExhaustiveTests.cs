@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 using TranspileError = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -96,8 +98,11 @@ public sealed partial class RlsLqlExhaustiveTests
     public void CustomGucReader_AppTenantId_PassesThrough_Postgres()
     {
         var sql = Pg("tenant_id = app_tenant_id()");
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"tenant_id\"", "app_tenant_id()"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"app_tenant_id\"", sql, StringComparison.Ordinal);
     }
 
@@ -115,9 +120,11 @@ public sealed partial class RlsLqlExhaustiveTests
     public void SecurityDefiner_IsMember_TwoArgs_PassesThrough()
     {
         var sql = Pg("is_member(app_user_id(), app_tenant_id())");
-        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
-        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["is_member(", "app_user_id()", "app_tenant_id()"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"is_member\"", sql, StringComparison.Ordinal);
     }
 
@@ -141,26 +148,15 @@ public sealed partial class RlsLqlExhaustiveTests
 
     [Theory]
     // AndCombination_TwoPredicates_QuotesColumns_Postgres
-    [InlineData(
-        "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
-        "\"tenant_id\"",
-        "is_member("
-    )]
+    [MemberData(nameof(AndCombination_TwoPredicates_QuotesColumns_Postgres_CasesInlineCases))]
     // StringLiteral_PreservedVerbatim
-    [InlineData("status = 'active'", "'active'", "\"status\"")]
+
     // NegativeNumericLiteral_NotQuoted
-    [InlineData("balance > -5", "\"balance\"", "-5")]
+
     // Multiline_LqlPredicate_TranspilesCleanly
-    [InlineData(
-        """
-            tenant_id = app_tenant_id()
-              and is_member(app_user_id(), app_tenant_id())
-            """,
-        "\"tenant_id\"",
-        "is_member("
-    )]
+
     // ExtraWhitespace_Around_Operators_PreservedNotBroken
-    [InlineData("tenant_id   =    app_tenant_id()", "\"tenant_id\"", "app_tenant_id()")]
+
     public void AndCombination_TwoPredicates_QuotesColumns_Postgres_Cases(
         string caseValue0,
         string caseValue1,
@@ -168,8 +164,11 @@ public sealed partial class RlsLqlExhaustiveTests
     )
     {
         var sql = Pg(caseValue0);
-        Assert.Contains(caseValue1, sql, StringComparison.Ordinal);
-        Assert.Contains(caseValue2, sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: [caseValue1, caseValue2],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -178,8 +177,11 @@ public sealed partial class RlsLqlExhaustiveTests
         // LQL uses lowercase 'and' / 'or'. Transpiler must not rewrite or strip them.
         var sql = Pg("a = 1 and b = 2");
         Assert.Contains("and", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("\"a\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"b\"", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"a\"", "\"b\""],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     // ── 7. OR combinations ──────────────────────────────────────────
@@ -190,10 +192,11 @@ public sealed partial class RlsLqlExhaustiveTests
         var sql = Pg(
             "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner(app_user_id(), app_tenant_id()))"
         );
-        Assert.Contains("\"user_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("is_owner(", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"user_id\"", "\"tenant_id\"", "app_user_id()", "is_owner("],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     // ── 8. NOT operator ─────────────────────────────────────────────
@@ -212,11 +215,11 @@ public sealed partial class RlsLqlExhaustiveTests
     public void Parentheses_Nested_PreservedInOutput()
     {
         var sql = Pg("(a = 1 and b = 2) or (c = 3 and d = 4)");
-        Assert.Contains("\"a\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"d\"", sql, StringComparison.Ordinal);
-        // Both nested groups present.
-        Assert.Contains("(", sql, StringComparison.Ordinal);
-        Assert.Contains(")", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"a\"", "\"d\"", "(", ")"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     // ── 10. NULL handling ───────────────────────────────────────────
@@ -240,18 +243,15 @@ public sealed partial class RlsLqlExhaustiveTests
     // ── 11. Comparison operators ────────────────────────────────────
 
     [Theory]
-    [InlineData("=")]
-    [InlineData("<>")]
-    [InlineData("!=")]
-    [InlineData(">")]
-    [InlineData(">=")]
-    [InlineData("<")]
-    [InlineData("<=")]
+    [MemberData(nameof(ComparisonOperators_Survive_PostgresInlineCases))]
     public void ComparisonOperators_Survive_Postgres(string op)
     {
         var sql = Pg($"created_at {op} '2024-01-01'");
-        Assert.Contains("\"created_at\"", sql, StringComparison.Ordinal);
-        Assert.Contains(op, sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"created_at\"", op],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     // ── 12. String literals ─────────────────────────────────────────
@@ -303,8 +303,11 @@ public sealed partial class RlsLqlExhaustiveTests
         // owner_id::uuid should not become "owner_id"::"uuid" — type names
         // can't be quoted in Postgres.
         var sql = Pg("owner_id::uuid = current_user_id()::uuid");
-        Assert.Contains("\"owner_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("::uuid", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"owner_id\"", "::uuid"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"uuid\"", sql, StringComparison.Ordinal);
     }
 
@@ -314,8 +317,11 @@ public sealed partial class RlsLqlExhaustiveTests
     public void NumericLiteral_NotQuoted()
     {
         var sql = Pg("count >= 10");
-        Assert.Contains("\"count\"", sql, StringComparison.Ordinal);
-        Assert.Contains("10", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"count\"", "10"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"10\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("[10]", sql, StringComparison.Ordinal);
     }
@@ -324,11 +330,11 @@ public sealed partial class RlsLqlExhaustiveTests
 
     [Theory]
     // MixedCaseIdentifier_QuotedPreservesCase
-    [InlineData("OwnerId = current_user_id()", "\"OwnerId\"")]
+    [MemberData(nameof(MixedCaseIdentifier_QuotedPreservesCase_CasesInlineCases))]
     // UnderscoreLeadingIdentifier_Quoted
-    [InlineData("_internal_flag = true", "\"_internal_flag\"")]
+
     // IdentifierWithDigits_Quoted
-    [InlineData("col1 = 'x'", "\"col1\"")]
+
     public void MixedCaseIdentifier_QuotedPreservesCase_Cases(string caseValue0, string caseValue1)
     {
         var sql = Pg(caseValue0);
@@ -365,10 +371,11 @@ public sealed partial class RlsLqlExhaustiveTests
     public void NapShape_AgentConfigsMember_FullPredicate()
     {
         var sql = Pg("tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())");
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
-        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"tenant_id\"", "app_tenant_id()", "is_member(", "app_user_id()"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"is_member\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("\"app_tenant_id\"", sql, StringComparison.Ordinal);
     }
@@ -382,9 +389,11 @@ public sealed partial class RlsLqlExhaustiveTests
         var sql = Pg(
             "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_tenant_owner(app_user_id(), app_tenant_id()))"
         );
-        Assert.Contains("\"user_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("is_tenant_owner(", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"user_id\"", "\"tenant_id\"", "is_tenant_owner("],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -504,11 +513,11 @@ public sealed partial class RlsLqlExhaustiveTests
             RlsPlatform.Postgres,
             "diag"
         );
-        Assert.True(
-            result is TranspileOk,
-            result is TranspileError e ? e.Value.Message : "expected Ok"
-        );
-        var sql = ((TranspileOk)result).Value;
+
+        var sql = Ok(
+            actual: result,
+            message: result is TranspileError e ? e.Value.Message : "expected Ok"
+        ).Value;
         // The inner SQL must reference columns without the 'c.' prefix
         // because 'c' is the lambda variable bound to the FROM table.
         Assert.Contains("FROM conversations", sql, StringComparison.Ordinal);

@@ -82,7 +82,8 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
     [Fact]
     public void Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate()
     {
-        var baseline = Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1();
+        var baseline =
+            Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1();
         ApplySchema(schema: baseline);
 
         var schemaPath = WriteTempSchemaFile(
@@ -179,8 +180,7 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
             )
             .Build();
 
-    private static string DesiredAgentConfigsYaml() =>
-        Data_DesiredAgentConfigsYaml_1;
+    private static string DesiredAgentConfigsYaml() => Data_DesiredAgentConfigsYaml_1;
 
     private static string DesiredAgentConfigsWithUniqueYaml() =>
         Data_DesiredAgentConfigsWithUniqueYaml_1;

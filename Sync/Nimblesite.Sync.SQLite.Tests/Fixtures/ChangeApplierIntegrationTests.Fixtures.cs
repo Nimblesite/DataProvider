@@ -1,8 +1,4 @@
 // Implements [CI-DESLOP-INDEPENDENT-DATA].
-using Microsoft.Data.Sqlite;
-using Tests.Shared;
-using Xunit;
-
 namespace Nimblesite.Sync.SQLite.Tests;
 
 public partial class ChangeApplierIntegrationTests
@@ -207,34 +203,34 @@ public partial class ChangeApplierIntegrationTests
 
     private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_1() =>
         new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"p1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-                "origin",
-                Timestamp
-            );
+            1,
+            "Person",
+            "{\"Id\":\"p1\"}",
+            SyncOperation.Insert,
+            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
+            "origin",
+            Timestamp
+        );
 
     private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_2() =>
         new SyncLogEntry(
-                2,
-                "Person",
-                "{\"Id\":\"p2\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
-                "origin",
-                Timestamp
-            );
+            2,
+            "Person",
+            "{\"Id\":\"p2\"}",
+            SyncOperation.Insert,
+            "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
+            "origin",
+            Timestamp
+        );
 
     private static global::Nimblesite.Sync.Core.SyncLogEntry Fixture_ApplyChange_MultipleBatches_AllSucceed_3() =>
         new SyncLogEntry(
-                3,
-                "Person",
-                "{\"Id\":\"p3\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
-                "origin",
-                Timestamp
-            );
+            3,
+            "Person",
+            "{\"Id\":\"p3\"}",
+            SyncOperation.Insert,
+            "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
+            "origin",
+            Timestamp
+        );
 }

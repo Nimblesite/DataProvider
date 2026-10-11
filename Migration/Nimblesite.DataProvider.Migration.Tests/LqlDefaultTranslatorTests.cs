@@ -1,10 +1,12 @@
+using static global::Tests.Shared.StringAssertions;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
 /// Unit tests for LqlDefaultTranslator covering all code paths.
 /// Tests both ToPostgres() and ToSqlite() methods for complete coverage.
 /// </summary>
-public sealed class LqlDefaultTranslatorTests
+public sealed partial class LqlDefaultTranslatorTests
 {
     // =========================================================================
     // NULL HANDLING - ArgumentNullException
@@ -23,15 +25,10 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("now()", "CURRENT_TIMESTAMP")]
-    [InlineData("NOW()", "CURRENT_TIMESTAMP")] // Case insensitive
-    [InlineData("  now()  ", "CURRENT_TIMESTAMP")] // Whitespace trimmed
-    [InlineData("current_timestamp()", "CURRENT_TIMESTAMP")]
-    [InlineData("CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP")]
-    [InlineData("current_date()", "CURRENT_DATE")]
-    [InlineData("CURRENT_DATE()", "CURRENT_DATE")]
-    [InlineData("current_time()", "CURRENT_TIME")]
-    [InlineData("CURRENT_TIME()", "CURRENT_TIME")]
+    [MemberData(nameof(ToPostgres_TimestampFunctions_TranslatesCorrectlyInlineCases))]
+    // Case insensitive
+    // Whitespace trimmed
+
     public void ToPostgres_TimestampFunctions_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -39,12 +36,10 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("now()", "(datetime('now'))")]
-    [InlineData("NOW()", "(datetime('now'))")] // Case insensitive
-    [InlineData("  now()  ", "(datetime('now'))")] // Whitespace trimmed
-    [InlineData("current_timestamp()", "CURRENT_TIMESTAMP")]
-    [InlineData("current_date()", "(date('now'))")]
-    [InlineData("current_time()", "(time('now'))")]
+    [MemberData(nameof(ToSqlite_TimestampFunctions_TranslatesCorrectlyInlineCases))]
+    // Case insensitive
+    // Whitespace trimmed
+
     public void ToSqlite_TimestampFunctions_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -56,10 +51,9 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("gen_uuid()")]
-    [InlineData("GEN_UUID()")] // Case insensitive
-    [InlineData("uuid()")]
-    [InlineData("UUID()")]
+    [MemberData(nameof(ToPostgres_UuidFunctions_TranslatesToGenRandomUuidInlineCases))]
+    // Case insensitive
+
     public void ToPostgres_UuidFunctions_TranslatesToGenRandomUuid(string input)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -67,19 +61,13 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("gen_uuid()")]
-    [InlineData("GEN_UUID()")]
-    [InlineData("uuid()")]
-    [InlineData("UUID()")]
+    [MemberData(nameof(ToSqlite_UuidFunctions_TranslatesToHexExpressionInlineCases))]
     public void ToSqlite_UuidFunctions_TranslatesToHexExpression(string input)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
 
         // Should contain the SQLite UUID v4 expression parts
-        Assert.Contains("hex(randomblob", result);
-        Assert.Contains("'-'", result);
-        Assert.Contains("'-4'", result); // UUID v4 marker
-        Assert.Contains("'89ab'", result); // UUID variant bits
+        ContainsAll(actual: result, expected: ["hex(randomblob", "'-'", "'-4'", "'89ab'"]); // UUID variant bits
     }
 
     // =========================================================================
@@ -87,13 +75,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("true", "true")]
-    [InlineData("TRUE", "true")]
-    [InlineData("True", "true")]
-    [InlineData("  true  ", "true")]
-    [InlineData("false", "false")]
-    [InlineData("FALSE", "false")]
-    [InlineData("False", "false")]
+    [MemberData(nameof(ToPostgres_BooleanLiterals_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_BooleanLiterals_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -101,12 +83,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("true", "1")]
-    [InlineData("TRUE", "1")]
-    [InlineData("True", "1")]
-    [InlineData("false", "0")]
-    [InlineData("FALSE", "0")]
-    [InlineData("False", "0")]
+    [MemberData(nameof(ToSqlite_BooleanLiterals_TranslatesToIntegerValuesInlineCases))]
     public void ToSqlite_BooleanLiterals_TranslatesToIntegerValues(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -118,13 +95,10 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("0", "0")]
-    [InlineData("1", "1")]
-    [InlineData("42", "42")]
-    [InlineData("-100", "-100")]
-    [InlineData("2147483647", "2147483647")] // int32 max
-    [InlineData("-2147483648", "-2147483648")] // int32 min
-    [InlineData("  123  ", "123")] // Whitespace trimmed
+    [MemberData(nameof(ToPostgres_IntegerLiterals_PassThroughInlineCases))]
+    // int32 max
+    // int32 min
+    // Whitespace trimmed
     public void ToPostgres_IntegerLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -132,12 +106,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("0", "0")]
-    [InlineData("1", "1")]
-    [InlineData("42", "42")]
-    [InlineData("-100", "-100")]
-    [InlineData("2147483647", "2147483647")]
-    [InlineData("-2147483648", "-2147483648")]
+    [MemberData(nameof(ToSqlite_IntegerLiterals_PassThroughInlineCases))]
     public void ToSqlite_IntegerLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -145,12 +114,8 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("0.0", "0.0")]
-    [InlineData("3.14", "3.14")]
-    [InlineData("-99.99", "-99.99")]
-    [InlineData("0.00000001", "0.00000001")]
-    [InlineData("3.1415926535", "3.1415926535")]
-    [InlineData("  1.5  ", "1.5")] // Whitespace trimmed
+    [MemberData(nameof(ToPostgres_DecimalLiterals_PassThroughInlineCases))]
+    // Whitespace trimmed
     public void ToPostgres_DecimalLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -158,10 +123,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("0.0", "0.0")]
-    [InlineData("3.14", "3.14")]
-    [InlineData("-99.99", "-99.99")]
-    [InlineData("0.00000001", "0.00000001")]
+    [MemberData(nameof(ToSqlite_DecimalLiterals_PassThroughInlineCases))]
     public void ToSqlite_DecimalLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -173,12 +135,9 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("'hello'", "'hello'")]
-    [InlineData("'Hello World'", "'hello world'")] // Gets lowercased during normalization
-    [InlineData("''", "''")]
-    [InlineData("'test123'", "'test123'")]
-    [InlineData("'foo-bar-baz'", "'foo-bar-baz'")]
-    [InlineData("'snake_case'", "'snake_case'")]
+    [MemberData(nameof(ToPostgres_StringLiterals_PassThroughInlineCases))]
+    // Gets lowercased during normalization
+
     public void ToPostgres_StringLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -186,10 +145,9 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("'hello'", "'hello'")]
-    [InlineData("'Hello World'", "'hello world'")] // Gets lowercased during normalization
-    [InlineData("''", "''")]
-    [InlineData("'test123'", "'test123'")]
+    [MemberData(nameof(ToSqlite_StringLiterals_PassThroughInlineCases))]
+    // Gets lowercased during normalization
+
     public void ToSqlite_StringLiterals_PassThrough(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -201,9 +159,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("lower(name)", "lower(name)")]
-    [InlineData("LOWER(name)", "lower(name)")]
-    [InlineData("lower(column_name)", "lower(column_name)")]
+    [MemberData(nameof(ToPostgres_LowerFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_LowerFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -211,8 +167,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("lower(name)", "lower(name)")]
-    [InlineData("LOWER(name)", "lower(name)")]
+    [MemberData(nameof(ToSqlite_LowerFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_LowerFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -220,8 +175,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("upper(name)", "upper(name)")]
-    [InlineData("UPPER(name)", "upper(name)")]
+    [MemberData(nameof(ToPostgres_UpperFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_UpperFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -229,8 +183,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("upper(name)", "upper(name)")]
-    [InlineData("UPPER(name)", "upper(name)")]
+    [MemberData(nameof(ToSqlite_UpperFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_UpperFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -238,9 +191,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("coalesce(a, b)", "COALESCE(a, b)")]
-    [InlineData("COALESCE(x, y, z)", "COALESCE(x, y, z)")]
-    [InlineData("coalesce(name, 'default')", "COALESCE(name, 'default')")]
+    [MemberData(nameof(ToPostgres_CoalesceFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_CoalesceFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -248,8 +199,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("coalesce(a, b)", "coalesce(a, b)")]
-    [InlineData("COALESCE(x, y, z)", "coalesce(x, y, z)")]
+    [MemberData(nameof(ToSqlite_CoalesceFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_CoalesceFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -257,8 +207,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("length(name)", "length(name)")]
-    [InlineData("LENGTH(text)", "length(text)")]
+    [MemberData(nameof(ToPostgres_LengthFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_LengthFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -266,8 +215,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("length(name)", "length(name)")]
-    [InlineData("LENGTH(text)", "length(text)")]
+    [MemberData(nameof(ToSqlite_LengthFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_LengthFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -280,21 +228,21 @@ public sealed class LqlDefaultTranslatorTests
 
     [Theory]
     // ToPostgres_SubstringWith3Args_UsesFromForSyntax
-    [InlineData("substring(text, 1, 5)", "substring(text from 1 for 5)")]
+    [MemberData(nameof(ToPostgres_SubstringWith3Args_UsesFromForSyntax_CasesInlineCases))]
     // ToPostgres_SubstringWith2Args_UsesCommaSyntax
-    [InlineData("substring(text, 1)", "substring(text, 1)")]
+
     // ToPostgres_UnknownFunction_PassThroughWithArgs
-    [InlineData("custom_func(arg1, arg2)", "custom_func(arg1, arg2)")]
+
     // ToPostgres_UnknownFunctionNoArgs_PassThrough
-    [InlineData("my_function()", "my_function()")]
+
     // ToPostgres_ColumnReference_PassThrough
-    [InlineData("column_name", "column_name")]
+
     // ToPostgres_ComplexExpression_PassThrough
-    [InlineData("some_expression + 1", "some_expression + 1")]
+
     // ToPostgres_FunctionWithWhitespaceInArgs_PreservesWhitespace
-    [InlineData("coalesce( a , b , c )", "COALESCE(a, b, c)")]
+
     // ToPostgres_FunctionWithEmptyArgs_HandlesGracefully
-    [InlineData("lower()", "lower()")]
+
     public void ToPostgres_SubstringWith3Args_UsesFromForSyntax_Cases(
         string caseValue0,
         string caseValue1
@@ -306,27 +254,27 @@ public sealed class LqlDefaultTranslatorTests
 
     [Theory]
     // ToSqlite_SubstringWith3Args_UsesSubstrFunction
-    [InlineData("substring(text, 1, 5)", "substr(text, 1, 5)")]
+    [MemberData(nameof(ToSqlite_SubstringWith3Args_UsesSubstrFunction_CasesInlineCases))]
     // ToSqlite_SubstringWith2Args_UsesSubstrFunction
-    [InlineData("substring(text, 1)", "substr(text, 1)")]
+
     // ToSqlite_ConcatWith2Args_UsesConcatOperator
-    [InlineData("concat(a, b)", "a || b")]
+
     // ToSqlite_ConcatWith3Args_UsesConcatOperator
-    [InlineData("concat(first, ' ', last)", "first || ' ' || last")]
+
     // ToSqlite_ConcatWithNoArgs_ReturnsEmptyString
-    [InlineData("concat()", "''")]
+
     // ToSqlite_UnknownFunction_PassThroughWithArgs
-    [InlineData("custom_func(arg1, arg2)", "custom_func(arg1, arg2)")]
+
     // ToSqlite_UnknownFunctionNoArgs_PassThrough
-    [InlineData("my_function()", "my_function()")]
+
     // ToSqlite_ColumnReference_PassThrough
-    [InlineData("column_name", "column_name")]
+
     // ToSqlite_ComplexExpression_PassThrough
-    [InlineData("some_expression + 1", "some_expression + 1")]
+
     // ToSqlite_FunctionWithWhitespaceInArgs_PreservesWhitespace
-    [InlineData("coalesce( a , b , c )", "coalesce(a, b, c)")]
+
     // ToSqlite_FunctionWithEmptyArgs_HandlesGracefully
-    [InlineData("lower()", "lower()")]
+
     public void ToSqlite_SubstringWith3Args_UsesSubstrFunction_Cases(
         string caseValue0,
         string caseValue1
@@ -341,8 +289,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("trim(name)", "trim(name)")]
-    [InlineData("TRIM(text)", "trim(text)")]
+    [MemberData(nameof(ToPostgres_TrimFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_TrimFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -350,8 +297,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("trim(name)", "trim(name)")]
-    [InlineData("TRIM(text)", "trim(text)")]
+    [MemberData(nameof(ToSqlite_TrimFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_TrimFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -363,8 +309,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("concat(a, b)", "concat(a, b)")]
-    [InlineData("concat(first, ' ', last)", "concat(first, ' ', last)")]
+    [MemberData(nameof(ToPostgres_ConcatFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_ConcatFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -376,8 +321,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("abs(value)", "abs(value)")]
-    [InlineData("ABS(-10)", "abs(-10)")]
+    [MemberData(nameof(ToPostgres_AbsFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_AbsFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -385,8 +329,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("abs(value)", "abs(value)")]
-    [InlineData("ABS(-10)", "abs(-10)")]
+    [MemberData(nameof(ToSqlite_AbsFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_AbsFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -398,9 +341,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("round(value)", "round(value)")]
-    [InlineData("round(price, 2)", "round(price, 2)")]
-    [InlineData("ROUND(amount, 0)", "round(amount, 0)")]
+    [MemberData(nameof(ToPostgres_RoundFunction_TranslatesCorrectlyInlineCases))]
     public void ToPostgres_RoundFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
@@ -408,9 +349,7 @@ public sealed class LqlDefaultTranslatorTests
     }
 
     [Theory]
-    [InlineData("round(value)", "round(value)")]
-    [InlineData("round(price, 2)", "round(price, 2)")]
-    [InlineData("ROUND(amount, 0)", "round(amount, 0)")]
+    [MemberData(nameof(ToSqlite_RoundFunction_TranslatesCorrectlyInlineCases))]
     public void ToSqlite_RoundFunction_TranslatesCorrectly(string input, string expected)
     {
         var result = LqlDefaultTranslator.ToSqlite(input);
@@ -434,15 +373,7 @@ public sealed class LqlDefaultTranslatorTests
     // =========================================================================
 
     [Theory]
-    [InlineData("42")]
-    [InlineData("3.14")]
-    [InlineData("'hello'")]
-    [InlineData("lower(name)")]
-    [InlineData("upper(name)")]
-    [InlineData("length(text)")]
-    [InlineData("trim(value)")]
-    [InlineData("abs(-5)")]
-    [InlineData("round(price, 2)")]
+    [MemberData(nameof(BothPlatforms_SameLql_ProduceValidSqlInlineCases))]
     public void BothPlatforms_SameLql_ProduceValidSql(string lql)
     {
         // These should not throw and should produce non-empty results

@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -12,9 +14,15 @@ public sealed class PostgresSupportDdlTests
             )
         );
 
-        Assert.Contains("CREATE ROLE \"app_user\" NOLOGIN NOBYPASSRLS;", ddl);
-        Assert.Contains("ALTER ROLE \"app_user\" NOLOGIN NOBYPASSRLS", ddl);
-        Assert.Contains("GRANT \"app_user\" TO \"postgres\"", ddl);
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE ROLE \"app_user\" NOLOGIN NOBYPASSRLS;",
+                "ALTER ROLE \"app_user\" NOLOGIN NOBYPASSRLS",
+                "GRANT \"app_user\" TO \"postgres\"",
+            ]
+        );
     }
 
     [Fact]
@@ -38,24 +46,19 @@ public sealed class PostgresSupportDdlTests
             )
         );
 
-        Assert.Contains(
-            "CREATE OR REPLACE FUNCTION \"public\".\"is_member\"(\"tenant_id\" uuid, \"user_id\" uuid)",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains("RETURNS boolean", ddl, StringComparison.Ordinal);
-        Assert.Contains("LANGUAGE sql", ddl, StringComparison.Ordinal);
-        Assert.Contains("STABLE", ddl, StringComparison.Ordinal);
-        Assert.Contains("SECURITY DEFINER", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "REVOKE EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) FROM PUBLIC",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "GRANT EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) TO \"app_user\", \"app_admin\"",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE OR REPLACE FUNCTION \"public\".\"is_member\"(\"tenant_id\" uuid, \"user_id\" uuid)",
+                "RETURNS boolean",
+                "LANGUAGE sql",
+                "STABLE",
+                "SECURITY DEFINER",
+                "REVOKE EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) FROM PUBLIC",
+                "GRANT EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) TO \"app_user\", \"app_admin\"",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -95,14 +98,23 @@ public sealed class PostgresSupportDdlTests
             )
         );
 
-        Assert.Contains("pg_has_role(current_user, 'supabase_admin', 'MEMBER')", ddl);
-        Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", ddl);
-        Assert.Contains("GRANT \"supabase_admin\" TO", ddl, StringComparison.Ordinal);
-        Assert.Contains("SET LOCAL ROLE \"supabase_admin\";", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "GRANT SELECT, INSERT ON TABLE \"auth\".\"users\" TO \"app_admin\";",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "pg_has_role(current_user, 'supabase_admin', 'MEMBER')",
+                "MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP",
+            ]
+        );
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "GRANT \"supabase_admin\" TO",
+                "SET LOCAL ROLE \"supabase_admin\";",
+                "GRANT SELECT, INSERT ON TABLE \"auth\".\"users\" TO \"app_admin\";",
+            ],
+            comparison: StringComparison.Ordinal
         );
         Assert.EndsWith("RESET ROLE", ddl, StringComparison.Ordinal);
     }

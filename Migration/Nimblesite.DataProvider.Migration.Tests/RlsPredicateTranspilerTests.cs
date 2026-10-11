@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 using TranspileError = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -46,13 +48,11 @@ public sealed partial class RlsPredicateTranspilerTests
             "owner_isolation"
         );
 
-        Assert.True(result is TranspileOk);
-        var sql = ((TranspileOk)result).Value;
-        Assert.Contains("\"OwnerId\"", sql, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            sql,
-            StringComparison.Ordinal
+        var sql = Ok(actual: result).Value;
+        ContainsAll(
+            actual: sql,
+            expected: ["\"OwnerId\"", "current_setting('rls.current_user_id', true)"],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -65,10 +65,12 @@ public sealed partial class RlsPredicateTranspilerTests
             "owner_isolation"
         );
 
-        Assert.True(result is TranspileOk);
-        var sql = ((TranspileOk)result).Value;
-        Assert.Contains("[OwnerId]", sql, StringComparison.Ordinal);
-        Assert.Contains("__rls_context", sql, StringComparison.Ordinal);
+        var sql = Ok(actual: result).Value;
+        ContainsAll(
+            actual: sql,
+            expected: ["[OwnerId]", "__rls_context"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -80,10 +82,12 @@ public sealed partial class RlsPredicateTranspilerTests
             "owner_isolation"
         );
 
-        Assert.True(result is TranspileOk);
-        var sql = ((TranspileOk)result).Value;
-        Assert.Contains("[OwnerId]", sql, StringComparison.Ordinal);
-        Assert.Contains("SESSION_CONTEXT", sql, StringComparison.Ordinal);
+        var sql = Ok(actual: result).Value;
+        ContainsAll(
+            actual: sql,
+            expected: ["[OwnerId]", "SESSION_CONTEXT"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -91,8 +95,7 @@ public sealed partial class RlsPredicateTranspilerTests
     {
         var result = RlsPredicateTranspiler.Translate("", RlsPlatform.Postgres, "p");
 
-        Assert.True(result is TranspileError);
-        var err = ((TranspileError)result).Value;
+        var err = Expected<TranspileError>(actual: result).Value;
         Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", err.Message, StringComparison.Ordinal);
         Assert.Contains("'p'", err.Message, StringComparison.Ordinal);
     }
@@ -113,16 +116,16 @@ public sealed partial class RlsPredicateTranspilerTests
     [Fact]
     public void Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers()
     {
-        const string lql = Data_Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers_1;
+        const string lql =
+            Data_Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers_1;
         var input = $"exists({lql})";
 
         var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Postgres, "ex");
 
-        Assert.True(
-            result is TranspileOk,
-            result is TranspileError e ? e.Value.Message : "expected Ok"
-        );
-        var sql = ((TranspileOk)result).Value;
+        var sql = Ok(
+            actual: result,
+            message: result is TranspileError e ? e.Value.Message : "expected Ok"
+        ).Value;
         Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
         Assert.EndsWith(")", sql, StringComparison.Ordinal);
         Assert.Contains(
@@ -146,11 +149,10 @@ public sealed partial class RlsPredicateTranspilerTests
 
         var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Sqlite, "ex");
 
-        Assert.True(
-            result is TranspileOk,
-            result is TranspileError e ? e.Value.Message : "expected Ok"
-        );
-        var sql = ((TranspileOk)result).Value;
+        var sql = Ok(
+            actual: result,
+            message: result is TranspileError e ? e.Value.Message : "expected Ok"
+        ).Value;
         Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
         Assert.Contains("__rls_context", sql, StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -169,8 +171,7 @@ public sealed partial class RlsPredicateTranspilerTests
             "broken"
         );
 
-        Assert.True(result is TranspileError);
-        var err = ((TranspileError)result).Value;
+        var err = Expected<TranspileError>(actual: result).Value;
         Assert.Contains("MIG-E-RLS-LQL", err.Message, StringComparison.Ordinal);
         Assert.Contains("'broken'", err.Message, StringComparison.Ordinal);
     }
@@ -192,10 +193,13 @@ public sealed partial class RlsPredicateTranspilerTests
             RlsPlatform.Postgres,
             "p"
         );
-        Assert.True(result is TranspileOk);
-        var sql = ((TranspileOk)result).Value;
-        Assert.Contains("'AND OR NOT'", sql, StringComparison.Ordinal);
-        Assert.Contains("\"OwnerName\"", sql, StringComparison.Ordinal);
+
+        var sql = Ok(actual: result).Value;
+        ContainsAll(
+            actual: sql,
+            expected: ["'AND OR NOT'", "\"OwnerName\""],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"AND\"", sql, StringComparison.Ordinal);
     }
 
@@ -210,16 +214,16 @@ public sealed partial class RlsPredicateTranspilerTests
             "tenant_member"
         );
 
-        Assert.True(
-            result is TranspileOk,
-            result is TranspileError e ? e.Value.Message : "expected Ok"
-        );
-        var sql = ((TranspileOk)result).Value;
+        var sql = Ok(
+            actual: result,
+            message: result is TranspileError e ? e.Value.Message : "expected Ok"
+        ).Value;
 
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
-        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["\"tenant_id\"", "app_tenant_id()", "is_member(", "app_user_id()"],
+            comparison: StringComparison.Ordinal
+        );
         Assert.DoesNotContain("\"app_tenant_id\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("\"is_member\"", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("\"app_user_id\"", sql, StringComparison.Ordinal);
@@ -245,13 +249,19 @@ public sealed partial class RlsPredicateTranspilerTests
             "self_or_owner"
         );
 
-        Assert.True(result is TranspileOk);
-        var sql = ((TranspileOk)result).Value;
-        Assert.Contains("\"user_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_user_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
-        Assert.Contains("is_owner(", sql, StringComparison.Ordinal);
+        var sql = Ok(actual: result).Value;
+        ContainsAll(
+            actual: sql,
+            expected:
+            [
+                "\"user_id\"",
+                "\"tenant_id\"",
+                "app_user_id()",
+                "app_tenant_id()",
+                "is_owner(",
+            ],
+            comparison: StringComparison.Ordinal
+        );
     }
 }
 

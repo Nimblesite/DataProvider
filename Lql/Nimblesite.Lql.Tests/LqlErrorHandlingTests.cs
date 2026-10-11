@@ -3,6 +3,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Xunit;
+using static global::Tests.Shared.StringAssertions;
 using LqlStatementError = Outcome.Result<
     Nimblesite.Lql.Core.LqlStatement,
     Nimblesite.Sql.Model.SqlError
@@ -58,58 +59,18 @@ public partial class LqlErrorHandlingTests
         Assert.True(position.Column >= 0);
     }
 
-    [Fact]
-    public void MissingPipeOperator_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            users select(users.id, users.name)
-            """
-        );
-
-    [Fact]
-    public void InvalidTableName_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            123_invalid_table |> select(id, name)
-            """
-        );
-
-    [Fact]
-    public void UnclosedParentheses_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            users |> select(users.id, users.name
-            """
-        );
-
-    [Fact]
-    public void InvalidJoinSyntax_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            users |> join(orders, invalid_join_syntax)
-            """
-        );
-
-    [Fact]
-    public void MissingOnClauseInJoin_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            users |> join(orders)
-            """
-        );
-
-    [Fact]
-    public void InvalidFilterFunction_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: """
-            users |> filter(invalid_filter_function)
-            """
-        );
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(MissingPipeOperator_ShouldReturnError_CasesData))]
+    public void MissingPipeOperator_ShouldReturnError_Cases(string caseName, string lqlCode)
+    {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        SyntaxError(lqlCode: lqlCode);
+    }
 
     // Implements [LQL-IDENTIFIER-VALIDATION].
     [Theory]
-    [InlineData("tenant_members")]
-    [InlineData("fhir_patient")]
+    [MemberData(nameof(UnderscorePipelineBase_ShouldParseAsTableNameInlineCases))]
     public void UnderscorePipelineBase_ShouldParseAsTableName(string tableName)
     {
         var error = ParseError(lqlCode: "123_invalid_table |> select(id)");
@@ -128,24 +89,18 @@ public partial class LqlErrorHandlingTests
         )
         {
             var sql = Assert.IsType<SqlTextOk>(result).Value;
-            Assert.Contains(tableName, sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("FROM", sql, StringComparison.OrdinalIgnoreCase);
+            ContainsAll(
+                actual: sql,
+                expected: [tableName, "SELECT", "FROM"],
+                comparison: StringComparison.OrdinalIgnoreCase
+            );
         }
     }
 
     [Fact]
-    public void CircularReference_ShouldReturnError() =>
-        SyntaxError(
-            lqlCode: Data_CircularReference_ShouldReturnError_1
-        );
-
-    [Fact]
     public void ErrorMessage_ShouldIncludeLineAndColumn()
     {
-        var error = ParseError(
-            lqlCode: Data_ErrorMessage_ShouldIncludeLineAndColumn_1
-        );
+        var error = ParseError(lqlCode: Data_ErrorMessage_ShouldIncludeLineAndColumn_1);
         Assert.Contains("line", error.FormattedMessage, StringComparison.Ordinal);
         Assert.Contains("column", error.FormattedMessage, StringComparison.Ordinal);
         Assert.NotNull(error.Position);

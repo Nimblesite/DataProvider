@@ -17,9 +17,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = """{"version": "1.0", "mappings": []}""";
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Empty(success.Config.Mappings);
         Assert.Equal("1.0", success.Config.Version);
     }
@@ -29,9 +27,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_SimpleMapping_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Single(success.Config.Mappings);
         var mapping = success.Config.Mappings[0];
         Assert.Equal("user-mapping", mapping.Id);
@@ -46,9 +42,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_PkMapping_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var mapping = success.Config.Mappings[0];
         Assert.NotNull(mapping.PkMapping);
         Assert.Equal("Id", mapping.PkMapping.SourceColumn);
@@ -60,9 +54,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_ColumnMappings_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var mapping = success.Config.Mappings[0];
         Assert.Equal(2, mapping.ColumnMappings.Count);
         Assert.Equal("FullName", mapping.ColumnMappings[0].Source);
@@ -74,9 +66,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_ConstantTransform_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var colMapping = success.Config.Mappings[0].ColumnMappings[0];
         Assert.Null(colMapping.Source);
         Assert.Equal("Source", colMapping.Target);
@@ -89,9 +79,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_LqlTransform_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var colMapping = success.Config.Mappings[0].ColumnMappings[0];
         Assert.Equal(TransformType.Lql, colMapping.Transform);
         Assert.Contains("dateFormat", colMapping.Lql);
@@ -102,9 +90,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_ExcludedColumns_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var excluded = success.Config.Mappings[0].ExcludedColumns;
         Assert.Equal(2, excluded.Count);
         Assert.Contains("PasswordHash", excluded);
@@ -116,9 +102,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_Filter_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var filter = success.Config.Mappings[0].Filter;
         Assert.NotNull(filter);
         Assert.Contains("IsActive", filter.Lql);
@@ -129,9 +113,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_SyncTracking_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var tracking = success.Config.Mappings[0].SyncTracking;
         Assert.True(tracking.Enabled);
         Assert.Equal(SyncTrackingStrategy.Hash, tracking.Strategy);
@@ -143,9 +125,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_MultiTarget_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var mapping = success.Config.Mappings[0];
         Assert.True(mapping.IsMultiTarget);
         Assert.NotNull(mapping.Targets);
@@ -159,9 +139,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_DirectionPull_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Equal(MappingDirection.Pull, success.Config.Mappings[0].Direction);
     }
 
@@ -170,9 +148,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_DirectionBoth_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Equal(MappingDirection.Both, success.Config.Mappings[0].Direction);
     }
 
@@ -181,9 +157,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_UnmappedTableBehaviorPassthrough_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Equal(UnmappedTableBehavior.Passthrough, success.Config.UnmappedTableBehavior);
     }
 
@@ -203,9 +177,7 @@ public sealed partial class MappingConfigParserTests
     {
         var json = Data_Parse_MissingRequiredFields_SkipsInvalidMapping_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         Assert.Single(success.Config.Mappings);
         Assert.Equal("valid", success.Config.Mappings[0].Id);
     }
@@ -240,9 +212,7 @@ public sealed partial class MappingConfigParserTests
         var parseResult = MappingConfigParser.Parse(originalJson, _logger);
         var config = ((MappingConfigParseOk)parseResult).Config;
         var serialized = MappingConfigParser.ToJson(config);
-        var reparsed = MappingConfigParser.Parse(serialized, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(reparsed);
+        var success = ParseConfigAndRequireSuccess(input0: serialized);
         Assert.Equal("1.0", success.Config.Version);
         Assert.Single(success.Config.Mappings);
         Assert.Equal("test-mapping", success.Config.Mappings[0].Id);
@@ -259,9 +229,7 @@ public sealed partial class MappingConfigParserTests
         // This is the example from spec Section 7.3
         var json = Data_Parse_FullSpecExample_ParsesCorrectly_1;
 
-        var result = MappingConfigParser.Parse(json, _logger);
-
-        var success = Assert.IsType<MappingConfigParseOk>(result);
+        var success = ParseConfigAndRequireSuccess(input0: json);
         var mapping = success.Config.Mappings[0];
 
         Assert.Equal("user-to-customer", mapping.Id);
@@ -280,4 +248,16 @@ public sealed partial class MappingConfigParserTests
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.Sync.Core.MappingConfigParseOk ParseConfigAndRequireSuccess(
+        global::System.String input0
+    )
+    {
+        var result = MappingConfigParser.Parse(input0, _logger);
+
+        var success = Assert.IsType<MappingConfigParseOk>(result);
+
+        return success;
+    }
 }

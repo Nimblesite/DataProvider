@@ -97,7 +97,10 @@ public static class SqliteDdlGenerator
         // Add check constraints
         foreach (var cc in table.CheckConstraints)
         {
-            columnDefs.Add($"CHECK ({cc.Expression})");
+            var name = string.IsNullOrEmpty(cc.Name)
+                ? string.Empty
+                : $"CONSTRAINT [{cc.Name.Replace("]", "]]", StringComparison.Ordinal)}] ";
+            columnDefs.Add($"{name}CHECK ({cc.Expression})");
         }
 
         sb.Append(string.Join(", ", columnDefs));

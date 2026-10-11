@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using Nimblesite.Sql.Model;
 using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -137,8 +138,8 @@ public sealed class SqlAntlrCodeGeneratorTests
             GroupColumns,
             config
         );
-        Assert.True(result is StringError);
-        var err = (StringError)result;
+
+        var err = Expected<StringError>(actual: result);
         Assert.Contains("model boom", err.Value.Message, StringComparison.Ordinal);
     }
 
@@ -157,8 +158,8 @@ public sealed class SqlAntlrCodeGeneratorTests
             GroupColumns,
             config
         );
-        Assert.True(result is StringError);
-        var err = (StringError)result;
+
+        var err = Expected<StringError>(actual: result);
         Assert.Contains("access boom", err.Value.Message, StringComparison.Ordinal);
     }
 
@@ -174,8 +175,7 @@ public sealed class SqlAntlrCodeGeneratorTests
             MakeGrouping()
         );
 
-        Assert.True(result is StringOk);
-        var ok = (StringOk)result;
+        var ok = Ok(actual: result);
         Assert.Contains("Generated", ok.Value, StringComparison.Ordinal);
     }
 
@@ -187,16 +187,7 @@ public sealed class SqlAntlrCodeGeneratorTests
             GenerateRawRecordType = (_, _) => new StringError(new SqlError("raw boom")),
         };
 
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "OrderWithLines",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            config,
-            MakeGrouping()
-        );
-        Assert.True(result is StringError);
-        Assert.Contains("raw boom", ((StringError)result).Value.Message, StringComparison.Ordinal);
+        GenerateAndAssertMetadataCode(input0: config, value2: "raw boom");
     }
 
     [Fact]
@@ -208,20 +199,7 @@ public sealed class SqlAntlrCodeGeneratorTests
                 new StringError(new SqlError("method boom")),
         };
 
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "OrderWithLines",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            config,
-            MakeGrouping()
-        );
-        Assert.True(result is StringError);
-        Assert.Contains(
-            "method boom",
-            ((StringError)result).Value.Message,
-            StringComparison.Ordinal
-        );
+        GenerateAndAssertMetadataCode(input0: config, value2: "method boom");
     }
 
     [Fact]
@@ -232,19 +210,24 @@ public sealed class SqlAntlrCodeGeneratorTests
             GenerateGroupedModels = (_, _, _, _, _) => new StringError(new SqlError("models boom")),
         };
 
+        GenerateAndAssertMetadataCode(input0: config, value2: "models boom");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void GenerateAndAssertMetadataCode(
+        global::Nimblesite.DataProvider.Core.CodeGeneration.CodeGenerationConfig input0,
+        string value2
+    )
+    {
         var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
             "OrderWithLines",
             "SELECT 1",
             MakeStatement(),
             GroupColumns,
-            config,
+            input0,
             MakeGrouping()
         );
         Assert.True(result is StringError);
-        Assert.Contains(
-            "models boom",
-            ((StringError)result).Value.Message,
-            StringComparison.Ordinal
-        );
+        Assert.Contains(value2, ((StringError)result).Value.Message, StringComparison.Ordinal);
     }
 }

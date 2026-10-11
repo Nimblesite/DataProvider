@@ -1,3 +1,5 @@
+using static global::Tests.Shared.StringAssertions;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TRIGGER-PG] DDL emission rules from
@@ -23,8 +25,11 @@ public sealed class PostgresTriggerDdlTests
             )
         );
 
-        Assert.Contains("$trigger_guard1$", ddl, StringComparison.Ordinal);
-        Assert.Contains("do not $trigger_guard$ terminate me", ddl, StringComparison.Ordinal);
+        ContainsAll(
+            actual: ddl,
+            expected: ["$trigger_guard1$", "do not $trigger_guard$ terminate me"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]

@@ -12,7 +12,9 @@ namespace Nimblesite.Sync.Http.Tests;
 /// Uses WebApplicationFactory for real ASP.NET Core server + real SQLite databases.
 /// This is the PROOF that Nimblesite.Sync.Http extension methods work in a real scenario.
 /// </summary>
-public sealed partial class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactory>, IDisposable
+public sealed partial class HttpSyncE2ETests
+    : IClassFixture<SyncApiWebApplicationFactory>,
+        IDisposable
 {
     private readonly HttpClient _client;
     private readonly string _serverDbPath;
@@ -46,8 +48,7 @@ public sealed partial class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicati
 
         DatabaseCommands.Execute(
             connection: conn,
-            configure: command =>
-                command.CommandText = Data_InitializeDatabase_1
+            configure: command => command.CommandText = Data_InitializeDatabase_1
         );
 
         TriggerGenerator.CreateTriggers(conn, "Person", NullLogger.Instance);

@@ -39,10 +39,7 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
 
     private void CreateSchema()
     {
-        using var command = new SqliteCommand(
-            Data_CreateSchema_1,
-            _connection
-        );
+        using var command = new SqliteCommand(Data_CreateSchema_1, _connection);
         command.ExecuteNonQuery();
     }
 

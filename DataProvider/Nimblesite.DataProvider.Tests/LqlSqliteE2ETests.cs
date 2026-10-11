@@ -5,6 +5,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -28,22 +29,19 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
     {
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_1
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         // Seed users
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_2
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
 
         // Seed orders
         DatabaseCommands.Execute(
             connection: _connection,
-            configure: command =>
-                command.CommandText = Data_CreateSchemaAndSeed_3
+            configure: command => command.CommandText = Data_CreateSchemaAndSeed_3
         );
     }
 
@@ -75,8 +73,11 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
 
         // Convert to SQLite
         var sql = AssertSqliteOk(statement);
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["SELECT", "users"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         // Execute against real DB
         var queryResult = _connection.Query<(string, string, string)>(
@@ -154,8 +155,11 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
         var statement = AssertParseOk(lqlCode);
 
         var sql = AssertSqliteOk(statement);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["ORDER BY", "LIMIT"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         var queryResult = _connection.Query<(string, long)>(
             sql: sql,
@@ -197,8 +201,11 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
         var statement = AssertParseOk(lqlCode);
 
         var sql = AssertSqliteOk(statement);
-        Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("users.id = orders.user_id", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["JOIN", "users.id = orders.user_id"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         var queryResult = _connection.Query<(string, double)>(
             sql: sql,
@@ -317,11 +324,12 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
 
         var sql = context.GenerateSQL();
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(actual: sql, expected: ["name", "email"]);
+        ContainsAll(
+            actual: sql,
+            expected: ["WHERE", "ORDER BY", "LIMIT"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         // Execute it
         var result = _connection.Query<(string, string)>(
@@ -366,8 +374,7 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
 
         var sql = context.GenerateSQL();
         Assert.Contains("INNER JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("orders", sql);
-        Assert.Contains("users.id = orders.user_id", sql);
+        ContainsAll(actual: sql, expected: ["orders", "users.id = orders.user_id"]);
 
         var result = _connection.Query<(string, double)>(
             sql: sql,

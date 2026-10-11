@@ -1,5 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 using Tests.Shared;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -68,12 +69,10 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "settings");
 
         // PostgreSQL: boolean column with DEFAULT true
-        Assert.Contains("enabled", pgDdl);
-        Assert.Contains("DEFAULT true", pgDdl);
+        ContainsAll(actual: pgDdl, expected: ["enabled", "DEFAULT true"]);
 
         // SQLite: integer column with DEFAULT 1 (true = 1)
-        Assert.Contains("[enabled]", sqliteDdl);
-        Assert.Contains("DEFAULT 1", sqliteDdl);
+        ContainsAll(actual: sqliteDdl, expected: ["[enabled]", "DEFAULT 1"]);
 
         // VERIFY COLUMNS: Exactly 2 columns, no extras
         var pgColumns = GetPostgresColumns(_pgConnection, "settings");
@@ -113,12 +112,10 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var sqliteDdl = GetSqliteTableDdl(_sqliteConnection, "flags");
 
         // PostgreSQL: boolean column with DEFAULT false
-        Assert.Contains("disabled", pgDdl);
-        Assert.Contains("DEFAULT false", pgDdl);
+        ContainsAll(actual: pgDdl, expected: ["disabled", "DEFAULT false"]);
 
         // SQLite: integer column with DEFAULT 0 (false = 0)
-        Assert.Contains("[disabled]", sqliteDdl);
-        Assert.Contains("DEFAULT 0", sqliteDdl);
+        ContainsAll(actual: sqliteDdl, expected: ["[disabled]", "DEFAULT 0"]);
 
         // VERIFY COLUMNS: Exactly 2 columns, no extras
         Assert.Equal(2, GetPostgresColumns(_pgConnection, "flags").Count);
@@ -192,11 +189,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO logs (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO logs (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO logs (id) VALUES (1)",
+            value1: "INSERT INTO logs (id) VALUES (1)"
+        );
 
         // Assert - Should have valid timestamps
         var pgValue = QueryPg<DateTime>("SELECT timestamp FROM logs WHERE id = 1");
@@ -213,11 +210,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO daily_records (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO daily_records (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO daily_records (id) VALUES (1)",
+            value1: "INSERT INTO daily_records (id) VALUES (1)"
+        );
 
         // Assert
         var pgValue = QueryPg<DateTime>("SELECT record_date FROM daily_records WHERE id = 1");
@@ -241,11 +238,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO counters (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO counters (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO counters (id) VALUES (1)",
+            value1: "INSERT INTO counters (id) VALUES (1)"
+        );
 
         // Assert - Same integer values on both platforms
         Assert.Equal(42, QueryPg<int>("SELECT count FROM counters WHERE id = 1"));
@@ -265,11 +262,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO prices (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO prices (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO prices (id) VALUES (1)",
+            value1: "INSERT INTO prices (id) VALUES (1)"
+        );
 
         // Assert - Same decimal values (within floating-point tolerance for SQLite)
         Assert.Equal(99.99m, QueryPg<decimal>("SELECT amount FROM prices WHERE id = 1"));
@@ -293,23 +290,21 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO statuses (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO statuses (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO statuses (id) VALUES (1)",
+            value1: "INSERT INTO statuses (id) VALUES (1)"
+        );
 
         // Assert - Same string values on both platforms
         Assert.Equal("active", QueryPg<string>("SELECT status FROM statuses WHERE id = 1"));
-        Assert.Equal("active", QuerySqlite<string>("SELECT status FROM statuses WHERE id = 1"));
-
-        Assert.Equal(
-            "uncategorized",
-            QueryPg<string>("SELECT category FROM statuses WHERE id = 1")
-        );
-        Assert.Equal(
-            "uncategorized",
-            QuerySqlite<string>("SELECT category FROM statuses WHERE id = 1")
+        AssertDatabaseQueryValues(
+            value0: "active",
+            value1: "SELECT status FROM statuses WHERE id = 1",
+            value2: "uncategorized",
+            value3: "SELECT category FROM statuses WHERE id = 1",
+            value4: "uncategorized",
+            value5: "SELECT category FROM statuses WHERE id = 1"
         );
 
         Assert.Equal("", QueryPg<string>("SELECT empty FROM statuses WHERE id = 1"));
@@ -385,11 +380,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO items (label) VALUES ('item1')");
-        ExecuteSqlite("INSERT INTO items (label) VALUES ('item1')");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO items (label) VALUES ('item1')",
+            value1: "INSERT INTO items (label) VALUES ('item1')"
+        );
 
         // Assert
         var pgUuid = QueryPg<Guid>("SELECT id FROM items WHERE label = 'item1'");
@@ -420,18 +415,18 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         // PostgreSQL DDL verification
         Assert.Contains("gen_random_uuid()", pgDdl.ToLowerInvariant()); // UUID
-        Assert.Contains("DEFAULT true", pgDdl); // boolean true
-        Assert.Contains("DEFAULT 0", pgDdl); // integer 0
-        Assert.Contains("DEFAULT 5.0", pgDdl); // decimal
-        Assert.Contains("DEFAULT 'pending'", pgDdl); // string
+        ContainsAll(
+            actual: pgDdl,
+            expected: ["DEFAULT true", "DEFAULT 0", "DEFAULT 5.0", "DEFAULT 'pending'"]
+        ); // string
         Assert.Contains("CURRENT_TIMESTAMP", pgDdl.ToUpperInvariant()); // now()
 
         // SQLite DDL verification
         Assert.Contains("hex(randomblob", sqliteDdl.ToLowerInvariant()); // UUID
-        Assert.Contains("DEFAULT 1", sqliteDdl); // boolean true = 1
-        Assert.Contains("DEFAULT 0", sqliteDdl); // integer 0
-        Assert.Contains("DEFAULT 5.0", sqliteDdl); // decimal
-        Assert.Contains("DEFAULT 'pending'", sqliteDdl); // string
+        ContainsAll(
+            actual: sqliteDdl,
+            expected: ["DEFAULT 1", "DEFAULT 0", "DEFAULT 5.0", "DEFAULT 'pending'"]
+        ); // string
         Assert.Contains("datetime('now')", sqliteDdl.ToLowerInvariant()); // now()
 
         // VERIFY COLUMNS: Exactly 7 columns with correct names
@@ -556,8 +551,7 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
 
         // ASSERT 3: Defaults are CORRECT in DDL
         // PostgreSQL: Check defaults in DDL
-        Assert.Contains("DEFAULT true", pgDdlAfter); // boolean true
-        Assert.Contains("DEFAULT 1", pgDdlAfter); // integer 1
+        ContainsAll(actual: pgDdlAfter, expected: ["DEFAULT true", "DEFAULT 1"]); // integer 1
 
         // SQLite: Check defaults in DDL
         Assert.Contains("DEFAULT 1", sqliteDdlAfter); // boolean true = 1, integer 1 = 1
@@ -592,11 +586,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO large_nums (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO large_nums (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO large_nums (id) VALUES (1)",
+            value1: "INSERT INTO large_nums (id) VALUES (1)"
+        );
 
         // Assert - Same values on both platforms
         Assert.Equal(2147483647, QueryPg<long>("SELECT big_pos FROM large_nums WHERE id = 1"));
@@ -613,11 +607,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO precision_test (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO precision_test (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO precision_test (id) VALUES (1)",
+            value1: "INSERT INTO precision_test (id) VALUES (1)"
+        );
 
         // Assert
         Assert.Equal(0.00000001m, QueryPg<decimal>("SELECT tiny FROM precision_test WHERE id = 1"));
@@ -645,47 +639,37 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO special_strings (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO special_strings (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO special_strings (id) VALUES (1)",
+            value1: "INSERT INTO special_strings (id) VALUES (1)"
+        );
 
         // Assert - Same string values on both platforms
         Assert.Equal(
             "hello world",
             QueryPg<string>("SELECT with_spaces FROM special_strings WHERE id = 1")
         );
-        Assert.Equal(
-            "hello world",
-            QuerySqlite<string>("SELECT with_spaces FROM special_strings WHERE id = 1")
-        );
-
-        Assert.Equal(
-            "test123",
-            QueryPg<string>("SELECT with_numbers FROM special_strings WHERE id = 1")
-        );
-        Assert.Equal(
-            "test123",
-            QuerySqlite<string>("SELECT with_numbers FROM special_strings WHERE id = 1")
+        AssertDatabaseQueryValues(
+            value0: "hello world",
+            value1: "SELECT with_spaces FROM special_strings WHERE id = 1",
+            value2: "test123",
+            value3: "SELECT with_numbers FROM special_strings WHERE id = 1",
+            value4: "test123",
+            value5: "SELECT with_numbers FROM special_strings WHERE id = 1"
         );
 
         Assert.Equal(
             "foo-bar-baz",
             QueryPg<string>("SELECT with_hyphen FROM special_strings WHERE id = 1")
         );
-        Assert.Equal(
-            "foo-bar-baz",
-            QuerySqlite<string>("SELECT with_hyphen FROM special_strings WHERE id = 1")
-        );
-
-        Assert.Equal(
-            "snake_case_value",
-            QueryPg<string>("SELECT with_underscore FROM special_strings WHERE id = 1")
-        );
-        Assert.Equal(
-            "snake_case_value",
-            QuerySqlite<string>("SELECT with_underscore FROM special_strings WHERE id = 1")
+        AssertDatabaseQueryValues(
+            value0: "foo-bar-baz",
+            value1: "SELECT with_hyphen FROM special_strings WHERE id = 1",
+            value2: "snake_case_value",
+            value3: "SELECT with_underscore FROM special_strings WHERE id = 1",
+            value4: "snake_case_value",
+            value5: "SELECT with_underscore FROM special_strings WHERE id = 1"
         );
     }
 
@@ -696,11 +680,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO feature_flags (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO feature_flags (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO feature_flags (id) VALUES (1)",
+            value1: "INSERT INTO feature_flags (id) VALUES (1)"
+        );
 
         // Assert - All flags match expected values
         Assert.True(QueryPg<bool>("SELECT flag_a FROM feature_flags WHERE id = 1"));
@@ -753,11 +737,11 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
         var schema = Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1();
 
         // Act
-        ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
-        ApplySchema(_sqliteConnection, schema, SqliteDdlGenerator.Generate);
-
-        ExecutePg("INSERT INTO time_test (id) VALUES (1)");
-        ExecuteSqlite("INSERT INTO time_test (id) VALUES (1)");
+        ApplyBothSchemasAndReadDdl(
+            input0: schema,
+            value0: "INSERT INTO time_test (id) VALUES (1)",
+            value1: "INSERT INTO time_test (id) VALUES (1)"
+        );
 
         // Assert - All time values are populated
         Assert.True(
@@ -961,5 +945,36 @@ public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) :
             columns.Add(reader.GetString(1));
         }
         return columns;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ApplyBothSchemasAndReadDdl(
+        global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input0,
+        string value0,
+        string value1
+    )
+    {
+        // Act
+        ApplySchema(_pgConnection, input0, PostgresDdlGenerator.Generate);
+        ApplySchema(_sqliteConnection, input0, SqliteDdlGenerator.Generate);
+
+        ExecutePg(value0);
+        ExecuteSqlite(value1);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void AssertDatabaseQueryValues(
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4,
+        string value5
+    )
+    {
+        Assert.Equal(value0, QuerySqlite<string>(value1));
+
+        Assert.Equal(value2, QueryPg<string>(value3));
+        Assert.Equal(value4, QuerySqlite<string>(value5));
     }
 }

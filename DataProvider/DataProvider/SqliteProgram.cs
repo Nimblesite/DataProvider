@@ -182,8 +182,6 @@ internal static class SqliteCli
                 {
                     ConnectionType = connectionType,
                     TargetNamespace = "Generated",
-                    GenerateSourceFile = (ns, model, dataAccess) =>
-                        GenerateSourceFileForConnectionType(ns, model, dataAccess, connectionType),
                 };
             }
 
@@ -496,56 +494,6 @@ internal static class SqliteCli
     /// <summary>
     /// Generates a source file with the correct using statement for the specified connection type.
     /// </summary>
-    private static Result<string, SqlError> GenerateSourceFileForConnectionType(
-        string namespaceName,
-        string modelCode,
-        string dataAccessCode,
-        string connectionType
-    )
-    {
-        if (string.IsNullOrWhiteSpace(namespaceName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("namespaceName cannot be null or empty")
-            );
-
-        if (string.IsNullOrWhiteSpace(modelCode) && string.IsNullOrWhiteSpace(dataAccessCode))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("At least one of modelCode or dataAccessCode must be provided")
-            );
-
-        var connectionNamespace = connectionType switch
-        {
-            "NpgsqlConnection" => "Npgsql",
-            "SqlConnection" => "Microsoft.Data.SqlClient",
-            _ => "Microsoft.Data.Sqlite",
-        };
-
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Collections.Generic;");
-        sb.AppendLine("using System.Collections.Immutable;");
-        sb.AppendLine("using System.Threading.Tasks;");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"using {connectionNamespace};");
-        sb.AppendLine("using Outcome;");
-        sb.AppendLine("using Nimblesite.Sql.Model;");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {namespaceName};");
-        sb.AppendLine();
-
-        if (!string.IsNullOrWhiteSpace(dataAccessCode))
-        {
-            sb.Append(dataAccessCode);
-            sb.AppendLine();
-        }
-
-        if (!string.IsNullOrWhiteSpace(modelCode))
-        {
-            sb.Append(modelCode);
-        }
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
-    }
-
     private static string EscapeForPreprocessor(string message)
     {
         if (string.IsNullOrEmpty(message))

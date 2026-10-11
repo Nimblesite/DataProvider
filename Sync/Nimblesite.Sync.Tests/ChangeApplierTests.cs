@@ -89,14 +89,7 @@ public sealed partial class ChangeApplierTests : IDisposable
     [Fact]
     public void ApplyBatch_FailsAfterMaxRetries()
     {
-        var batch = new SyncBatch(
-            [
-                Fixture_ApplyBatch_FailsAfterMaxRetries_1(),
-            ],
-            0,
-            1,
-            false
-        );
+        var batch = new SyncBatch([Fixture_ApplyBatch_FailsAfterMaxRetries_1()], 0, 1, false);
 
         var result = ChangeApplier.ApplyBatch(
             batch,

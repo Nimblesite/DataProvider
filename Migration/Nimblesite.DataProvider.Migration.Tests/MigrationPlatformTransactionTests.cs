@@ -9,9 +9,7 @@ public sealed partial record MigrationPlatformRegressionTests
 {
     // Implements [MIG-TEST-CROSS-PLATFORM]: one transaction contract for every provider.
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(Transact_ReturnsValuePropagatesFailureAndReleasesTransactionInlineCases))]
     public async Task Transact_ReturnsValuePropagatesFailureAndReleasesTransaction(string provider)
     {
         await WithAsyncTargetAsync(provider, AssertTransactionContractAsync).ConfigureAwait(true);
@@ -67,11 +65,10 @@ public sealed partial record MigrationPlatformRegressionTests
         IDbTransaction transaction
     )
     {
-        if (transaction is not DbTransaction dbTransaction)
-        {
-            Assert.Fail($"{target.Provider} returned a transaction without DbTransaction support");
-            return;
-        }
+        var dbTransaction = global::Tests.Shared.ResultAssertions.Expected<DbTransaction>(
+            actual: transaction,
+            message: $"{target.Provider} returned a transaction without DbTransaction support"
+        );
         Assert.Same(target.Connection, dbTransaction.Connection);
         using var command = target.Connection.CreateCommand();
         command.Transaction = dbTransaction;

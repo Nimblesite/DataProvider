@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
 namespace Nimblesite.Sync.Tests;
@@ -74,13 +75,12 @@ public sealed partial class MappingEngineTests
     public void ApplyMapping_PassthroughMode_NoMapping_ReturnsIdentity()
     {
         var config = SyncMappingConfig.Passthrough;
-        var entry = MappingTestData.Entry(
-            table: "Person",
-            pk: """{"Id":"p1"}""",
-            payload: """{"Id":"p1","Name":"Alice"}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "Person",
+            value1: """{"Id":"p1"}""",
+            value2: """{"Id":"p1","Name":"Alice"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Single(success.Entries);
         Assert.Equal("Person", success.Entries[0].TargetTable);
         Assert.Equal("""{"Id":"p1"}""", success.Entries[0].TargetPkValue);
@@ -105,13 +105,12 @@ public sealed partial class MappingEngineTests
     {
         var mapping = Fixture_ApplyMapping_SingleTarget_RenamesTable_1();
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1","Name":"Alice"}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "User",
+            value1: """{"Id":"u1"}""",
+            value2: """{"Id":"u1","Name":"Alice"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Single(success.Entries);
         Assert.Equal("Customer", success.Entries[0].TargetTable);
     }
@@ -128,13 +127,12 @@ public sealed partial class MappingEngineTests
             PkMapping = new PkMapping("Id", "CustomerId"),
         };
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1","Name":"Alice"}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "User",
+            value1: """{"Id":"u1"}""",
+            value2: """{"Id":"u1","Name":"Alice"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("CustomerId", success.Entries[0].TargetPkValue);
         Assert.Contains("u1", success.Entries[0].TargetPkValue);
     }
@@ -148,15 +146,16 @@ public sealed partial class MappingEngineTests
             new("EmailAddress", "Email"),
         };
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(columnMappings: columnMappings);
-        var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1","FullName":"Alice","EmailAddress":"alice@test.com"}"""
+        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(
+            columnMappings: columnMappings
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "User",
+            value1: """{"Id":"u1"}""",
+            value2: """{"Id":"u1","FullName":"Alice","EmailAddress":"alice@test.com"}"""
+        );
         Assert.Contains("Name", success.Entries[0].MappedPayload);
         Assert.Contains("Alice", success.Entries[0].MappedPayload);
         Assert.Contains("Email", success.Entries[0].MappedPayload);
@@ -172,15 +171,16 @@ public sealed partial class MappingEngineTests
             new(null, "Source", TransformType.Constant, "mobile-app"),
         };
 
-        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(columnMappings: columnMappings);
-        var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1","Name":"Alice"}"""
+        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(
+            columnMappings: columnMappings
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
+        var config = MappingTestData.Strict(mappings: [mapping]);
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "User",
+            value1: """{"Id":"u1"}""",
+            value2: """{"Id":"u1","Name":"Alice"}"""
+        );
         Assert.Contains("Source", success.Entries[0].MappedPayload);
         Assert.Contains("mobile-app", success.Entries[0].MappedPayload);
     }
@@ -197,13 +197,12 @@ public sealed partial class MappingEngineTests
             ExcludedColumns = ["PasswordHash", "SecurityStamp"],
         };
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "User",
-            pk: """{"Id":"u1"}""",
-            payload: """{"Id":"u1","Name":"Alice","PasswordHash":"secret","SecurityStamp":"xyz"}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "User",
+            value1: """{"Id":"u1"}""",
+            value2: """{"Id":"u1","Name":"Alice","PasswordHash":"secret","SecurityStamp":"xyz"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Name", success.Entries[0].MappedPayload);
         Assert.DoesNotContain("PasswordHash", success.Entries[0].MappedPayload);
         Assert.DoesNotContain("SecurityStamp", success.Entries[0].MappedPayload);
@@ -259,13 +258,12 @@ public sealed partial class MappingEngineTests
             Targets = targets,
         };
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "Order",
-            pk: """{"Id":"o1"}""",
-            payload: """{"Id":"o1","Total":99.99,"CustomerId":"c1"}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "Order",
+            value1: """{"Id":"o1"}""",
+            value2: """{"Id":"o1","Total":99.99,"CustomerId":"c1"}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Equal(2, success.Entries.Count);
         Assert.Contains(success.Entries, e => e.TargetTable == "OrderHeader");
         Assert.Contains(success.Entries, e => e.TargetTable == "OrderAudit");
@@ -293,13 +291,12 @@ public sealed partial class MappingEngineTests
             Targets = targets,
         };
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = MappingTestData.Entry(
-            table: "Order",
-            pk: """{"Id":"o1"}""",
-            payload: """{"Id":"o1","Total":99.99}"""
+        var success = ApplyConfiguredMappingToEntry(
+            input0: config,
+            value0: "Order",
+            value1: """{"Id":"o1"}""",
+            value2: """{"Id":"o1","Total":99.99}"""
         );
-
-        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var header = success.Entries.First(e => e.TargetTable == "OrderHeader");
         var audit = success.Entries.First(e => e.TargetTable == "OrderAudit");
 
@@ -326,8 +323,7 @@ public sealed partial class MappingEngineTests
 
         var result = MappingEngine.MapPrimaryKey(pk, mapping);
 
-        Assert.Contains("CustomerId", result);
-        Assert.Contains("test-id", result);
+        ContainsAll(actual: result, expected: ["CustomerId", "test-id"]);
         Assert.DoesNotContain(":\"Id\"", result);
     }
 
@@ -351,5 +347,20 @@ public sealed partial class MappingEngineTests
 
         var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Null(success.Entries[0].MappedPayload);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.Sync.Core.MappingSuccess ApplyConfiguredMappingToEntry(
+        global::Nimblesite.Sync.Core.SyncMappingConfig input0,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var entry = MappingTestData.Entry(table: value0, pk: value1, payload: value2);
+
+        var success = Expected<MappingSuccess>(entry: entry, config: input0, logger: _logger);
+
+        return success;
     }
 }

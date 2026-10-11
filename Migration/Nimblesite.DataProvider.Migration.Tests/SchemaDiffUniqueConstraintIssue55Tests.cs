@@ -33,7 +33,10 @@ public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
                 ),
             ]
         );
-        var desired = Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(current: current);
+        var desired =
+            Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
+                current: current
+            );
 
         var ops = SchemaDiffAssertions.Diff(
             current: current,

@@ -120,7 +120,7 @@ public static partial class DataAccessGenerator
         if (parameters == null || parameters.Count == 0)
             return "";
 
-        return string.Join(", ", parameters.Select(p => $"object {p.Name}"));
+        return string.Join(", ", parameters.Select(p => $"object? {p.Name}"));
     }
 
     /// <summary>
@@ -383,7 +383,7 @@ public static partial class DataAccessGenerator
 
         sb.AppendLine(
             CultureInfo.InvariantCulture,
-            $"        const string sql = \"INSERT INTO {QuotedIdentifier(table.Name)} ({columnNames}) VALUES ({parameterNames})\";"
+            $"        const string sql = \"INSERT INTO {QualifiedTable(table)} ({columnNames}) VALUES ({parameterNames})\";"
         );
         AppendTransactionConnectionGuard(sb);
         AppendTransactionCommandOpen(sb);
@@ -509,77 +509,6 @@ public static partial class DataAccessGenerator
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
-    }
-
-    /// <summary>
-    /// Generates an UPDATE method for a database table
-    /// </summary>
-    /// <param name="table">Database table metadata</param>
-    /// <param name="connectionType">Database connection type</param>
-    /// <returns>Generated UPDATE method code</returns>
-    public static Result<string, SqlError> GenerateUpdateMethod(
-        DatabaseTable table,
-        string connectionType = "SqliteConnection"
-    )
-    {
-        if (table == null)
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("table cannot be null")
-            );
-
-        var updateableColumns = table.UpdateableColumns;
-        var primaryKeyColumns = table.PrimaryKeyColumns;
-
-        if (updateableColumns.Count == 0 || primaryKeyColumns.Count == 0)
-            return new Result<string, SqlError>.Ok<string, SqlError>("");
-
-        var sb = new StringBuilder();
-        var allColumns = primaryKeyColumns.Concat(updateableColumns).ToList();
-        var parameterList = string.Join(
-            ", ",
-            allColumns.Select(c =>
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{c.CSharpType} {EscapeReservedKeyword(c.Name)}"
-                )
-            )
-        );
-
-        sb.AppendLine();
-        sb.AppendLine("    /// <summary>");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    /// Updates a row in the {table.Name} table."
-        );
-        sb.AppendLine("    /// </summary>");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"    public static async Task<Result<int, SqlError>> Update{table.Name}Async(this IDbTransaction transaction, {parameterList})"
-        );
-        sb.AppendLine("    {");
-
-        // Generate UPDATE SQL with double-quoted identifiers (see the INSERT generator)
-        var setClause = string.Join(
-            ", ",
-            updateableColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
-        );
-        var whereClause = string.Join(
-            " AND ",
-            primaryKeyColumns.Select(c => $"{QuotedIdentifier(c.Name)} = @{c.Name}")
-        );
-
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"        const string sql = \"UPDATE {QuotedIdentifier(table.Name)} SET {setClause} WHERE {whereClause}\";"
-        );
-        AppendTransactionConnectionGuard(sb);
-        AppendTransactionCommandOpen(sb);
-
-        // Add parameters (nullable types use null-coalescing to DBNull.Value)
-        AppendParameterBindings(sb, allColumns);
-        AppendNonQueryTail(sb, failure: "Update failed", connectionType: connectionType);
 
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
@@ -944,6 +873,11 @@ public static partial class DataAccessGenerator
     /// <summary>
     /// Double-quotes an identifier (SQL standard) for a generated C# string literal.
     /// </summary>
+    private static string QualifiedTable(DatabaseTable table) =>
+        table.Schema is "" or "main" or "public" or "dbo"
+            ? QuotedIdentifier(table.Name)
+            : $"{QuotedIdentifier(table.Schema)}.{QuotedIdentifier(table.Name)}";
+
     private static string QuotedIdentifier(string name) =>
         $"\\\"{name.Replace("\"", "\\\"\\\"", StringComparison.Ordinal)}\\\"";
 

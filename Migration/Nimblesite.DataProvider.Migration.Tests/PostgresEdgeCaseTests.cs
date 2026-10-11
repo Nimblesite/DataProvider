@@ -106,10 +106,11 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO negative_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT balance, adjustment FROM negative_defaults WHERE id = 1";
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: "INSERT INTO negative_defaults (id) VALUES (1)",
+            value1: "SELECT balance, adjustment FROM negative_defaults WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal(-100.50m, reader.GetDecimal(0));
@@ -124,10 +125,11 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO empty_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT notes FROM empty_defaults WHERE id = 1";
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: "INSERT INTO empty_defaults (id) VALUES (1)",
+            value1: "SELECT notes FROM empty_defaults WHERE id = 1"
+        );
         var result = cmd.ExecuteScalar();
         Assert.Equal("", result);
     }
@@ -140,10 +142,11 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO bool_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT is_active, is_deleted FROM bool_defaults WHERE id = 1";
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: "INSERT INTO bool_defaults (id) VALUES (1)",
+            value1: "SELECT is_active, is_deleted FROM bool_defaults WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.True(reader.GetBoolean(0));
@@ -158,10 +161,11 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO uuid_defaults (id) VALUES (1), (2)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT external_id FROM uuid_defaults ORDER BY id";
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: "INSERT INTO uuid_defaults (id) VALUES (1), (2)",
+            value1: "SELECT external_id FROM uuid_defaults ORDER BY id"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         var uuid1 = reader.GetGuid(0);
@@ -348,13 +352,13 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            @"
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: @"
             INSERT INTO decimal_extremes (id, tiny, large, precise)
-            VALUES (1, 0.0001, 999999999999999999, 1234567890.12345678)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT tiny, large, precise FROM decimal_extremes WHERE id = 1";
+            VALUES (1, 0.0001, 999999999999999999, 1234567890.12345678)",
+            value1: "SELECT tiny, large, precise FROM decimal_extremes WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal(0.0001m, reader.GetDecimal(0));
@@ -370,12 +374,11 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO decimal_zero_neg (id, zero, negative, negative_small) VALUES (1, 0.00, -99999.99, -0.00000001)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText =
-            "SELECT zero, negative, negative_small FROM decimal_zero_neg WHERE id = 1";
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: "INSERT INTO decimal_zero_neg (id, zero, negative, negative_small) VALUES (1, 0.00, -99999.99, -0.00000001)",
+            value1: "SELECT zero, negative, negative_small FROM decimal_zero_neg WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal(0.00m, reader.GetDecimal(0));
@@ -395,13 +398,13 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
         ApplySchema(schema);
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            @"
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: @"
             INSERT INTO timestamp_extremes (id, past, future)
-            VALUES (1, '1900-01-01 00:00:00+00', '2999-12-31 23:59:59+00')";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT past, future FROM timestamp_extremes WHERE id = 1";
+            VALUES (1, '1900-01-01 00:00:00+00', '2999-12-31 23:59:59+00')",
+            value1: "SELECT past, future FROM timestamp_extremes WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
 
@@ -453,8 +456,7 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
 
         // Test cascade behavior
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            Data_ForeignKey_AllCascadeTypes_Success_1;
+        cmd.CommandText = Data_ForeignKey_AllCascadeTypes_Success_1;
         cmd.ExecuteNonQuery();
 
         // Verify cascade delete worked
@@ -528,4 +530,17 @@ public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixtu
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void ExecuteAndPrepareCommand(
+        global::Npgsql.NpgsqlCommand input0,
+        string value0,
+        string value1
+    )
+    {
+        input0.CommandText = value0;
+        input0.ExecuteNonQuery();
+
+        input0.CommandText = value1;
+    }
 }

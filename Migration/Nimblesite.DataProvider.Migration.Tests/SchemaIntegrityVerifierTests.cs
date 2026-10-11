@@ -22,8 +22,10 @@ public sealed partial class SchemaIntegrityVerifierTests
     [Fact]
     public void Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches()
     {
-        var live = Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1();
-        var desired = Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2();
+        var live =
+            Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_1();
+        var desired =
+            Fixture_Verify_EquivalentDefaultSchemasAndSqliteIntegerWidths_ReturnsNoMismatches_2();
 
         var mismatches = Verify(live: live, desired: desired);
 
@@ -43,65 +45,35 @@ public sealed partial class SchemaIntegrityVerifierTests
             $"public.accounts.id: type expected {PortableTypes.Uuid} but found {PortableTypes.Int}",
             mismatches
         );
-        Assert.Contains(
-            "public.accounts.id: nullability expected NOT NULL but found NULL",
-            mismatches
+        AssertIntegrityMismatchMessages(
+            input0: mismatches,
+            value0: "public.accounts.id: nullability expected NOT NULL but found NULL",
+            value1: "public.accounts.id: identity expected True but found False",
+            value2: "public.accounts.id: default expected gen_uuid() but found <none>",
+            value3: "public.accounts.code: default expected 'new' but found 'old'",
+            value4: "public.accounts.missing: missing column",
+            value5: "public.accounts: primary key columns expected (id) but found (tenant_id)",
+            value6: "public.accounts: foreign key fk_accounts_tenant columns drifted"
         );
-        Assert.Contains("public.accounts.id: identity expected True but found False", mismatches);
-        Assert.Contains(
-            "public.accounts.id: default expected gen_uuid() but found <none>",
-            mismatches
+        AssertIntegrityMismatchMessages(
+            input0: mismatches,
+            value0: "public.accounts: foreign key fk_accounts_tenant referenced table drifted",
+            value1: "public.accounts: foreign key fk_accounts_tenant referenced columns drifted",
+            value2: "public.accounts: foreign key fk_accounts_tenant on delete expected Cascade but found NoAction",
+            value3: "public.accounts: foreign key fk_accounts_tenant on update expected NoAction but found Cascade",
+            value4: "public.accounts: missing foreign key FK_accounts_missing_fk on (missing_fk)",
+            value5: "public.accounts: unique constraint uq_accounts_tenant_code columns expected (tenant_id, code) but found (code, tenant_id)",
+            value6: "public.accounts: missing unique constraint UQ_accounts_status on (status)"
         );
-        Assert.Contains("public.accounts.code: default expected 'new' but found 'old'", mismatches);
-        Assert.Contains("public.accounts.missing: missing column", mismatches);
-        Assert.Contains(
-            "public.accounts: primary key columns expected (id) but found (tenant_id)",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: foreign key fk_accounts_tenant columns drifted",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: foreign key fk_accounts_tenant referenced table drifted",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: foreign key fk_accounts_tenant referenced columns drifted",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: foreign key fk_accounts_tenant on delete expected Cascade but found NoAction",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: foreign key fk_accounts_tenant on update expected NoAction but found Cascade",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: missing foreign key FK_accounts_missing_fk on (missing_fk)",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: unique constraint uq_accounts_tenant_code columns expected (tenant_id, code) but found (code, tenant_id)",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: missing unique constraint UQ_accounts_status on (status)",
-            mismatches
-        );
-        Assert.Contains("public.accounts: index idx_accounts_code uniqueness drifted", mismatches);
-        Assert.Contains("public.accounts: index idx_accounts_code columns drifted", mismatches);
-        Assert.Contains("public.accounts: index idx_accounts_code expressions drifted", mismatches);
-        Assert.Contains("public.accounts: index idx_accounts_code filter drifted", mismatches);
-        Assert.Contains("public.accounts: missing index idx_accounts_missing", mismatches);
-        Assert.Contains(
-            "public.accounts: check constraint ck_accounts_code expression drifted",
-            mismatches
-        );
-        Assert.Contains(
-            "public.accounts: missing check constraint ck_accounts_missing",
-            mismatches
+        AssertIntegrityMismatchMessages(
+            input0: mismatches,
+            value0: "public.accounts: index idx_accounts_code uniqueness drifted",
+            value1: "public.accounts: index idx_accounts_code columns drifted",
+            value2: "public.accounts: index idx_accounts_code expressions drifted",
+            value3: "public.accounts: index idx_accounts_code filter drifted",
+            value4: "public.accounts: missing index idx_accounts_missing",
+            value5: "public.accounts: check constraint ck_accounts_code expression drifted",
+            value6: "public.accounts: missing check constraint ck_accounts_missing"
         );
         Assert.Contains("public.accounts.status: missing check constraint", mismatches);
     }
@@ -128,22 +100,16 @@ public sealed partial class SchemaIntegrityVerifierTests
 
         var mismatches = Verify(live: live, desired: desired);
 
-        Assert.Contains(
-            "public.documents: row-level security expected True but found False",
-            mismatches
+        AssertIntegrityMismatchMessages(
+            input0: mismatches,
+            value0: "public.documents: row-level security expected True but found False",
+            value1: "public.documents: forced row-level security expected True but found False",
+            value2: "public.documents: missing row-level security policy tenant_read",
+            value3: "role app_user: login drifted",
+            value4: "role app_user: bypassRls drifted",
+            value5: "role missing_role: missing role",
+            value6: "public.current_tenant_id: missing function"
         );
-        Assert.Contains(
-            "public.documents: forced row-level security expected True but found False",
-            mismatches
-        );
-        Assert.Contains(
-            "public.documents: missing row-level security policy tenant_read",
-            mismatches
-        );
-        Assert.Contains("role app_user: login drifted", mismatches);
-        Assert.Contains("role app_user: bypassRls drifted", mismatches);
-        Assert.Contains("role missing_role: missing role", mismatches);
-        Assert.Contains("public.current_tenant_id: missing function", mismatches);
         Assert.Contains("grant Table documents: missing grant", mismatches);
     }
 
@@ -198,5 +164,26 @@ public sealed partial class SchemaIntegrityVerifierTests
             "Expected schema integrity verification to succeed."
         );
         return ((SchemaIntegrityOk)result).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertIntegrityMismatchMessages(
+        global::System.Collections.Immutable.ImmutableArray<global::System.String> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4,
+        string value5,
+        string value6
+    )
+    {
+        Assert.Contains(value0, input0);
+        Assert.Contains(value1, input0);
+        Assert.Contains(value2, input0);
+        Assert.Contains(value3, input0);
+        Assert.Contains(value4, input0);
+        Assert.Contains(value5, input0);
+        Assert.Contains(value6, input0);
     }
 }
