@@ -1,3 +1,4 @@
+// Implements [DP-SQL-MODEL-TEST-FRAGMENTS].
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
@@ -157,9 +158,7 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("CustomerName", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["CustomerName"]);
     }
 
     [Fact]
@@ -193,9 +192,7 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("NULL", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["NULL"]);
     }
 
     [Fact]
@@ -204,9 +201,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = "Orders".From("o").SelectAll().Where("o.IsActive", false).ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("o.IsActive = 0", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["o.IsActive = 0"]);
     }
 
     [Fact]
@@ -221,10 +216,7 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("(", sql);
-        Assert.Contains(")", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["(", ")"]);
     }
 
     [Fact]
@@ -246,9 +238,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = "Orders".From("o").SelectAll().Where("o.TotalAmount", 99.99).ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("99.99", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["99.99"]);
     }
 
     [Fact]
@@ -352,9 +342,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = "Orders".From().Select<Order>(o => o.Status).Distinct().ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("DISTINCT", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["DISTINCT"]);
     }
 
     #endregion
@@ -551,10 +539,7 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("LIKE", sql);
-        Assert.Contains("Acme", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["LIKE", "Acme"]);
     }
 
     [Fact]
@@ -566,10 +551,7 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("LIKE", sql);
-        Assert.Contains("Tech", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["LIKE", "Tech"]);
     }
 
     [Fact]
@@ -603,10 +585,10 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("CustomerName", sql);
-        Assert.Contains("Email", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["CustomerName", "Email"]
+        );
     }
 
     [Fact]
@@ -626,9 +608,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = "Orders".From().SelectAll().Where("Count", 42L).ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("42", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["42"]);
     }
 
     [Fact]
@@ -637,9 +617,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = "Orders".From().SelectAll().Where("Amount", 19.99m).ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("19.99", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["19.99"]);
     }
 
     #endregion
@@ -708,10 +686,10 @@ public sealed class SqlModelCoverageTests : IDisposable
             .ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("IsActive = 1", sql);
-        Assert.Contains("IsDeleted = 0", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["IsActive = 1", "IsDeleted = 0"]
+        );
     }
 
     [Fact]
@@ -739,10 +717,10 @@ public sealed class SqlModelCoverageTests : IDisposable
         var query = builder.GroupBy("o.Status").ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("COUNT(*)", sql);
-        Assert.Contains("SUM(o.TotalAmount)", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["COUNT(*)", "SUM(o.TotalAmount)"]
+        );
     }
 
     [Fact]
@@ -775,9 +753,7 @@ public sealed class SqlModelCoverageTests : IDisposable
         ).ToSqlStatement();
 
         var sqlResult = query.ToSQLite();
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-        Assert.Contains("Orders", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["Orders"]);
     }
 
     [Fact]

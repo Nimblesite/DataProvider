@@ -1,4 +1,7 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 using System.Globalization;
+using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -15,7 +18,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -31,134 +34,106 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
     }
 
     private static SchemaDefinition BuildOwnerIsolationSchema() =>
-        new()
-        {
-            Name = "rls_test",
-            Tables =
+        SchemaTestData.Schema(
+            name: "rls_test",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "owner_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "title",
-                            Type = new VarCharType(200),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                        SchemaTestData.Column(
+                            name: "owner_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "title",
+                            type: new VarCharType(200),
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_isolation",
-                                Operations = [RlsOperation.All],
-                                UsingLql = "owner_id = current_user_id()::uuid",
-                                WithCheckLql = "owner_id = current_user_id()::uuid",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "owner_isolation",
+                                operations: [RlsOperation.All],
+                                usingLql: "owner_id = current_user_id()::uuid",
+                                withCheckLql: "owner_id = current_user_id()::uuid"
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 
     private static SchemaDefinition BuildGroupMembershipSchema() =>
-        new()
-        {
-            Name = "rls_group_test",
-            Tables =
+        SchemaTestData.Schema(
+            name: "rls_group_test",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "user_group_memberships",
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "user_group_memberships",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "user_id",
-                            Type = new VarCharType(450),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "group_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                        SchemaTestData.Column(
+                            name: "user_id",
+                            type: new VarCharType(450),
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "group_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "documents",
-                    Columns =
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "group_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "title",
-                            Type = new VarCharType(200),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                        SchemaTestData.Column(
+                            name: "group_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "title",
+                            type: new VarCharType(200),
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "group_read_access",
-                                Operations = [RlsOperation.Select],
-                                UsingLql = """
-                                    exists(
-                                      user_group_memberships
-                                      |> filter(fn(m) => m.user_id = current_user_id() and m.group_id = documents.group_id)
-                                      |> select(id)
-                                    )
-                                    """,
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "group_read_access",
+                                operations: [RlsOperation.Select],
+                                usingLql: """
+                                exists(
+                                  user_group_memberships
+                                  |> filter(fn(m) => m.user_id = current_user_id() and m.group_id = documents.group_id)
+                                  |> select(id)
+                                )
+                                """
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 
     private const string AppRole = "rls_app_role";
 
@@ -235,13 +210,16 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
         using (var tx = _connection.BeginTransaction())
         {
             SetAppRoleAndUser(_connection, tx, alice);
-            using var ins = _connection.CreateCommand();
-            ins.Transaction = tx;
-            ins.CommandText =
-                "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'alice')";
-            ins.Parameters.AddWithValue("@i", aliceDoc);
-            ins.Parameters.AddWithValue("@o", alice);
-            ins.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _connection,
+                configure: ins =>
+                {
+                    ins.Transaction = tx;
+                    ins.CommandText =
+                        "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'alice')";
+                },
+                parameters: () => [("@i", aliceDoc), ("@o", alice)]
+            );
             tx.Commit();
         }
 
@@ -249,13 +227,16 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
         using (var tx = _connection.BeginTransaction())
         {
             SetAppRoleAndUser(_connection, tx, bob);
-            using var ins = _connection.CreateCommand();
-            ins.Transaction = tx;
-            ins.CommandText =
-                "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'bob')";
-            ins.Parameters.AddWithValue("@i", bobDoc);
-            ins.Parameters.AddWithValue("@o", bob);
-            ins.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _connection,
+                configure: ins =>
+                {
+                    ins.Transaction = tx;
+                    ins.CommandText =
+                        "INSERT INTO \"public\".\"documents\"(id, owner_id, title) VALUES (@i, @o, 'bob')";
+                },
+                parameters: () => [("@i", bobDoc), ("@o", bob)]
+            );
             tx.Commit();
         }
 
@@ -360,25 +341,12 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
             [
                 BuildOwnerIsolationSchema().Tables[0] with
                 {
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_isolation",
-                                Operations = [RlsOperation.All],
-                                UsingLql = "owner_id = current_user_id()::uuid",
-                                WithCheckLql = "owner_id = current_user_id()::uuid",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = "extra_policy",
-                                Operations = [RlsOperation.Select],
-                                UsingLql = "true",
-                            },
-                        ],
-                    },
+                    RowLevelSecurity = Fixture_SchemaDiff_AddsNewPolicy_ToExistingRlsTable_1(
+                        name: name,
+                        operations: operations,
+                        usingLql: usingLql,
+                        withCheckLql: withCheckLql
+                    ),
                 },
             ],
         };
@@ -435,12 +403,12 @@ public sealed class PostgresRlsE2ETests(PostgresContainerFixture fixture) : IAsy
 
     private void InsertDocument(Guid id, Guid groupId, string title)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO \"public\".\"documents\"(id, group_id, title) VALUES (@id, @group, @title)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@group", groupId);
-        cmd.Parameters.AddWithValue("@title", title);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO \"public\".\"documents\"(id, group_id, title) VALUES (@id, @group, @title)",
+            parameters: () => [("@id", id), ("@group", groupId), ("@title", title)]
+        );
     }
 }

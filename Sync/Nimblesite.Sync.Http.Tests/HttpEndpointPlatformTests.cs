@@ -30,7 +30,7 @@ public sealed record HttpEndpointPlatformTests
     [InlineData("postgres")]
     [InlineData("sqlserver")]
     // Implements [SYNC-HTTP-PROVIDERS].
-    public async Task HttpStateAndPull_MatchProviderSupport(string provider)
+    public async Task HttpStateAndPull_ReturnEmptyStateAndChanges(string provider)
     {
         var target = await CreateTargetAsync(provider).ConfigureAwait(true);
         try
@@ -39,17 +39,6 @@ public sealed record HttpEndpointPlatformTests
             var query =
                 $"dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}";
             using var state = await client.GetAsync($"/sync/state?{query}").ConfigureAwait(true);
-            if (provider == "sqlserver")
-            {
-                await AssertUnsupportedProviderAsync(state, target.ConnectionString)
-                    .ConfigureAwait(true);
-                using var rejectedPull = await client
-                    .GetAsync($"/sync/changes?fromVersion=0&batchSize=10&{query}")
-                    .ConfigureAwait(true);
-                await AssertUnsupportedProviderAsync(rejectedPull, target.ConnectionString)
-                    .ConfigureAwait(true);
-                return;
-            }
             Assert.Equal(HttpStatusCode.OK, state.StatusCode);
             Assert.Equal("application/json", state.Content.Headers.ContentType?.MediaType);
             using var stateJson = JsonDocument.Parse(
@@ -81,7 +70,7 @@ public sealed record HttpEndpointPlatformTests
     [InlineData("postgres")]
     [InlineData("sqlserver")]
     // Implements [SYNC-HTTP-PROVIDERS].
-    public async Task HttpPush_AppliesSupportedProviderOrRejectsWithoutMutation(string provider)
+    public async Task HttpPush_AppliesChangeOnEveryProvider(string provider)
     {
         var target = await CreateTargetAsync(provider).ConfigureAwait(true);
         try
@@ -115,12 +104,6 @@ public sealed record HttpEndpointPlatformTests
                 $"/sync/changes?dbType={provider}&connectionString={Uri.EscapeDataString(target.ConnectionString)}",
                 content
             );
-            if (provider == "sqlserver")
-            {
-                await AssertUnsupportedProviderAsync(response, target.ConnectionString)
-                    .ConfigureAwait(true);
-                return;
-            }
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
             await AssertPersonAsync(provider, target.ConnectionString, id).ConfigureAwait(true);
@@ -132,25 +115,6 @@ public sealed record HttpEndpointPlatformTests
                 File.Delete(target.FilePath);
             }
         }
-    }
-
-    private static async Task AssertUnsupportedProviderAsync(
-        HttpResponseMessage response,
-        string connectionString
-    )
-    {
-        // Current API contract uses ProblemDetails/500 for unsupported providers.
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using var problem = JsonDocument.Parse(
-            await response.Content.ReadAsStringAsync().ConfigureAwait(false)
-        );
-        Assert.Equal(500, problem.RootElement.GetProperty("status").GetInt32());
-        Assert.Equal(
-            "Unknown database type: sqlserver",
-            problem.RootElement.GetProperty("detail").GetString()
-        );
-        AssertSqlServerCatalogIsEmpty(connectionString);
     }
 
     private static void AssertSqlServerCatalogIsEmpty(string connectionString)
@@ -198,7 +162,11 @@ public sealed record HttpEndpointPlatformTests
             var connectionString = await _sqlServer
                 .CreateDatabaseConnectionStringAsync()
                 .ConfigureAwait(false);
-            AssertSqlServerCatalogIsEmpty(connectionString);
+            CreatePersonTable("sqlserver", connectionString, "dbo");
+            using var sqlServer = new SqlConnection(connectionString);
+            await sqlServer.OpenAsync().ConfigureAwait(false);
+            Assert.IsType<BoolSyncOk>(Nimblesite.Sync.SqlServer.SqlServerSyncSchema.CreateSchema(sqlServer));
+            Assert.IsType<BoolSyncOk>(Nimblesite.Sync.SqlServer.SqlServerSyncStore.SetOriginId(sqlServer, "server-origin"));
             return new HttpTarget(connectionString, FilePath: null);
         }
         Assert.Equal("sqlite", provider);

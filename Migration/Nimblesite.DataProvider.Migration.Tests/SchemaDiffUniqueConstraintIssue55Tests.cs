@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
@@ -8,69 +9,43 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <see cref="AddUniqueConstraintOperation"/> regardless of how many other
 /// columns, foreign keys, or constraints the table already carries.
 /// </summary>
-public sealed class SchemaDiffUniqueConstraintIssue55Tests
+public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
 {
     private static IReadOnlyList<ColumnDefinition> AgentConfigColumns() =>
         [
-            new ColumnDefinition
-            {
-                Name = "id",
-                Type = PortableTypes.Uuid,
-                IsNullable = false,
-            },
-            new ColumnDefinition
-            {
-                Name = "tenant_id",
-                Type = PortableTypes.Uuid,
-                IsNullable = false,
-            },
-            new ColumnDefinition
-            {
-                Name = "name",
-                Type = PortableTypes.Text,
-                IsNullable = false,
-            },
+            SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
+            SchemaTestData.Column(name: "tenant_id", type: PortableTypes.Uuid, isNullable: false),
+            SchemaTestData.Column(name: "name", type: PortableTypes.Text, isNullable: false),
         ];
 
     [Fact]
     public void Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = AgentConfigColumns(),
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = current.Tables[0].Columns,
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    UniqueConstraints =
-                    [
-                        new UniqueConstraintDefinition
-                        {
-                            Name = "uq_agent_configs_tenant_name",
-                            Columns = ["tenant_id", "name"],
-                        },
-                    ],
-                },
-            ],
-        };
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "agent_configs",
+                    columns: AgentConfigColumns(),
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+            ]
+        );
+        var desired =
+            Fixture_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1(
+                name: name,
+                tables: tables,
+                schema: schema,
+                name: name,
+                columns: columns,
+                current: current,
+                primaryKey: primaryKey,
+                uniqueConstraints: uniqueConstraints,
+                name: name,
+                columns: columns
+            );
 
         var ops = SchemaDiffAssertions.Diff(
             current: current,
@@ -90,26 +65,23 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
     [Fact]
     public void Calculate_ReplayAfterUniqueConstraintApplied_YieldsNoUniqueOperation()
     {
-        var unique = new UniqueConstraintDefinition
-        {
-            Name = "uq_agent_configs_tenant_name",
-            Columns = ["tenant_id", "name"],
-        };
-        var converged = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var unique = SchemaTestData.UniqueConstraint(
+            name: "uq_agent_configs_tenant_name",
+            columns: ["tenant_id", "name"]
+        );
+        var converged = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = AgentConfigColumns(),
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    UniqueConstraints = [unique],
-                },
-            ],
-        };
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "agent_configs",
+                    columns: AgentConfigColumns(),
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    uniqueConstraints: [unique]
+                ),
+            ]
+        );
 
         var ops = SchemaDiffAssertions.Diff(
             current: converged,

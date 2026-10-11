@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Integration.Tests;
 
 // Implements [SYNC-MAPPING-E2E-SETUP].
@@ -56,18 +59,20 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
         SyncSchema.CreateSchema(conn);
         SyncSchema.SetOriginId(conn, originId);
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE User (
-                Id TEXT PRIMARY KEY,
-                FullName TEXT NOT NULL,
-                EmailAddress TEXT,
-                PasswordHash TEXT,
-                SecurityStamp TEXT,
-                CreatedAt TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE User (
+                    Id TEXT PRIMARY KEY,
+                    FullName TEXT NOT NULL,
+                    EmailAddress TEXT,
+                    PasswordHash TEXT,
+                    SecurityStamp TEXT,
+                    CreatedAt TEXT
+                );
+                """
+        );
 
         TriggerGenerator.CreateTriggers(conn, "User", NullLogger.Instance);
         return conn;

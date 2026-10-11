@@ -11,30 +11,10 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange
         var columns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Email",
-                CSharpType = "string?",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Age",
-                CSharpType = "int?",
-                SqlType = "INTEGER",
-            },
+            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "Email", cSharpType: "string?", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "Age", cSharpType: "int?", sqlType: "INTEGER"),
         };
 
         // Act
@@ -61,12 +41,7 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange
         var columns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
+            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
         };
 
         // Act
@@ -98,42 +73,12 @@ public sealed class ModelGenerationIntegrationTests
         var childColumns = new List<string> { "OrderId", "Amount", "Status" };
         var allColumns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Email",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "OrderId",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Amount",
-                CSharpType = "decimal",
-                SqlType = "DECIMAL",
-            },
-            new()
-            {
-                Name = "Status",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
+            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "Email", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "OrderId", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "Amount", cSharpType: "decimal", sqlType: "DECIMAL"),
+            ColumnTestData.Create(name: "Status", cSharpType: "string", sqlType: "TEXT"),
         };
 
         // Act
@@ -173,24 +118,9 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange
         var columns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "UserId",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "UserName",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "OrderCount",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
+            ColumnTestData.Create(name: "UserId", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "UserName", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "OrderCount", cSharpType: "int", sqlType: "INTEGER"),
         };
 
         // Act
@@ -214,30 +144,10 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange - Testing edge cases with column names
         var columns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "user_id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "first_name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "is_active",
-                CSharpType = "bool",
-                SqlType = "BOOLEAN",
-            },
-            new()
-            {
-                Name = "created_at",
-                CSharpType = "DateTime",
-                SqlType = "DATETIME",
-            },
+            ColumnTestData.Create(name: "user_id", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "first_name", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "is_active", cSharpType: "bool", sqlType: "BOOLEAN"),
+            ColumnTestData.Create(name: "created_at", cSharpType: "DateTime", sqlType: "DATETIME"),
         };
 
         // Act
@@ -264,12 +174,11 @@ public sealed class ModelGenerationIntegrationTests
         for (int i = 1; i <= 20; i++)
         {
             columns.Add(
-                new DatabaseColumn
-                {
-                    Name = $"Column{i}",
-                    CSharpType = i % 2 == 0 ? "string" : "int",
-                    SqlType = i % 2 == 0 ? "TEXT" : "INTEGER",
-                }
+                ColumnTestData.Create(
+                    name: $"Column{i}",
+                    cSharpType: i % 2 == 0 ? "string" : "int",
+                    sqlType: i % 2 == 0 ? "TEXT" : "INTEGER"
+                )
             );
         }
 
@@ -309,18 +218,8 @@ public sealed class ModelGenerationIntegrationTests
         var validColumns = new List<string> { "Id", "Name" };
         var allColumns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
+            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
         };
 
         // Act & Assert - Null parent name
@@ -380,24 +279,9 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange - Generate code and verify it contains proper C# syntax
         var columns = new List<DatabaseColumn>
         {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "CreatedAt",
-                CSharpType = "DateTime?",
-                SqlType = "DATETIME",
-            },
+            ColumnTestData.Create(name: "Id", cSharpType: "int", sqlType: "INTEGER"),
+            ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
+            ColumnTestData.Create(name: "CreatedAt", cSharpType: "DateTime?", sqlType: "DATETIME"),
         };
 
         // Act

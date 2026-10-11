@@ -1,4 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -8,7 +11,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests applying sync changes (insert, update, delete) to SQLite database.
 /// NO MOCKS - real file-based SQLite databases only! NO :memory:!
 /// </summary>
-public sealed class ChangeApplierIntegrationTests : IDisposable
+public sealed partial class ChangeApplierIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly string _dbPath;
@@ -27,16 +30,18 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         SyncSchema.SetOriginId(_db, _originId);
 
         // Create test table
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Age INTEGER,
-                Email TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Age INTEGER,
+                    Email TEXT
+                );
+                """
+        );
     }
 
     #region Insert Operations
@@ -45,13 +50,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_CreatesNewRecord()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30,\"Email\":\"alice@example.com\"}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_CreatesNewRecord_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -75,13 +80,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithNullPayload_ReturnsError()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: null,
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_WithNullPayload_ReturnsError_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -96,13 +101,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithEmptyPayload_ReturnsError()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_WithEmptyPayload_ReturnsError_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -117,25 +122,25 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_DuplicateKey_ReplacesExisting()
     {
         // Arrange - Insert first record
-        var entry1 = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30}",
-            Origin: "remote-origin",
+        var entry1 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
         ChangeApplierSQLite.ApplyChange(_db, entry1);
 
         // Act - Insert with same PK (should replace)
-        var entry2 = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice Updated\",\"Age\":31}",
-            Origin: "remote-origin",
+        var entry2 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
         var result = ChangeApplierSQLite.ApplyChange(_db, entry2);
@@ -161,13 +166,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange - Insert first
         InsertPerson("p1", "Alice", 30);
 
-        var entry = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice Updated\",\"Age\":31,\"Email\":\"alice.new@example.com\"}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Update_ModifiesExistingRecord_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -190,13 +195,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Update_NonExistingRecord_InsertsAsUpsert()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -221,13 +226,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange
         InsertPerson("p1", "Alice", 30);
 
-        var entry = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Delete_RemovesExistingRecord_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -246,13 +251,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Delete_NonExistingRecord_StillSucceeds()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"nonexistent\"}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Delete_NonExistingRecord_StillSucceeds_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -267,13 +272,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Delete_InvalidPkValue_ReturnsError()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Delete_InvalidPkValue_ReturnsError_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -292,13 +297,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesStringValues()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Email\":\"alice@example.com\"}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesStringValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -313,13 +318,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesIntegerValues()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":25}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesIntegerValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -338,13 +343,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesNullValues()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Email\":null}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesNullValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -363,17 +368,19 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesBooleanValues()
     {
         // Arrange - Create table with boolean-like column
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)";
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)"
+        );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Settings",
-            PkValue: "{\"Id\":\"s1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"s1\",\"Enabled\":true}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesBooleanValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -392,17 +399,19 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesFalseBooleanValues()
     {
         // Arrange
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)";
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)"
+        );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Settings",
-            PkValue: "{\"Id\":\"s1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"s1\",\"Enabled\":false}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesFalseBooleanValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -421,17 +430,19 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_HandlesDoubleValues()
     {
         // Arrange
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Product (Id TEXT PRIMARY KEY, Price REAL)";
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "CREATE TABLE Product (Id TEXT PRIMARY KEY, Price REAL)"
+        );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Product",
-            PkValue: "{\"Id\":\"prod1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"prod1\",\"Price\":99.99}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_HandlesDoubleValues_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -458,25 +469,27 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse()
     {
         // Arrange - Create FK relationship
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-            CREATE TABLE Employee (
-                Id TEXT PRIMARY KEY,
-                Name TEXT,
-                DeptId TEXT REFERENCES Department(Id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                PRAGMA foreign_keys = ON;
+                CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
+                CREATE TABLE Employee (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT,
+                    DeptId TEXT REFERENCES Department(Id)
+                );
+                """
+        );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Employee",
-            PkValue: "{\"Id\":\"e1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"e1\",\"Name\":\"John\",\"DeptId\":\"nonexistent\"}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -492,26 +505,28 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithValidForeignKey_Succeeds()
     {
         // Arrange - Create FK relationship and parent record
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-            INSERT INTO Department (Id, Name) VALUES ('d1', 'Engineering');
-            CREATE TABLE Employee (
-                Id TEXT PRIMARY KEY,
-                Name TEXT,
-                DeptId TEXT REFERENCES Department(Id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                PRAGMA foreign_keys = ON;
+                CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
+                INSERT INTO Department (Id, Name) VALUES ('d1', 'Engineering');
+                CREATE TABLE Employee (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT,
+                    DeptId TEXT REFERENCES Department(Id)
+                );
+                """
+        );
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Employee",
-            PkValue: "{\"Id\":\"e1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"e1\",\"Name\":\"John\",\"DeptId\":\"d1\"}",
-            Origin: "remote-origin",
+        var entry = Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -533,33 +548,9 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange
         var entries = new[]
         {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"p1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-                "origin",
-                Timestamp
-            ),
-            new SyncLogEntry(
-                2,
-                "Person",
-                "{\"Id\":\"p2\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
-                "origin",
-                Timestamp
-            ),
-            new SyncLogEntry(
-                3,
-                "Person",
-                "{\"Id\":\"p3\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
-                "origin",
-                Timestamp
-            ),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_1(),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_2(),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_3(),
         };
 
         // Act
@@ -586,12 +577,12 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
 
     private void InsertPerson(string id, string name, int age)
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES (@id, @name, @age)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@age", age);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: cmd =>
+                cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES (@id, @name, @age)",
+            parameters: () => [("@id", id), ("@name", name), ("@age", age)]
+        );
     }
 
     /// <inheritdoc/>

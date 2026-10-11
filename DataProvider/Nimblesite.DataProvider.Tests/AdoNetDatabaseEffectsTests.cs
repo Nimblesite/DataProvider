@@ -21,31 +21,19 @@ public sealed class AdoNetDatabaseEffectsTests
     private static AdoNetDatabaseEffects CreateSqliteEffects() =>
         new(cs => new SqliteConnection(cs), MapType);
 
-    [Fact]
-    public async Task Rejects_null_connection_string()
+    [Theory]
+    // Rejects_null_connection_string
+    [InlineData("", "SELECT 1")]
+    // Rejects_whitespace_sql
+    [InlineData("Data Source=:memory:", "   ")]
+    // Returns_error_for_invalid_sql
+    [InlineData("Data Source=:memory:", "SELECT * FROM table_that_does_not_exist")]
+    public async Task Rejects_null_connection_string_Cases(string caseValue0, string caseValue1)
     {
         var effects = CreateSqliteEffects();
         var result = await effects.GetColumnMetadataFromSqlAsync(
-            "",
-            "SELECT 1",
-            Array.Empty<ParameterInfo>()
-        );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-    }
-
-    [Fact]
-    public async Task Rejects_whitespace_sql()
-    {
-        var effects = CreateSqliteEffects();
-        var result = await effects.GetColumnMetadataFromSqlAsync(
-            "Data Source=:memory:",
-            "   ",
+            caseValue0,
+            caseValue1,
             Array.Empty<ParameterInfo>()
         );
         Assert.True(
@@ -124,24 +112,6 @@ public sealed class AdoNetDatabaseEffectsTests
         Assert.Equal(2, ok.Value.Count);
         Assert.Contains(ok.Value, c => c.Name == "matched_id");
         Assert.Contains(ok.Value, c => c.Name == "matched_limit");
-    }
-
-    [Fact]
-    public async Task Returns_error_for_invalid_sql()
-    {
-        var effects = CreateSqliteEffects();
-        var result = await effects.GetColumnMetadataFromSqlAsync(
-            "Data Source=:memory:",
-            "SELECT * FROM table_that_does_not_exist",
-            Array.Empty<ParameterInfo>()
-        );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
     }
 
     [Fact]

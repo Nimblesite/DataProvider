@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using Microsoft.Data.SqlClient;
+using Nimblesite.Sync.SqlServer;
 
 // TODO: Logging!!
 #pragma warning disable IDE0060 // Remove unused parameter
@@ -31,6 +33,9 @@ public static class SyncHelpers
                 batchSize,
                 logger
             ),
+            "sqlserver" or "mssql" => WithSqlServer(connectionString, connection =>
+                SqlServerSyncStore.FetchChanges(connection: connection, fromVersion: fromVersion, limit: batchSize, logger: logger)
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -48,6 +53,7 @@ public static class SyncHelpers
         {
             "sqlite" => ApplyChangesToSqlite(connectionString, changes, originId, logger),
             "postgres" => ApplyChangesToPostgres(connectionString, changes, originId, logger),
+            "sqlserver" or "mssql" => ApplyChangesToSqlServer(connectionString, changes, originId, logger),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -64,6 +70,8 @@ public static class SyncHelpers
         {
             "sqlite" => UpsertClientSqlite(connectionString, client, logger),
             "postgres" => UpsertClientPostgres(connectionString, client, logger),
+            "sqlserver" or "mssql" => WithSqlServer(connectionString, connection =>
+                SqlServerSyncStore.UpsertClient(connection: connection, client: client).Match(ok => ok, _ => false)),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -75,6 +83,8 @@ public static class SyncHelpers
         {
             "sqlite" => GetMaxVersionSqlite(connectionString, logger),
             "postgres" => GetMaxVersionPostgres(connectionString, logger),
+            "sqlserver" or "mssql" => WithSqlServer(connectionString, connection =>
+                SqlServerSyncStore.GetMaxVersion(connection: connection).Match(ok => ok, _ => 0)),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -229,4 +239,25 @@ public static class SyncHelpers
         conn.Open();
         return Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
     }
+
+    private static T WithSqlServer<T>(string connectionString, Func<SqlConnection, T> run)
+    {
+        using var connection = new SqlConnection(connectionString);
+        connection.Open();
+        return run(connection);
+    }
+
+    private static int ApplyChangesToSqlServer(string connectionString, List<SyncLogEntryDto> changes, string originId, ILogger logger) =>
+        WithSqlServer(connectionString, connection =>
+        {
+            var suppression = SqlServerSyncStore.SetSuppression(connection: connection, enabled: true);
+            if (suppression is not Outcome.Result<bool, SyncError>.Ok<bool, SyncError> { Value: true }) return 0;
+            try
+            {
+                return ApplyChangesCore(changes: changes, originId: originId, applyChange: entry =>
+                    SqlServerChangeApplier.ApplyChange(connection: connection, entry: entry, logger: logger)
+                        is Outcome.Result<bool, SyncError>.Ok<bool, SyncError> { Value: true });
+            }
+            finally { SqlServerSyncStore.SetSuppression(connection: connection, enabled: false); }
+        });
 }

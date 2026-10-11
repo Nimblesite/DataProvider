@@ -1,4 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
+using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -106,9 +108,10 @@ internal static class SqliteTestDb
 
     public static void Execute(SqliteConnection connection, string sql)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: connection,
+            configure: command => command.CommandText = sql
+        );
     }
 
     public static int CountRows(SqliteConnection connection, string tableName) =>

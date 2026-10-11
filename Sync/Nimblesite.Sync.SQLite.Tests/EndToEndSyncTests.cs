@@ -1,4 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
@@ -235,15 +238,17 @@ public sealed class EndToEndSyncTests : IDisposable
         SyncSchema.SetOriginId(connection, originId);
 
         // Create Person table
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: connection,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT NOT NULL
+                );
+                """
+        );
 
         // Use TriggerGenerator to create sync triggers (spec Section 9)
         var triggerResult = TriggerGenerator.CreateTriggers(connection, "Person", TestLogger.L);
@@ -269,10 +274,11 @@ public sealed class EndToEndSyncTests : IDisposable
 
     private static void DeletePerson(SqliteConnection db, string id)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "DELETE FROM Person WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
+            parameters: () => [("@id", id)]
+        );
     }
 
     private static (string Id, string Name, string Email)? GetPerson(SqliteConnection db, string id)

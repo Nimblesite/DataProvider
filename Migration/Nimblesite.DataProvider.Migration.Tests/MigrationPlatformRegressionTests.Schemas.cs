@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed partial record MigrationPlatformRegressionTests
@@ -6,112 +7,83 @@ public sealed partial record MigrationPlatformRegressionTests
         bool stripeIdNullable,
         bool externalIdNullable
     ) =>
-        new()
-        {
-            Name = "issue109",
-            Tables =
+        SchemaTestData.Schema(
+            name: "issue109",
+            tables:
             [
                 ParentTable("tenants"),
-                new TableDefinition
-                {
-                    Name = "topup",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "topup",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "stripe_payment_intent_id",
-                            Type = PortableTypes.Text,
-                            IsNullable = stripeIdNullable,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "required_receipt_reference",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "external_id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = externalIdNullable,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "optional_note",
-                            Type = PortableTypes.Text,
-                            IsNullable = true,
-                        },
+                        SchemaTestData.Column(
+                            name: "id",
+                            type: PortableTypes.Uuid,
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "stripe_payment_intent_id",
+                            type: PortableTypes.Text,
+                            isNullable: stripeIdNullable
+                        ),
+                        SchemaTestData.Column(
+                            name: "required_receipt_reference",
+                            type: PortableTypes.Text,
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "external_id",
+                            type: PortableTypes.Uuid,
+                            isNullable: externalIdNullable
+                        ),
+                        SchemaTestData.Column(
+                            name: "optional_note",
+                            type: PortableTypes.Text,
+                            isNullable: true
+                        ),
                         UuidColumn("tenant_id"),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    ForeignKeys = [ForeignKey("tenant_id", "tenants")],
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    foreignKeys: [ForeignKey("tenant_id", "tenants")]
+                ),
+            ]
+        );
 
     private static SchemaDefinition ForeignKeySchema(bool parent, bool column, bool fk)
     {
-        var endUser = new TableDefinition
-        {
-            Name = "tenant_end_users",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
-        var events = new TableDefinition
-        {
-            Name = "usage_events",
-            Columns = column
+        var endUser = Fixture_ForeignKeySchema_1(
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey
+        );
+        var events = SchemaTestData.Table(
+            name: "usage_events",
+            columns: column
                 ?
                 [
-                    new ColumnDefinition
-                    {
-                        Name = "id",
-                        Type = PortableTypes.Uuid,
-                        IsNullable = false,
-                    },
-                    new ColumnDefinition { Name = "end_user_id", Type = PortableTypes.Uuid },
+                    SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
+                    SchemaTestData.Column(name: "end_user_id", type: PortableTypes.Uuid),
                 ]
-                :
-                [
-                    new ColumnDefinition
-                    {
-                        Name = "id",
-                        Type = PortableTypes.Uuid,
-                        IsNullable = false,
-                    },
-                ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            ForeignKeys = fk ? [EndUserForeignKey()] : [],
-        };
-        return new SchemaDefinition
-        {
-            Name = "issues79_80",
-            Tables = parent ? [endUser, events] : [events],
-        };
+                : [SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false)],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            foreignKeys: fk ? [EndUserForeignKey()] : []
+        );
+        return SchemaTestData.Schema(
+            name: "issues79_80",
+            tables: parent ? [endUser, events] : [events]
+        );
     }
 
     private static ForeignKeyDefinition EndUserForeignKey() =>
-        new()
-        {
-            Columns = ["end_user_id"],
-            ReferencedTable = "tenant_end_users",
-            ReferencedColumns = ["id"],
-            OnDelete = ForeignKeyAction.SetNull,
-        };
+        SchemaTestData.ForeignKey(
+            columns: ["end_user_id"],
+            referencedTable: "tenant_end_users",
+            referencedColumns: ["id"],
+            onDelete: ForeignKeyAction.SetNull
+        );
 
     private static SchemaDefinition ForeignKeyCleanupSchema(
         bool includeTenantForeignKey,
@@ -121,83 +93,69 @@ public sealed partial record MigrationPlatformRegressionTests
     {
         var tenants = ParentTable("tenants");
         var projects = ParentTable("projects");
-        var events = new TableDefinition
-        {
-            Name = "usage_events",
-            Columns = [UuidColumn("id"), UuidColumn("tenant_id"), UuidColumn("project_id")],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            ForeignKeys =
-                includeTenantForeignKey && includeProjectForeignKey
+        var events = SchemaTestData.Table(
+            name: "usage_events",
+            columns: [UuidColumn("id"), UuidColumn("tenant_id"), UuidColumn("project_id")],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            foreignKeys: includeTenantForeignKey && includeProjectForeignKey
                     ? [ForeignKey("tenant_id", "tenants"), ForeignKey("project_id", "projects")]
                 : includeTenantForeignKey ? [ForeignKey("tenant_id", "tenants")]
-                : [ForeignKey("project_id", "projects")],
-        };
-        var audit = new TableDefinition
-        {
-            Name = "audit_events",
-            Columns = [UuidColumn("id"), UuidColumn("tenant_id")],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            ForeignKeys = [ForeignKey("tenant_id", "tenants")],
-        };
-        return new SchemaDefinition
-        {
-            Name = "issue105",
-            Tables = includeObsoleteTable
+                : [ForeignKey("project_id", "projects")]
+        );
+        var audit = SchemaTestData.Table(
+            name: "audit_events",
+            columns: [UuidColumn("id"), UuidColumn("tenant_id")],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            foreignKeys: [ForeignKey("tenant_id", "tenants")]
+        );
+        return SchemaTestData.Schema(
+            name: "issue105",
+            tables: includeObsoleteTable
                 ? [tenants, projects, events, audit, ParentTable("obsolete_records")]
-                : [tenants, projects, events, audit],
-        };
+                : [tenants, projects, events, audit]
+        );
     }
 
     private static TableDefinition ParentTable(string name) =>
-        new()
-        {
-            Name = name,
-            Columns = [UuidColumn("id")],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
+        SchemaTestData.Table(
+            name: name,
+            columns: [UuidColumn("id")],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+        );
 
     private static ColumnDefinition UuidColumn(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: name, type: PortableTypes.Uuid, isNullable: false);
 
     private static ForeignKeyDefinition ForeignKey(string column, string referencedTable) =>
-        new()
-        {
-            Columns = [column],
-            ReferencedTable = referencedTable,
-            ReferencedColumns = ["id"],
-            OnDelete = ForeignKeyAction.Cascade,
-        };
+        SchemaTestData.ForeignKey(
+            columns: [column],
+            referencedTable: referencedTable,
+            referencedColumns: ["id"],
+            onDelete: ForeignKeyAction.Cascade
+        );
 
     private static SchemaDefinition PolicySchema(bool usingAllowed, bool checkAllowed) =>
-        new()
-        {
-            Name = "issue98",
-            Tables =
+        SchemaTestData.Schema(
+            name: "issue98",
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns = [UuidColumn("id")],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                SchemaTestData.Table(
+                    name: "documents",
+                    columns: [UuidColumn("id")],
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "documents_access",
-                                Operations = [RlsOperation.All],
-                                UsingLql = usingAllowed ? "id is not null" : "id is null",
-                                WithCheckLql = checkAllowed ? "id is not null" : "id is null",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "documents_access",
+                                operations: [RlsOperation.All],
+                                usingLql: usingAllowed ? "id is not null" : "id is null",
+                                withCheckLql: checkAllowed ? "id is not null" : "id is null"
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 }

@@ -1,7 +1,10 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Tests.Shared;
 using PullResultResult = Outcome.Result<
     Nimblesite.Sync.Core.PullResult,
     Nimblesite.Sync.Core.SyncError
@@ -420,101 +423,103 @@ public sealed class SyncCoordinatorTests : IDisposable
         var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"""
-            PRAGMA foreign_keys = ON;
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = $"""
+                PRAGMA foreign_keys = ON;
 
-            CREATE TABLE _sync_state (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
+                CREATE TABLE _sync_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
 
-            CREATE TABLE _sync_session (
-                sync_active INTEGER DEFAULT 0
-            );
-            INSERT INTO _sync_session VALUES (0);
+                CREATE TABLE _sync_session (
+                    sync_active INTEGER DEFAULT 0
+                );
+                INSERT INTO _sync_session VALUES (0);
 
-            CREATE TABLE _sync_log (
-                version INTEGER PRIMARY KEY AUTOINCREMENT,
-                table_name TEXT NOT NULL,
-                pk_value TEXT NOT NULL,
-                operation TEXT NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
-                payload TEXT,
-                origin TEXT NOT NULL,
-                timestamp TEXT NOT NULL
-            );
+                CREATE TABLE _sync_log (
+                    version INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    pk_value TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
+                    payload TEXT,
+                    origin TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
+                );
 
-            INSERT INTO _sync_state VALUES ('origin_id', '{originId}');
-            INSERT INTO _sync_state VALUES ('last_server_version', '0');
-            INSERT INTO _sync_state VALUES ('last_push_version', '0');
+                INSERT INTO _sync_state VALUES ('origin_id', '{originId}');
+                INSERT INTO _sync_state VALUES ('last_server_version', '0');
+                INSERT INTO _sync_state VALUES ('last_push_version', '0');
 
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL
+                );
 
-            CREATE TABLE Parent (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
+                CREATE TABLE Parent (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL
+                );
 
-            CREATE TABLE Child (
-                Id TEXT PRIMARY KEY,
-                ParentId TEXT NOT NULL REFERENCES Parent(Id),
-                Name TEXT NOT NULL
-            );
+                CREATE TABLE Child (
+                    Id TEXT PRIMARY KEY,
+                    ParentId TEXT NOT NULL REFERENCES Parent(Id),
+                    Name TEXT NOT NULL
+                );
 
-            -- Sync triggers
-            CREATE TRIGGER Person_sync_insert AFTER INSERT ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
+                -- Sync triggers
+                CREATE TRIGGER Person_sync_insert AFTER INSERT ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES ('Person', json_object('Id', NEW.Id), 'insert',
+                            json_object('Id', NEW.Id, 'Name', NEW.Name),
+                            (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                END;
 
-            CREATE TRIGGER Person_sync_update AFTER UPDATE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', NEW.Id), 'update',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
+                CREATE TRIGGER Person_sync_update AFTER UPDATE ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES ('Person', json_object('Id', NEW.Id), 'update',
+                            json_object('Id', NEW.Id, 'Name', NEW.Name),
+                            (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                END;
 
-            CREATE TRIGGER Person_sync_delete AFTER DELETE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', OLD.Id), 'delete', NULL,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
+                CREATE TRIGGER Person_sync_delete AFTER DELETE ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES ('Person', json_object('Id', OLD.Id), 'delete', NULL,
+                            (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                END;
 
-            CREATE TRIGGER Parent_sync_insert AFTER INSERT ON Parent
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Parent', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
+                CREATE TRIGGER Parent_sync_insert AFTER INSERT ON Parent
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES ('Parent', json_object('Id', NEW.Id), 'insert',
+                            json_object('Id', NEW.Id, 'Name', NEW.Name),
+                            (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                END;
 
-            CREATE TRIGGER Child_sync_insert AFTER INSERT ON Child
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Child', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'ParentId', NEW.ParentId, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-            """;
-        cmd.ExecuteNonQuery();
+                CREATE TRIGGER Child_sync_insert AFTER INSERT ON Child
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES ('Child', json_object('Id', NEW.Id), 'insert',
+                            json_object('Id', NEW.Id, 'ParentId', NEW.ParentId, 'Name', NEW.Name),
+                            (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                            strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                END;
+                """
+        );
 
         return conn;
     }
@@ -643,30 +648,31 @@ public sealed class SyncCoordinatorTests : IDisposable
 
     private static void InsertPerson(SqliteConnection db, string id, string name)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name) VALUES ($id, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd => cmd.CommandText = "INSERT INTO Person (Id, Name) VALUES ($id, $name)",
+            parameters: () => [("$id", id), ("$name", name)]
+        );
     }
 
     private static void InsertParent(SqliteConnection db, string id, string name)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd => cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)",
+            parameters: () => [("$id", id), ("$name", name)]
+        );
     }
 
     private static void InsertChild(SqliteConnection db, string id, string parentId, string name)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$parentId", parentId);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)",
+            parameters: () => [("$id", id), ("$parentId", parentId), ("$name", name)]
+        );
     }
 
     private static void InsertSyncLogEntry(
@@ -678,17 +684,22 @@ public sealed class SyncCoordinatorTests : IDisposable
         string origin
     )
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ($table, $pk, $op, $payload, $origin, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-            """;
-        cmd.Parameters.AddWithValue("$table", tableName);
-        cmd.Parameters.AddWithValue("$pk", pkValue);
-        cmd.Parameters.AddWithValue("$op", operation);
-        cmd.Parameters.AddWithValue("$payload", payload);
-        cmd.Parameters.AddWithValue("$origin", origin);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd =>
+                cmd.CommandText = """
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES ($table, $pk, $op, $payload, $origin, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+            parameters: () =>
+                [
+                    ("$table", tableName),
+                    ("$pk", pkValue),
+                    ("$op", operation),
+                    ("$payload", payload),
+                    ("$origin", origin),
+                ]
+        );
     }
 
     private static string? GetName(SqliteConnection db, string table, string id)

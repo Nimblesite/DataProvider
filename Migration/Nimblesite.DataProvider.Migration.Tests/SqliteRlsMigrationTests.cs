@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-SQLITE] tests from docs/specs/rls-spec.md.
@@ -254,7 +255,7 @@ public sealed class SqliteRlsMigrationTests
     }
 
     private static SchemaDefinition DocumentsSchema(RlsPolicyDefinition policy) =>
-        new() { Name = "sqlite", Tables = [DocumentsTable(policy)] };
+        SchemaTestData.Schema(name: "sqlite", tables: [DocumentsTable(policy)]);
 
     private static string LegacySelectViewDdl(RlsPolicyDefinition policy) =>
         SqliteDdlGenerator
@@ -272,69 +273,55 @@ public sealed class SqliteRlsMigrationTests
             );
 
     private static TableDefinition DocumentsTable(RlsPolicyDefinition policy) =>
-        new()
-        {
-            Schema = "main",
-            Name = "Documents",
-            Columns =
+        SchemaTestData.Table(
+            schema: "main",
+            name: "Documents",
+            columns:
             [
                 RequiredText("Id"),
                 RequiredText("OwnerId"),
-                new ColumnDefinition { Name = "Title", Type = PortableTypes.Text },
+                SchemaTestData.Column(name: "Title", type: PortableTypes.Text),
             ],
-            PrimaryKey = new PrimaryKeyDefinition { Name = "PK_Documents", Columns = ["Id"] },
-            RowLevelSecurity = new RlsPolicySetDefinition { Policies = [policy] },
-        };
+            primaryKey: SchemaTestData.PrimaryKey(name: "PK_Documents", columns: ["Id"]),
+            rowLevelSecurity: new RlsPolicySetDefinition { Policies = [policy] }
+        );
 
     private static SchemaDefinition GroupMembershipSchema() =>
-        new()
-        {
-            Name = "sqlite",
-            Tables = [MembershipTable(), DocumentsTable(GroupMembershipPolicy())],
-        };
+        SchemaTestData.Schema(
+            name: "sqlite",
+            tables: [MembershipTable(), DocumentsTable(GroupMembershipPolicy())]
+        );
 
     private static TableDefinition MembershipTable() =>
-        new()
-        {
-            Schema = "main",
-            Name = "UserGroupMemberships",
-            Columns = [RequiredText("Id"), RequiredText("UserId")],
-            PrimaryKey = new PrimaryKeyDefinition
-            {
-                Name = "PK_UserGroupMemberships",
-                Columns = ["Id"],
-            },
-        };
+        SchemaTestData.Table(
+            schema: "main",
+            name: "UserGroupMemberships",
+            columns: [RequiredText("Id"), RequiredText("UserId")],
+            primaryKey: SchemaTestData.PrimaryKey(name: "PK_UserGroupMemberships", columns: ["Id"])
+        );
 
     private static ColumnDefinition RequiredText(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Text,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: name, type: PortableTypes.Text, isNullable: false);
 
     private static RlsPolicyDefinition OwnerPolicy(IReadOnlyList<RlsOperation> ops) =>
-        new()
-        {
-            Name = "owner_isolation",
-            Operations = ops,
-            UsingLql = "OwnerId = current_user_id()",
-            WithCheckLql = "OwnerId = current_user_id()",
-        };
+        SchemaTestData.RlsPolicy(
+            name: "owner_isolation",
+            operations: ops,
+            usingLql: "OwnerId = current_user_id()",
+            withCheckLql: "OwnerId = current_user_id()"
+        );
 
     private static RlsPolicyDefinition GroupMembershipPolicy() =>
-        new()
-        {
-            Name = "group_member_insert",
-            Operations = [RlsOperation.Insert],
-            WithCheckLql = """
-                exists(
-                  UserGroupMemberships
-                  |> filter(fn(m) => m.UserId = current_user_id())
-                )
-                """,
-        };
+        SchemaTestData.RlsPolicy(
+            name: "group_member_insert",
+            operations: [RlsOperation.Insert],
+            withCheckLql: """
+            exists(
+              UserGroupMemberships
+              |> filter(fn(m) => m.UserId = current_user_id())
+            )
+            """
+        );
 
     private static void InsertDocument(SqliteConnection connection, string id, string ownerId) =>
         SqliteTestDb.Execute(

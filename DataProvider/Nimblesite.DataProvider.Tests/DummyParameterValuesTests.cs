@@ -49,25 +49,17 @@ public sealed class DummyParameterValuesTests
         Assert.IsType<DateTime>(value);
     }
 
-    [Fact]
-    public void Id_match_returns_int_one()
+    [Theory]
+    // Id_match_returns_int_one
+    [InlineData("id", 1)]
+    // Limit_match_returns_int_hundred
+    [InlineData("limit", 100)]
+    // Offset_match_returns_int_zero
+    [InlineData("offset", 0)]
+    public void Id_match_returns_int_one_Cases(string caseValue0, int caseValue1)
     {
-        var value = DummyParameterValues.GetDummyValueForParameter(new ParameterInfo("id"));
-        Assert.Equal(1, value);
-    }
-
-    [Fact]
-    public void Limit_match_returns_int_hundred()
-    {
-        var value = DummyParameterValues.GetDummyValueForParameter(new ParameterInfo("limit"));
-        Assert.Equal(100, value);
-    }
-
-    [Fact]
-    public void Offset_match_returns_int_zero()
-    {
-        var value = DummyParameterValues.GetDummyValueForParameter(new ParameterInfo("offset"));
-        Assert.Equal(0, value);
+        var value = DummyParameterValues.GetDummyValueForParameter(new ParameterInfo(caseValue0));
+        Assert.Equal(caseValue1, value);
     }
 
     [Fact]

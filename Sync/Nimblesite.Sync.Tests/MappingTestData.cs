@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace Nimblesite.Sync.Tests;
 
 // Implements [SYNC-MAPPING-TEST-DATA].
@@ -33,5 +35,21 @@ internal static class MappingTestData
             Version: "1.0",
             UnmappedTableBehavior: UnmappedTableBehavior.Strict,
             Mappings: mappings
+        );
+
+    internal static TExpected Expected<TExpected>(
+        SyncLogEntry entry,
+        SyncMappingConfig config,
+        ILogger logger,
+        MappingDirection direction = MappingDirection.Push
+    )
+        where TExpected : MappingResult =>
+        Assert.IsType<TExpected>(
+            @object: MappingEngine.ApplyMapping(
+                entry: entry,
+                config: config,
+                direction: direction,
+                logger: logger
+            )
         );
 }

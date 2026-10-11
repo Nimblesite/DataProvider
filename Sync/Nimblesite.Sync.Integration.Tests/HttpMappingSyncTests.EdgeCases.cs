@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Integration.Tests;
 
 // Implements [SYNC-MAPPING-E2E-SETUP].
@@ -12,12 +15,12 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert with NULL email
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-null', 'Null Email User', NULL)";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-null', 'Null Email User', NULL)"
+        );
 
         var changes = SyncLogRepository.FetchChanges(source, 0, 100);
         var changesList = ((SyncLogListOk)changes).Value;
@@ -168,12 +171,12 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert with empty string (not NULL)
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-empty', 'Empty Email', '')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-empty', 'Empty Email', '')"
+        );
 
         var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
@@ -242,12 +245,12 @@ public sealed partial class HttpMappingSyncTests
 
         var mappingConfig = UserToCustomerConfig(columnMappings, []);
 
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-const', 'Constant Test', 'const@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-const', 'Constant Test', 'const@example.com')"
+        );
 
         var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
@@ -273,12 +276,12 @@ public sealed partial class HttpMappingSyncTests
             ["FullName", "EmailAddress", "PasswordHash", "SecurityStamp", "CreatedAt"]
         );
 
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-excl', 'Excluded', 'excl@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u-excl', 'Excluded', 'excl@example.com')"
+        );
 
         var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 

@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
@@ -10,49 +11,34 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// enum-style CHECK was silently skipped because the diff matched on name
 /// only.
 /// </summary>
-public sealed class SchemaDiffCheckConstraintIssue57Tests
+public sealed partial class SchemaDiffCheckConstraintIssue57Tests
 {
     [Fact]
     public void Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
                     CheckConstraints =
                     [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression =
-                                "kind IN ('request','input_tokens','output_tokens','sandbox_seconds')",
-                        },
+                        SchemaTestData.CheckConstraint(
+                            name: "usage_events_kind_check",
+                            expression: "kind IN ('request','input_tokens','output_tokens','sandbox_seconds')"
+                        ),
                     ],
                 },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                current.Tables[0] with
-                {
-                    CheckConstraints =
-                    [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression =
-                                "kind IN ('llm_request','llm_input_tokens','llm_output_tokens','machine_seconds')",
-                        },
-                    ],
-                },
-            ],
-        };
+            ]
+        );
+        var desired = Fixture_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(
+            name: name,
+            tables: tables,
+            current: current,
+            name: name,
+            expression: expression
+        );
 
         var ops = SchemaDiffAssertions.Diff(
             current: current,
@@ -78,10 +64,9 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
     [Fact]
     public void Calculate_ColumnCheckConstraintExpressionChanged_DropsAndReadds()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
@@ -95,8 +80,8 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
                         },
                     ],
                 },
-            ],
-        };
+            ]
+        );
         var desired = current with
         {
             Tables =
@@ -134,24 +119,22 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
     [Fact]
     public void Calculate_CheckConstraintUnchanged_EmitsNoCheckConstraintOps()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "stable",
-            Tables =
+        var schema = SchemaTestData.Schema(
+            name: "stable",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
                     CheckConstraints =
                     [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression = "kind IN ('a','b')",
-                        },
+                        SchemaTestData.CheckConstraint(
+                            name: "usage_events_kind_check",
+                            expression: "kind IN ('a','b')"
+                        ),
                     ],
                 },
-            ],
-        };
+            ]
+        );
 
         var ops = SchemaDiffAssertions.Diff(
             current: schema,
@@ -164,25 +147,14 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
     }
 
     private static TableDefinition BaseUsageEventsTable() =>
-        new()
-        {
-            Schema = "public",
-            Name = "usage_events",
-            Columns =
+        SchemaTestData.Table(
+            schema: "public",
+            name: "usage_events",
+            columns:
             [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "kind",
-                    Type = PortableTypes.Text,
-                    IsNullable = false,
-                },
+                SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
+                SchemaTestData.Column(name: "kind", type: PortableTypes.Text, isNullable: false),
             ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+        );
 }

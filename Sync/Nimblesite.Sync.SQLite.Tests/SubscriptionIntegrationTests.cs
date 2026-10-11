@@ -8,7 +8,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests subscription creation, matching, and notification delivery.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class SubscriptionIntegrationTests : IDisposable
+public sealed partial class SubscriptionIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly string _dbPath = Path.Combine(
@@ -120,13 +120,13 @@ public sealed class SubscriptionIntegrationTests : IDisposable
             SubscriptionManager.CreateTableSubscription("sub-3", "origin-3", "Products", Timestamp),
         };
 
-        var change = new SyncLogEntry(
-            Version: 100,
-            TableName: "Orders",
-            PkValue: "{\"Id\":\"order-123\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"order-123\",\"Status\":\"shipped\",\"Total\":99.99}",
-            Origin: "server-origin",
+        var change = Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
             Timestamp: Timestamp
         );
 
@@ -346,15 +346,7 @@ public sealed class SubscriptionIntegrationTests : IDisposable
             "Orders",
             Timestamp
         );
-        var change = new SyncLogEntry(
-            1,
-            "Orders",
-            "{\"Id\":\"o1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"o1\",\"Status\":\"shipped\",\"Amount\":150.00}",
-            "server",
-            Timestamp
-        );
+        var change = Fixture_Spec10_7_Notifications_IncludeFullPayload_1();
 
         // Act
         var notifications = SubscriptionManager.CreateNotifications([sub], change);

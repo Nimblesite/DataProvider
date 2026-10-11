@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
 using SchemaIntegrityOk = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -21,82 +22,50 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 ///   3. An inspector may not emit <c>AllTablesInSchema</c> directly even when
 ///      YAML declares it.
 /// </summary>
-public sealed class SchemaIntegrityVerifierIssue59Tests
+public sealed partial class SchemaIntegrityVerifierIssue59Tests
 {
     [Fact]
     public void Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral()
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'pending'::text",
-                        },
-                    ],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'pending'",
-                        },
-                    ],
-                },
-            ],
-        };
+        var live = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            defaultValue: defaultValue
+        );
+        var desired = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            defaultValue: defaultValue
+        );
 
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
 
-        var changedDefault = new SchemaDefinition
-        {
-            Name = "changed-default",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'failed'",
-                        },
-                    ],
-                },
-            ],
-        };
+        var changedDefault =
+            Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3(
+                name: name,
+                tables: tables,
+                schema: schema,
+                name: name,
+                columns: columns,
+                name: name,
+                type: type,
+                isNullable: isNullable,
+                defaultValue: defaultValue
+            );
 
         var changedDefaultMismatches = Verify(live: live, desired: changedDefault);
 
@@ -108,51 +77,29 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector()
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_admin"],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_user", "app_admin"],
-                },
-            ],
-        };
+        var live =
+            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_1(
+                name: name,
+                grants: grants
+            );
+        var desired =
+            Fixture_Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_2(
+                name: name,
+                grants: grants,
+                schema: schema,
+                target: target,
+                privileges: privileges,
+                roles: roles
+            );
 
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
 
-        var missingAdminGrant = new SchemaDefinition
-        {
-            Name = "missing-admin-grant",
-            Grants = [live.Grants[0]],
-        };
+        var missingAdminGrant = SchemaTestData.Schema(
+            name: "missing-admin-grant",
+            grants: [live.Grants[0]]
+        );
 
         var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
 
@@ -164,64 +111,36 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
     [Fact]
     public void Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector()
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
-            [
-                new TableDefinition { Schema = "public", Name = "a" },
-                new TableDefinition { Schema = "public", Name = "b" },
-            ],
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "a",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "b",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition { Schema = "public", Name = "a" },
-                new TableDefinition { Schema = "public", Name = "b" },
-            ],
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-            ],
-        };
+        var live =
+            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_1(
+                schema: schema,
+                name: name,
+                grants: grants,
+                schema: schema,
+                target: target,
+                objectName: objectName,
+                privileges: privileges,
+                roles: roles
+            );
+        var desired =
+            Fixture_Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector_2(
+                name: name,
+                tables: tables,
+                schema: schema,
+                target: target,
+                privileges: privileges,
+                roles: roles
+            );
 
         var mismatches = Verify(live: live, desired: desired);
 
         Assert.Empty(mismatches);
 
-        var missingTableGrant = new SchemaDefinition
-        {
-            Name = "missing-table-grant",
-            Tables = live.Tables,
-            Grants = [live.Grants[0]],
-        };
+        var missingTableGrant = SchemaTestData.Schema(
+            name: "missing-table-grant",
+            tables: live.Tables,
+            grants: [live.Grants[0]]
+        );
 
         var missingTableMismatches = Verify(live: missingTableGrant, desired: desired);
 

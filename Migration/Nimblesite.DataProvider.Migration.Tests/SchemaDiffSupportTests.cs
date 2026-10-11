@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
@@ -58,13 +59,12 @@ public sealed class SchemaDiffSupportTests
         {
             Grants =
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT"],
-                    Roles = ["app_user"],
-                },
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.AllTablesInSchema,
+                    privileges: ["SELECT"],
+                    roles: ["app_user"]
+                ),
             ],
         };
 
@@ -82,14 +82,13 @@ public sealed class SchemaDiffSupportTests
         {
             Grants =
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                    RunAs = "schema_owner",
-                },
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.AllTablesInSchema,
+                    privileges: ["SELECT", "INSERT"],
+                    roles: ["app_user"],
+                    runAs: "schema_owner"
+                ),
             ],
         };
 
@@ -107,15 +106,14 @@ public sealed class SchemaDiffSupportTests
         {
             Grants =
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "auth",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["SELECT"],
-                    Roles = ["app_user"],
-                    RunAs = "supabase_admin",
-                },
+                SchemaTestData.PostgresGrant(
+                    schema: "auth",
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["SELECT"],
+                    roles: ["app_user"],
+                    runAs: "supabase_admin"
+                ),
             ],
         };
 
@@ -129,61 +127,55 @@ public sealed class SchemaDiffSupportTests
     }
 
     private static SchemaDefinition SupportSchema() =>
-        new()
-        {
-            Name = "support",
-            Roles = [new PostgresRoleDefinition { Name = "app_user", GrantTo = ["postgres"] }],
-            Tables =
+        SchemaTestData.Schema(
+            name: "support",
+            roles: [SchemaTestData.PostgresRole(name: "app_user", grantTo: ["postgres"])],
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(
+                            name: "id",
+                            type: PortableTypes.Uuid,
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "documents_member",
-                                Roles = ["app_user"],
-                                UsingSql = "is_member()",
-                                WithCheckSql = "is_member()",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "documents_member",
+                                roles: ["app_user"],
+                                usingSql: "is_member()",
+                                withCheckSql: "is_member()"
+                            ),
                         ],
-                    },
-                },
+                    }
+                ),
             ],
-            Functions =
+            functions:
             [
-                new PostgresFunctionDefinition
-                {
-                    Name = "is_member",
-                    Returns = "boolean",
-                    SecurityDefiner = true,
-                    Body = "SELECT true",
-                    ExecuteRoles = ["app_user"],
-                },
+                SchemaTestData.PostgresFunction(
+                    name: "is_member",
+                    returns: "boolean",
+                    securityDefiner: true,
+                    body: "SELECT true",
+                    executeRoles: ["app_user"]
+                ),
             ],
-            Grants =
+            grants:
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-            ],
-        };
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.AllTablesInSchema,
+                    privileges: ["SELECT", "INSERT"],
+                    roles: ["app_user"]
+                ),
+            ]
+        );
 }

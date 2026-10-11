@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
 using SchemaIntegrityOk = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -108,72 +109,64 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
     }
 
     private static SchemaDefinition NullableSchema(bool nullable) =>
-        new()
-        {
-            Name = "nullable_upgrade",
-            Tables =
+        SchemaTestData.Schema(
+            name: "nullable_upgrade",
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "documents",
+                    columns:
                     [
                         Id(),
-                        new ColumnDefinition
-                        {
-                            Name = "notes",
-                            Type = PortableTypes.Text,
-                            IsNullable = nullable,
-                        },
+                        SchemaTestData.Column(
+                            name: "notes",
+                            type: PortableTypes.Text,
+                            isNullable: nullable
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+            ]
+        );
 
     private static SchemaDefinition ForeignKeySchema(bool hasReferenceColumn) =>
-        new()
-        {
-            Name = "foreign_key_upgrade",
-            Tables =
+        SchemaTestData.Schema(
+            name: "foreign_key_upgrade",
+            tables:
             [
                 Parent("parents"),
-                new TableDefinition
-                {
-                    Name = "children",
-                    Columns = hasReferenceColumn ? [Id(), UuidColumn("parent_id")] : [Id()],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    ForeignKeys = hasReferenceColumn ? [ForeignKey("parent_id", "parents")] : [],
-                },
-            ],
-        };
+                SchemaTestData.Table(
+                    name: "children",
+                    columns: hasReferenceColumn ? [Id(), UuidColumn("parent_id")] : [Id()],
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    foreignKeys: hasReferenceColumn ? [ForeignKey("parent_id", "parents")] : []
+                ),
+            ]
+        );
 
     private static SchemaDefinition PolicySchema(string predicate) =>
-        new()
-        {
-            Name = "policy_upgrade",
-            Tables =
+        SchemaTestData.Schema(
+            name: "policy_upgrade",
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns = [Id(), UuidColumn("owner_id")],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                SchemaTestData.Table(
+                    name: "documents",
+                    columns: [Id(), UuidColumn("owner_id")],
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_policy",
-                                UsingSql = $"owner_id {predicate}",
-                                WithCheckSql = $"owner_id {predicate}",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "owner_policy",
+                                usingSql: $"owner_id {predicate}",
+                                withCheckSql: $"owner_id {predicate}"
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 
     private static SchemaDefinition CleanupSchema(bool includeObsolete)
     {
@@ -194,57 +187,48 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
                 )
                 .ToArray()
             : kept;
-        return new SchemaDefinition
-        {
-            Name = "foreign_key_cleanup",
-            Tables =
+        return SchemaTestData.Schema(
+            name: "foreign_key_cleanup",
+            tables:
             [
                 Parent("kept_a"),
                 Parent("kept_b"),
                 Parent("obsolete"),
-                new TableDefinition
-                {
-                    Name = "children",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "children",
+                    columns:
                     [
                         Id(),
                         UuidColumn("kept_a_id"),
                         UuidColumn("kept_b_id"),
                         UuidColumn("obsolete_id"),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    ForeignKeys = foreignKeys,
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    foreignKeys: foreignKeys
+                ),
+            ]
+        );
     }
 
     private static TableDefinition Parent(string name) =>
-        new()
-        {
-            Name = name,
-            Columns = [Id()],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
+        SchemaTestData.Table(
+            name: name,
+            columns: [Id()],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+        );
 
     private static ColumnDefinition Id() =>
-        new()
-        {
-            Name = "id",
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false);
 
     private static ColumnDefinition UuidColumn(string name) =>
-        new() { Name = name, Type = PortableTypes.Uuid };
+        SchemaTestData.Column(name: name, type: PortableTypes.Uuid);
 
     private static ForeignKeyDefinition ForeignKey(string column, string table) =>
-        new()
-        {
-            Columns = [column],
-            ReferencedTable = table,
-            ReferencedColumns = ["id"],
-        };
+        SchemaTestData.ForeignKey(
+            columns: [column],
+            referencedTable: table,
+            referencedColumns: ["id"]
+        );
 
     private static SchemaDefinition Inspect(NpgsqlConnection connection) =>
         Assert

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
+// Implements [SYNC-TRIGGER-SHARED-GENERATION].
 namespace Nimblesite.Sync.Postgres;
 
 /// <summary>
@@ -32,15 +33,23 @@ public static class PostgresTriggerGenerator
         string pkColumn
     )
     {
-        var sb = new StringBuilder();
-
-        sb.AppendLine(GenerateInsertTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateUpdateTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateDeleteTrigger(tableName, pkColumn));
-
-        return sb.ToString();
+        return TriggerGenerationWorkflow.Compose(
+            insert: GenerateChangeTrigger(
+                tableName: tableName,
+                columns: columns,
+                pkColumn: pkColumn,
+                operation: "insert",
+                eventName: "INSERT"
+            ),
+            update: GenerateChangeTrigger(
+                tableName: tableName,
+                columns: columns,
+                pkColumn: pkColumn,
+                operation: "update",
+                eventName: "UPDATE"
+            ),
+            delete: GenerateDeleteTrigger(tableName: tableName, pkColumn: pkColumn)
+        );
     }
 
     /// <summary>
@@ -63,53 +72,22 @@ public static class PostgresTriggerGenerator
     {
         logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
 
-        var columnsResult = GetTableColumns(connection, tableName);
-
-        if (columnsResult is ColumnInfoListError error)
+        return GetTableColumns(connection: connection, tableName: tableName) switch
         {
-            logger.LogError(
-                "TRIGGER: Failed to get columns for {Table}: {Error}",
-                tableName,
-                error.Value
-            );
-            return new StringSyncError(error.Value);
-        }
-
-        var columns = ((ColumnInfoListOk)columnsResult).Value;
-
-        if (columns.Count == 0)
-        {
-            logger.LogError("TRIGGER: Table {Table} not found or has no columns", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' not found or has no columns")
-            );
-        }
-
-        var pkColumn = columns.FirstOrDefault(c => c.IsPrimaryKey);
-        if (pkColumn is null)
-        {
-            logger.LogError("TRIGGER: Table {Table} has no primary key", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' has no primary key")
-            );
-        }
-
-        logger.LogDebug(
-            "TRIGGER: Table {Table} has {ColumnCount} columns, PK={PK}",
-            tableName,
-            columns.Count,
-            pkColumn.Name
-        );
-
-        var columnNames = columns.Select(c => c.Name).ToList();
-        var triggers = GenerateTriggers(tableName, columnNames, pkColumn.Name);
-
-        logger.LogInformation(
-            "TRIGGER: Generated INSERT/UPDATE/DELETE triggers for table {Table}",
-            tableName
-        );
-
-        return new StringSyncOk(triggers);
+            ColumnInfoListError error => TriggerGenerationWorkflow.ColumnError(
+                tableName: tableName,
+                error: error.Value,
+                logger: logger
+            ),
+            ColumnInfoListOk columns => TriggerGenerationWorkflow.Generate(
+                tableName: tableName,
+                columns: columns.Value,
+                isPrimaryKey: column => column.IsPrimaryKey,
+                columnName: column => column.Name,
+                generate: GenerateTriggers,
+                logger: logger
+            ),
+        };
     }
 
     /// <summary>
@@ -274,87 +252,54 @@ public static class PostgresTriggerGenerator
         }
     }
 
-    private static string GenerateInsertTrigger(
+    // Implements [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE].
+    private static readonly CompositeFormat ChangeTriggerFormat = CompositeFormat.Parse(
+        format: """
+        CREATE OR REPLACE FUNCTION {0}_sync_{5}_fn() RETURNS TRIGGER AS $$
+        BEGIN
+            IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES (
+                    '{1}',
+                    jsonb_build_object('{4}', NEW."{2}")::text,
+                    '{5}',
+                    {3}::text,
+                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                    to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+                );
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        DROP TRIGGER IF EXISTS {0}_sync_{5} ON "{1}";
+        CREATE TRIGGER {0}_sync_{5}
+        AFTER {6} ON "{1}"
+        FOR EACH ROW EXECUTE FUNCTION {0}_sync_{5}_fn();
+        """
+    );
+
+    private static string GenerateChangeTrigger(
         string tableName,
         IReadOnlyList<string> columns,
-        string pkColumn
-    )
-    {
-        var lowerTable = tableName.ToLowerInvariant();
-        var pkLower = pkColumn.ToLowerInvariant();
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE OR REPLACE FUNCTION {0}_sync_insert_fn() RETURNS TRIGGER AS $$
-            BEGIN
-                IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
-                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                    VALUES (
-                        '{1}',
-                        jsonb_build_object('{4}', NEW."{2}")::text,
-                        'insert',
-                        {3}::text,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    );
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS {0}_sync_insert ON "{1}";
-            CREATE TRIGGER {0}_sync_insert
-            AFTER INSERT ON "{1}"
-            FOR EACH ROW EXECUTE FUNCTION {0}_sync_insert_fn();
-            """,
-            lowerTable,
-            tableName,
-            pkColumn,
-            BuildJsonbObject(columns, "NEW"),
-            pkLower
+        string pkColumn,
+        string operation,
+        string eventName
+    ) =>
+        string.Format(
+            provider: CultureInfo.InvariantCulture,
+            format: ChangeTriggerFormat,
+            args:
+            [
+                tableName.ToLowerInvariant(),
+                tableName,
+                pkColumn,
+                BuildJsonbObject(columns: columns, prefix: "NEW"),
+                pkColumn.ToLowerInvariant(),
+                operation,
+                eventName,
+            ]
         );
-    }
-
-    private static string GenerateUpdateTrigger(
-        string tableName,
-        IReadOnlyList<string> columns,
-        string pkColumn
-    )
-    {
-        var lowerTable = tableName.ToLowerInvariant();
-        var pkLower = pkColumn.ToLowerInvariant();
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE OR REPLACE FUNCTION {0}_sync_update_fn() RETURNS TRIGGER AS $$
-            BEGIN
-                IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
-                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                    VALUES (
-                        '{1}',
-                        jsonb_build_object('{4}', NEW."{2}")::text,
-                        'update',
-                        {3}::text,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    );
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS {0}_sync_update ON "{1}";
-            CREATE TRIGGER {0}_sync_update
-            AFTER UPDATE ON "{1}"
-            FOR EACH ROW EXECUTE FUNCTION {0}_sync_update_fn();
-            """,
-            lowerTable,
-            tableName,
-            pkColumn,
-            BuildJsonbObject(columns, "NEW"),
-            pkLower
-        );
-    }
 
     private static string GenerateDeleteTrigger(string tableName, string pkColumn)
     {

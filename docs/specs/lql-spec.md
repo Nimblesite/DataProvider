@@ -168,3 +168,9 @@ PostgreSQL, SQLite, and SQL Server contexts append ordering items through one in
 ### Shared analyzer column fixture [LQL-TEST-COLUMN-FIXTURE]
 
 Rust completion, hover and schema tests reuse one test-only column constructor, preserving all names, SQL types, nullability and primary-key flags at their original call sites.
+
+### Shared hover-test requests [LQL-HOVER-TEST-REQUEST]
+
+LSP protocol tests share the hover request and non-null result assertion. Every
+document URI, line, character, failure message, and content assertion remains
+unchanged, including multi-line document positions.

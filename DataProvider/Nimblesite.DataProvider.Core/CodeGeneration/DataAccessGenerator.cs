@@ -8,6 +8,7 @@ namespace Nimblesite.DataProvider.Core.CodeGeneration;
 /// <summary>
 /// Static methods for generating data access extension methods
 /// </summary>
+// Implements [DP-CODEGEN-SHARED-BULK-LOOP].
 public static partial class DataAccessGenerator
 {
     /// <summary>
@@ -628,60 +629,15 @@ public static partial class DataAccessGenerator
             CultureInfo.InvariantCulture,
             $"    public static async Task<Result<int, SqlError>> BulkInsert{table.Name}Async(this IDbTransaction transaction, IEnumerable<({tupleType})> records)"
         );
-        sb.AppendLine("    {");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"        const int batchSize = {batchSize};");
-        sb.AppendLine("        var totalInserted = 0;");
-        sb.AppendLine("        var batch = new List<(" + tupleType + ")>(batchSize);");
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-        sb.AppendLine("            foreach (var record in records)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                batch.Add(record);");
-        sb.AppendLine("                if (batch.Count >= batchSize)");
-        sb.AppendLine("                {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                    var result = await ExecuteBulkInsert{table.Name}BatchAsync(transaction, batch).ConfigureAwait(false);"
+        AppendBulkBatchLoop(
+            builder: sb,
+            tableName: table.Name,
+            tupleType: tupleType,
+            batchSize: batchSize,
+            operation: "Insert",
+            totalVariable: "totalInserted",
+            failure: "Bulk insert failed"
         );
-        sb.AppendLine(
-            "                    if (result is Result<int, SqlError>.Error<int, SqlError> err)"
-        );
-        sb.AppendLine("                        return err;");
-        sb.AppendLine(
-            "                    totalInserted += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
-        );
-        sb.AppendLine("                    batch.Clear();");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (batch.Count > 0)");
-        sb.AppendLine("            {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                var finalResult = await ExecuteBulkInsert{table.Name}BatchAsync(transaction, batch).ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "                if (finalResult is Result<int, SqlError>.Error<int, SqlError> finalErr)"
-        );
-        sb.AppendLine("                    return finalErr;");
-        sb.AppendLine(
-            "                totalInserted += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(totalInserted);"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("        catch (Exception ex)");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Bulk insert failed\", ex));"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine();
 
         // Generate the batch execution helper method
         sb.AppendLine("    /// <summary>");
@@ -792,60 +748,15 @@ public static partial class DataAccessGenerator
             CultureInfo.InvariantCulture,
             $"    public static async Task<Result<int, SqlError>> BulkUpsert{table.Name}Async(this IDbTransaction transaction, IEnumerable<({tupleType})> records)"
         );
-        sb.AppendLine("    {");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"        const int batchSize = {batchSize};");
-        sb.AppendLine("        var totalAffected = 0;");
-        sb.AppendLine("        var batch = new List<(" + tupleType + ")>(batchSize);");
-        sb.AppendLine();
-        sb.AppendLine("        try");
-        sb.AppendLine("        {");
-        sb.AppendLine("            foreach (var record in records)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                batch.Add(record);");
-        sb.AppendLine("                if (batch.Count >= batchSize)");
-        sb.AppendLine("                {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                    var result = await ExecuteBulkUpsert{table.Name}BatchAsync(transaction, batch).ConfigureAwait(false);"
+        AppendBulkBatchLoop(
+            builder: sb,
+            tableName: table.Name,
+            tupleType: tupleType,
+            batchSize: batchSize,
+            operation: "Upsert",
+            totalVariable: "totalAffected",
+            failure: "Bulk upsert failed"
         );
-        sb.AppendLine(
-            "                    if (result is Result<int, SqlError>.Error<int, SqlError> err)"
-        );
-        sb.AppendLine("                        return err;");
-        sb.AppendLine(
-            "                    totalAffected += ((Result<int, SqlError>.Ok<int, SqlError>)result).Value;"
-        );
-        sb.AppendLine("                    batch.Clear();");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (batch.Count > 0)");
-        sb.AppendLine("            {");
-        sb.AppendLine(
-            CultureInfo.InvariantCulture,
-            $"                var finalResult = await ExecuteBulkUpsert{table.Name}BatchAsync(transaction, batch).ConfigureAwait(false);"
-        );
-        sb.AppendLine(
-            "                if (finalResult is Result<int, SqlError>.Error<int, SqlError> finalErr)"
-        );
-        sb.AppendLine("                    return finalErr;");
-        sb.AppendLine(
-            "                totalAffected += ((Result<int, SqlError>.Ok<int, SqlError>)finalResult).Value;"
-        );
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Ok<int, SqlError>(totalAffected);"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("        catch (Exception ex)");
-        sb.AppendLine("        {");
-        sb.AppendLine(
-            "            return new Result<int, SqlError>.Error<int, SqlError>(new SqlError(\"Bulk upsert failed\", ex));"
-        );
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine();
 
         // Generate the batch execution helper method
         sb.AppendLine("    /// <summary>");

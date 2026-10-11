@@ -35,6 +35,7 @@
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Postgres/Nimblesite.Sync.Postgres.csproj" />
+    <ProjectReference Include="../Nimblesite.Sync.SqlServer/Nimblesite.Sync.SqlServer.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Http/Nimblesite.Sync.Http.csproj" />
     <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
   </ItemGroup>
@@ -48,5 +49,8 @@
       Include="..\..\Tests.Shared\PostgresCollection.cs"
       Link="Shared\PostgresCollection.cs"
     />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
   </ItemGroup>
 </Project>

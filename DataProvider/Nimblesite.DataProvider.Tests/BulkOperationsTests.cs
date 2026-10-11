@@ -12,31 +12,15 @@ public sealed class BulkOperationsTests
             Name = "Products",
             Columns = new List<DatabaseColumn>
             {
-                new()
-                {
-                    Name = "Id",
-                    CSharpType = "Guid",
-                    IsPrimaryKey = true,
-                    IsIdentity = false,
-                },
-                new()
-                {
-                    Name = "Name",
-                    CSharpType = "string",
-                    IsNullable = false,
-                },
-                new()
-                {
-                    Name = "Price",
-                    CSharpType = "decimal",
-                    IsNullable = false,
-                },
-                new()
-                {
-                    Name = "Category",
-                    CSharpType = "string",
-                    IsNullable = true,
-                },
+                ColumnTestData.Create(
+                    name: "Id",
+                    cSharpType: "Guid",
+                    isPrimaryKey: true,
+                    isIdentity: false
+                ),
+                ColumnTestData.Create(name: "Name", cSharpType: "string", isNullable: false),
+                ColumnTestData.Create(name: "Price", cSharpType: "decimal", isNullable: false),
+                ColumnTestData.Create(name: "Category", cSharpType: "string", isNullable: true),
             }.AsReadOnly(),
         };
 
@@ -47,30 +31,30 @@ public sealed class BulkOperationsTests
             Name = "Orders",
             Columns = new List<DatabaseColumn>
             {
-                new()
-                {
-                    Name = "Id",
-                    CSharpType = "int",
-                    IsPrimaryKey = true,
-                    IsIdentity = true,
-                },
-                new()
-                {
-                    Name = "CustomerId",
-                    CSharpType = "Guid",
-                    IsNullable = false,
-                },
-                new()
-                {
-                    Name = "Total",
-                    CSharpType = "decimal",
-                    IsNullable = false,
-                },
+                ColumnTestData.Create(
+                    name: "Id",
+                    cSharpType: "int",
+                    isPrimaryKey: true,
+                    isIdentity: true
+                ),
+                ColumnTestData.Create(name: "CustomerId", cSharpType: "Guid", isNullable: false),
+                ColumnTestData.Create(name: "Total", cSharpType: "decimal", isNullable: false),
             }.AsReadOnly(),
         };
 
-    [Fact]
-    public void GenerateBulkInsertMethod_WithValidTable_ReturnsSuccess()
+    [Theory]
+    // GenerateBulkInsertMethod_WithValidTable_ReturnsSuccess
+    [InlineData("BulkInsertProductsAsync", "IEnumerable<(", "INSERT INTO Products", "batchSize")]
+    // GenerateBulkInsertMethod_IncludesErrorHandling
+    [InlineData("try", "catch (Exception ex)", "Result<int, SqlError>.Error", "Bulk insert failed")]
+    // GenerateBulkInsertMethod_GeneratesProperTupleType
+    [InlineData("Guid Id", "string Name", "decimal Price", "string Category")]
+    public void GenerateBulkInsertMethod_WithValidTable_ReturnsSuccess_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2,
+        string caseValue3
+    )
     {
         // Arrange
         var table = CreateTestTable();
@@ -81,10 +65,10 @@ public sealed class BulkOperationsTests
         // Assert
         Assert.True(result is StringOk);
         var code = ((StringOk)result).Value;
-        Assert.Contains("BulkInsertProductsAsync", code);
-        Assert.Contains("IEnumerable<(", code);
-        Assert.Contains("INSERT INTO Products", code);
-        Assert.Contains("batchSize", code);
+        Assert.Contains(caseValue0, code);
+        Assert.Contains(caseValue1, code);
+        Assert.Contains(caseValue2, code);
+        Assert.Contains(caseValue3, code);
     }
 
     [Fact]
@@ -117,8 +101,18 @@ public sealed class BulkOperationsTests
         Assert.DoesNotContain("Id Id", code);
     }
 
-    [Fact]
-    public void GenerateBulkInsertMethod_GeneratesBatchHelper()
+    [Theory]
+    // GenerateBulkInsertMethod_GeneratesBatchHelper
+    [InlineData("ExecuteBulkInsertProductsBatchAsync", "StringBuilder", "parameters.Add")]
+    // GenerateBulkInsertMethod_GeneratesParameterizedQueries
+    [InlineData("@p", "AddWithValue", "DBNull.Value")]
+    // GenerateBulkInsertMethod_GeneratesAsyncMethods
+    [InlineData("async Task<Result<int, SqlError>>", "await", "ConfigureAwait(false)")]
+    public void GenerateBulkInsertMethod_GeneratesBatchHelper_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2
+    )
     {
         // Arrange
         var table = CreateTestTable();
@@ -129,9 +123,9 @@ public sealed class BulkOperationsTests
         // Assert
         Assert.True(result is StringOk);
         var code = ((StringOk)result).Value;
-        Assert.Contains("ExecuteBulkInsertProductsBatchAsync", code);
-        Assert.Contains("StringBuilder", code);
-        Assert.Contains("parameters.Add", code);
+        Assert.Contains(caseValue0, code);
+        Assert.Contains(caseValue1, code);
+        Assert.Contains(caseValue2, code);
     }
 
     [Fact]
@@ -225,18 +219,12 @@ public sealed class BulkOperationsTests
             Name = "Logs",
             Columns = new List<DatabaseColumn>
             {
-                new()
-                {
-                    Name = "Message",
-                    CSharpType = "string",
-                    IsPrimaryKey = false,
-                },
-                new()
-                {
-                    Name = "Timestamp",
-                    CSharpType = "DateTime",
-                    IsPrimaryKey = false,
-                },
+                ColumnTestData.Create(name: "Message", cSharpType: "string", isPrimaryKey: false),
+                ColumnTestData.Create(
+                    name: "Timestamp",
+                    cSharpType: "DateTime",
+                    isPrimaryKey: false
+                ),
             }.AsReadOnly(),
         };
 
@@ -247,24 +235,6 @@ public sealed class BulkOperationsTests
         Assert.True(result is StringOk);
         var code = ((StringOk)result).Value;
         Assert.Empty(code);
-    }
-
-    [Fact]
-    public void GenerateBulkInsertMethod_IncludesErrorHandling()
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var code = ((StringOk)result).Value;
-        Assert.Contains("try", code);
-        Assert.Contains("catch (Exception ex)", code);
-        Assert.Contains("Result<int, SqlError>.Error", code);
-        Assert.Contains("Bulk insert failed", code);
     }
 
     [Fact]
@@ -286,23 +256,6 @@ public sealed class BulkOperationsTests
     }
 
     [Fact]
-    public void GenerateBulkInsertMethod_GeneratesParameterizedQueries()
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var code = ((StringOk)result).Value;
-        Assert.Contains("@p", code);
-        Assert.Contains("AddWithValue", code);
-        Assert.Contains("DBNull.Value", code);
-    }
-
-    [Fact]
     public void GenerateBulkUpsertMethod_IncludesAllColumns()
     {
         // Arrange
@@ -318,24 +271,6 @@ public sealed class BulkOperationsTests
         Assert.Contains("Name", code);
         Assert.Contains("Price", code);
         Assert.Contains("Category", code);
-    }
-
-    [Fact]
-    public void GenerateBulkInsertMethod_GeneratesProperTupleType()
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var code = ((StringOk)result).Value;
-        Assert.Contains("Guid Id", code);
-        Assert.Contains("string Name", code);
-        Assert.Contains("decimal Price", code);
-        Assert.Contains("string Category", code);
     }
 
     [Fact]
@@ -372,23 +307,6 @@ public sealed class BulkOperationsTests
     }
 
     [Fact]
-    public void GenerateBulkInsertMethod_GeneratesAsyncMethods()
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(table);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var code = ((StringOk)result).Value;
-        Assert.Contains("async Task<Result<int, SqlError>>", code);
-        Assert.Contains("await", code);
-        Assert.Contains("ConfigureAwait(false)", code);
-    }
-
-    [Fact]
     public void GenerateBulkInsertMethod_UsesExtensionMethodPattern()
     {
         // Arrange
@@ -413,30 +331,10 @@ public sealed class BulkOperationsTests
             Name = "OrderItems",
             Columns = new List<DatabaseColumn>
             {
-                new()
-                {
-                    Name = "OrderId",
-                    CSharpType = "Guid",
-                    IsPrimaryKey = true,
-                },
-                new()
-                {
-                    Name = "ProductId",
-                    CSharpType = "Guid",
-                    IsPrimaryKey = true,
-                },
-                new()
-                {
-                    Name = "Quantity",
-                    CSharpType = "int",
-                    IsNullable = false,
-                },
-                new()
-                {
-                    Name = "UnitPrice",
-                    CSharpType = "decimal",
-                    IsNullable = false,
-                },
+                ColumnTestData.Create(name: "OrderId", cSharpType: "Guid", isPrimaryKey: true),
+                ColumnTestData.Create(name: "ProductId", cSharpType: "Guid", isPrimaryKey: true),
+                ColumnTestData.Create(name: "Quantity", cSharpType: "int", isNullable: false),
+                ColumnTestData.Create(name: "UnitPrice", cSharpType: "decimal", isNullable: false),
             }.AsReadOnly(),
         };
 

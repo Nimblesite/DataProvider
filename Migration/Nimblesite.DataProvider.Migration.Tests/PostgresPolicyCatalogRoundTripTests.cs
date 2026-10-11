@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-DIFF]. PostgreSQL catalog deparsing must not cause false policy drift.
@@ -62,70 +63,58 @@ public sealed class PostgresPolicyCatalogRoundTripTests(PostgresContainerFixture
     }
 
     private static SchemaDefinition PolicySchema(string secondRole) =>
-        new()
-        {
-            Name = "policy_catalog_roundtrip",
-            Functions =
+        SchemaTestData.Schema(
+            name: "policy_catalog_roundtrip",
+            functions:
             [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_is_system",
-                    Returns = "text",
-                    Body = "SELECT 'true'::text",
-                },
+                SchemaTestData.PostgresFunction(
+                    name: "app_is_system",
+                    returns: "text",
+                    body: "SELECT 'true'::text"
+                ),
             ],
-            Tables =
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "parents",
-                    Columns = [Id()],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-                new TableDefinition
-                {
-                    Name = "children",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "parents",
+                    columns: [Id()],
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+                SchemaTestData.Table(
+                    name: "children",
+                    columns:
                     [
                         Id(),
-                        new ColumnDefinition { Name = "parent_id", Type = PortableTypes.Uuid },
-                        new ColumnDefinition { Name = "role", Type = PortableTypes.Text },
+                        SchemaTestData.Column(name: "parent_id", type: PortableTypes.Uuid),
+                        SchemaTestData.Column(name: "role", type: PortableTypes.Text),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "system_all",
-                                Operations = [RlsOperation.All],
-                                UsingLql = "app_is_system() = 'true'",
-                                WithCheckLql = "app_is_system() = 'true'",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = "parent_policy",
-                                Operations = [RlsOperation.Select],
-                                UsingLql = "exists(parents |> filter(fn(p) => p.id = parent_id))",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = "role_policy",
-                                Operations = [RlsOperation.Select],
-                                UsingLql = $"role in ('admin', '{secondRole}')",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "system_all",
+                                operations: [RlsOperation.All],
+                                usingLql: "app_is_system() = 'true'",
+                                withCheckLql: "app_is_system() = 'true'"
+                            ),
+                            SchemaTestData.RlsPolicy(
+                                name: "parent_policy",
+                                operations: [RlsOperation.Select],
+                                usingLql: "exists(parents |> filter(fn(p) => p.id = parent_id))"
+                            ),
+                            SchemaTestData.RlsPolicy(
+                                name: "role_policy",
+                                operations: [RlsOperation.Select],
+                                usingLql: $"role in ('admin', '{secondRole}')"
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 
     private static ColumnDefinition Id() =>
-        new()
-        {
-            Name = "id",
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false);
 }

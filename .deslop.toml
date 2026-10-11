@@ -8,6 +8,15 @@
 exclude = [
   # Reporting is outside the requested duplication audit scope.
   "Reporting/**",
+  # Independent scenario datasets contain schema/configuration input, never runners
+  # or assertions. Keep each scenario explicit to protect its test oracle.
+  "**/Fixtures/*.Fixtures.cs",
+  # Standalone teaching projects intentionally show complete, independent usage.
+  "DataProvider/Nimblesite.DataProvider.Example/**",
+  "DataProvider/Nimblesite.DataProvider.Example.FSharp/**",
+  "DataProvider/Nimblesite.DataProvider.SQLite.FSharp/**",
+  # Golden generated-code expectations must remain independent of the generators.
+  "DataProvider/Nimblesite.DataProvider.Tests/CustomCodeGenerationTests.cs",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLLexer.cs",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParser.cs",
   "DataProvider/Nimblesite.DataProvider.Postgres/Parsing/PostgreSQLParserBaseListener.cs",

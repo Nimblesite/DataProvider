@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Nimblesite.Sync.SqlServer" />
+    <InternalsVisibleTo Include="Nimblesite.Sync.Postgres" />
+    <InternalsVisibleTo Include="Nimblesite.Sync.SQLite" />
     <InternalsVisibleTo Include="Nimblesite.Sync.Tests" />
     <InternalsVisibleTo Include="Nimblesite.Sync.Http.Tests" />
     <InternalsVisibleTo Include="Nimblesite.Sync.Integration.Tests" />

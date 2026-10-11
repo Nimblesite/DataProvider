@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using TranspileError = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -9,7 +10,7 @@ using TranspileOk = Outcome.Result<
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class RlsCurrentSettingLqlTests
+public sealed partial class RlsCurrentSettingLqlTests
 {
     [Theory]
     [InlineData("tenant_id = current_setting('app.tenant_id')::uuid", "'app.tenant_id'")]
@@ -140,13 +141,12 @@ public sealed class RlsCurrentSettingLqlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "agent_configs",
-                new RlsPolicyDefinition
-                {
-                    Name = "tenant_member",
-                    Roles = ["app_user"],
-                    UsingLql = "tenant_id = current_setting('app.tenant_id')::uuid",
-                    WithCheckLql = "tenant_id = current_setting('app.tenant_id')::uuid",
-                }
+                Fixture_Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument_1(
+                    name: name,
+                    roles: roles,
+                    usingLql: usingLql,
+                    withCheckLql: withCheckLql
+                )
             )
         );
 

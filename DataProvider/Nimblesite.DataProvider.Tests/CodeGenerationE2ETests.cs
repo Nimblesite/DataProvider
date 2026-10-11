@@ -7,42 +7,60 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: DataAccessGenerator code generation with full verification.
 /// Each test generates code and validates the output contains correct C# constructs.
 /// </summary>
-public sealed class CodeGenerationE2ETests
+public sealed partial class CodeGenerationE2ETests
 {
+    // Implements [DP-CODEGEN-SHARED-BULK-LOOP].
+    [Theory]
+    [InlineData("int", "Integer")]
+    [InlineData("int?", "Integer")]
+    [InlineData("long", "Bigint")]
+    [InlineData("short", "Smallint")]
+    [InlineData("bool", "Boolean")]
+    [InlineData("float", "Real")]
+    [InlineData("double", "Double")]
+    [InlineData("decimal", "Numeric")]
+    [InlineData("DateTime", "Timestamp")]
+    [InlineData("Guid", "Uuid")]
+    [InlineData("Guid?", "Uuid")]
+    [InlineData("byte[]", "Bytea")]
+    [InlineData("string", "Text")]
+    public void GenerateQueryMethod_PostgresNullParameter_UsesMatchingColumnType(
+        string cSharpType,
+        string databaseType
+    )
+    {
+        var result = DataAccessGenerator.GenerateQueryMethod(
+            className: "PeopleQueries",
+            methodName: "Find",
+            returnTypeName: "Person",
+            sql: "SELECT Id FROM People WHERE Id = @id",
+            parameters: [new ParameterInfo(Name: "id")],
+            columns: [new DatabaseColumn { Name = "Id", CSharpType = cSharpType }],
+            connectionType: "NpgsqlConnection"
+        );
+        var code = Assert.IsType<StringOk>(@object: result).Value;
+        Assert.Contains(
+            expectedSubstring: $"new NpgsqlParameter(\"@id\", NpgsqlTypes.NpgsqlDbType.{databaseType}) {{ Value = DBNull.Value }}",
+            actualString: code
+        );
+        Assert.Contains(
+            expectedSubstring: "command.Parameters.AddWithValue(\"@id\", id);",
+            actualString: code
+        );
+    }
+
     private static readonly IReadOnlyList<DatabaseColumn> PatientColumns =
     [
-        new DatabaseColumn
-        {
-            Name = "Id",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-            IsPrimaryKey = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "Name",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new DatabaseColumn
-        {
-            Name = "Age",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-        new DatabaseColumn
-        {
-            Name = "Email",
-            SqlType = "TEXT",
-            CSharpType = "string",
-            IsNullable = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "IsActive",
-            SqlType = "INTEGER",
-            CSharpType = "bool",
-        },
+        ColumnTestData.Create(name: "Id", sqlType: "TEXT", cSharpType: "Guid", isPrimaryKey: true),
+        ColumnTestData.Create(name: "Name", sqlType: "TEXT", cSharpType: "string"),
+        ColumnTestData.Create(name: "Age", sqlType: "INTEGER", cSharpType: "int"),
+        ColumnTestData.Create(
+            name: "Email",
+            sqlType: "TEXT",
+            cSharpType: "string",
+            isNullable: true
+        ),
+        ColumnTestData.Create(name: "IsActive", sqlType: "INTEGER", cSharpType: "bool"),
     ];
 
     private static readonly IReadOnlyList<ParameterInfo> QueryParameters =
@@ -183,12 +201,7 @@ public sealed class CodeGenerationE2ETests
     [Fact]
     public void GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode_1();
 
         var result = DataAccessGenerator.GenerateInsertMethod(
             table: table,
@@ -245,15 +258,7 @@ public sealed class CodeGenerationE2ETests
             returnTypeName: "TestRecord",
             sql: "SELECT * FROM Items WHERE class = @class AND int = @int",
             parameters: [new ParameterInfo(Name: "class"), new ParameterInfo(Name: "int")],
-            columns:
-            [
-                new DatabaseColumn
-                {
-                    Name = "Id",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                },
-            ]
+            columns: [ColumnTestData.Create(name: "Id", cSharpType: "string", sqlType: "TEXT")]
         );
 
         Assert.True(result is StringOk);
@@ -268,12 +273,7 @@ public sealed class CodeGenerationE2ETests
     [Fact]
     public void GenerateBulkInsertMethod_ProducesValidBatchCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateBulkInsertMethod_ProducesValidBatchCode_1();
 
         var result = DataAccessGenerator.GenerateBulkInsertMethod(table: table, batchSize: 100);
 
@@ -293,12 +293,7 @@ public sealed class CodeGenerationE2ETests
     [Fact]
     public void GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode_1();
 
         var result = DataAccessGenerator.GenerateBulkUpsertMethod(
             table: table,
@@ -326,19 +321,18 @@ public sealed class CodeGenerationE2ETests
     {
         var manyColumns = Enumerable
             .Range(0, 15)
-            .Select(i => new DatabaseColumn
-            {
-                Name = $"Column{i}",
-                CSharpType =
-                    i % 3 == 0 ? "int"
-                    : i % 3 == 1 ? "string"
-                    : "bool",
-                SqlType =
-                    i % 3 == 0 ? "INTEGER"
-                    : i % 3 == 1 ? "TEXT"
-                    : "BOOLEAN",
-                IsNullable = i % 4 == 0,
-            })
+            .Select(i =>
+                ColumnTestData.Create(
+                    name: $"Column{i}",
+                    cSharpType: i % 3 == 0 ? "int"
+                        : i % 3 == 1 ? "string"
+                        : "bool",
+                    sqlType: i % 3 == 0 ? "INTEGER"
+                        : i % 3 == 1 ? "TEXT"
+                        : "BOOLEAN",
+                    isNullable: i % 4 == 0
+                )
+            )
             .ToImmutableArray();
 
         var result = DataAccessGenerator.GenerateQueryMethod(

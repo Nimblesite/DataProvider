@@ -7,65 +7,24 @@ public sealed partial class CodeGenerationExtendedE2ETests
 {
     private static readonly IReadOnlyList<DatabaseColumn> OrderColumns =
     [
-        new()
-        {
-            Name = "OrderId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-            IsPrimaryKey = true,
-        },
-        new()
-        {
-            Name = "CustomerName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Total",
-            SqlType = "REAL",
-            CSharpType = "decimal",
-        },
+        ColumnTestData.Create(
+            name: "OrderId",
+            sqlType: "TEXT",
+            cSharpType: "Guid",
+            isPrimaryKey: true
+        ),
+        ColumnTestData.Create(name: "CustomerName", sqlType: "TEXT", cSharpType: "string"),
+        ColumnTestData.Create(name: "Total", sqlType: "REAL", cSharpType: "decimal"),
     ];
 
     private static readonly IReadOnlyList<DatabaseColumn> AllJoinedColumns =
     [
-        new()
-        {
-            Name = "OrderId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-        },
-        new()
-        {
-            Name = "CustomerName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Total",
-            SqlType = "REAL",
-            CSharpType = "decimal",
-        },
-        new()
-        {
-            Name = "LineItemId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-        },
-        new()
-        {
-            Name = "ProductName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Quantity",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
+        ColumnTestData.Create(name: "OrderId", sqlType: "TEXT", cSharpType: "Guid"),
+        ColumnTestData.Create(name: "CustomerName", sqlType: "TEXT", cSharpType: "string"),
+        ColumnTestData.Create(name: "Total", sqlType: "REAL", cSharpType: "decimal"),
+        ColumnTestData.Create(name: "LineItemId", sqlType: "TEXT", cSharpType: "Guid"),
+        ColumnTestData.Create(name: "ProductName", sqlType: "TEXT", cSharpType: "string"),
+        ColumnTestData.Create(name: "Quantity", sqlType: "INTEGER", cSharpType: "int"),
     ];
 
     private static GroupingConfig CreateOrderGroupingConfig() =>
@@ -91,32 +50,20 @@ public sealed partial class CodeGenerationExtendedE2ETests
             Schema = "main",
             Columns = new DatabaseColumn[]
             {
-                new()
-                {
-                    Name = "Id",
-                    SqlType = "TEXT",
-                    CSharpType = "Guid",
-                    IsPrimaryKey = true,
-                },
-                new()
-                {
-                    Name = "RowNum",
-                    SqlType = "INTEGER",
-                    CSharpType = "int",
-                    IsIdentity = true,
-                },
-                new()
-                {
-                    Name = "Name",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                },
-                new()
-                {
-                    Name = "Price",
-                    SqlType = "REAL",
-                    CSharpType = "decimal",
-                },
+                ColumnTestData.Create(
+                    name: "Id",
+                    sqlType: "TEXT",
+                    cSharpType: "Guid",
+                    isPrimaryKey: true
+                ),
+                ColumnTestData.Create(
+                    name: "RowNum",
+                    sqlType: "INTEGER",
+                    cSharpType: "int",
+                    isIdentity: true
+                ),
+                ColumnTestData.Create(name: "Name", sqlType: "TEXT", cSharpType: "string"),
+                ColumnTestData.Create(name: "Price", sqlType: "REAL", cSharpType: "decimal"),
             },
         };
 

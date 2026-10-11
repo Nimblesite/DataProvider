@@ -1,4 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -26,15 +28,17 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         SyncSchema.SetOriginId(_db, _originId);
 
         // Create test table with triggers
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Age INTEGER
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Age INTEGER
+                );
+                """
+        );
         TriggerGenerator.CreateTriggers(_db, "Person", NullLogger.Instance);
     }
 
@@ -208,9 +212,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_FetchChanges_WithEntries_ReturnsEntries()
     {
         // Arrange - Insert via user table to trigger logging
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)";
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
+        );
 
         // Act
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
@@ -228,10 +235,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         for (var i = 0; i < 10; i++)
         {
-            using var cmd = _db.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
+            );
         }
 
         // Act
@@ -248,10 +257,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         for (var i = 0; i < 5; i++)
         {
-            using var cmd = _db.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
+            );
         }
 
         // Get the max version
@@ -283,10 +294,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         for (var i = 0; i < 5; i++)
         {
-            using var cmd = _db.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('p{i}', 'Person {i}', {20 + i})"
+            );
         }
 
         // Act
@@ -301,16 +314,21 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_Insert_LogsUpdate()
     {
         // Arrange
-        using var insertCmd = _db.CreateCommand();
-        insertCmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)";
-        insertCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
+        );
 
         var versionAfterInsert = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;
 
         // Act - Update
-        using var updateCmd = _db.CreateCommand();
-        updateCmd.CommandText = "UPDATE Person SET Name = 'Alice Updated' WHERE Id = 'p1'";
-        updateCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "UPDATE Person SET Name = 'Alice Updated' WHERE Id = 'p1'"
+        );
 
         // Assert
         var result = SyncLogRepository.FetchChanges(_db, versionAfterInsert, 100);
@@ -323,16 +341,20 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_Delete_LogsTombstone()
     {
         // Arrange
-        using var insertCmd = _db.CreateCommand();
-        insertCmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)";
-        insertCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO Person (Id, Name, Age) VALUES ('p1', 'Alice', 30)"
+        );
 
         var versionAfterInsert = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;
 
         // Act - Delete
-        using var deleteCmd = _db.CreateCommand();
-        deleteCmd.CommandText = "DELETE FROM Person WHERE Id = 'p1'";
-        deleteCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
+        );
 
         // Assert
         var result = SyncLogRepository.FetchChanges(_db, versionAfterInsert, 100);
@@ -384,10 +406,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         for (var i = 0; i < 5; i++)
         {
-            using var cmd = _db.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Age) VALUES ('min{i}', 'Person {i}', {20 + i})";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('min{i}', 'Person {i}', {20 + i})"
+            );
         }
 
         // Act
@@ -415,10 +439,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         // Arrange
         for (var i = 0; i < 5; i++)
         {
-            using var cmd = _db.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Age) VALUES ('cnt{i}', 'Person {i}', {20 + i})";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _db,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Age) VALUES ('cnt{i}', 'Person {i}', {20 + i})"
+            );
         }
 
         // Act
@@ -433,9 +459,12 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_FetchChanges_ContainsAllFields()
     {
         // Arrange
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES ('fld1', 'Alice', 30)";
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO Person (Id, Name, Age) VALUES ('fld1', 'Alice', 30)"
+        );
 
         // Act
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
@@ -757,13 +786,16 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
     public void TombstoneManager_PurgeTombstones_RemovesOldDeletes()
     {
         // Arrange - Insert and delete to create tombstones
-        using var insertCmd = _db.CreateCommand();
-        insertCmd.CommandText = "INSERT INTO Person (Id, Name) VALUES ('p1', 'Alice')";
-        insertCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "INSERT INTO Person (Id, Name) VALUES ('p1', 'Alice')"
+        );
 
-        using var deleteCmd = _db.CreateCommand();
-        deleteCmd.CommandText = "DELETE FROM Person WHERE Id = 'p1'";
-        deleteCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
+        );
 
         // Get version
         var maxVersion = ((LongSyncOk)SyncLogRepository.GetMaxVersion(_db)).Value;

@@ -3,7 +3,7 @@ namespace Nimblesite.Sync.Tests;
 /// <summary>
 /// Tests for SyncError types.
 /// </summary>
-public sealed class SyncErrorTests
+public sealed partial class SyncErrorTests
 {
     [Fact]
     public void SyncErrorForeignKeyViolation_CreatesCorrectRecord()
@@ -22,15 +22,7 @@ public sealed class SyncErrorTests
     [Fact]
     public void SyncErrorDeferredChangeFailed_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncErrorDeferredChangeFailed_CreatesCorrectRecord_1();
 
         var error = new SyncErrorDeferredChangeFailed(entry, "Max retries exceeded");
 
@@ -67,25 +59,9 @@ public sealed class SyncErrorTests
     [Fact]
     public void SyncErrorUnresolvedConflict_CreatesCorrectRecord()
     {
-        var localChange = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"p1\",\"Name\":\"LocalName\"}",
-            "local-origin",
-            "2024-01-01T00:00:00Z"
-        );
+        var localChange = Fixture_SyncErrorUnresolvedConflict_CreatesCorrectRecord_1();
 
-        var remoteChange = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"p1\",\"Name\":\"RemoteName\"}",
-            "remote-origin",
-            "2024-01-01T00:00:01Z"
-        );
+        var remoteChange = Fixture_SyncErrorUnresolvedConflict_CreatesCorrectRecord_2();
 
         var error = new SyncErrorUnresolvedConflict(localChange, remoteChange);
 

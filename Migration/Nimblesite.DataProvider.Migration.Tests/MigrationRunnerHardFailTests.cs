@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
 using MigrationRunnerResult = Outcome.Result<
     bool,
@@ -27,11 +28,10 @@ public sealed partial record MigrationPlatformRegressionTests
 
     private static void AssertRunnerHardFail(MigrationTarget target, bool continueOnError)
     {
-        var baseline = new SchemaDefinition
-        {
-            Name = "runner_hard_fail",
-            Tables = [ParentTable("runner_baseline")],
-        };
+        var baseline = SchemaTestData.Schema(
+            name: "runner_hard_fail",
+            tables: [ParentTable("runner_baseline")]
+        );
         Migrate(target, baseline);
         AssertBaseline(target);
         var before = new CreateTableOperation(ParentTable("runner_before"));

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using static Nimblesite.Sync.Tests.MappingTestData;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -18,30 +19,25 @@ public sealed partial class LqlMappingCornerCaseTests
     [Fact]
     public void MappingEngine_NullPayload_ReturnsNullMappedPayload()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "test",
-            sourceTable: "Source",
-            targetTable: "Target",
-            columnMappings:
-            [
-                new ColumnMapping("Name", "DisplayName", TransformType.Lql, null, "upper(Name)"),
-            ]
+        var mapping = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Source",
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Delete,
-            Payload: null, // DELETE operations have null payload
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var entry = Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
+            Timestamp: Timestamp
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Null(success.Entries[0].MappedPayload);
     }
 
@@ -61,9 +57,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Id":"1","Name":"Test","Value":123}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
         Assert.Contains("Name", payload);
         Assert.Contains("Test", payload);
@@ -78,10 +72,11 @@ public sealed partial class LqlMappingCornerCaseTests
             new("NonExistent", "DisplayName", TransformType.Lql, null, "upper(NonExistent)"),
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "test",
-            sourceTable: "Source",
-            targetTable: "Target",
+        var mapping = Fixture_MappingEngine_LqlWithMissingSourceColumn_FallsBack_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -93,9 +88,7 @@ public sealed partial class LqlMappingCornerCaseTests
         );
 
         // Should not throw, should handle gracefully
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.NotNull(success.Entries[0].MappedPayload);
     }
 
@@ -110,10 +103,11 @@ public sealed partial class LqlMappingCornerCaseTests
             new("Status", "StatusCode"), // Direct mapping
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "test",
-            sourceTable: "Source",
-            targetTable: "Target",
+        var mapping = Fixture_MappingEngine_MixedTransformTypes_AllApplied_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -124,9 +118,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Id":"1","Name":"Alice","Email":"ALICE@TEST.COM","Status":"active"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
         Assert.Contains("Alice", payload); // Direct
         Assert.Contains("alice@test.com", payload); // LQL lowercase
@@ -153,9 +145,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Id":"1","Name":"Alice","Email":"a@test.com","Password":"secret123","Salt":"xyz","SecurityToken":"abc","InternalNotes":"admin notes","PublicBio":"Hello!"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
         Assert.Contains("Name", payload);
@@ -186,9 +176,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Name":"Test"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("CustomerId", success.Entries[0].TargetPkValue);
         Assert.Contains("user-123", success.Entries[0].TargetPkValue);
         Assert.DoesNotContain("UserId", success.Entries[0].TargetPkValue);
@@ -202,13 +190,7 @@ public sealed partial class LqlMappingCornerCaseTests
             new(
                 "UserProfile",
                 [
-                    new ColumnMapping(
-                        "Name",
-                        "DisplayName",
-                        TransformType.Lql,
-                        null,
-                        "upper(Name)"
-                    ),
+                    Fixture_MappingEngine_MultiTarget_AllTargetsReceiveTransformedData_1(),
                     new ColumnMapping("Email", "Email"),
                 ]
             ),
@@ -238,9 +220,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Id":"1","Name":"alice","Email":"alice@test.com"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Equal(2, success.Entries.Count);
 
         var profile = success.Entries.First(e => e.TargetTable == "UserProfile");
@@ -267,10 +247,11 @@ public sealed partial class LqlMappingCornerCaseTests
             new("zip", "PostalCode", TransformType.Lql, null, "left(zip, 5)"),
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "address-norm",
-            sourceTable: "RawAddress",
-            targetTable: "Address",
+        var mapping = Fixture_E2E_FullAddressNormalization_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -281,9 +262,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"Id":"1","street":"  123 Main St  ","city":"  springfield  ","state":"il","zip":"62701-1234"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
         Assert.Contains("123 Main St", payload); // Trimmed street
@@ -306,10 +285,11 @@ public sealed partial class LqlMappingCornerCaseTests
             new(null, "DataSource", TransformType.Constant, "legacy_crm"),
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "user-sanitize",
-            sourceTable: "LegacyUser",
-            targetTable: "CleanUser",
+        var mapping = Fixture_E2E_UserDataSanitization_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         ) with
         {
@@ -324,9 +304,7 @@ public sealed partial class LqlMappingCornerCaseTests
             payload: """{"legacy_id":"USR-001","username":"JohnDoe123","email":"John.Doe@Example.COM","display_name":"  John Doe  ","password_hash":"abc123","ssn":"123-45-6789","credit_card":"4111111111111111"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var payload = success.Entries[0].MappedPayload!;
 
         // PK renamed

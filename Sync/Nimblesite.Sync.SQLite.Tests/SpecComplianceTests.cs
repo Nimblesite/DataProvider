@@ -1,5 +1,8 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
@@ -10,7 +13,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Every spec section with testable requirements is covered.
 /// NO MOCKS - REAL SQLITE DATABASES ONLY!
 /// </summary>
-public sealed class SpecComplianceTests : IDisposable
+public sealed partial class SpecComplianceTests : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly string _dbPath = Path.Combine(
@@ -187,14 +190,18 @@ public sealed class SpecComplianceTests : IDisposable
         Assert.IsType<BoolSyncOk>(result);
 
         // Verify triggers work by inserting/updating/deleting
-        using var insertCmd = _db.CreateCommand();
-        insertCmd.CommandText =
-            "INSERT INTO Product (Id, Name, Price) VALUES ('prod1', 'Widget', 9.99)";
-        insertCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO Product (Id, Name, Price) VALUES ('prod1', 'Widget', 9.99)"
+        );
 
-        using var updateCmd = _db.CreateCommand();
-        updateCmd.CommandText = "UPDATE Product SET Price = 19.99 WHERE Id = 'prod1'";
-        updateCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "UPDATE Product SET Price = 19.99 WHERE Id = 'prod1'"
+        );
 
         using var deleteCmd = _db.CreateCommand();
         deleteCmd.CommandText = "DELETE FROM Product WHERE Id = 'prod1'";
@@ -248,24 +255,8 @@ public sealed class SpecComplianceTests : IDisposable
             DateTime.UtcNow.ToString("O")
         );
 
-        var matchingChange = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            _originId,
-            ""
-        );
-        var nonMatchingChange = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p3\"}",
-            SyncOperation.Update,
-            "{}",
-            _originId,
-            ""
-        );
+        var matchingChange = Fixture_Spec_S10_Subscriptions_RecordLevelMatching_1();
+        var nonMatchingChange = Fixture_Spec_S10_Subscriptions_RecordLevelMatching_2();
 
         Assert.True(SubscriptionManager.MatchesChange(sub, matchingChange));
         Assert.False(SubscriptionManager.MatchesChange(sub, nonMatchingChange));
@@ -282,33 +273,9 @@ public sealed class SpecComplianceTests : IDisposable
             DateTime.UtcNow.ToString("O")
         );
 
-        var change1 = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{}",
-            _originId,
-            ""
-        );
-        var change2 = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p999\"}",
-            SyncOperation.Delete,
-            null,
-            _originId,
-            ""
-        );
-        var wrongTable = new SyncLogEntry(
-            3,
-            "Order",
-            "{\"Id\":\"o1\"}",
-            SyncOperation.Insert,
-            "{}",
-            _originId,
-            ""
-        );
+        var change1 = Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_1();
+        var change2 = Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_2();
+        var wrongTable = Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_3();
 
         Assert.True(SubscriptionManager.MatchesChange(sub, change1));
         Assert.True(SubscriptionManager.MatchesChange(sub, change2));
@@ -563,33 +530,9 @@ public sealed class SpecComplianceTests : IDisposable
     public void Spec_S14_ConflictDetection_SameTablePkDifferentOrigin()
     {
         // Spec S14.1: Conflict when same table+PK, different origin
-        var local = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-A",
-            "2025-01-01T00:00:00.000Z"
-        );
-        var remote = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-B",
-            "2025-01-01T00:00:01.000Z"
-        );
-        var noConflict = new SyncLogEntry(
-            3,
-            "Person",
-            "{\"Id\":\"p2\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-B",
-            "2025-01-01T00:00:01.000Z"
-        );
+        var local = Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_1();
+        var remote = Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_2();
+        var noConflict = Fixture_Spec_S14_ConflictDetection_SameTablePkDifferentOrigin_3();
 
         Assert.True(ConflictResolver.IsConflict(local, remote));
         Assert.False(ConflictResolver.IsConflict(local, noConflict)); // Different PK
@@ -599,24 +542,8 @@ public sealed class SpecComplianceTests : IDisposable
     public void Spec_S14_LastWriteWins_HigherTimestampWins()
     {
         // Spec S14.2: LWW - highest timestamp wins
-        var older = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Name\":\"Old\"}",
-            "origin-A",
-            "2025-01-01T00:00:00.000Z"
-        );
-        var newer = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Name\":\"New\"}",
-            "origin-B",
-            "2025-01-01T00:00:01.000Z"
-        );
+        var older = Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_1();
+        var newer = Fixture_Spec_S14_LastWriteWins_HigherTimestampWins_2();
 
         var resolution = ConflictResolver.ResolveLastWriteWins(older, newer);
         Assert.Equal(newer, resolution.Winner);
@@ -626,24 +553,8 @@ public sealed class SpecComplianceTests : IDisposable
     [Fact]
     public void Spec_S14_ServerWins_AlwaysChoosesRemote()
     {
-        var local = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-A",
-            "2025-01-01T00:00:01.000Z"
-        );
-        var remote = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-B",
-            "2025-01-01T00:00:00.000Z"
-        );
+        var local = Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_1();
+        var remote = Fixture_Spec_S14_ServerWins_AlwaysChoosesRemote_2();
 
         var resolution = ConflictResolver.Resolve(local, remote, ConflictStrategy.ServerWins);
         Assert.Equal(remote, resolution.Winner);
@@ -652,24 +563,8 @@ public sealed class SpecComplianceTests : IDisposable
     [Fact]
     public void Spec_S14_ClientWins_AlwaysChoosesLocal()
     {
-        var local = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-A",
-            "2025-01-01T00:00:00.000Z"
-        );
-        var remote = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{}",
-            "origin-B",
-            "2025-01-01T00:00:01.000Z"
-        );
+        var local = Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_1();
+        var remote = Fixture_Spec_S14_ClientWins_AlwaysChoosesLocal_2();
 
         var resolution = ConflictResolver.Resolve(local, remote, ConflictStrategy.ClientWins);
         Assert.Equal(local, resolution.Winner);
@@ -850,60 +745,62 @@ public sealed class SpecComplianceTests : IDisposable
 
     private void CreateTestTable()
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT NOT NULL
-            );
-
-            CREATE TRIGGER Person_sync_insert
-            AFTER INSERT ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    'Person',
-                    json_object('Id', NEW.Id),
-                    'insert',
-                    json_object('Id', NEW.Id, 'Name', NEW.Name, 'Email', NEW.Email),
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT NOT NULL
                 );
-            END;
 
-            CREATE TRIGGER Person_sync_update
-            AFTER UPDATE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    'Person',
-                    json_object('Id', NEW.Id),
-                    'update',
-                    json_object('Id', NEW.Id, 'Name', NEW.Name, 'Email', NEW.Email),
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
+                CREATE TRIGGER Person_sync_insert
+                AFTER INSERT ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES (
+                        'Person',
+                        json_object('Id', NEW.Id),
+                        'insert',
+                        json_object('Id', NEW.Id, 'Name', NEW.Name, 'Email', NEW.Email),
+                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    );
+                END;
 
-            CREATE TRIGGER Person_sync_delete
-            AFTER DELETE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    'Person',
-                    json_object('Id', OLD.Id),
-                    'delete',
-                    NULL,
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """;
-        cmd.ExecuteNonQuery();
+                CREATE TRIGGER Person_sync_update
+                AFTER UPDATE ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES (
+                        'Person',
+                        json_object('Id', NEW.Id),
+                        'update',
+                        json_object('Id', NEW.Id, 'Name', NEW.Name, 'Email', NEW.Email),
+                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    );
+                END;
+
+                CREATE TRIGGER Person_sync_delete
+                AFTER DELETE ON Person
+                WHEN (SELECT sync_active FROM _sync_session) = 0
+                BEGIN
+                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                    VALUES (
+                        'Person',
+                        json_object('Id', OLD.Id),
+                        'delete',
+                        NULL,
+                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                    );
+                END;
+                """
+        );
     }
 
     private void InsertPerson(string id, string name, string email)
@@ -922,10 +819,11 @@ public sealed class SpecComplianceTests : IDisposable
 
     private void DeletePerson(string id)
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "DELETE FROM Person WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
+            parameters: () => [("@id", id)]
+        );
     }
 
     private void SeedInsertUpdateDeleteP1()

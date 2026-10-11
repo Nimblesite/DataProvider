@@ -1,4 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -157,19 +159,40 @@ public sealed class SchemaAndTriggerTests : IDisposable
         Assert.Equal("", ((StringSyncOk)result).Value);
     }
 
-    [Fact]
-    public void CreateSchema_CreatesSyncLogIndexes()
+    [Theory]
+    // CreateSchema_CreatesSyncLogIndexes
+    [InlineData(
+        """
+            SELECT name FROM sqlite_master
+            WHERE type='index'
+            AND name LIKE 'idx_sync_log%'
+            """,
+        "idx_sync_log_version",
+        "idx_sync_log_table"
+    )]
+    // CreateSchema_CreatesSubscriptionIndexes
+    [InlineData(
+        """
+            SELECT name FROM sqlite_master
+            WHERE type='index'
+            AND name LIKE 'idx_subscriptions%'
+            ORDER BY name
+            """,
+        "idx_subscriptions_origin",
+        "idx_subscriptions_table"
+    )]
+    public void CreateSchema_CreatesSyncLogIndexes_Cases(
+        string caseValue0,
+        string caseValue2,
+        string caseValue3
+    )
     {
         // Act
         SyncSchema.CreateSchema(_db);
 
         // Assert
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            SELECT name FROM sqlite_master
-            WHERE type='index'
-            AND name LIKE 'idx_sync_log%'
-            """;
+        cmd.CommandText = caseValue0;
 
         var indexes = new List<string>();
         using var reader = cmd.ExecuteReader();
@@ -178,8 +201,8 @@ public sealed class SchemaAndTriggerTests : IDisposable
             indexes.Add(reader.GetString(0));
         }
 
-        Assert.Contains("idx_sync_log_version", indexes);
-        Assert.Contains("idx_sync_log_table", indexes);
+        Assert.Contains(caseValue2, indexes);
+        Assert.Contains(caseValue3, indexes);
     }
 
     [Fact]
@@ -198,32 +221,6 @@ public sealed class SchemaAndTriggerTests : IDisposable
 
         var indexName = cmd.ExecuteScalar() as string;
         Assert.Equal("idx_sync_clients_version", indexName);
-    }
-
-    [Fact]
-    public void CreateSchema_CreatesSubscriptionIndexes()
-    {
-        // Act
-        SyncSchema.CreateSchema(_db);
-
-        // Assert
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            SELECT name FROM sqlite_master
-            WHERE type='index'
-            AND name LIKE 'idx_subscriptions%'
-            ORDER BY name
-            """;
-
-        var indexes = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            indexes.Add(reader.GetString(0));
-        }
-
-        Assert.Contains("idx_subscriptions_origin", indexes);
-        Assert.Contains("idx_subscriptions_table", indexes);
     }
 
     #endregion
@@ -298,15 +295,17 @@ public sealed class SchemaAndTriggerTests : IDisposable
     {
         // Arrange
         SyncSchema.CreateSchema(_db);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Products (
-                ProductId TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Price REAL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Products (
+                    ProductId TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Price REAL
+                );
+                """
+        );
 
         // Act
         var result = TriggerGenerator.GenerateTriggersFromSchema(
@@ -726,14 +725,16 @@ public sealed class SchemaAndTriggerTests : IDisposable
     {
         // Arrange
         SyncSchema.CreateSchema(_db);
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE NoPrimaryKey (
-                Name TEXT,
-                Value INTEGER
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE NoPrimaryKey (
+                    Name TEXT,
+                    Value INTEGER
+                );
+                """
+        );
 
         // Act
         var result = TriggerGenerator.GenerateTriggersFromSchema(

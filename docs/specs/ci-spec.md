@@ -99,3 +99,29 @@ does not regress it, clone ClinicalCoding next to this checkout and run
 into `artifacts/local-feed` with a unique `0.0.0-local.<timestamp>` version, then
 runs ClinicalCoding's make targets (default `lint test build`) with that version
 and feed. The ClinicalCoding working tree is restored on exit.
+
+## Shared test command execution [CI-TEST-SHARED-COMMAND]
+
+Database test fixtures share synchronous command creation, execution, and disposal
+through a typed DbConnection helper linked from Tests.Shared. Typed configuration
+callbacks keep SQL assignment at each test site, preserving analyzer visibility.
+Every SQL literal, connection, test case, and assertion is retained. Parameterized
+commands, commands reused for multiple operations, and explicit command transactions
+keep their existing lifetimes and execution paths.
+
+### Shared test command bindings [CI-TEST-SHARED-COMMAND-PARAMETERS]
+
+Database command fixtures bind ordered name/value rows using parameters created by
+the command's provider. The parameter factory runs after SQL configuration, before
+execution. Calls retain their SQL, parameter names and values, transaction assignments
+and assertions. Only two-argument AddWithValue bindings with independent values use
+the fixture. The existing person fixture reuses the same provider parameter binder.
+
+### Independent scenario data [CI-DESLOP-INDEPENDENT-DATA]
+
+`**/Fixtures/*.Fixtures.cs` contains only independent test schema and mapping
+datasets. Their repeated shapes express different scenarios, and are excluded
+from clone analysis. Test runners, database setup and all assertions remain in
+the audited files. Fixture functions evaluate at their original call sites,
+with the same captured values and constructor/default semantics. Standalone
+teaching applications are also excluded; their complete examples are intentional.

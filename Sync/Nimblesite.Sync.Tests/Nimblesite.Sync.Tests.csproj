@@ -25,4 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+  </ItemGroup>
 </Project>

@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
+// Implements [SYNC-TRIGGER-SHARED-GENERATION].
 namespace Nimblesite.Sync.SQLite;
 
 /// <summary>
@@ -34,15 +35,23 @@ public static class TriggerGenerator
         string pkColumn
     )
     {
-        var sb = new StringBuilder();
-
-        sb.AppendLine(GenerateInsertTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateUpdateTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateDeleteTrigger(tableName, pkColumn));
-
-        return sb.ToString();
+        return TriggerGenerationWorkflow.Compose(
+            insert: GenerateChangeTrigger(
+                tableName: tableName,
+                columns: columns,
+                pkColumn: pkColumn,
+                operation: "insert",
+                eventName: "INSERT"
+            ),
+            update: GenerateChangeTrigger(
+                tableName: tableName,
+                columns: columns,
+                pkColumn: pkColumn,
+                operation: "update",
+                eventName: "UPDATE"
+            ),
+            delete: GenerateDeleteTrigger(tableName: tableName, pkColumn: pkColumn)
+        );
     }
 
     /// <summary>
@@ -65,53 +74,22 @@ public static class TriggerGenerator
     {
         logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
 
-        var columnsResult = GetTableColumns(connection, tableName);
-
-        if (columnsResult is ColumnInfoListError error)
+        return GetTableColumns(connection: connection, tableName: tableName) switch
         {
-            logger.LogError(
-                "TRIGGER: Failed to get columns for {Table}: {Error}",
-                tableName,
-                error.Value
-            );
-            return new StringSyncError(error.Value);
-        }
-
-        var columns = ((ColumnInfoListOk)columnsResult).Value;
-
-        if (columns.Count == 0)
-        {
-            logger.LogError("TRIGGER: Table {Table} not found or has no columns", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' not found or has no columns")
-            );
-        }
-
-        var pkColumn = columns.FirstOrDefault(c => c.IsPrimaryKey);
-        if (pkColumn is null)
-        {
-            logger.LogError("TRIGGER: Table {Table} has no primary key", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' has no primary key")
-            );
-        }
-
-        logger.LogDebug(
-            "TRIGGER: Table {Table} has {ColumnCount} columns, PK={PK}",
-            tableName,
-            columns.Count,
-            pkColumn.Name
-        );
-
-        var columnNames = columns.Select(c => c.Name).ToList();
-        var triggers = GenerateTriggers(tableName, columnNames, pkColumn.Name);
-
-        logger.LogInformation(
-            "TRIGGER: Generated INSERT/UPDATE/DELETE triggers for table {Table}",
-            tableName
-        );
-
-        return new StringSyncOk(triggers);
+            ColumnInfoListError error => TriggerGenerationWorkflow.ColumnError(
+                tableName: tableName,
+                error: error.Value,
+                logger: logger
+            ),
+            ColumnInfoListOk columns => TriggerGenerationWorkflow.Generate(
+                tableName: tableName,
+                columns: columns.Value,
+                isPrimaryKey: column => column.IsPrimaryKey,
+                columnName: column => column.Name,
+                generate: GenerateTriggers,
+                logger: logger
+            ),
+        };
     }
 
     /// <summary>
@@ -261,60 +239,44 @@ public static class TriggerGenerator
         }
     }
 
-    private static string GenerateInsertTrigger(
-        string tableName,
-        IReadOnlyList<string> columns,
-        string pkColumn
-    ) =>
-        string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_insert
-            AFTER INSERT ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', NEW.{1}),
-                    'insert',
-                    {2},
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn,
-            BuildJsonObject(columns, "NEW")
-        );
+    // Implements [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE].
+    private static readonly CompositeFormat ChangeTriggerFormat = CompositeFormat.Parse(
+        format: """
+        CREATE TRIGGER {0}_sync_{3}
+        AFTER {4} ON {0}
+        WHEN (SELECT sync_active FROM _sync_session) = 0
+        BEGIN
+            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+            VALUES (
+                '{0}',
+                json_object('{1}', NEW.{1}),
+                '{3}',
+                {2},
+                (SELECT value FROM _sync_state WHERE key = 'origin_id'),
+                strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            );
+        END;
+        """
+    );
 
-    private static string GenerateUpdateTrigger(
+    private static string GenerateChangeTrigger(
         string tableName,
         IReadOnlyList<string> columns,
-        string pkColumn
+        string pkColumn,
+        string operation,
+        string eventName
     ) =>
         string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_update
-            AFTER UPDATE ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', NEW.{1}),
-                    'update',
-                    {2},
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn,
-            BuildJsonObject(columns, "NEW")
+            provider: CultureInfo.InvariantCulture,
+            format: ChangeTriggerFormat,
+            args:
+            [
+                tableName,
+                pkColumn,
+                BuildJsonObject(columns: columns, prefix: "NEW"),
+                operation,
+                eventName,
+            ]
         );
 
     private static string GenerateDeleteTrigger(string tableName, string pkColumn) =>

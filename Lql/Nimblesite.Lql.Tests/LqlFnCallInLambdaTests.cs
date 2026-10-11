@@ -47,14 +47,24 @@ public sealed class LqlFnCallInLambdaTests
         }
     }
 
-    [Fact]
-    public void Lambda_BareFnCall_StringArgs_PassesThrough()
+    [Theory]
+    // Lambda_BareFnCall_StringArgs_PassesThrough
+    [InlineData("t |> filter(fn(x) => is_member('a', 'b'))", "is_member('a', 'b')", "is_member()")]
+    // Lambda_BareFnCall_IntArg_PassesThrough
+    [InlineData("t |> filter(fn(x) => has_role(42))", "has_role(42)", "has_role()")]
+    // Lambda_BareFnCall_DecimalArg_PassesThrough
+    [InlineData("t |> filter(fn(x) => has_balance(1.5))", "has_balance(1.5)", "has_balance()")]
+    public void Lambda_BareFnCall_StringArgs_PassesThrough_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue3
+    )
     {
-        foreach (var sql in ToAllDialects("t |> filter(fn(x) => is_member('a', 'b'))"))
+        foreach (var sql in ToAllDialects(caseValue0))
         {
-            Assert.Contains("is_member('a', 'b')", sql, StringComparison.Ordinal);
+            Assert.Contains(caseValue1, sql, StringComparison.Ordinal);
             Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("is_member()", sql, StringComparison.Ordinal);
+            Assert.DoesNotContain(caseValue3, sql, StringComparison.Ordinal);
         }
     }
 
@@ -121,28 +131,6 @@ public sealed class LqlFnCallInLambdaTests
             Assert.Contains("is_member(", sql, StringComparison.Ordinal);
             Assert.Contains("00000000-0000-0000-0000-000000000000", sql, StringComparison.Ordinal);
             Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void Lambda_BareFnCall_IntArg_PassesThrough()
-    {
-        foreach (var sql in ToAllDialects("t |> filter(fn(x) => has_role(42))"))
-        {
-            Assert.Contains("has_role(42)", sql, StringComparison.Ordinal);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("has_role()", sql, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void Lambda_BareFnCall_DecimalArg_PassesThrough()
-    {
-        foreach (var sql in ToAllDialects("t |> filter(fn(x) => has_balance(1.5))"))
-        {
-            Assert.Contains("has_balance(1.5)", sql, StringComparison.Ordinal);
-            Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("has_balance()", sql, StringComparison.Ordinal);
         }
     }
 

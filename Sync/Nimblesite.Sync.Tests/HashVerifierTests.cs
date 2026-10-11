@@ -1,6 +1,6 @@
 namespace Nimblesite.Sync.Tests;
 
-public sealed class HashVerifierTests
+public sealed partial class HashVerifierTests
 {
     [Fact]
     public void ComputeBatchHash_EmptyBatch_ReturnsConsistentHash()
@@ -17,24 +17,8 @@ public sealed class HashVerifierTests
     {
         var entries = new[]
         {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-            new SyncLogEntry(
-                2,
-                "Person",
-                "{\"Id\":\"2\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"2\",\"Name\":\"Bob\"}",
-                "origin-1",
-                "2025-01-01T00:00:01.000Z"
-            ),
+            Fixture_ComputeBatchHash_SameEntries_SameHash_1(),
+            Fixture_ComputeBatchHash_SameEntries_SameHash_2(),
         };
 
         var hash1 = HashVerifier.ComputeBatchHash(entries);
@@ -46,31 +30,9 @@ public sealed class HashVerifierTests
     [Fact]
     public void ComputeBatchHash_DifferentEntries_DifferentHash()
     {
-        var entries1 = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries1 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_1() };
 
-        var entries2 = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Bob\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries2 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_2() };
 
         var hash1 = HashVerifier.ComputeBatchHash(entries1);
         var hash2 = HashVerifier.ComputeBatchHash(entries2);
@@ -81,18 +43,7 @@ public sealed class HashVerifierTests
     [Fact]
     public void ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly()
     {
-        var entries = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Delete,
-                null,
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries = new[] { Fixture_ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly_1() };
 
         var hash = HashVerifier.ComputeBatchHash(entries);
 

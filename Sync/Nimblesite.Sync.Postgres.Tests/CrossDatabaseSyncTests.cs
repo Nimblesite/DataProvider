@@ -1,4 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
+using Tests.Shared;
 using PersonCommand = global::Tests.Shared.PersonCommandParameters;
 
 namespace Nimblesite.Sync.Postgres.Tests;
@@ -68,28 +71,32 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
 
     private static void CreateTestTable(NpgsqlConnection conn)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS person (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT
-            )
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS person (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    email TEXT
+                )
+                """
+        );
     }
 
     private static void CreateTestTable(SqliteConnection conn)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT
-            )
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT
+                )
+                """
+        );
     }
 
     #region Spec Section 7: Unified Change Log
@@ -482,36 +489,38 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
 
     private static void UpdatePerson(NpgsqlConnection conn, string id, string name)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE person SET name = @name WHERE id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: cmd => cmd.CommandText = "UPDATE person SET name = @name WHERE id = @id",
+            parameters: () => [("@id", id), ("@name", name)]
+        );
     }
 
     private static void UpdatePerson(SqliteConnection conn, string id, string name)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE Person SET Name = @name WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: cmd => cmd.CommandText = "UPDATE Person SET Name = @name WHERE Id = @id",
+            parameters: () => [("@id", id), ("@name", name)]
+        );
     }
 
     private static void DeletePerson(NpgsqlConnection conn, string id)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM person WHERE id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: cmd => cmd.CommandText = "DELETE FROM person WHERE id = @id",
+            parameters: () => [("@id", id)]
+        );
     }
 
     private static void DeletePerson(SqliteConnection conn, string id)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM Person WHERE Id = @id";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
+            parameters: () => [("@id", id)]
+        );
     }
 
     private static IReadOnlyList<SyncLogEntry> FetchChanges(NpgsqlConnection conn, long fromVersion)

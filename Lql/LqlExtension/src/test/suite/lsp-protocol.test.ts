@@ -424,6 +424,21 @@ suite("LSP Protocol E2E Tests", function () {
     return result as LspInitializeResult;
   }
 
+  // Implements [LQL-HOVER-TEST-REQUEST].
+  async function hoverAt(
+    uri: string,
+    position: LspPosition,
+    message: string,
+  ): Promise<LspHoverResult> {
+    const raw = await client.request("textDocument/hover", {
+      textDocument: { uri },
+      position,
+    });
+    assert.ok(raw !== null && raw !== undefined, message);
+    // Safe: LSP hover response always has this shape when non-null
+    return raw as LspHoverResult;
+  }
+
   /** Open a document and wait for diagnostics */
   async function openDocument(
     uri: string,
@@ -574,14 +589,7 @@ suite("LSP Protocol E2E Tests", function () {
       "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)";
     await openDocument("file:///test/hover.lql", content);
 
-    const filterHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/hover.lql" },
-      position: { line: 0, character: 12 },
-    });
-
-    assert.ok(filterHover !== null && filterHover !== undefined, "Hover result for 'filter' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = filterHover as LspHoverResult;
+    const hover = await hoverAt("file:///test/hover.lql", { line: 0, character: 12 }, "Hover result for 'filter' must not be null");
     assert.ok(hover.contents !== undefined, "Hover must have contents");
     const filterText = extractHoverText(hover);
     assert.ok(
@@ -600,14 +608,7 @@ suite("LSP Protocol E2E Tests", function () {
       "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)";
     await openDocument("file:///test/hover2.lql", content);
 
-    const selectHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/hover2.lql" },
-      position: { line: 0, character: 52 },
-    });
-
-    assert.ok(selectHover !== null && selectHover !== undefined, "Hover result for 'select' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = selectHover as LspHoverResult;
+    const hover = await hoverAt("file:///test/hover2.lql", { line: 0, character: 52 }, "Hover result for 'select' must not be null");
     const selectText = extractHoverText(hover);
     assert.ok(
       selectText.toLowerCase().includes("select"),
@@ -626,14 +627,7 @@ suite("LSP Protocol E2E Tests", function () {
       "orders |> select(count(*) as cnt, sum(orders.total) as total)",
     );
 
-    const countHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/agg_hover.lql" },
-      position: { line: 0, character: 19 },
-    });
-
-    assert.ok(countHover !== null && countHover !== undefined, "Hover for 'count' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const countHoverTyped = countHover as LspHoverResult;
+    const countHoverTyped = await hoverAt("file:///test/agg_hover.lql", { line: 0, character: 19 }, "Hover for 'count' must not be null");
     assert.ok(countHoverTyped.contents !== undefined, "Hover must have contents");
     const countText = extractHoverText(countHoverTyped);
     assert.ok(
@@ -641,14 +635,7 @@ suite("LSP Protocol E2E Tests", function () {
       "Must describe count function",
     );
 
-    const sumHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/agg_hover.lql" },
-      position: { line: 0, character: 35 },
-    });
-
-    assert.ok(sumHover !== null && sumHover !== undefined, "Hover for 'sum' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const sumHoverTyped = sumHover as LspHoverResult;
+    const sumHoverTyped = await hoverAt("file:///test/agg_hover.lql", { line: 0, character: 35 }, "Hover for 'sum' must not be null");
     const sumText = extractHoverText(sumHoverTyped);
     assert.ok(
       sumText.toLowerCase().includes("sum"),
@@ -1100,13 +1087,7 @@ suite("LSP Protocol E2E Tests", function () {
     await openDocument("file:///test/intelliprompt_proof1.lql", content);
 
     // Hover over 'filter' at line 1, char ~5
-    const filterHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 1, character: 5 },
-    });
-    assert.ok(filterHoverRaw !== null && filterHoverRaw !== undefined, "Hover for 'filter' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const filterHover = filterHoverRaw as LspHoverResult;
+    const filterHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 1, character: 5 }, "Hover for 'filter' must return data");
     assert.ok(filterHover.contents !== undefined, "Hover must have contents");
     const filterText = extractHoverText(filterHover);
     assert.ok(filterText.includes("filter"), "Hover must mention 'filter'");
@@ -1114,25 +1095,13 @@ suite("LSP Protocol E2E Tests", function () {
     assert.ok(filterText.includes("```"), "Hover must contain code block with signature");
 
     // Hover over 'join' at line 2, char ~5
-    const joinHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 2, character: 5 },
-    });
-    assert.ok(joinHoverRaw !== null && joinHoverRaw !== undefined, "Hover for 'join' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const joinHover = joinHoverRaw as LspHoverResult;
+    const joinHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 2, character: 5 }, "Hover for 'join' must return data");
     const joinText = extractHoverText(joinHover);
     assert.ok(joinText.toLowerCase().includes("join"), "Hover must describe join");
     assert.ok(joinText.includes("```"), "Hover must contain code signature for join");
 
     // Hover over 'select' at line 3, char ~5
-    const selectHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 3, character: 5 },
-    });
-    assert.ok(selectHoverRaw !== null && selectHoverRaw !== undefined, "Hover for 'select' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const selectHover = selectHoverRaw as LspHoverResult;
+    const selectHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 3, character: 5 }, "Hover for 'select' must return data");
     const selectText = extractHoverText(selectHover);
     assert.ok(selectText.toLowerCase().includes("select"), "Hover must describe select");
     assert.ok(
@@ -1141,58 +1110,28 @@ suite("LSP Protocol E2E Tests", function () {
     );
 
     // Hover over 'group_by' at line 4, char ~5
-    const groupHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 4, character: 5 },
-    });
-    assert.ok(groupHoverRaw !== null && groupHoverRaw !== undefined, "Hover for 'group_by' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const groupHover = groupHoverRaw as LspHoverResult;
+    const groupHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 4, character: 5 }, "Hover for 'group_by' must return data");
     const groupText = extractHoverText(groupHover);
     assert.ok(groupText.toLowerCase().includes("group"), "Hover must describe grouping");
 
     // Hover over 'having' at line 5, char ~5
-    const havingHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 5, character: 5 },
-    });
-    assert.ok(havingHoverRaw !== null && havingHoverRaw !== undefined, "Hover for 'having' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const havingHover = havingHoverRaw as LspHoverResult;
+    const havingHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 5, character: 5 }, "Hover for 'having' must return data");
     const havingText = extractHoverText(havingHover);
     assert.ok(havingText.toLowerCase().includes("having"), "Hover must describe having");
     assert.ok(havingText.toLowerCase().includes("filter"), "Having hover must mention filtering groups");
 
     // Hover over 'order_by' at line 6, char ~5
-    const orderHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 6, character: 5 },
-    });
-    assert.ok(orderHoverRaw !== null && orderHoverRaw !== undefined, "Hover for 'order_by' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const orderHover = orderHoverRaw as LspHoverResult;
+    const orderHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 6, character: 5 }, "Hover for 'order_by' must return data");
     const orderText = extractHoverText(orderHover);
     assert.ok(orderText.toLowerCase().includes("order"), "Hover must describe ordering");
 
     // Hover over 'limit' at line 7, char ~5
-    const limitHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 7, character: 5 },
-    });
-    assert.ok(limitHoverRaw !== null && limitHoverRaw !== undefined, "Hover for 'limit' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const limitHover = limitHoverRaw as LspHoverResult;
+    const limitHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 7, character: 5 }, "Hover for 'limit' must return data");
     const limitText = extractHoverText(limitHover);
     assert.ok(limitText.toLowerCase().includes("limit"), "Hover must describe limit");
 
     // Hover over 'offset' at line 8, char ~5
-    const offsetHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 8, character: 5 },
-    });
-    assert.ok(offsetHoverRaw !== null && offsetHoverRaw !== undefined, "Hover for 'offset' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const offsetHover = offsetHoverRaw as LspHoverResult;
+    const offsetHover = await hoverAt("file:///test/intelliprompt_proof1.lql", { line: 8, character: 5 }, "Hover for 'offset' must return data");
     const offsetText = extractHoverText(offsetHover);
     assert.ok(offsetText.toLowerCase().includes("offset"), "Hover must describe offset");
     assert.ok(offsetText.toLowerCase().includes("skip"), "Offset hover must mention skipping rows");
@@ -1204,13 +1143,7 @@ suite("LSP Protocol E2E Tests", function () {
     await openDocument("file:///test/intelliprompt_agg.lql", content);
 
     // Hover over 'count' at position ~17
-    const countHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 19 },
-    });
-    assert.ok(countHoverRaw !== null && countHoverRaw !== undefined, "Must get hover for 'count'");
-    // Safe: LSP hover response always has this shape when non-null
-    const countHover = countHoverRaw as LspHoverResult;
+    const countHover = await hoverAt("file:///test/intelliprompt_agg.lql", { line: 0, character: 19 }, "Must get hover for 'count'");
     assert.ok(typeof countHover.contents !== "string", "Count hover contents must not be a plain string");
     assert.ok(countHover.contents?.kind === "markdown", "Hover contents must be Markdown format");
     assert.ok(
@@ -1219,13 +1152,7 @@ suite("LSP Protocol E2E Tests", function () {
     );
 
     // Hover over 'sum' at position ~37
-    const sumHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 35 },
-    });
-    assert.ok(sumHoverRaw !== null && sumHoverRaw !== undefined, "Must get hover for 'sum'");
-    // Safe: LSP hover response always has this shape when non-null
-    const sumHover = sumHoverRaw as LspHoverResult;
+    const sumHover = await hoverAt("file:///test/intelliprompt_agg.lql", { line: 0, character: 35 }, "Must get hover for 'sum'");
     assert.ok(typeof sumHover.contents !== "string", "Sum hover contents must not be a plain string");
     assert.ok(sumHover.contents?.kind === "markdown", "Sum hover must be Markdown");
     assert.ok(
@@ -1234,33 +1161,15 @@ suite("LSP Protocol E2E Tests", function () {
     );
 
     // Hover over 'avg'
-    const avgHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 69 },
-    });
-    assert.ok(avgHoverRaw !== null && avgHoverRaw !== undefined, "Must get hover for 'avg'");
-    // Safe: LSP hover response always has this shape when non-null
-    const avgHover = avgHoverRaw as LspHoverResult;
+    const avgHover = await hoverAt("file:///test/intelliprompt_agg.lql", { line: 0, character: 69 }, "Must get hover for 'avg'");
     assert.ok(extractHoverText(avgHover).toLowerCase().includes("avg"), "Avg hover must describe avg");
 
     // Hover over 'max'
-    const maxHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 99 },
-    });
-    assert.ok(maxHoverRaw !== null && maxHoverRaw !== undefined, "Must get hover for 'max'");
-    // Safe: LSP hover response always has this shape when non-null
-    const maxHover = maxHoverRaw as LspHoverResult;
+    const maxHover = await hoverAt("file:///test/intelliprompt_agg.lql", { line: 0, character: 99 }, "Must get hover for 'max'");
     assert.ok(extractHoverText(maxHover).toLowerCase().includes("max"), "Max hover must describe max");
 
     // Hover over 'min'
-    const minHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 127 },
-    });
-    assert.ok(minHoverRaw !== null && minHoverRaw !== undefined, "Must get hover for 'min'");
-    // Safe: LSP hover response always has this shape when non-null
-    const minHover = minHoverRaw as LspHoverResult;
+    const minHover = await hoverAt("file:///test/intelliprompt_agg.lql", { line: 0, character: 127 }, "Must get hover for 'min'");
     assert.ok(extractHoverText(minHover).toLowerCase().includes("min"), "Min hover must describe min");
   });
 
@@ -1270,13 +1179,7 @@ suite("LSP Protocol E2E Tests", function () {
     await openDocument("file:///test/intelliprompt_string.lql", content);
 
     // Hover over 'concat'
-    const concatHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 18 },
-    });
-    assert.ok(concatHoverRaw !== null && concatHoverRaw !== undefined, "Must get hover for 'concat'");
-    // Safe: LSP hover response always has this shape when non-null
-    const concatHover = concatHoverRaw as LspHoverResult;
+    const concatHover = await hoverAt("file:///test/intelliprompt_string.lql", { line: 0, character: 18 }, "Must get hover for 'concat'");
     assert.ok(
       extractHoverText(concatHover).toLowerCase().includes("concat"),
       "Concat hover must describe concatenation",
@@ -1287,39 +1190,21 @@ suite("LSP Protocol E2E Tests", function () {
     );
 
     // Hover over 'upper'
-    const upperHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 60 },
-    });
-    assert.ok(upperHoverRaw !== null && upperHoverRaw !== undefined, "Must get hover for 'upper'");
-    // Safe: LSP hover response always has this shape when non-null
-    const upperHover = upperHoverRaw as LspHoverResult;
+    const upperHover = await hoverAt("file:///test/intelliprompt_string.lql", { line: 0, character: 60 }, "Must get hover for 'upper'");
     assert.ok(
       extractHoverText(upperHover).toLowerCase().includes("upper"),
       "Upper hover must describe uppercase",
     );
 
     // Hover over 'trim'
-    const trimHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 94 },
-    });
-    assert.ok(trimHoverRaw !== null && trimHoverRaw !== undefined, "Must get hover for 'trim'");
-    // Safe: LSP hover response always has this shape when non-null
-    const trimHover = trimHoverRaw as LspHoverResult;
+    const trimHover = await hoverAt("file:///test/intelliprompt_string.lql", { line: 0, character: 94 }, "Must get hover for 'trim'");
     assert.ok(
       extractHoverText(trimHover).toLowerCase().includes("trim"),
       "Trim hover must describe trimming",
     );
 
     // Hover over 'length'
-    const lengthHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 117 },
-    });
-    assert.ok(lengthHoverRaw !== null && lengthHoverRaw !== undefined, "Must get hover for 'length'");
-    // Safe: LSP hover response always has this shape when non-null
-    const lengthHover = lengthHoverRaw as LspHoverResult;
+    const lengthHover = await hoverAt("file:///test/intelliprompt_string.lql", { line: 0, character: 117 }, "Must get hover for 'length'");
     assert.ok(
       extractHoverText(lengthHover).toLowerCase().includes("length"),
       "Length hover must describe string length",
@@ -1571,13 +1456,7 @@ let final_report = users_active
     assert.ok(completions !== null && completions !== undefined, "Must get completions");
 
     // Step 4: Hover over 'filter' on line 1
-    const hoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/full_workflow.lql" },
-      position: { line: 1, character: 5 },
-    });
-    assert.ok(hoverRaw !== null && hoverRaw !== undefined, "Must get hover info");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = hoverRaw as LspHoverResult;
+    const hover = await hoverAt("file:///test/full_workflow.lql", { line: 1, character: 5 }, "Must get hover info");
     assert.ok(typeof hover.contents !== "string", "Hover contents must not be a plain string");
     assert.ok(hover.contents?.kind === "markdown", "Hover must be Markdown");
     assert.ok(
@@ -1670,13 +1549,7 @@ let final_report = users_active
     await openDocument("file:///test/kw_hover_proof.lql", content);
 
     // Hover over 'let' at position 0-2
-    const letHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/kw_hover_proof.lql" },
-      position: { line: 0, character: 1 },
-    });
-    assert.ok(letHoverRaw !== null && letHoverRaw !== undefined, "Must get hover for 'let'");
-    // Safe: LSP hover response always has this shape when non-null
-    const letHover = letHoverRaw as LspHoverResult;
+    const letHover = await hoverAt("file:///test/kw_hover_proof.lql", { line: 0, character: 1 }, "Must get hover for 'let'");
     assert.ok(
       extractHoverText(letHover).toLowerCase().includes("bind"),
       "Let hover must describe binding",
@@ -1687,13 +1560,7 @@ let final_report = users_active
     );
 
     // Hover over 'fn' at position ~29
-    const fnHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/kw_hover_proof.lql" },
-      position: { line: 0, character: 29 },
-    });
-    assert.ok(fnHoverRaw !== null && fnHoverRaw !== undefined, "Must get hover for 'fn'");
-    // Safe: LSP hover response always has this shape when non-null
-    const fnHover = fnHoverRaw as LspHoverResult;
+    const fnHover = await hoverAt("file:///test/kw_hover_proof.lql", { line: 0, character: 29 }, "Must get hover for 'fn'");
     assert.ok(
       extractHoverText(fnHover).toLowerCase().includes("lambda"),
       "fn hover must describe lambda expressions",

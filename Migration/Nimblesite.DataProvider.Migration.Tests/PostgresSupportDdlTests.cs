@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed class PostgresSupportDdlTests
@@ -7,7 +8,7 @@ public sealed class PostgresSupportDdlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new CreateOrAlterRoleOperation(
-                new PostgresRoleDefinition { Name = "app_user", GrantTo = ["postgres"] }
+                SchemaTestData.PostgresRole(name: "app_user", grantTo: ["postgres"])
             )
         );
 
@@ -21,24 +22,19 @@ public sealed class PostgresSupportDdlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "is_member",
-                    Arguments =
+                SchemaTestData.PostgresFunction(
+                    schema: "public",
+                    name: "is_member",
+                    arguments:
                     [
-                        new PostgresFunctionArgumentDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = "uuid",
-                        },
-                        new PostgresFunctionArgumentDefinition { Name = "user_id", Type = "uuid" },
+                        SchemaTestData.PostgresFunctionArgument(name: "tenant_id", type: "uuid"),
+                        SchemaTestData.PostgresFunctionArgument(name: "user_id", type: "uuid"),
                     ],
-                    Returns = "boolean",
-                    SecurityDefiner = true,
-                    Body = "SELECT true",
-                    ExecuteRoles = ["app_user", "app_admin"],
-                }
+                    returns: "boolean",
+                    securityDefiner: true,
+                    body: "SELECT true",
+                    executeRoles: ["app_user", "app_admin"]
+                )
             )
         );
 
@@ -68,13 +64,12 @@ public sealed class PostgresSupportDdlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["select", "insert", "update", "delete"],
-                    Roles = ["app_user", "app_admin"],
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.AllTablesInSchema,
+                    privileges: ["select", "insert", "update", "delete"],
+                    roles: ["app_user", "app_admin"]
+                )
             )
         );
 
@@ -89,15 +84,14 @@ public sealed class PostgresSupportDdlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "auth",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["select", "insert"],
-                    Roles = ["app_admin"],
-                    RunAs = "supabase_admin",
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: "auth",
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["select", "insert"],
+                    roles: ["app_admin"],
+                    runAs: "supabase_admin"
+                )
             )
         );
 
@@ -118,14 +112,13 @@ public sealed class PostgresSupportDdlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new RevokePrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "documents",
-                    Privileges = ["select"],
-                    Roles = ["app_user"],
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.Table,
+                    objectName: "documents",
+                    privileges: ["select"],
+                    roles: ["app_user"]
+                )
             )
         );
 

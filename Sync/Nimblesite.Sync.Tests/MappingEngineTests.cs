@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using static Nimblesite.Sync.Tests.MappingTestData;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -8,18 +9,18 @@ namespace Nimblesite.Sync.Tests;
 /// Tests for MappingEngine - data transformation during sync.
 /// Covers spec Section 7 - Data Mapping.
 /// </summary>
-public sealed class MappingEngineTests
+public sealed partial class MappingEngineTests
 {
     private readonly NullLogger<MappingEngineTests> _logger = new();
 
     [Fact]
     public void FindMapping_ExactMatch_ReturnsMapping()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-to-customer",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Push
+        var mapping = Fixture_FindMapping_ExactMatch_ReturnsMapping_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -32,11 +33,11 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPush()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-both",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Both
+        var mapping = Fixture_FindMapping_BothDirection_MatchesPush_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -49,11 +50,11 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_BothDirection_MatchesPull()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-both",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Both
+        var mapping = Fixture_FindMapping_BothDirection_MatchesPull_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -65,11 +66,11 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_WrongDirection_ReturnsNull()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-push",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Push
+        var mapping = Fixture_FindMapping_WrongDirection_ReturnsNull_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -81,11 +82,11 @@ public sealed class MappingEngineTests
     [Fact]
     public void FindMapping_UnmappedTable_ReturnsNull()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "order-mapping",
-            sourceTable: "Order",
-            targetTable: "OrderSummary",
-            direction: MappingDirection.Push
+        var mapping = Fixture_FindMapping_UnmappedTable_ReturnsNull_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
 
@@ -104,9 +105,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"p1","Name":"Alice"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Single(success.Entries);
         Assert.Equal("Person", success.Entries[0].TargetTable);
         Assert.Equal("""{"Id":"p1"}""", success.Entries[0].TargetPkValue);
@@ -122,20 +121,18 @@ public sealed class MappingEngineTests
             payload: """{"Id":"p1","Name":"Alice"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var skipped = Assert.IsType<MappingSkipped>(result);
+        var skipped = Expected<MappingSkipped>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Person", skipped.Reason);
     }
 
     [Fact]
     public void ApplyMapping_SingleTarget_RenamesTable()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-to-customer",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Push
+        var mapping = Fixture_ApplyMapping_SingleTarget_RenamesTable_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
         var entry = MappingTestData.Entry(
@@ -144,9 +141,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1","Name":"Alice"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Single(success.Entries);
         Assert.Equal("Customer", success.Entries[0].TargetTable);
     }
@@ -169,9 +164,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1","Name":"Alice"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("CustomerId", success.Entries[0].TargetPkValue);
         Assert.Contains("u1", success.Entries[0].TargetPkValue);
     }
@@ -185,10 +178,11 @@ public sealed class MappingEngineTests
             new("EmailAddress", "Email"),
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "user-mapping",
-            sourceTable: "User",
-            targetTable: "Customer",
+        var mapping = Fixture_ApplyMapping_SingleTarget_MapsColumns_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -198,9 +192,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1","FullName":"Alice","EmailAddress":"alice@test.com"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Name", success.Entries[0].MappedPayload);
         Assert.Contains("Alice", success.Entries[0].MappedPayload);
         Assert.Contains("Email", success.Entries[0].MappedPayload);
@@ -216,10 +208,11 @@ public sealed class MappingEngineTests
             new(null, "Source", TransformType.Constant, "mobile-app"),
         };
 
-        var mapping = MappingTestData.Mapping(
-            id: "user-mapping",
-            sourceTable: "User",
-            targetTable: "Customer",
+        var mapping = Fixture_ApplyMapping_SingleTarget_ConstantTransform_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            columnMappings: columnMappings,
             columnMappings: columnMappings
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
@@ -229,9 +222,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1","Name":"Alice"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Source", success.Entries[0].MappedPayload);
         Assert.Contains("mobile-app", success.Entries[0].MappedPayload);
     }
@@ -254,9 +245,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1","Name":"Alice","PasswordHash":"secret","SecurityStamp":"xyz"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Contains("Name", success.Entries[0].MappedPayload);
         Assert.DoesNotContain("PasswordHash", success.Entries[0].MappedPayload);
         Assert.DoesNotContain("SecurityStamp", success.Entries[0].MappedPayload);
@@ -280,9 +269,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"u1"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var skipped = Assert.IsType<MappingSkipped>(result);
+        var skipped = Expected<MappingSkipped>(entry: entry, config: config, logger: _logger);
         Assert.Contains("disabled", skipped.Reason);
     }
 
@@ -320,9 +307,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"o1","Total":99.99,"CustomerId":"c1"}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Equal(2, success.Entries.Count);
         Assert.Contains(success.Entries, e => e.TargetTable == "OrderHeader");
         Assert.Contains(success.Entries, e => e.TargetTable == "OrderAudit");
@@ -356,9 +341,7 @@ public sealed class MappingEngineTests
             payload: """{"Id":"o1","Total":99.99}"""
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         var header = success.Entries.First(e => e.TargetTable == "OrderHeader");
         var audit = success.Entries.First(e => e.TargetTable == "OrderAudit");
 
@@ -404,26 +387,24 @@ public sealed class MappingEngineTests
     [Fact]
     public void ApplyMapping_DeleteOperation_NullPayload_Succeeds()
     {
-        var mapping = MappingTestData.Mapping(
-            id: "user-mapping",
-            sourceTable: "User",
-            targetTable: "Customer",
-            direction: MappingDirection.Push
+        var mapping = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_1(
+            id: id,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            direction: direction
         );
         var config = MappingTestData.Strict(mappings: [mapping]);
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "User",
-            PkValue: """{"Id":"u1"}""",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "origin-1",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var entry = Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_2(
+            Version: Version,
+            TableName: TableName,
+            PkValue: PkValue,
+            Operation: Operation,
+            Payload: Payload,
+            Origin: Origin,
+            Timestamp: Timestamp
         );
 
-        var result = MappingEngine.ApplyMapping(entry, config, MappingDirection.Push, _logger);
-
-        var success = Assert.IsType<MappingSuccess>(result);
+        var success = Expected<MappingSuccess>(entry: entry, config: config, logger: _logger);
         Assert.Null(success.Entries[0].MappedPayload);
     }
 }

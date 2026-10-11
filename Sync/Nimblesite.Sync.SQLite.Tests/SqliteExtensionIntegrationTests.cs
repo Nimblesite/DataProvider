@@ -1,3 +1,5 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -260,16 +262,17 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void GetOldestSyncLogVersion_WithEntries_ReturnsMinVersion()
     {
         // Arrange - Insert sync log entries directly
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o1"}', 'insert', '{}', @origin, @ts);
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o2"}', 'insert', '{}', @origin, @ts);
-            """;
-        cmd.Parameters.AddWithValue("@origin", _originId);
-        cmd.Parameters.AddWithValue("@ts", Timestamp);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: cmd =>
+                cmd.CommandText = """
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES ('Orders', '{"Id":"o1"}', 'insert', '{}', @origin, @ts);
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES ('Orders', '{"Id":"o2"}', 'insert', '{}', @origin, @ts);
+                """,
+            parameters: () => [("@origin", _originId), ("@ts", Timestamp)]
+        );
 
         // Act
         var result = _db.GetOldestSyncLogVersion();

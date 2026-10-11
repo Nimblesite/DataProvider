@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -8,7 +9,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// because the diff matched on name only.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresContainerFixture fixture)
+public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -75,42 +78,21 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
                 "kind IN ('llm_request','llm_input_tokens','llm_output_tokens','machine_seconds')",
             _ => throw new ArgumentOutOfRangeException(nameof(version)),
         };
-        return new SchemaDefinition
-        {
-            Name = "issue57",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = SchemaName,
-                    Name = "usage_events",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "kind",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    CheckConstraints =
-                    [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression = expression,
-                        },
-                    ],
-                },
-            ],
-        };
+        return Fixture_SchemaWithKindCheck_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey,
+            checkConstraints: checkConstraints,
+            name: name,
+            expression: expression,
+            expression: expression
+        );
     }
 
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)

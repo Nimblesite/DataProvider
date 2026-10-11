@@ -3,7 +3,7 @@ namespace Nimblesite.Sync.Tests;
 /// <summary>
 /// Tests for SyncState, SyncSession, and SyncClient records.
 /// </summary>
-public sealed class SyncStateTests
+public sealed partial class SyncStateTests
 {
     [Fact]
     public void SyncState_CreatesCorrectRecord()
@@ -100,15 +100,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncLogEntry_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncLogEntry_CreatesCorrectRecord_1();
 
         Assert.Equal(1, entry.Version);
         Assert.Equal("Person", entry.TableName);
@@ -122,15 +114,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncLogEntry_DeleteHasNullPayload()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Delete,
-            null,
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncLogEntry_DeleteHasNullPayload_1();
 
         Assert.Null(entry.Payload);
         Assert.Equal(SyncOperation.Delete, entry.Operation);
@@ -177,15 +161,7 @@ public sealed class SyncStateTests
     [Fact]
     public void ChangeNotification_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{}",
-            "origin",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_ChangeNotification_CreatesCorrectRecord_1();
 
         var notification = new ChangeNotification("sub-1", entry);
 

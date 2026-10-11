@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Integration.Tests;
 
 // Implements [SYNC-MAPPING-E2E-SETUP].
@@ -29,14 +32,14 @@ public sealed partial class HttpMappingSyncTests
         var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
         // Act - Insert in source with SOURCE schema columns
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = """
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText = """
                 INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp, CreatedAt)
                 VALUES ('u1', 'Alice Smith', 'alice@example.com', 'secret123', 'stamp-xyz', '2024-01-15');
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Fetch changes from source
         var changes = SyncLogRepository.FetchChanges(source, 0, 100);
@@ -100,14 +103,14 @@ public sealed partial class HttpMappingSyncTests
         var mappingConfig = UserToCustomerConfig(columnMappings, ["PasswordHash", "SecurityStamp"]);
 
         // Insert in source
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = """
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText = """
                 INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp)
                 VALUES ('u2', 'Bob Johnson', 'bob@example.com', 'hash123', 'stamp-abc');
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Fetch changes
         var changes = SyncLogRepository.FetchChanges(source, 0, 100);
@@ -220,14 +223,14 @@ public sealed partial class HttpMappingSyncTests
         var mappingConfig = new SyncMappingConfig("1.0", UnmappedTableBehavior.Strict, [mapping]);
 
         // Insert order
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = """
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText = """
                 INSERT INTO SalesOrder (Id, CustomerId, Total, CreatedAt)
                 VALUES ('o1', 'c123', 249.99, '2024-01-15T10:30:00Z');
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Fetch changes
         var changes = SyncLogRepository.FetchChanges(source, 0, 100);
@@ -263,14 +266,14 @@ public sealed partial class HttpMappingSyncTests
         using var source = CreateDefaultSourceDb(mappingConfig: out var mappingConfig);
 
         // Insert
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText = """
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText = """
                 INSERT INTO User (Id, FullName, EmailAddress)
                 VALUES ('u3', 'Original Name', 'original@example.com');
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         var insertChanges = SyncLogRepository.FetchChanges(source, 0, 100);
         var insertVersion = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);
@@ -314,12 +317,12 @@ public sealed partial class HttpMappingSyncTests
         var mappingConfig = UserToCustomerConfig([], []);
 
         // Insert then delete
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u4', 'Delete Me', 'd@x.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: source,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO User (Id, FullName, EmailAddress) VALUES ('u4', 'Delete Me', 'd@x.com')"
+        );
 
         var insertChanges = SyncLogRepository.FetchChanges(source, 0, 100);
         var insertVersion = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);

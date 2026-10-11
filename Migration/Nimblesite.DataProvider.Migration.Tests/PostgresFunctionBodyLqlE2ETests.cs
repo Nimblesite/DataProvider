@@ -1,4 +1,7 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
+using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -98,9 +101,10 @@ public sealed class PostgresFunctionBodyLqlE2ETests(PostgresContainerFixture fix
 
     private void Exec(string sql)
     {
-        using var command = _connection.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: command => command.CommandText = sql
+        );
     }
 
     private void Exec(NpgsqlTransaction tx, string sql)
@@ -112,112 +116,89 @@ public sealed class PostgresFunctionBodyLqlE2ETests(PostgresContainerFixture fix
     }
 
     private static SchemaDefinition Schema(Names names) =>
-        new()
-        {
-            Name = "body_lql",
-            Roles = [new PostgresRoleDefinition { Name = names.AppUserRole, GrantTo = ["test"] }],
-            Tables = [TenantMembersTable(), DocumentsTable(names)],
-            Functions =
+        SchemaTestData.Schema(
+            name: "body_lql",
+            roles: [SchemaTestData.PostgresRole(name: names.AppUserRole, grantTo: ["test"])],
+            tables: [TenantMembersTable(), DocumentsTable(names)],
+            functions:
             [
-                new PostgresFunctionDefinition
-                {
-                    Name = names.AppTenantFunction,
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.tenant_id')::uuid",
-                    ExecuteRoles = [names.AppUserRole],
-                },
-                new PostgresFunctionDefinition
-                {
-                    Name = names.AppUserFunction,
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.user_id')::uuid",
-                    ExecuteRoles = [names.AppUserRole],
-                },
-                new PostgresFunctionDefinition
-                {
-                    Name = names.IsMemberFunction,
-                    Returns = "boolean",
-                    Arguments =
+                SchemaTestData.PostgresFunction(
+                    name: names.AppTenantFunction,
+                    returns: "uuid",
+                    bodyLql: "current_setting('app.tenant_id')::uuid",
+                    executeRoles: [names.AppUserRole]
+                ),
+                SchemaTestData.PostgresFunction(
+                    name: names.AppUserFunction,
+                    returns: "uuid",
+                    bodyLql: "current_setting('app.user_id')::uuid",
+                    executeRoles: [names.AppUserRole]
+                ),
+                SchemaTestData.PostgresFunction(
+                    name: names.IsMemberFunction,
+                    returns: "boolean",
+                    arguments:
                     [
-                        new PostgresFunctionArgumentDefinition { Name = "u", Type = "uuid" },
-                        new PostgresFunctionArgumentDefinition { Name = "t", Type = "uuid" },
+                        SchemaTestData.PostgresFunctionArgument(name: "u", type: "uuid"),
+                        SchemaTestData.PostgresFunctionArgument(name: "t", type: "uuid"),
                     ],
-                    SecurityDefiner = true,
-                    BodyLql =
-                        "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))",
-                    ExecuteRoles = [names.AppUserRole],
-                },
+                    securityDefiner: true,
+                    bodyLql: "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))",
+                    executeRoles: [names.AppUserRole]
+                ),
             ],
-            Grants =
+            grants:
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = [names.AppUserRole],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"],
-                    Roles = [names.AppUserRole],
-                },
-            ],
-        };
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.Schema,
+                    privileges: ["USAGE"],
+                    roles: [names.AppUserRole]
+                ),
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.AllTablesInSchema,
+                    privileges: ["SELECT", "INSERT", "UPDATE", "DELETE"],
+                    roles: [names.AppUserRole]
+                ),
+            ]
+        );
 
     private static TableDefinition TenantMembersTable() =>
-        new()
-        {
-            Schema = "public",
-            Name = "tenant_members",
-            Columns = [RequiredUuid("id"), RequiredUuid("tenant_id"), RequiredUuid("user_id")],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
+        SchemaTestData.Table(
+            schema: "public",
+            name: "tenant_members",
+            columns: [RequiredUuid("id"), RequiredUuid("tenant_id"), RequiredUuid("user_id")],
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+        );
 
     private static TableDefinition DocumentsTable(Names names) =>
-        new()
-        {
-            Schema = "public",
-            Name = "documents",
-            Columns =
+        SchemaTestData.Table(
+            schema: "public",
+            name: "documents",
+            columns:
             [
                 RequiredUuid("id"),
                 RequiredUuid("tenant_id"),
-                new ColumnDefinition
-                {
-                    Name = "title",
-                    Type = PortableTypes.Text,
-                    IsNullable = false,
-                },
+                SchemaTestData.Column(name: "title", type: PortableTypes.Text, isNullable: false),
             ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            RowLevelSecurity = new RlsPolicySetDefinition
-            {
-                Forced = true,
-                Policies =
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            rowLevelSecurity: SchemaTestData.RlsPolicySet(
+                forced: true,
+                policies:
                 [
-                    new RlsPolicyDefinition
-                    {
-                        Name = "documents_member",
-                        Roles = [names.AppUserRole],
-                        UsingLql =
-                            $"tenant_id = {names.AppTenantFunction}() and {names.IsMemberFunction}({names.AppUserFunction}(), {names.AppTenantFunction}())",
-                        WithCheckLql =
-                            $"tenant_id = {names.AppTenantFunction}() and {names.IsMemberFunction}({names.AppUserFunction}(), {names.AppTenantFunction}())",
-                    },
-                ],
-            },
-        };
+                    SchemaTestData.RlsPolicy(
+                        name: "documents_member",
+                        roles: [names.AppUserRole],
+                        usingLql: $"tenant_id = {names.AppTenantFunction}() and {names.IsMemberFunction}({names.AppUserFunction}(), {names.AppTenantFunction}())",
+                        withCheckLql: $"tenant_id = {names.AppTenantFunction}() and {names.IsMemberFunction}({names.AppUserFunction}(), {names.AppTenantFunction}())"
+                    ),
+                ]
+            )
+        );
 
     private static ColumnDefinition RequiredUuid(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: name, type: PortableTypes.Uuid, isNullable: false);
 
     private sealed record Names(
         string AppUserRole,

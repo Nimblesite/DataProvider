@@ -14,36 +14,33 @@ public class CustomCodeGenerationTests
 {
     private static readonly List<DatabaseColumn> TestColumns =
     [
-        new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            SqlType = "INTEGER",
-            IsNullable = false,
-            IsPrimaryKey = true,
-            IsIdentity = true,
-            IsComputed = false,
-        },
-        new DatabaseColumn
-        {
-            Name = "Name",
-            CSharpType = "string",
-            SqlType = "TEXT",
-            IsNullable = false,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-        },
-        new DatabaseColumn
-        {
-            Name = "Email",
-            CSharpType = "string?",
-            SqlType = "TEXT",
-            IsNullable = true,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-        },
+        ColumnTestData.Create(
+            name: "Id",
+            cSharpType: "int",
+            sqlType: "INTEGER",
+            isNullable: false,
+            isPrimaryKey: true,
+            isIdentity: true,
+            isComputed: false
+        ),
+        ColumnTestData.Create(
+            name: "Name",
+            cSharpType: "string",
+            sqlType: "TEXT",
+            isNullable: false,
+            isPrimaryKey: false,
+            isIdentity: false,
+            isComputed: false
+        ),
+        ColumnTestData.Create(
+            name: "Email",
+            cSharpType: "string?",
+            sqlType: "TEXT",
+            isNullable: true,
+            isPrimaryKey: false,
+            isIdentity: false,
+            isComputed: false
+        ),
     ];
 
     private static readonly SelectStatement TestStatement = new()
@@ -868,41 +865,23 @@ public class NonQueryCodeGenerationTests
         Assert.DoesNotContain("AddWithValue", code);
     }
 
-    [Fact]
-    public void GenerateNonQueryMethod_EmptyClassName_ReturnsError()
+    [Theory]
+    // GenerateNonQueryMethod_EmptyClassName_ReturnsError
+    [InlineData("", "Test", "UPDATE x SET y = 1")]
+    // GenerateNonQueryMethod_EmptyMethodName_ReturnsError
+    [InlineData("TestExtensions", "", "UPDATE x SET y = 1")]
+    // GenerateNonQueryMethod_EmptySql_ReturnsError
+    [InlineData("TestExtensions", "Test", "")]
+    public void GenerateNonQueryMethod_EmptyClassName_ReturnsError_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2
+    )
     {
         var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "",
-            "Test",
-            "UPDATE x SET y = 1",
-            new List<ParameterInfo>(),
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringError);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_EmptyMethodName_ReturnsError()
-    {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "TestExtensions",
-            "",
-            "UPDATE x SET y = 1",
-            new List<ParameterInfo>(),
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringError);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_EmptySql_ReturnsError()
-    {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "TestExtensions",
-            "Test",
-            "",
+            caseValue0,
+            caseValue1,
+            caseValue2,
             new List<ParameterInfo>(),
             "SqliteConnection"
         );

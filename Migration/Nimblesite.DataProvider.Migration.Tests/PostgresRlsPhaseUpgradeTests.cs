@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-DIFF]. Policy alterations and replacements belong to the RLS CLI phase.
@@ -96,47 +97,40 @@ public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixtur
     }
 
     private static SchemaDefinition PolicySchema(bool changed) =>
-        new()
-        {
-            Name = "rls_phase_upgrade",
-            Tables =
+        SchemaTestData.Schema(
+            name: "rls_phase_upgrade",
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition { Name = "owner_id", Type = PortableTypes.Uuid },
+                        SchemaTestData.Column(
+                            name: "id",
+                            type: PortableTypes.Uuid,
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(name: "owner_id", type: PortableTypes.Uuid),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_policy",
-                                Operations = [RlsOperation.All],
-                                UsingSql = changed ? "owner_id IS NULL" : "owner_id IS NOT NULL",
-                                WithCheckSql = changed
-                                    ? "owner_id IS NULL"
-                                    : "owner_id IS NOT NULL",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = "scope_policy",
-                                Operations = [changed ? RlsOperation.Delete : RlsOperation.Select],
-                                UsingSql = "TRUE",
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "owner_policy",
+                                operations: [RlsOperation.All],
+                                usingSql: changed ? "owner_id IS NULL" : "owner_id IS NOT NULL",
+                                withCheckSql: changed ? "owner_id IS NULL" : "owner_id IS NOT NULL"
+                            ),
+                            SchemaTestData.RlsPolicy(
+                                name: "scope_policy",
+                                operations: [changed ? RlsOperation.Delete : RlsOperation.Select],
+                                usingSql: "TRUE"
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 }

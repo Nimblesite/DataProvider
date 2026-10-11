@@ -28,6 +28,12 @@
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="../../Tests.Shared/PersonCommandParameters.cs" Link="Shared/PersonCommandParameters.cs" />
+    <Compile
+      Include="../../Tests.Shared/PersonCommandParameters.cs"
+      Link="Shared/PersonCommandParameters.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
   </ItemGroup>
 </Project>

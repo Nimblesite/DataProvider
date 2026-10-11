@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
@@ -7,15 +8,7 @@ public sealed partial class SchemaDiffTests
     public void Calculate_RemovedTable_NotDroppedByDefault()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Table(
-                "public",
-                "obsolete",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
+        var current = Fixture_Calculate_RemovedTable_NotDroppedByDefault_1();
 
         var desired = UsersSchema(name: "Desired");
 
@@ -29,15 +22,7 @@ public sealed partial class SchemaDiffTests
     public void Calculate_RemovedTable_DroppedWhenDestructiveAllowed()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Table(
-                "public",
-                "obsolete",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
+        var current = Fixture_Calculate_RemovedTable_DroppedWhenDestructiveAllowed_1();
 
         var desired = UsersSchema(name: "Desired");
 
@@ -116,38 +101,9 @@ public sealed partial class SchemaDiffTests
     public void Calculate_RemovedForeignKey_DroppedWhenDestructiveAllowed()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-                        .ForeignKey("dept_id", "departments", "id", ForeignKeyAction.Cascade)
-            )
-            .Build();
+        var current = Fixture_Calculate_RemovedForeignKey_DroppedWhenDestructiveAllowed_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-            )
-            .Build();
+        var desired = Fixture_Calculate_RemovedForeignKey_DroppedWhenDestructiveAllowed_2();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
@@ -159,17 +115,15 @@ public sealed partial class SchemaDiffTests
     [Fact]
     public void Calculate_CurrentForcedRls_AllowDestructive_EmitsDisableForceRls()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "Current",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
-        };
+        var current = SchemaTestData.Schema(
+            name: "Current",
+            tables: [RlsTable(new RlsPolicySetDefinition { Forced = true })]
+        );
 
-        var desired = new SchemaDefinition
-        {
-            Name = "Desired",
-            Tables = [RlsTable(new RlsPolicySetDefinition())],
-        };
+        var desired = SchemaTestData.Schema(
+            name: "Desired",
+            tables: [RlsTable(new RlsPolicySetDefinition())]
+        );
 
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
         Assert.Contains(ops, op => op is DisableForceRlsOperation);

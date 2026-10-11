@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // EXTREME E2E for NimblesiteAgenticPlatform (NAP) — proves issues #32, #36, #37
@@ -16,7 +17,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -73,62 +75,42 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         // 4 tenant-scoped tables (subset of NAP's 13 — same shape).
         var tables = TenantTableNames.Select(MakeTenantTable).ToList();
-        return new SchemaDefinition { Name = "nap", Tables = tables };
+        return SchemaTestData.Schema(name: "nap", tables: tables);
     }
 
     private static TableDefinition MakeTenantTable(string tableName) =>
-        new()
-        {
-            Schema = "public",
-            Name = tableName,
-            Columns =
+        SchemaTestData.Table(
+            schema: "public",
+            name: tableName,
+            columns:
             [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = new UuidType(),
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "tenant_id",
-                    Type = new UuidType(),
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "title",
-                    Type = new VarCharType(200),
-                    IsNullable = false,
-                },
+                SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                SchemaTestData.Column(name: "tenant_id", type: new UuidType(), isNullable: false),
+                SchemaTestData.Column(name: "title", type: new VarCharType(200), isNullable: false),
             ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            RowLevelSecurity = new RlsPolicySetDefinition
-            {
-                Enabled = true,
-                Forced = true, // issue #37 — NAP threat model
-                Policies =
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            rowLevelSecurity: SchemaTestData.RlsPolicySet(
+                enabled: true,
+                forced: true,
+                policies:
                 [
-                    new RlsPolicyDefinition
-                    {
-                        Name = $"{tableName}_member",
-                        Operations = [RlsOperation.All],
-                        Roles = ["nap_app_user"],
-                        // LQL form — fn calls (app_tenant_id) pass through verbatim.
-                        UsingLql = "tenant_id = app_tenant_id()",
-                        WithCheckLql = "tenant_id = app_tenant_id()",
-                    },
-                    new RlsPolicyDefinition
-                    {
-                        Name = $"{tableName}_admin_all",
-                        Operations = [RlsOperation.All],
-                        Roles = ["nap_app_admin"],
-                        UsingLql = "true",
-                        WithCheckLql = "true",
-                    },
-                ],
-            },
-        };
+                    SchemaTestData.RlsPolicy(
+                        name: $"{tableName}_member",
+                        operations: [RlsOperation.All],
+                        roles: ["nap_app_user"],
+                        usingLql: "tenant_id = app_tenant_id()",
+                        withCheckLql: "tenant_id = app_tenant_id()"
+                    ),
+                    SchemaTestData.RlsPolicy(
+                        name: $"{tableName}_admin_all",
+                        operations: [RlsOperation.All],
+                        roles: ["nap_app_admin"],
+                        usingLql: "true",
+                        withCheckLql: "true"
+                    ),
+                ]
+            )
+        );
 
     private void ApplyAndGrant(SchemaDefinition desired)
     {
@@ -304,18 +286,16 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         ApplyAndGrant(NapSchema());
 
         // Rename '*_admin_all' to '*_admin_full' on every table.
-        var renamed = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var renamed = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
-                        RowLevelSecurity = new RlsPolicySetDefinition
-                        {
-                            Enabled = true,
-                            Forced = true,
-                            Policies = t.RowLevelSecurity!.Policies.Select(p =>
+                        RowLevelSecurity = SchemaTestData.RlsPolicySet(
+                            enabled: true,
+                            forced: true,
+                            policies: t.RowLevelSecurity!.Policies.Select(p =>
                                     p.Name.EndsWith("_admin_all", StringComparison.Ordinal)
                                         ? p with
                                         {
@@ -327,12 +307,12 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
                                         }
                                         : p
                                 )
-                                .ToList(),
-                        },
+                                .ToList()
+                        ),
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
         var current = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
@@ -362,23 +342,21 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        var depleted = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var depleted = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
-                        RowLevelSecurity = new RlsPolicySetDefinition
-                        {
-                            Enabled = true,
-                            Forced = true,
-                            Policies = [t.RowLevelSecurity!.Policies[0]],
-                        },
+                        RowLevelSecurity = SchemaTestData.RlsPolicySet(
+                            enabled: true,
+                            forced: true,
+                            policies: [t.RowLevelSecurity!.Policies[0]]
+                        ),
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
         var current = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
@@ -395,63 +373,26 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         // tenant_members_self_or_owner shape:
         // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner)
-        var schema = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "tenant_members",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "user_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "is_owner",
-                            Type = new BooleanType(),
-                            IsNullable = false,
-                            DefaultValue = "false",
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "tenant_members_self_or_owner",
-                                Operations = [RlsOperation.Select],
-                                Roles = ["nap_app_user"],
-                                UsingLql =
-                                    "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner)",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            defaultValue: defaultValue,
+            primaryKey: primaryKey,
+            rowLevelSecurity: rowLevelSecurity,
+            enabled: enabled,
+            forced: forced,
+            policies: policies,
+            name: name,
+            operations: operations,
+            roles: roles,
+            usingLql: usingLql
+        );
         ApplyAndGrant(schema);
 
         var inspected = (
@@ -469,18 +410,17 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        var unforced = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var unforced = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
                         RowLevelSecurity = t.RowLevelSecurity! with { Forced = false },
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
         var current = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)

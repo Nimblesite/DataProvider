@@ -1,7 +1,9 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -550,18 +552,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     public void Spec15_4_BatchHash_IsConsistent()
     {
         // Arrange
-        var entries = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries = new[] { Fixture_Spec15_4_BatchHash_IsConsistent_1() };
 
         // Act
         var hash1 = HashVerifier.ComputeBatchHash(entries);
@@ -674,9 +665,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     )]
     private void ExecuteSql(string sql)
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(connection: _db, configure: command => command.CommandText = sql);
     }
 
     private List<SyncLogEntry> FetchAllChanges()

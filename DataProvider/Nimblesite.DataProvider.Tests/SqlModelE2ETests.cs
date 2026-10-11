@@ -1,7 +1,9 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
 using Outcome;
+using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -23,38 +25,42 @@ public sealed class SqlModelE2ETests : IDisposable
 
     private void CreateSchemaAndSeed()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Employees (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Department TEXT NOT NULL,
-                Salary REAL NOT NULL,
-                YearsExp INTEGER NOT NULL
-            );
-            CREATE TABLE Departments (
-                Name TEXT PRIMARY KEY,
-                Budget REAL NOT NULL,
-                HeadCount INTEGER NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Employees (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Department TEXT NOT NULL,
+                    Salary REAL NOT NULL,
+                    YearsExp INTEGER NOT NULL
+                );
+                CREATE TABLE Departments (
+                    Name TEXT PRIMARY KEY,
+                    Budget REAL NOT NULL,
+                    HeadCount INTEGER NOT NULL
+                );
+                """
+        );
 
-        using var seedCmd = _connection.CreateCommand();
-        seedCmd.CommandText = """
-            INSERT INTO Employees VALUES ('e1', 'Alice', 'Engineering', 95000, 5);
-            INSERT INTO Employees VALUES ('e2', 'Bob', 'Engineering', 105000, 8);
-            INSERT INTO Employees VALUES ('e3', 'Charlie', 'Sales', 75000, 3);
-            INSERT INTO Employees VALUES ('e4', 'Diana', 'Sales', 85000, 6);
-            INSERT INTO Employees VALUES ('e5', 'Eve', 'Marketing', 70000, 2);
-            INSERT INTO Employees VALUES ('e6', 'Frank', 'Engineering', 120000, 12);
-            INSERT INTO Employees VALUES ('e7', 'Grace', 'Marketing', 80000, 4);
-            INSERT INTO Employees VALUES ('e8', 'Hank', 'Sales', 90000, 7);
-            INSERT INTO Departments VALUES ('Engineering', 500000, 3);
-            INSERT INTO Departments VALUES ('Sales', 300000, 3);
-            INSERT INTO Departments VALUES ('Marketing', 200000, 2);
-            """;
-        seedCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: command =>
+                command.CommandText = """
+                INSERT INTO Employees VALUES ('e1', 'Alice', 'Engineering', 95000, 5);
+                INSERT INTO Employees VALUES ('e2', 'Bob', 'Engineering', 105000, 8);
+                INSERT INTO Employees VALUES ('e3', 'Charlie', 'Sales', 75000, 3);
+                INSERT INTO Employees VALUES ('e4', 'Diana', 'Sales', 85000, 6);
+                INSERT INTO Employees VALUES ('e5', 'Eve', 'Marketing', 70000, 2);
+                INSERT INTO Employees VALUES ('e6', 'Frank', 'Engineering', 120000, 12);
+                INSERT INTO Employees VALUES ('e7', 'Grace', 'Marketing', 80000, 4);
+                INSERT INTO Employees VALUES ('e8', 'Hank', 'Sales', 90000, 7);
+                INSERT INTO Departments VALUES ('Engineering', 500000, 3);
+                INSERT INTO Departments VALUES ('Sales', 300000, 3);
+                INSERT INTO Departments VALUES ('Marketing', 200000, 2);
+                """
+        );
     }
 
     [Fact]
@@ -469,41 +475,32 @@ public sealed class SqlModelE2ETests : IDisposable
             Schema = "dbo",
             Columns =
             [
-                new DatabaseColumn
-                {
-                    Name = "Id",
-                    CSharpType = "Guid",
-                    SqlType = "TEXT",
-                    IsPrimaryKey = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "AutoId",
-                    CSharpType = "int",
-                    SqlType = "INTEGER",
-                    IsIdentity = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "Computed",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                    IsComputed = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "Name",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                },
-                new DatabaseColumn
-                {
-                    Name = "Email",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                    IsNullable = true,
-                    MaxLength = 255,
-                },
+                ColumnTestData.Create(
+                    name: "Id",
+                    cSharpType: "Guid",
+                    sqlType: "TEXT",
+                    isPrimaryKey: true
+                ),
+                ColumnTestData.Create(
+                    name: "AutoId",
+                    cSharpType: "int",
+                    sqlType: "INTEGER",
+                    isIdentity: true
+                ),
+                ColumnTestData.Create(
+                    name: "Computed",
+                    cSharpType: "string",
+                    sqlType: "TEXT",
+                    isComputed: true
+                ),
+                ColumnTestData.Create(name: "Name", cSharpType: "string", sqlType: "TEXT"),
+                ColumnTestData.Create(
+                    name: "Email",
+                    cSharpType: "string",
+                    sqlType: "TEXT",
+                    isNullable: true,
+                    maxLength: 255
+                ),
             ],
         };
 

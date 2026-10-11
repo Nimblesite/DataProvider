@@ -1,9 +1,14 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+// Implements [MIG-TEST-ID-NAME-COLUMNS].
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
 /// E2E tests for SQLite migrations - greenfield and upgrades.
 /// </summary>
-public sealed class SqliteMigrationTests
+public sealed partial class SqliteMigrationTests
 {
     private readonly ILogger _logger = NullLogger.Instance;
 
@@ -26,17 +31,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255), c => c.NotNull())
-                            .Column("Name", PortableTypes.NVarChar(100))
-                            .Index("idx_users_email", "Email", unique: true)
-                )
-                .Build();
+            var schema = Fixture_CreateDatabaseFromScratch_SingleTable_Success_1(unique: unique);
 
             // Act
             var emptySchema = SqliteSchemaInspector.Inspect(connection, _logger);
@@ -84,28 +79,8 @@ public sealed class SqliteMigrationTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255), c => c.NotNull())
-                )
-                .Table(
-                    "Orders",
-                    t =>
-                        t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey().Identity())
-                            .Column("UserId", PortableTypes.Uuid, c => c.NotNull())
-                            .Column("Total", PortableTypes.Decimal(10, 2), c => c.NotNull())
-                            .Column(
-                                "CreatedAt",
-                                PortableTypes.DateTime(),
-                                c => c.NotNull().Default("CURRENT_TIMESTAMP")
-                            )
-                            .ForeignKey("UserId", "Users", "Id", ForeignKeyAction.Cascade)
-                )
-                .Build();
+            var schema =
+                Fixture_CreateDatabaseFromScratch_MultipleTablesWithForeignKeys_Success_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -135,31 +110,13 @@ public sealed class SqliteMigrationTests
         SqliteTestDb.WithDb(test: connection =>
         {
             // Create initial schema
-            var v1 = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255))
-                )
-                .Build();
+            var v1 = Fixture_UpgradeExistingDatabase_AddColumn_Success_1();
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // Define v2 with new columns
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255))
-                            .Column("Name", PortableTypes.NVarChar(100))
-                            .Column("CreatedAt", PortableTypes.DateTime())
-                )
-                .Build();
+            var v2 = Fixture_UpgradeExistingDatabase_AddColumn_Success_2();
 
             // Act - upgrade to v2
             var currentSchema = (
@@ -209,17 +166,7 @@ public sealed class SqliteMigrationTests
             SeedSchema(connection, v1, _logger);
 
             // v2 adds a new table
-            var v2 = Schema
-                .Define("Test")
-                .Table("Users", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-                .Table(
-                    "Products",
-                    t =>
-                        t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey().Identity())
-                            .Column("Name", PortableTypes.NVarChar(200), c => c.NotNull())
-                            .Column("Price", PortableTypes.Decimal(10, 2))
-                )
-                .Build();
+            var v2 = Fixture_UpgradeExistingDatabase_AddTable_Success_1();
 
             // Act
             var currentSchema = (
@@ -258,30 +205,13 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255))
-                )
-                .Build();
+            var v1 = Fixture_UpgradeExistingDatabase_AddIndex_Success_1();
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // v2 adds an index
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255))
-                            .Index("idx_users_email", "Email", unique: true)
-                )
-                .Build();
+            var v2 = Fixture_UpgradeExistingDatabase_AddIndex_Success_2(unique: unique);
 
             // Act
             var currentSchema = (
@@ -321,16 +251,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Items",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.NVarChar(50))
-                            .Index("idx_items_name", "Name")
-                )
-                .Build();
+            var schema = Fixture_Migration_IsIdempotent_NoErrorOnRerun_1();
 
             // Act - Run migration twice
             for (var i = 0; i < 2; i++)
@@ -367,38 +288,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "TypeTest",
-                    t =>
-                        t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey())
-                            .Column("TinyInt", PortableTypes.TinyInt)
-                            .Column("SmallInt", PortableTypes.SmallInt)
-                            .Column("Int", PortableTypes.Int)
-                            .Column("BigInt", PortableTypes.BigInt)
-                            .Column("Decimal", PortableTypes.Decimal(18, 2))
-                            .Column("Float", PortableTypes.Float)
-                            .Column("Double", PortableTypes.Double)
-                            .Column("Money", PortableTypes.Money)
-                            .Column("Bool", PortableTypes.Boolean)
-                            .Column("Char", PortableTypes.Char(10))
-                            .Column("VarChar", PortableTypes.VarChar(50))
-                            .Column("NChar", PortableTypes.NChar(10))
-                            .Column("NVarChar", PortableTypes.NVarChar(100))
-                            .Column("Text", PortableTypes.Text)
-                            .Column("Binary", PortableTypes.Binary(16))
-                            .Column("VarBinary", PortableTypes.VarBinary(256))
-                            .Column("Blob", PortableTypes.Blob)
-                            .Column("Date", PortableTypes.Date)
-                            .Column("Time", PortableTypes.Time())
-                            .Column("DateTime", PortableTypes.DateTime())
-                            .Column("DateTimeOffset", PortableTypes.DateTimeOffset)
-                            .Column("Uuid", PortableTypes.Uuid)
-                            .Column("Json", PortableTypes.Json)
-                            .Column("Xml", PortableTypes.Xml)
-                )
-                .Build();
+            var schema = Fixture_CreateTable_AllPortableTypes_Success_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -515,17 +405,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Users",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Email", PortableTypes.NVarChar(255), c => c.NotNull())
-                            .Column("Active", PortableTypes.Boolean, c => c.Default("1"))
-                            .Index("idx_users_email", "Email", unique: true)
-                )
-                .Build();
+            var schema = Fixture_SchemaInspector_RoundTrip_Matches_1(unique: unique);
 
             // Create schema
             SeedSchema(connection, schema, _logger);
@@ -582,12 +462,11 @@ public sealed class SqliteMigrationTests
         SqliteTestDb.WithDb(test: connection =>
         {
             // Create a custom operation that generates invalid SQL
-            var badTable = new TableDefinition
-            {
-                Schema = "main",
-                Name = "Bad\"Table", // Invalid table name with quote
-                Columns = [new ColumnDefinition { Name = "Id", Type = PortableTypes.Int }],
-            };
+            var badTable = SchemaTestData.Table(
+                schema: "main",
+                name: "Bad\"Table",
+                columns: [SchemaTestData.Column(name: "Id", type: PortableTypes.Int)]
+            );
 
             var createOp = new CreateTableOperation(badTable);
 
@@ -611,24 +490,26 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-            CREATE TABLE customers (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL,
-                name TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command =>
+                    command.CommandText = """
+                    CREATE TABLE customers (
+                        id TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        name TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX idx_customers_email ON customers(email);
+                    CREATE TABLE orders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        customer_id TEXT NOT NULL,
+                        total REAL,
+                        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX idx_orders_customer ON orders(customer_id);
+                    """
             );
-            CREATE UNIQUE INDEX idx_customers_email ON customers(email);
-            CREATE TABLE orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                customer_id TEXT NOT NULL,
-                total REAL,
-                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
-            );
-            CREATE INDEX idx_orders_customer ON orders(customer_id);
-            """;
-            cmd.ExecuteNonQuery();
 
             // Act - CAPTURE the existing schema
             var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
@@ -665,17 +546,19 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-            CREATE TABLE products (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                active INTEGER DEFAULT 1
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command =>
+                    command.CommandText = """
+                    CREATE TABLE products (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        price REAL,
+                        active INTEGER DEFAULT 1
+                    );
+                    CREATE INDEX idx_products_name ON products(name);
+                    """
             );
-            CREATE INDEX idx_products_name ON products(name);
-            """;
-            cmd.ExecuteNonQuery();
 
             // Act - Capture and serialize to JSON
             var captureResult = SqliteSchemaInspector.Inspect(connection, _logger);
@@ -711,16 +594,12 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Artists",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .ExpressionIndex("uq_artists_name", "lower(Name)", unique: true)
-                )
-                .Build();
+            var schema = Fixture_ExpressionIndex_CreateWithLowerFunction_Success_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -750,24 +629,22 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Venues",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .ExpressionIndex("uq_venues_name", "lower(Name)", unique: true)
-                )
-                .Build();
+            var schema = Fixture_ExpressionIndex_EnforcesCaseInsensitiveUniqueness_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             SeedSchema(connection, schema, _logger);
 
             // Act - Insert first venue
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText =
-                "INSERT INTO Venues (Id, Name) VALUES ('11111111-1111-1111-1111-111111111111', 'The Corner Hotel')";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command =>
+                    command.CommandText =
+                        "INSERT INTO Venues (Id, Name) VALUES ('11111111-1111-1111-1111-111111111111', 'The Corner Hotel')"
+            );
 
             // Try to insert duplicate with different case - should fail
             using var duplicateCmd = connection.CreateCommand();
@@ -787,27 +664,12 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Suburbs",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(100), c => c.NotNull())
-                )
-                .Table(
-                    "Places",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .Column("SuburbId", PortableTypes.Uuid, c => c.NotNull())
-                            .ExpressionIndex(
-                                "uq_places_name_suburb",
-                                ["lower(Name)", "SuburbId"],
-                                unique: true
-                            )
-                )
-                .Build();
+            var schema = Fixture_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -838,16 +700,12 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Bands",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .ExpressionIndex("uq_bands_name", "lower(Name)", unique: true)
-                )
-                .Build();
+            var schema = Fixture_ExpressionIndex_Idempotent_NoErrorOnRerun_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Act - Run migration twice
             for (var i = 0; i < 2; i++)
@@ -887,15 +745,17 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-            CREATE TABLE artists (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command =>
+                    command.CommandText = """
+                    CREATE TABLE artists (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL
+                    );
+                    CREATE UNIQUE INDEX uq_artists_name ON artists(lower(name));
+                    """
             );
-            CREATE UNIQUE INDEX uq_artists_name ON artists(lower(name));
-            """;
-            cmd.ExecuteNonQuery();
 
             // Act - Inspect schema
             var result = SqliteSchemaInspector.Inspect(connection, _logger);
@@ -925,31 +785,23 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Schema
-                .Define("Test")
-                .Table(
-                    "Artists",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .Index("idx_artists_name", "Name", unique: true)
-                )
-                .Build();
+            var v1 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // v2 changes to expression index (different name since it's semantically different)
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Artists",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .ExpressionIndex("uq_artists_name_ci", "lower(Name)", unique: true)
-                )
-                .Build();
+            var v2 = Fixture_UpgradeIndex_ColumnToExpression_RequiresDropAndCreate_2(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Act - Calculate upgrade operations
             var currentSchema = (
@@ -992,31 +844,23 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var v1 = Schema
-                .Define("Test")
-                .Table(
-                    "Venues",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .ExpressionIndex("uq_venues_name", "lower(Name)", unique: true)
-                )
-                .Build();
+            var v1 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_1(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Apply v1
             SeedSchema(connection, v1, _logger);
 
             // v2 changes back to simple column index (different name)
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Venues",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .Index("idx_venues_name", "Name", unique: true)
-                )
-                .Build();
+            var v2 = Fixture_UpgradeIndex_ExpressionToColumn_RequiresDropAndCreate_2(
+                table: table,
+                idType: idType,
+                nameType: nameType,
+                unique: unique
+            );
 
             // Act
             var currentSchema = (
@@ -1062,19 +906,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "events",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "created_at",
-                                PortableTypes.DateTime(),
-                                c => c.NotNull().DefaultLql("now()")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_NowFunction_TranslatesToCurrentTimestamp_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1090,9 +922,10 @@ public sealed class SqliteMigrationTests
             Assert.Contains("(datetime('now'))", tableDef);
 
             // Insert and verify default works
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO events (id) VALUES (1)";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO events (id) VALUES (1)"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT created_at FROM events WHERE id = 1";
@@ -1109,24 +942,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "flags",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "is_active",
-                                PortableTypes.Boolean,
-                                c => c.NotNull().DefaultLql("true")
-                            )
-                            .Column(
-                                "is_deleted",
-                                PortableTypes.Boolean,
-                                c => c.NotNull().DefaultLql("false")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_BooleanTrue_TranslatesTo1_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1143,9 +959,10 @@ public sealed class SqliteMigrationTests
             Assert.Contains("DEFAULT 0", tableDef); // false -> 0
 
             // Insert and verify defaults work
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO flags (id) VALUES (1)";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO flags (id) VALUES (1)"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT is_active, is_deleted FROM flags WHERE id = 1";
@@ -1163,25 +980,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "counters",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("count", PortableTypes.Int, c => c.NotNull().DefaultLql("0"))
-                            .Column(
-                                "priority",
-                                PortableTypes.Int,
-                                c => c.NotNull().DefaultLql("100")
-                            )
-                            .Column(
-                                "rate",
-                                PortableTypes.Decimal(5, 2),
-                                c => c.NotNull().DefaultLql("1.5")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_NumericValues_PassThrough_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1190,9 +989,10 @@ public sealed class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Insert and verify defaults work
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO counters (id) VALUES (1)";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO counters (id) VALUES (1)"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT count, priority, rate FROM counters WHERE id = 1";
@@ -1211,24 +1011,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "items",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "status",
-                                PortableTypes.VarChar(20),
-                                c => c.NotNull().DefaultLql("'pending'")
-                            )
-                            .Column(
-                                "category",
-                                PortableTypes.VarChar(50),
-                                c => c.DefaultLql("'uncategorized'")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_StringLiteral_PassThrough_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1237,9 +1020,10 @@ public sealed class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Insert and verify defaults work
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO items (id) VALUES (1)";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO items (id) VALUES (1)"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT status, category FROM items WHERE id = 1";
@@ -1257,19 +1041,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "records",
-                    t =>
-                        t.Column(
-                                "id",
-                                PortableTypes.Uuid,
-                                c => c.PrimaryKey().DefaultLql("gen_uuid()")
-                            )
-                            .Column("name", PortableTypes.VarChar(100))
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1278,10 +1050,12 @@ public sealed class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Insert multiple rows and verify UUIDs are generated and unique
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText =
-                "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command =>
+                    command.CommandText =
+                        "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT id FROM records";
@@ -1312,19 +1086,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "logs",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "log_date",
-                                PortableTypes.Date,
-                                c => c.NotNull().DefaultLql("current_date()")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1333,9 +1095,10 @@ public sealed class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Insert and verify default date
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO logs (id) VALUES (1)";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO logs (id) VALUES (1)"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText = "SELECT log_date FROM logs WHERE id = 1";
@@ -1352,34 +1115,7 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "orders",
-                    t =>
-                        t.Column(
-                                "id",
-                                PortableTypes.Uuid,
-                                c => c.PrimaryKey().DefaultLql("gen_uuid()")
-                            )
-                            .Column(
-                                "status",
-                                PortableTypes.VarChar(20),
-                                c => c.NotNull().DefaultLql("'pending'")
-                            )
-                            .Column("quantity", PortableTypes.Int, c => c.NotNull().DefaultLql("1"))
-                            .Column(
-                                "is_urgent",
-                                PortableTypes.Boolean,
-                                c => c.NotNull().DefaultLql("false")
-                            )
-                            .Column(
-                                "created_at",
-                                PortableTypes.DateTime(),
-                                c => c.NotNull().DefaultLql("now()")
-                            )
-                )
-                .Build();
+            var schema = Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1();
 
             // Act
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
@@ -1388,9 +1124,10 @@ public sealed class SqliteMigrationTests
             Assert.True(result is MigrationApplyResultOk);
 
             // Insert with no columns specified - all defaults should apply
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = "INSERT INTO orders DEFAULT VALUES";
-            insertCmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: connection,
+                configure: command => command.CommandText = "INSERT INTO orders DEFAULT VALUES"
+            );
 
             using var selectCmd = connection.CreateCommand();
             selectCmd.CommandText =
@@ -1427,16 +1164,8 @@ public sealed class SqliteMigrationTests
         // Implements [MIG-TEST-SQLITE-LIFETIME].
         SqliteTestDb.WithDb(test: connection =>
         {
-            var schema = Schema
-                .Define("Embeddings")
-                .Table(
-                    "documents",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Body", PortableTypes.Text, c => c.NotNull())
-                            .Column("Embedding", PortableTypes.Vector(384), c => c.NotNull())
-                )
-                .Build();
+            var schema =
+                Fixture_CreateTableWithVectorColumn_FallsBackToBlob_AndMigratesSuccessfully_1();
 
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 

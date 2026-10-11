@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
 using SchemaIntegrityOk = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -9,47 +10,35 @@ using SchemaIntegrityOk = Outcome.Result<
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class SchemaIntegrityVerifierFunctionDriftTests
+public sealed partial class SchemaIntegrityVerifierFunctionDriftTests
 {
     [Fact]
     public void Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches()
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "current_tenant_id",
-                    Arguments = [new PostgresFunctionArgumentDefinition { Type = "text" }],
-                    Returns = "text",
-                    Language = "plpgsql",
-                    Volatility = "volatile",
-                    SecurityDefiner = false,
-                    Body = "select null::text",
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "current_tenant_id",
-                    Arguments = [new PostgresFunctionArgumentDefinition { Type = "text" }],
-                    Returns = "uuid",
-                    Language = "sql",
-                    Volatility = "stable",
-                    SecurityDefiner = true,
-                    Body = "select current_setting('app.tenant_id')::uuid",
-                },
-            ],
-        };
+        var live = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_1(
+            name: name,
+            functions: functions,
+            schema: schema,
+            name: name,
+            arguments: arguments,
+            returns: returns,
+            language: language,
+            volatility: volatility,
+            securityDefiner: securityDefiner,
+            body: body
+        );
+        var desired = Fixture_Verify_WhenFunctionDefinitionDrifts_ReturnsDetailedMismatches_2(
+            name: name,
+            functions: functions,
+            schema: schema,
+            name: name,
+            arguments: arguments,
+            returns: returns,
+            language: language,
+            volatility: volatility,
+            securityDefiner: securityDefiner,
+            body: body
+        );
 
         var mismatches = Verify(live: live, desired: desired);
 

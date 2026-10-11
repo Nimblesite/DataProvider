@@ -61,47 +61,29 @@ public sealed class FunctionMappingE2ETests
         }
     }
 
-    [Fact]
-    public void CountWithColumn_AllProviders_ProducesCorrectSQL()
+    [Theory]
+    // CountWithColumn_AllProviders_ProducesCorrectSQL
+    [InlineData("count", "user_id", "COUNT", "user_id")]
+    // SumFunction_AllProviders_TranspilesCorrectly
+    [InlineData("sum", "amount", "SUM", "amount")]
+    // UpperFunction_AllProviders_TranspilesCorrectly
+    [InlineData("upper", "name", "UPPER", "name")]
+    // LowerFunction_AllProviders_TranspilesCorrectly
+    [InlineData("lower", "email", "LOWER", "email")]
+    // AvgFunction_AllProviders_TranspilesCorrectly
+    [InlineData("avg", "rating", "AVG", "rating")]
+    public void CountWithColumn_AllProviders_ProducesCorrectSQL_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2,
+        string caseValue3
+    )
     {
         foreach (var provider in AllProviders)
         {
-            var result = provider.TranspileFunction("count", "user_id");
-            Assert.Contains("COUNT", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", result, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void SumFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("sum", "amount");
-            Assert.Contains("SUM", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("amount", result, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void UpperFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("upper", "name");
-            Assert.Contains("UPPER", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("name", result, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void LowerFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("lower", "email");
-            Assert.Contains("LOWER", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("email", result, StringComparison.Ordinal);
+            var result = provider.TranspileFunction(caseValue0, caseValue1);
+            Assert.Contains(caseValue2, result, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue3, result, StringComparison.Ordinal);
         }
     }
 
@@ -264,17 +246,6 @@ public sealed class FunctionMappingE2ETests
 
             var maxResult = provider.TranspileFunction("max", "price");
             Assert.Contains("MAX", maxResult, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void AvgFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("avg", "rating");
-            Assert.Contains("AVG", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("rating", result, StringComparison.Ordinal);
         }
     }
 

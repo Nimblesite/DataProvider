@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 public sealed class RlsPolicyFunctionArgumentDriftTests
@@ -14,37 +15,33 @@ public sealed class RlsPolicyFunctionArgumentDriftTests
     }
 
     private static SchemaDefinition PolicySchema(string predicate) =>
-        new()
-        {
-            Name = "rls_function_argument_drift",
-            Tables =
+        SchemaTestData.Schema(
+            name: "rls_function_argument_drift",
+            tables:
             [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(
+                            name: "id",
+                            type: PortableTypes.Uuid,
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: new RlsPolicySetDefinition
                     {
                         Policies =
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "documents_member",
-                                Operations = [RlsOperation.Select],
-                                UsingSql = predicate,
-                            },
+                            SchemaTestData.RlsPolicy(
+                                name: "documents_member",
+                                operations: [RlsOperation.Select],
+                                usingSql: predicate
+                            ),
                         ],
-                    },
-                },
-            ],
-        };
+                    }
+                ),
+            ]
+        );
 }

@@ -12,31 +12,15 @@ public sealed class SqlAntlrCodeGeneratorTests
 {
     private static readonly IReadOnlyList<DatabaseColumn> GroupColumns =
     [
-        new DatabaseColumn
-        {
-            Name = "OrderId",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "OrderDate",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new DatabaseColumn
-        {
-            Name = "LineId",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-        new DatabaseColumn
-        {
-            Name = "LineQty",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
+        ColumnTestData.Create(
+            name: "OrderId",
+            sqlType: "INTEGER",
+            cSharpType: "int",
+            isPrimaryKey: true
+        ),
+        ColumnTestData.Create(name: "OrderDate", sqlType: "TEXT", cSharpType: "string"),
+        ColumnTestData.Create(name: "LineId", sqlType: "INTEGER", cSharpType: "int"),
+        ColumnTestData.Create(name: "LineQty", sqlType: "INTEGER", cSharpType: "int"),
     ];
 
     private static SelectStatement MakeStatement(params string[] paramNames) =>

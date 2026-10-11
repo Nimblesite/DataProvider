@@ -1041,6 +1041,8 @@ Mapping, expression, and corner-case tests share their mapping configuration and
 insert-log defaults. The mapping factory reuses `TableMapping.Identity`; each
 scenario retains its explicit direction, primary-key mapping, exclusions, enabled
 state, and multi-target configuration. Test inputs and assertions remain unchanged.
+The same fixture executes mappings and retains each caller’s exact xUnit result-type
+assertion, including successful and skipped outcomes and the explicit mapping direction.
 
 ### Shared mapping integration setup [SYNC-MAPPING-E2E-SETUP]
 
@@ -1083,3 +1085,27 @@ SQLite extension cases share insertion, retrieval and success/single-row checks 
 ### Shared sync log test reader [SYNC-TEST-LOG-READER]
 
 The test database owns the common parameterized sync-log query, row mapping and operation parser. Coordinator and integration fixtures reuse it, preserving ordered pagination, null payloads and the coordinator SQLite error result.
+
+### Shared trigger schema validation [SYNC-TRIGGER-SHARED-GENERATION]
+
+SQLite and PostgreSQL share column validation, primary-key selection, trigger assembly,
+and generation logging. Each provider retains its metadata query and SQL dialect.
+SQLite still drops existing triggers before creation; PostgreSQL retains its existing
+creation behavior. Public trigger APIs and provider column types remain unchanged.
+Direct tests cover empty columns, missing keys, first-key selection, column order,
+metadata failures and exact trigger separators; existing database tests cover DDL.
+
+### Shared HTTP mapping string cases [SYNC-TEST-STRING-TRANSFORMS]
+
+Eleven string-transform cases share their identical mapping execution and payload
+assertions as a theory. Every mapping ID, source and target table, primary key, LQL
+expression, payload and expected string is preserved in its own data row. The original
+case names label those rows. The number of executed cases and equality assertions
+remains unchanged; nullable, numeric, boolean and multi-assertion cases remain separate.
+
+### Shared trigger event templates [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE]
+
+Each provider uses one event template for INSERT and UPDATE. Event names and logged
+operation values retain their original casing; JSON payloads, primary-key casing and
+SQL whitespace remain identical. DELETE retains its separate payload behavior.
+Existing trigger tests exercise both events through the public provider API.

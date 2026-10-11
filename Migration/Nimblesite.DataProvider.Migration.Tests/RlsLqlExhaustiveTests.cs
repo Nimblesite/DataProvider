@@ -139,12 +139,37 @@ public sealed class RlsLqlExhaustiveTests
 
     // ── 6. AND combinations ─────────────────────────────────────────
 
-    [Fact]
-    public void AndCombination_TwoPredicates_QuotesColumns_Postgres()
+    [Theory]
+    // AndCombination_TwoPredicates_QuotesColumns_Postgres
+    [InlineData(
+        "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
+        "\"tenant_id\"",
+        "is_member("
+    )]
+    // StringLiteral_PreservedVerbatim
+    [InlineData("status = 'active'", "'active'", "\"status\"")]
+    // NegativeNumericLiteral_NotQuoted
+    [InlineData("balance > -5", "\"balance\"", "-5")]
+    // Multiline_LqlPredicate_TranspilesCleanly
+    [InlineData(
+        """
+            tenant_id = app_tenant_id()
+              and is_member(app_user_id(), app_tenant_id())
+            """,
+        "\"tenant_id\"",
+        "is_member("
+    )]
+    // ExtraWhitespace_Around_Operators_PreservedNotBroken
+    [InlineData("tenant_id   =    app_tenant_id()", "\"tenant_id\"", "app_tenant_id()")]
+    public void AndCombination_TwoPredicates_QuotesColumns_Postgres_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2
+    )
     {
-        var sql = Pg("tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())");
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
+        var sql = Pg(caseValue0);
+        Assert.Contains(caseValue1, sql, StringComparison.Ordinal);
+        Assert.Contains(caseValue2, sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -232,14 +257,6 @@ public sealed class RlsLqlExhaustiveTests
     // ── 12. String literals ─────────────────────────────────────────
 
     [Fact]
-    public void StringLiteral_PreservedVerbatim()
-    {
-        var sql = Pg("status = 'active'");
-        Assert.Contains("'active'", sql, StringComparison.Ordinal);
-        Assert.Contains("\"status\"", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void StringLiteralWithReservedWordsInside_NotIdentifierQuoted()
     {
         // 'AND' inside a string literal must not be wrapped as identifier.
@@ -303,21 +320,19 @@ public sealed class RlsLqlExhaustiveTests
         Assert.DoesNotContain("[10]", sql, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void NegativeNumericLiteral_NotQuoted()
-    {
-        var sql = Pg("balance > -5");
-        Assert.Contains("\"balance\"", sql, StringComparison.Ordinal);
-        Assert.Contains("-5", sql, StringComparison.Ordinal);
-    }
-
     // ── 17. Mixed-case identifiers ──────────────────────────────────
 
-    [Fact]
-    public void MixedCaseIdentifier_QuotedPreservesCase()
+    [Theory]
+    // MixedCaseIdentifier_QuotedPreservesCase
+    [InlineData("OwnerId = current_user_id()", "\"OwnerId\"")]
+    // UnderscoreLeadingIdentifier_Quoted
+    [InlineData("_internal_flag = true", "\"_internal_flag\"")]
+    // IdentifierWithDigits_Quoted
+    [InlineData("col1 = 'x'", "\"col1\"")]
+    public void MixedCaseIdentifier_QuotedPreservesCase_Cases(string caseValue0, string caseValue1)
     {
-        var sql = Pg("OwnerId = current_user_id()");
-        Assert.Contains("\"OwnerId\"", sql, StringComparison.Ordinal);
+        var sql = Pg(caseValue0);
+        Assert.Contains(caseValue1, sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -328,20 +343,6 @@ public sealed class RlsLqlExhaustiveTests
     }
 
     // ── 18. Underscore + digit identifiers ─────────────────────────
-
-    [Fact]
-    public void UnderscoreLeadingIdentifier_Quoted()
-    {
-        var sql = Pg("_internal_flag = true");
-        Assert.Contains("\"_internal_flag\"", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void IdentifierWithDigits_Quoted()
-    {
-        var sql = Pg("col1 = 'x'");
-        Assert.Contains("\"col1\"", sql, StringComparison.Ordinal);
-    }
 
     // ── 19. Schema-qualified identifiers ────────────────────────────
 
@@ -402,27 +403,6 @@ public sealed class RlsLqlExhaustiveTests
     }
 
     // ── 21. Whitespace + newline tolerance ──────────────────────────
-
-    [Fact]
-    public void Multiline_LqlPredicate_TranspilesCleanly()
-    {
-        var sql = Pg(
-            """
-            tenant_id = app_tenant_id()
-              and is_member(app_user_id(), app_tenant_id())
-            """
-        );
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("is_member(", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ExtraWhitespace_Around_Operators_PreservedNotBroken()
-    {
-        var sql = Pg("tenant_id   =    app_tenant_id()");
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("app_tenant_id()", sql, StringComparison.Ordinal);
-    }
 
     // ── 22. Empty / whitespace-only predicates ─────────────────────
 

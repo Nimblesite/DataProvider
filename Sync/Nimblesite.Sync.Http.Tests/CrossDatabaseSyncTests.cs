@@ -1,3 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Http.Tests;
 
 /// <summary>
@@ -54,15 +58,17 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         SyncSchema.SetOriginId(conn, originId);
 
         // Create test table
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT
+                );
+                """
+        );
 
         // Create triggers
         TriggerGenerator.CreateTriggers(conn, "Person", NullLogger.Instance);
@@ -119,12 +125,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         using var postgres = CreatePostgresDb(serverOriginId);
 
         // Act - Insert in SQLite
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'alice@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('p1', 'Alice', 'alice@example.com')"
+        );
 
         // Fetch changes from SQLite
         var changes = SyncLogRepository.FetchChanges(sqlite, 0, 100);
@@ -163,12 +169,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         Assert.True(triggerResult is BoolSyncOk, $"Trigger creation failed: {triggerResult}");
 
         // Act - Insert in Postgres
-        using (var cmd = postgres.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO person (id, name, email) VALUES ('p2', 'Bob', 'bob@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: postgres,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO person (id, name, email) VALUES ('p2', 'Bob', 'bob@example.com')"
+        );
 
         // Fetch changes from Postgres
         var changes = PostgresSyncLogRepository.FetchChanges(postgres, 0, 100);
@@ -207,20 +213,20 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         Assert.True(triggerResult is BoolSyncOk, $"Trigger creation failed: {triggerResult}");
 
         // Insert in SQLite
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('s1', 'SQLite User', 'sqlite@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('s1', 'SQLite User', 'sqlite@example.com')"
+        );
 
         // Insert in Postgres
-        using (var cmd = postgres.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO person (id, name, email) VALUES ('p1', 'Postgres User', 'postgres@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: postgres,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO person (id, name, email) VALUES ('p1', 'Postgres User', 'postgres@example.com')"
+        );
 
         // Sync SQLite -> Postgres
         var sqliteChanges = SyncLogRepository.FetchChanges(sqlite, 0, 100);
@@ -276,12 +282,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         using var postgres = CreatePostgresDb(postgresOriginId);
 
         // Insert in SQLite
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('u1', 'Original', 'original@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('u1', 'Original', 'original@example.com')"
+        );
 
         // Sync to Postgres
         var insertChanges = SyncLogRepository.FetchChanges(sqlite, 0, 100);
@@ -295,12 +301,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         var versionAfterInsert = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);
 
         // Act - Update in SQLite
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "UPDATE Person SET Name = 'Updated', Email = 'updated@example.com' WHERE Id = 'u1'";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "UPDATE Person SET Name = 'Updated', Email = 'updated@example.com' WHERE Id = 'u1'"
+        );
 
         // Sync update to Postgres
         var updateChanges = SyncLogRepository.FetchChanges(sqlite, versionAfterInsert, 100);
@@ -334,12 +340,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         using var postgres = CreatePostgresDb(postgresOriginId);
 
         // Insert and sync
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('d1', 'ToDelete', 'delete@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('d1', 'ToDelete', 'delete@example.com')"
+        );
 
         var insertChanges = SyncLogRepository.FetchChanges(sqlite, 0, 100);
         PostgresSyncSession.EnableSuppression(postgres);
@@ -352,11 +358,10 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         var versionAfterInsert = ((SyncLogListOk)insertChanges).Value.Max(e => e.Version);
 
         // Act - Delete in SQLite
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText = "DELETE FROM Person WHERE Id = 'd1'";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = 'd1'"
+        );
 
         // Fetch tombstone
         var deleteChanges = SyncLogRepository.FetchChanges(sqlite, versionAfterInsert, 100);
@@ -391,12 +396,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Insert WITH suppression - should NOT log
         SyncSessionManager.EnableSuppression(sqlite);
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('s1', 'Suppressed', 'suppressed@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('s1', 'Suppressed', 'suppressed@example.com')"
+        );
         SyncSessionManager.DisableSuppression(sqlite);
 
         // Assert - No changes logged
@@ -405,12 +410,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         Assert.Empty(list);
 
         // Insert WITHOUT suppression - should log
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('n1', 'Normal', 'normal@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('n1', 'Normal', 'normal@example.com')"
+        );
 
         // Assert - One change logged
         var changes2 = SyncLogRepository.FetchChanges(sqlite, 0, 100);
@@ -426,12 +431,12 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         using var sqlite = CreateSqliteDb(sqliteOriginId);
 
         // Insert data
-        using (var cmd = sqlite.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('h1', 'HashTest', 'hash@example.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: sqlite,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('h1', 'HashTest', 'hash@example.com')"
+        );
 
         // Get changes
         var changes = SyncLogRepository.FetchChanges(sqlite, 0, 100);

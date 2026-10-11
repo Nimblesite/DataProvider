@@ -1672,78 +1672,11 @@ internal static class PostgresCli
         }
     }
 
-    private static string MapPostgresTypeToCSharp(string pgType, bool isNullable)
-    {
-        var baseType = pgType.ToLowerInvariant() switch
-        {
-            // PostgreSQL native types
-            "uuid" => "Guid",
-            "boolean" or "bool" => "bool",
-            "smallint" or "int2" => "short",
-            "integer" or "int4" or "int" => "int",
-            "bigint" or "int8" => "long",
-            "real" or "float4" => "float",
-            "double precision" or "float8" => "double",
-            "numeric" or "decimal" or "money" => "decimal",
-            "date" => "DateOnly",
-            "time" or "time without time zone" => "TimeOnly",
-            "time with time zone" or "timetz" => "TimeOnly",
-            "timestamp" or "timestamp without time zone" => "DateTime",
-            "timestamp with time zone" or "timestamptz" => "DateTimeOffset",
-            "interval" => "TimeSpan",
-            "bytea" => "byte[]",
-            "text" or "varchar" or "character varying" or "char" or "character" or "name" =>
-                "string",
-            "json" or "jsonb" => "string",
-            var t when t.EndsWith("[]", StringComparison.Ordinal) => "string[]",
-
-            // PortableType names (from schema.yaml)
-            "uuidtype" => "Guid",
-            "booleantype" => "bool",
-            "smallinttype" => "short",
-            "inttype" => "int",
-            "biginttype" => "long",
-            "floattype" => "float",
-            "doubletype" => "double",
-            "decimaltype" => "decimal",
-            "moneytype" => "decimal",
-            "smallmoneytype" => "decimal",
-            "datetype" => "DateOnly",
-            "timetype" => "TimeOnly",
-            "datetimetype" => "DateTime",
-            "datetimeoffsettype" => "DateTimeOffset",
-            "texttype" => "string",
-            "chartype" => "string",
-            "varchartype" => "string",
-            "nchartype" => "string",
-            "nvarchartype" => "string",
-            "jsontype" => "string",
-            "xmltype" => "string",
-            "binarytype" => "byte[]",
-            "varbinarytype" => "byte[]",
-            "blobtype" => "byte[]",
-            "rowversiontype" => "byte[]",
-
-            _ => "string",
-        };
-
-        // Bug #14: byte[] columns can come back as null from the reader
-        // even when the schema marks them NOT NULL (Postgres bytea
-        // metadata is unreliable). Always treat byte[] as nullable so
-        // the generated reader expression compiles without CS8604.
-        if (baseType == "byte[]")
-        {
-            return "byte[]?";
-        }
-
-        // Add nullable suffix for nullable types (including strings but not arrays)
-        if (isNullable && !baseType.EndsWith("[]", StringComparison.Ordinal))
-        {
-            return baseType + "?";
-        }
-
-        return baseType;
-    }
+    private static string MapPostgresTypeToCSharp(string pgType, bool isNullable) =>
+        Nimblesite.DataProvider.Postgres.CodeGeneration.PostgresTypeMapper.MapPostgresTypeToCSharp(
+            pgType: pgType,
+            isNullable: isNullable
+        );
 
     private static Result<string, SqlError> GenerateCode(
         string fileName,
@@ -1922,130 +1855,31 @@ internal static class PostgresCli
         return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
     }
 
-    private static string MapPortableTypeToCSharp(PortableType type, bool isNullable)
-    {
-        var baseType = type switch
-        {
-            UuidType => "Guid",
-            BooleanType => "bool",
-            SmallIntType => "short",
-            IntType => "int",
-            BigIntType => "long",
-            FloatType => "float",
-            DoubleType => "double",
-            DecimalType => "decimal",
-            MoneyType => "decimal",
-            SmallMoneyType => "decimal",
-            DateType => "DateOnly",
-            TimeType => "TimeOnly",
-            DateTimeType => "DateTime",
-            DateTimeOffsetType => "DateTimeOffset",
-            TextType => "string",
-            CharType => "string",
-            VarCharType => "string",
-            NCharType => "string",
-            NVarCharType => "string",
-            JsonType => "string",
-            XmlType => "string",
-            BinaryType => "byte[]",
-            VarBinaryType => "byte[]",
-            BlobType => "byte[]",
-            RowVersionType => "byte[]",
-            // [DP-CODEGEN-VECTOR] §5.4.5: pgvector columns map to float[] in the
-            // generated C# surface. Binder goes through Pgvector.Vector; the
-            // public C# type is the raw float[] so consumers never see the
-            // Npgsql vendor type.
-            VectorType => "float[]",
-            _ => "string",
-        };
+    // Implements [CON-SHARED-CORE] and [DP-CODEGEN-VECTOR].
+    private static string MapPortableTypeToCSharp(PortableType type, bool isNullable) =>
+        type is VectorType
+            ? "float[]"
+            : Nimblesite.DataProvider.Postgres.CodeGeneration.PostgresTypeMapper.MapPortableTypeToCSharp(
+                type: type,
+                isNullable: isNullable
+            );
 
-        // Bug #14: byte[] columns can come back as null from the reader
-        // even when the schema marks them NOT NULL (Postgres bytea
-        // metadata is unreliable). Always treat byte[] as nullable so
-        // the generated reader expression compiles without CS8604.
-        if (baseType == "byte[]")
-        {
-            return "byte[]?";
-        }
-
-        // Add nullable suffix for nullable types (including strings but not arrays)
-        if (isNullable && !baseType.EndsWith("[]", StringComparison.Ordinal))
-        {
-            return baseType + "?";
-        }
-
-        return baseType;
-    }
-
-    private static string GetReaderExpression(DatabaseColumn col, int ordinal)
-    {
-        var nullCheck = col.IsNullable ? $"reader.IsDBNull({ordinal}) ? null : " : "";
-
-        return col.CSharpType.TrimEnd('?') switch
-        {
-            "Guid" => $"{nullCheck}reader.GetGuid({ordinal})",
-            "bool" => $"{nullCheck}reader.GetBoolean({ordinal})",
-            "short" => $"{nullCheck}reader.GetInt16({ordinal})",
-            "int" => $"{nullCheck}reader.GetInt32({ordinal})",
-            "long" => $"{nullCheck}reader.GetInt64({ordinal})",
-            "float" => $"{nullCheck}reader.GetFloat({ordinal})",
-            "double" => $"{nullCheck}reader.GetDouble({ordinal})",
-            "decimal" => $"{nullCheck}reader.GetDecimal({ordinal})",
-            "DateOnly" => $"{nullCheck}DateOnly.FromDateTime(reader.GetDateTime({ordinal}))",
-            "TimeOnly" => $"{nullCheck}TimeOnly.FromTimeSpan(reader.GetTimeSpan({ordinal}))",
-            "DateTime" => $"{nullCheck}reader.GetDateTime({ordinal})",
-            "DateTimeOffset" => $"{nullCheck}reader.GetFieldValue<DateTimeOffset>({ordinal})",
-            "TimeSpan" => $"{nullCheck}reader.GetTimeSpan({ordinal})",
-            "byte[]" => $"{nullCheck}reader.GetFieldValue<byte[]>({ordinal})",
-            "string[]" => $"reader.GetFieldValue<string[]>({ordinal})",
-            // [DP-CODEGEN-VECTOR] §5.4.5: pgvector columns come through as
-            // Pgvector.Vector; call .ToArray() so the consumer-facing shape is
-            // float[]. Nullable vector columns still use the same null check.
-            "float[]" => $"{nullCheck}reader.GetFieldValue<Pgvector.Vector>({ordinal}).ToArray()",
-            _ => $"{nullCheck}reader.GetString({ordinal})",
-        };
-    }
+    private static string GetReaderExpression(DatabaseColumn col, int ordinal) =>
+        col.CSharpType.TrimEnd('?') == "float[]"
+            ? $"{(col.IsNullable ? $"reader.IsDBNull({ordinal}) ? null : " : "")}reader.GetFieldValue<Pgvector.Vector>({ordinal}).ToArray()"
+            : Nimblesite.DataProvider.Postgres.CodeGeneration.PostgresTypeMapper.GetReaderExpression(
+                col: col,
+                ordinal: ordinal
+            );
 
     private static string InferParameterType(
         string paramName,
         IReadOnlyList<DatabaseColumn>? columns = null
-    )
-    {
-        // 1. If we have schema columns and one matches the param name
-        // (case-insensitive), use the actual column C# type. Strip the
-        // nullable suffix because parameters are non-nullable in method
-        // signatures (callers pass concrete values).
-        if (columns is not null)
-        {
-            foreach (var col in columns)
-            {
-                if (string.Equals(col.Name, paramName, StringComparison.OrdinalIgnoreCase))
-                {
-                    var t = col.CSharpType;
-                    if (t.EndsWith("?", StringComparison.Ordinal))
-                    {
-                        t = t[..^1];
-                    }
-                    return t;
-                }
-            }
-        }
-
-        // 2. Fall back to name-based heuristics. Default `*id` -> string
-        // because Postgres `text` ids are common and a `string` argument
-        // round-trips correctly to both `text` and `uuid` columns (Npgsql
-        // handles the cast for the latter when the column type is uuid).
-        var lower = paramName.ToLowerInvariant();
-        if (lower.EndsWith("id", StringComparison.Ordinal))
-            return "string";
-        if (
-            lower.Contains("limit", StringComparison.Ordinal)
-            || lower.Contains("offset", StringComparison.Ordinal)
-            || lower.Contains("count", StringComparison.Ordinal)
-        )
-            return "int";
-        return "object";
-    }
+    ) =>
+        Nimblesite.DataProvider.Postgres.CodeGeneration.PostgresTypeMapper.InferParameterType(
+            paramName: paramName,
+            columns: columns
+        );
 
     private static string ToPascalCase(string name)
     {

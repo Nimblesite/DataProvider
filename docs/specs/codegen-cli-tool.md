@@ -250,3 +250,24 @@ The default configuration source generator returns a SQL error for a blank names
 ### PostgreSQL null parameter emission [DP-CODEGEN-POSTGRES-NULL-PARAMETER]
 
 Generated PostgreSQL query methods bind null parameters with an explicit Npgsql type inferred from matching result-column metadata, retaining `DBNull.Value` and a typed PostgreSQL command.
+
+## Shared example schema [EXAMPLE-SCHEMA-SHARED]
+
+The integration and program coverage fixtures reuse the application's existing
+six-table schema creation method. Their temporary connections, foreign-key setting,
+seed rows, and assertions remain unchanged. Fixtures with different table sets
+retain their own schema setup.
+
+### Shared bulk batching template [DP-CODEGEN-SHARED-BULK-LOOP]
+
+Bulk insert and bulk upsert use one batching-loop template. The operation name,
+accumulator name and failure message retain their existing values. Provider-specific
+batch SQL remains separate. Generated code, including whitespace and batch sizes,
+must match the previous output exactly. PostgreSQL parameter-type tests cover the
+query generator's null binding contract alongside the existing bulk generation tests.
+
+### Column metadata fixtures [DP-TEST-COLUMN-FIXTURE]
+
+Code-generation tests share one column metadata constructor with the model's exact
+defaults. Every supplied property remains explicit at its test call site. Tests of
+DatabaseColumn construction continue to instantiate the model directly.

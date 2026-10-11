@@ -1,3 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Http.Tests;
 
 /// <summary>
@@ -36,48 +40,50 @@ public sealed class SyncFailureIsolationTests : IDisposable
         SyncSchema.CreateSchema(conn);
         SyncSchema.SetOriginId(conn, originId);
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE fhir_Encounter (
-                Id TEXT PRIMARY KEY,
-                PatientReference TEXT NOT NULL,
-                Status TEXT NOT NULL,
-                Class TEXT,
-                ServiceType TEXT,
-                ReasonCode TEXT,
-                StartDate TEXT,
-                EndDate TEXT,
-                Version INTEGER DEFAULT 1
-            );
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE fhir_Encounter (
+                    Id TEXT PRIMARY KEY,
+                    PatientReference TEXT NOT NULL,
+                    Status TEXT NOT NULL,
+                    Class TEXT,
+                    ServiceType TEXT,
+                    ReasonCode TEXT,
+                    StartDate TEXT,
+                    EndDate TEXT,
+                    Version INTEGER DEFAULT 1
+                );
 
-            CREATE TABLE fhir_Practitioner (
-                Id TEXT PRIMARY KEY,
-                Identifier TEXT,
-                Active INTEGER DEFAULT 1,
-                NameFamily TEXT,
-                NameGiven TEXT,
-                Qualification TEXT,
-                Specialty TEXT,
-                TelecomEmail TEXT,
-                TelecomPhone TEXT,
-                Version INTEGER DEFAULT 1
-            );
+                CREATE TABLE fhir_Practitioner (
+                    Id TEXT PRIMARY KEY,
+                    Identifier TEXT,
+                    Active INTEGER DEFAULT 1,
+                    NameFamily TEXT,
+                    NameGiven TEXT,
+                    Qualification TEXT,
+                    Specialty TEXT,
+                    TelecomEmail TEXT,
+                    TelecomPhone TEXT,
+                    Version INTEGER DEFAULT 1
+                );
 
-            CREATE TABLE fhir_Appointment (
-                Id TEXT PRIMARY KEY,
-                ServiceCategory TEXT,
-                ServiceType TEXT,
-                Priority TEXT,
-                Description TEXT,
-                Start TEXT,
-                End TEXT,
-                Status TEXT DEFAULT 'pending',
-                PatientReference TEXT,
-                PractitionerReference TEXT,
-                Version INTEGER DEFAULT 1
-            );
-            """;
-        cmd.ExecuteNonQuery();
+                CREATE TABLE fhir_Appointment (
+                    Id TEXT PRIMARY KEY,
+                    ServiceCategory TEXT,
+                    ServiceType TEXT,
+                    Priority TEXT,
+                    Description TEXT,
+                    Start TEXT,
+                    End TEXT,
+                    Status TEXT DEFAULT 'pending',
+                    PatientReference TEXT,
+                    PractitionerReference TEXT,
+                    Version INTEGER DEFAULT 1
+                );
+                """
+        );
 
         TriggerGenerator.CreateTriggers(conn, "fhir_Encounter", NullLogger.Instance);
         TriggerGenerator.CreateTriggers(conn, "fhir_Practitioner", NullLogger.Instance);
@@ -148,14 +154,14 @@ public sealed class SyncFailureIsolationTests : IDisposable
     {
         // Arrange - insert an encounter that will be synced
         var encounterId = "enc-101";
-        using (var cmd = _clientConn.CreateCommand())
-        {
-            cmd.CommandText = $"""
+        DatabaseCommands.Execute(
+            connection: _clientConn,
+            configure: cmd =>
+                cmd.CommandText = $"""
                 INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class, ServiceType, StartDate)
                 VALUES ('{encounterId}', 'patient-123', 'in-progress', 'ambulatory', 'consultation', '2024-01-15T09:00:00Z')
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Get the change
         var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
@@ -258,14 +264,14 @@ public sealed class SyncFailureIsolationTests : IDisposable
     {
         // Arrange - insert practitioner on server with version 5
         var practitionerId = "pract-202";
-        using (var cmd = _serverConn.CreateCommand())
-        {
-            cmd.CommandText = $"""
+        DatabaseCommands.Execute(
+            connection: _serverConn,
+            configure: cmd =>
+                cmd.CommandText = $"""
                 INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Qualification, Specialty, Version)
                 VALUES ('{practitionerId}', 'DR-202', 1, 'Smith', 'John', 'MD', 'Cardiology', 5)
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Get server change (version 5)
         var serverChanges = SyncLogRepository.FetchChanges(_serverConn, 0, 100);
@@ -319,14 +325,14 @@ public sealed class SyncFailureIsolationTests : IDisposable
         var practitionerId = "pract-concurrent";
 
         // Server version (v2)
-        using (var cmd = _serverConn.CreateCommand())
-        {
-            cmd.CommandText = $"""
+        DatabaseCommands.Execute(
+            connection: _serverConn,
+            configure: cmd =>
+                cmd.CommandText = $"""
                 INSERT INTO fhir_Practitioner (Id, Identifier, Active, NameFamily, NameGiven, Specialty, Version)
                 VALUES ('{practitionerId}', 'DR-CONC', 1, 'ServerFamily', 'ServerGiven', 'ServerSpecialty', 2)
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Fetch server's log entry
         var serverChanges = SyncLogRepository.FetchChanges(_serverConn, 0, 100);
@@ -425,14 +431,14 @@ public sealed class SyncFailureIsolationTests : IDisposable
     {
         // Arrange - create an appointment
         var appointmentId = "appt-789";
-        using (var cmd = _clientConn.CreateCommand())
-        {
-            cmd.CommandText = $"""
+        DatabaseCommands.Execute(
+            connection: _clientConn,
+            configure: cmd =>
+                cmd.CommandText = $"""
                 INSERT INTO fhir_Appointment (Id, ServiceCategory, ServiceType, Priority, Start, End, Status, PatientReference, PractitionerReference)
                 VALUES ('{appointmentId}', 'General', 'Consultation', 'routine', '2024-01-15T10:00:00Z', '2024-01-15T10:30:00Z', 'pending', 'patient-123', 'pract-456')
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Get the change
         var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
@@ -600,14 +606,14 @@ public sealed class SyncFailureIsolationTests : IDisposable
             cmd.ExecuteNonQuery();
         }
 
-        using (var cmd = _clientConn.CreateCommand())
-        {
-            cmd.CommandText = """
+        DatabaseCommands.Execute(
+            connection: _clientConn,
+            configure: cmd =>
+                cmd.CommandText = """
                 INSERT INTO fhir_Encounter (Id, PatientReference, Status, Class)
                 VALUES ('enc-101', 'patient-123', 'finished', 'ambulatory');
-                """;
-            cmd.ExecuteNonQuery();
-        }
+                """
+        );
 
         // Get all changes
         var changes = SyncLogRepository.FetchChanges(_clientConn, 0, 100);

@@ -278,32 +278,62 @@ public sealed class LqlDefaultTranslatorTests
     // SUBSTRING FUNCTION - different syntax between Postgres and SQLite
     // =========================================================================
 
-    [Fact]
-    public void ToPostgres_SubstringWith3Args_UsesFromForSyntax()
+    [Theory]
+    // ToPostgres_SubstringWith3Args_UsesFromForSyntax
+    [InlineData("substring(text, 1, 5)", "substring(text from 1 for 5)")]
+    // ToPostgres_SubstringWith2Args_UsesCommaSyntax
+    [InlineData("substring(text, 1)", "substring(text, 1)")]
+    // ToPostgres_UnknownFunction_PassThroughWithArgs
+    [InlineData("custom_func(arg1, arg2)", "custom_func(arg1, arg2)")]
+    // ToPostgres_UnknownFunctionNoArgs_PassThrough
+    [InlineData("my_function()", "my_function()")]
+    // ToPostgres_ColumnReference_PassThrough
+    [InlineData("column_name", "column_name")]
+    // ToPostgres_ComplexExpression_PassThrough
+    [InlineData("some_expression + 1", "some_expression + 1")]
+    // ToPostgres_FunctionWithWhitespaceInArgs_PreservesWhitespace
+    [InlineData("coalesce( a , b , c )", "COALESCE(a, b, c)")]
+    // ToPostgres_FunctionWithEmptyArgs_HandlesGracefully
+    [InlineData("lower()", "lower()")]
+    public void ToPostgres_SubstringWith3Args_UsesFromForSyntax_Cases(
+        string caseValue0,
+        string caseValue1
+    )
     {
-        var result = LqlDefaultTranslator.ToPostgres("substring(text, 1, 5)");
-        Assert.Equal("substring(text from 1 for 5)", result);
+        var result = LqlDefaultTranslator.ToPostgres(caseValue0);
+        Assert.Equal(caseValue1, result);
     }
 
-    [Fact]
-    public void ToPostgres_SubstringWith2Args_UsesCommaSyntax()
+    [Theory]
+    // ToSqlite_SubstringWith3Args_UsesSubstrFunction
+    [InlineData("substring(text, 1, 5)", "substr(text, 1, 5)")]
+    // ToSqlite_SubstringWith2Args_UsesSubstrFunction
+    [InlineData("substring(text, 1)", "substr(text, 1)")]
+    // ToSqlite_ConcatWith2Args_UsesConcatOperator
+    [InlineData("concat(a, b)", "a || b")]
+    // ToSqlite_ConcatWith3Args_UsesConcatOperator
+    [InlineData("concat(first, ' ', last)", "first || ' ' || last")]
+    // ToSqlite_ConcatWithNoArgs_ReturnsEmptyString
+    [InlineData("concat()", "''")]
+    // ToSqlite_UnknownFunction_PassThroughWithArgs
+    [InlineData("custom_func(arg1, arg2)", "custom_func(arg1, arg2)")]
+    // ToSqlite_UnknownFunctionNoArgs_PassThrough
+    [InlineData("my_function()", "my_function()")]
+    // ToSqlite_ColumnReference_PassThrough
+    [InlineData("column_name", "column_name")]
+    // ToSqlite_ComplexExpression_PassThrough
+    [InlineData("some_expression + 1", "some_expression + 1")]
+    // ToSqlite_FunctionWithWhitespaceInArgs_PreservesWhitespace
+    [InlineData("coalesce( a , b , c )", "coalesce(a, b, c)")]
+    // ToSqlite_FunctionWithEmptyArgs_HandlesGracefully
+    [InlineData("lower()", "lower()")]
+    public void ToSqlite_SubstringWith3Args_UsesSubstrFunction_Cases(
+        string caseValue0,
+        string caseValue1
+    )
     {
-        var result = LqlDefaultTranslator.ToPostgres("substring(text, 1)");
-        Assert.Equal("substring(text, 1)", result);
-    }
-
-    [Fact]
-    public void ToSqlite_SubstringWith3Args_UsesSubstrFunction()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("substring(text, 1, 5)");
-        Assert.Equal("substr(text, 1, 5)", result);
-    }
-
-    [Fact]
-    public void ToSqlite_SubstringWith2Args_UsesSubstrFunction()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("substring(text, 1)");
-        Assert.Equal("substr(text, 1)", result);
+        var result = LqlDefaultTranslator.ToSqlite(caseValue0);
+        Assert.Equal(caseValue1, result);
     }
 
     // =========================================================================
@@ -339,27 +369,6 @@ public sealed class LqlDefaultTranslatorTests
     {
         var result = LqlDefaultTranslator.ToPostgres(input);
         Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void ToSqlite_ConcatWith2Args_UsesConcatOperator()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("concat(a, b)");
-        Assert.Equal("a || b", result);
-    }
-
-    [Fact]
-    public void ToSqlite_ConcatWith3Args_UsesConcatOperator()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("concat(first, ' ', last)");
-        Assert.Equal("first || ' ' || last", result);
-    }
-
-    [Fact]
-    public void ToSqlite_ConcatWithNoArgs_ReturnsEmptyString()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("concat()");
-        Assert.Equal("''", result);
     }
 
     // =========================================================================
@@ -412,97 +421,13 @@ public sealed class LqlDefaultTranslatorTests
     // UNKNOWN FUNCTIONS - pass through with function name preserved
     // =========================================================================
 
-    [Fact]
-    public void ToPostgres_UnknownFunction_PassThroughWithArgs()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("custom_func(arg1, arg2)");
-        Assert.Equal("custom_func(arg1, arg2)", result);
-    }
-
-    [Fact]
-    public void ToSqlite_UnknownFunction_PassThroughWithArgs()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("custom_func(arg1, arg2)");
-        Assert.Equal("custom_func(arg1, arg2)", result);
-    }
-
-    [Fact]
-    public void ToPostgres_UnknownFunctionNoArgs_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("my_function()");
-        Assert.Equal("my_function()", result);
-    }
-
-    [Fact]
-    public void ToSqlite_UnknownFunctionNoArgs_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("my_function()");
-        Assert.Equal("my_function()", result);
-    }
-
     // =========================================================================
     // NON-FUNCTION EXPRESSIONS - column references, pass through
     // =========================================================================
 
-    [Fact]
-    public void ToPostgres_ColumnReference_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("column_name");
-        Assert.Equal("column_name", result);
-    }
-
-    [Fact]
-    public void ToSqlite_ColumnReference_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("column_name");
-        Assert.Equal("column_name", result);
-    }
-
-    [Fact]
-    public void ToPostgres_ComplexExpression_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("some_expression + 1");
-        Assert.Equal("some_expression + 1", result);
-    }
-
-    [Fact]
-    public void ToSqlite_ComplexExpression_PassThrough()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("some_expression + 1");
-        Assert.Equal("some_expression + 1", result);
-    }
-
     // =========================================================================
     // EDGE CASES - whitespace, mixed case, empty args
     // =========================================================================
-
-    [Fact]
-    public void ToPostgres_FunctionWithWhitespaceInArgs_PreservesWhitespace()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("coalesce( a , b , c )");
-        Assert.Equal("COALESCE(a, b, c)", result);
-    }
-
-    [Fact]
-    public void ToSqlite_FunctionWithWhitespaceInArgs_PreservesWhitespace()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("coalesce( a , b , c )");
-        Assert.Equal("coalesce(a, b, c)", result);
-    }
-
-    [Fact]
-    public void ToPostgres_FunctionWithEmptyArgs_HandlesGracefully()
-    {
-        var result = LqlDefaultTranslator.ToPostgres("lower()");
-        Assert.Equal("lower()", result);
-    }
-
-    [Fact]
-    public void ToSqlite_FunctionWithEmptyArgs_HandlesGracefully()
-    {
-        var result = LqlDefaultTranslator.ToSqlite("lower()");
-        Assert.Equal("lower()", result);
-    }
 
     // =========================================================================
     // PLATFORM EQUIVALENCE - Same LQL = Same semantic result

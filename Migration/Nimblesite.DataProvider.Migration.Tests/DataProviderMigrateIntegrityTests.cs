@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture fixture)
+public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerFixture fixture)
     : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
@@ -82,20 +82,17 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
     [Fact]
     public void Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate()
     {
-        var baseline = Schema
-            .Define(name: "nap")
-            .Table(
-                schema: "public",
-                name: "settings",
-                configure: t =>
-                    t.Column(name: "id", type: PortableTypes.Uuid, configure: c => c.PrimaryKey())
-                        .Column(
-                            name: "tier",
-                            type: PortableTypes.Text,
-                            configure: c => c.NotNull().Default(defaultValue: "'free'")
-                        )
-            )
-            .Build();
+        var baseline =
+            Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1(
+                name: name,
+                schema: schema,
+                name: name,
+                configure: configure,
+                name: name,
+                type: type,
+                configure: configure,
+                defaultValue: defaultValue
+            );
         ApplySchema(schema: baseline);
 
         var schemaPath = WriteTempSchemaFile(

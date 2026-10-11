@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.Sync.Postgres.Tests;
 
 /// <summary>
@@ -5,7 +8,8 @@ namespace Nimblesite.Sync.Postgres.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _conn = null!;
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -514,14 +518,16 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     public void ApplyChange_Insert_CreatesRow()
     {
         // Create test table
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_person (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            )
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_person (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                )
+                """
+        );
 
         var entry = new SyncLogEntry(
             1,
@@ -547,15 +553,17 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     public void ApplyChange_Update_UpdatesRow()
     {
         // Create and populate test table
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_update (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            );
-            INSERT INTO test_update (id, name) VALUES ('u1', 'Original');
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_update (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                );
+                INSERT INTO test_update (id, name) VALUES ('u1', 'Original');
+                """
+        );
 
         var entry = new SyncLogEntry(
             1,
@@ -615,15 +623,17 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void ApplyChange_Insert_Upserts()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_upsert (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            );
-            INSERT INTO test_upsert (id, name) VALUES ('x1', 'Original');
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_upsert (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                );
+                INSERT INTO test_upsert (id, name) VALUES ('x1', 'Original');
+                """
+        );
 
         var entry = new SyncLogEntry(
             1,
@@ -647,14 +657,16 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void ApplyChange_Update_NonExistent_UpsertsViaInsert()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_update_upsert (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            )
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_update_upsert (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                )
+                """
+        );
 
         var entry = new SyncLogEntry(
             1,
@@ -678,17 +690,19 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void ApplyChange_ForeignKeyViolation_ReturnsFalse()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_parent (
-                id TEXT PRIMARY KEY
-            );
-            CREATE TABLE IF NOT EXISTS test_child (
-                id TEXT PRIMARY KEY,
-                parent_id TEXT REFERENCES test_parent(id)
-            )
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_parent (
+                    id TEXT PRIMARY KEY
+                );
+                CREATE TABLE IF NOT EXISTS test_child (
+                    id TEXT PRIMARY KEY,
+                    parent_id TEXT REFERENCES test_parent(id)
+                )
+                """
+        );
 
         var entry = new SyncLogEntry(
             1,
@@ -742,14 +756,16 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     public void Triggers_LogInsert()
     {
         // Create and setup test table with triggers
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_log_insert (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            )
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_log_insert (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                )
+                """
+        );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_insert", Logger);
 
@@ -778,15 +794,17 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void Triggers_LogUpdate()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_log_update (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            );
-            INSERT INTO test_log_update (id, name) VALUES ('tu1', 'Before');
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_log_update (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                );
+                INSERT INTO test_log_update (id, name) VALUES ('tu1', 'Before');
+                """
+        );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_update", Logger);
         PostgresSyncSession.DisableSuppression(_conn);
@@ -796,9 +814,11 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
 
         // Update
-        using var updateCmd = _conn.CreateCommand();
-        updateCmd.CommandText = "UPDATE test_log_update SET name = 'After' WHERE id = 'tu1'";
-        updateCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = "UPDATE test_log_update SET name = 'After' WHERE id = 'tu1'"
+        );
 
         // Check sync log
         var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
@@ -814,15 +834,17 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void Triggers_LogDelete()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_log_delete (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            );
-            INSERT INTO test_log_delete (id, name) VALUES ('td1', 'ToDelete');
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_log_delete (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                );
+                INSERT INTO test_log_delete (id, name) VALUES ('td1', 'ToDelete');
+                """
+        );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_log_delete", Logger);
         PostgresSyncSession.DisableSuppression(_conn);
@@ -831,9 +853,11 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
 
         // Delete
-        using var deleteCmd = _conn.CreateCommand();
-        deleteCmd.CommandText = "DELETE FROM test_log_delete WHERE id = 'td1'";
-        deleteCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = "DELETE FROM test_log_delete WHERE id = 'td1'"
+        );
 
         // Check sync log
         var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
@@ -850,14 +874,16 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
     [Fact]
     public void Triggers_SuppressedWhenActive()
     {
-        using var createCmd = _conn.CreateCommand();
-        createCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS test_suppression (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL
-            )
-            """;
-        createCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE IF NOT EXISTS test_suppression (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL
+                )
+                """
+        );
 
         PostgresTriggerGenerator.CreateTriggers(_conn, "test_suppression", Logger);
         PostgresSyncSchema.SetOriginId(_conn, "trigger-test-origin");
@@ -868,10 +894,12 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         var maxBefore = ((LongSyncOk)PostgresSyncLogRepository.GetMaxVersion(_conn)).Value;
 
         // Insert while suppressed
-        using var insertCmd = _conn.CreateCommand();
-        insertCmd.CommandText =
-            "INSERT INTO test_suppression (id, name) VALUES ('sup1', 'Suppressed')";
-        insertCmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO test_suppression (id, name) VALUES ('sup1', 'Suppressed')"
+        );
 
         // Check sync log - should be empty
         var changes = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
@@ -881,10 +909,12 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
         // Disable and insert
         PostgresSyncSession.DisableSuppression(_conn);
 
-        using var insertCmd2 = _conn.CreateCommand();
-        insertCmd2.CommandText =
-            "INSERT INTO test_suppression (id, name) VALUES ('unsup1', 'NotSuppressed')";
-        insertCmd2.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _conn,
+            configure: command =>
+                command.CommandText =
+                    "INSERT INTO test_suppression (id, name) VALUES ('unsup1', 'NotSuppressed')"
+        );
 
         // Check sync log - should have entry
         var changes2 = PostgresSyncLogRepository.FetchChanges(_conn, maxBefore, 100);
@@ -901,15 +931,7 @@ public sealed class PostgresRepositoryTests(PostgresContainerFixture fixture) : 
             .CreateDatabaseAsync("sync_repo_no_schema")
             .ConfigureAwait(true);
         var client = new SyncClient("origin-1", 1, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z");
-        var entry = new SyncLogEntry(
-            0,
-            "TestTable",
-            "{\"Id\":\"t1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"t1\"}",
-            "origin-1",
-            "2025-01-01T00:00:00Z"
-        );
+        var entry = Fixture_Repositories_WithoutSyncSchema_ReturnDatabaseErrors_1();
 
         Assert.True(PostgresSyncClientRepository.GetAll(bare).IsError);
         Assert.True(PostgresSyncClientRepository.GetByOrigin(bare, "origin-1").IsError);

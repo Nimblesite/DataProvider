@@ -1,6 +1,8 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using Tests.Shared;
 using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
@@ -334,14 +336,16 @@ public sealed class TombstoneIntegrationTests : IDisposable
 
     private static void CreatePersonTable(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL
+                );
+                """
+        );
     }
 
     [SuppressMessage(
@@ -351,9 +355,7 @@ public sealed class TombstoneIntegrationTests : IDisposable
     )]
     private static void ExecuteSql(SqliteConnection db, string sql)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(connection: db, configure: command => command.CommandText = sql);
     }
 
     private static long GetOldestVersion(SqliteConnection db)

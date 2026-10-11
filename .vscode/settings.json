@@ -24,5 +24,6 @@
         "titleBar.inactiveBackground": "#070D1F",
         "titleBar.inactiveForeground": "#F4F7FBcc"
     },
-    "deslop.topOffenders.splitByLanguage": true
+    "deslop.topOffenders.splitByLanguage": true,
+    "deslop.topOffenders.groupBy": "kind"
 }

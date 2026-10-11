@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TRIGGER-PG] and [MIG-TRIGGER-DIFF] from
@@ -224,13 +227,13 @@ public sealed class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture 
 
     private void InsertPascalMember(Guid id, Guid tenantId, string role)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO \"public\".\"TenantMembers\"(\"Id\", \"TenantId\", \"Role\") VALUES (@i, @t, @r)";
-        cmd.Parameters.AddWithValue("@i", id);
-        cmd.Parameters.AddWithValue("@t", tenantId);
-        cmd.Parameters.AddWithValue("@r", role);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO \"public\".\"TenantMembers\"(\"Id\", \"TenantId\", \"Role\") VALUES (@i, @t, @r)",
+            parameters: () => [("@i", id), ("@t", tenantId), ("@r", role)]
+        );
     }
 
     private void ApplyGuardSchema() =>
@@ -238,29 +241,34 @@ public sealed class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture 
 
     private void InsertMember(Guid id, Guid tenantId, string role)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO \"public\".\"tenant_members\"(id, tenant_id, role) VALUES (@i, @t, @r)";
-        cmd.Parameters.AddWithValue("@i", id);
-        cmd.Parameters.AddWithValue("@t", tenantId);
-        cmd.Parameters.AddWithValue("@r", role);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO \"public\".\"tenant_members\"(id, tenant_id, role) VALUES (@i, @t, @r)",
+            parameters: () => [("@i", id), ("@t", tenantId), ("@r", role)]
+        );
     }
 
     private void DeleteMember(Guid id)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM \"public\".\"tenant_members\" WHERE id = @i";
-        cmd.Parameters.AddWithValue("@i", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText = "DELETE FROM \"public\".\"tenant_members\" WHERE id = @i",
+            parameters: () => [("@i", id)]
+        );
     }
 
     private void DemoteMember(Guid id)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "UPDATE \"public\".\"tenant_members\" SET role = 'member' WHERE id = @i";
-        cmd.Parameters.AddWithValue("@i", id);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "UPDATE \"public\".\"tenant_members\" SET role = 'member' WHERE id = @i",
+            parameters: () => [("@i", id)]
+        );
     }
 
     private long CountMembers()

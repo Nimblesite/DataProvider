@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using BodyError = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -9,7 +10,7 @@ using BodyOk = Outcome.Result<string, Nimblesite.DataProvider.Migration.Core.Mig
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class PostgresFunctionBodyLqlTests
+public sealed partial class PostgresFunctionBodyLqlTests
 {
     [Theory]
     [InlineData(
@@ -111,19 +112,13 @@ public sealed class PostgresFunctionBodyLqlTests
     public void ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody()
     {
         var yaml = SchemaYamlSerializer.ToYaml(
-            new SchemaDefinition
-            {
-                Name = "nap",
-                Functions =
-                [
-                    new PostgresFunctionDefinition
-                    {
-                        Name = "app_tenant_id",
-                        Returns = "uuid",
-                        BodyLql = "current_setting('app.tenant_id')::uuid",
-                    },
-                ],
-            }
+            Fixture_ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody_1(
+                name: name,
+                functions: functions,
+                name: name,
+                returns: returns,
+                bodyLql: bodyLql
+            )
         );
 
         Assert.Contains("bodyLql: current_setting('app.tenant_id')::uuid", yaml);
@@ -135,12 +130,11 @@ public sealed class PostgresFunctionBodyLqlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.tenant_id')::uuid",
-                }
+                SchemaTestData.PostgresFunction(
+                    name: "app_tenant_id",
+                    returns: "uuid",
+                    bodyLql: "current_setting('app.tenant_id')::uuid"
+                )
             )
         );
 
@@ -158,19 +152,17 @@ public sealed class PostgresFunctionBodyLqlTests
     {
         var ddl = PostgresDdlGenerator.Generate(
             new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Name = "is_member",
-                    Returns = "boolean",
-                    Arguments =
+                SchemaTestData.PostgresFunction(
+                    name: "is_member",
+                    returns: "boolean",
+                    arguments:
                     [
-                        new PostgresFunctionArgumentDefinition { Name = "u", Type = "uuid" },
-                        new PostgresFunctionArgumentDefinition { Name = "t", Type = "uuid" },
+                        SchemaTestData.PostgresFunctionArgument(name: "u", type: "uuid"),
+                        SchemaTestData.PostgresFunctionArgument(name: "t", type: "uuid"),
                     ],
-                    SecurityDefiner = true,
-                    BodyLql =
-                        "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))",
-                }
+                    securityDefiner: true,
+                    bodyLql: "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))"
+                )
             )
         );
 
@@ -186,12 +178,11 @@ public sealed class PostgresFunctionBodyLqlTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             PostgresDdlGenerator.Generate(
                 new CreateOrReplaceFunctionOperation(
-                    new PostgresFunctionDefinition
-                    {
-                        Name = "bad",
-                        Body = "SELECT true",
-                        BodyLql = "true",
-                    }
+                    SchemaTestData.PostgresFunction(
+                        name: "bad",
+                        body: "SELECT true",
+                        bodyLql: "true"
+                    )
                 )
             )
         );
@@ -202,29 +193,22 @@ public sealed class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "nap",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                },
-            ],
-        };
+        var current = Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1(
+            name: name,
+            functions: functions,
+            name: name,
+            returns: returns,
+            body: body
+        );
         var desired = current with
         {
             Functions =
             [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.tenant_id')::uuid",
-                },
+                SchemaTestData.PostgresFunction(
+                    name: "app_tenant_id",
+                    returns: "uuid",
+                    bodyLql: "current_setting('app.tenant_id')::uuid"
+                ),
             ],
         };
 
@@ -237,29 +221,22 @@ public sealed class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "nap",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                },
-            ],
-        };
+        var current = Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1(
+            name: name,
+            functions: functions,
+            name: name,
+            returns: returns,
+            body: body
+        );
         var desired = current with
         {
             Functions =
             [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "text",
-                    BodyLql = "current_setting('app.tenant_id')",
-                },
+                SchemaTestData.PostgresFunction(
+                    name: "app_tenant_id",
+                    returns: "text",
+                    bodyLql: "current_setting('app.tenant_id')"
+                ),
             ],
         };
 

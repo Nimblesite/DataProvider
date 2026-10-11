@@ -1184,3 +1184,17 @@ Migration integration cases share the same four named table existence assertions
 SQLite migration cases reuse the existing seed helper and inspect its returned migration result. Cases that inspect intermediate operations keep their local pipelines. Existing result assertions, schema declarations and logger arguments are preserved.
 
 The shared users fixture also supplies the optional obsolete `old_field` column for both additive and destructive cleanup cases, preserving their distinct migration flags and assertions. Implements [MIG-TEST-USER-FIXTURE].
+
+### Shared ID and name columns [MIG-TEST-ID-NAME-COLUMNS]
+
+Migration fixtures reuse the exact Id primary-key and non-null Name column recipe.
+Each portable type and size stays at its original call site. Column order, names,
+primary-key membership, nullability, subsequent columns, indexes, and constraints
+remain unchanged.
+
+### Shared schema fixtures [MIG-TEST-SCHEMA-FIXTURES]
+
+Migration tests share constructors for schema, table, column, and constraint
+fixtures. Each supplied field is retained at its call site, including order and
+provider expressions. Defaults match the existing records; explicit null
+collection inputs remain direct model constructions.

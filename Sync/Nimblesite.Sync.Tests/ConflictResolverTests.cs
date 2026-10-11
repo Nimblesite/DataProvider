@@ -30,33 +30,21 @@ public sealed class ConflictResolverTests
         Assert.True(result);
     }
 
-    [Fact]
-    public void IsConflict_SameTableSamePkSameOrigin_ReturnsFalse()
+    [Theory]
+    // IsConflict_SameTableSamePkSameOrigin_ReturnsFalse
+    [InlineData("Person", "pk-1", "origin-A")]
+    // IsConflict_DifferentTable_ReturnsFalse
+    [InlineData("Order", "pk-1", "origin-B")]
+    // IsConflict_DifferentPk_ReturnsFalse
+    [InlineData("Person", "pk-2", "origin-B")]
+    public void IsConflict_SameTableSamePkSameOrigin_ReturnsFalse_Cases(
+        string caseValue6,
+        string caseValue7,
+        string caseValue8
+    )
     {
         var local = CreateEntry(1, "Person", "pk-1", "origin-A", "2025-01-01T00:00:00.000Z");
-        var remote = CreateEntry(2, "Person", "pk-1", "origin-A", "2025-01-01T00:00:01.000Z");
-
-        var result = ConflictResolver.IsConflict(local, remote);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void IsConflict_DifferentTable_ReturnsFalse()
-    {
-        var local = CreateEntry(1, "Person", "pk-1", "origin-A", "2025-01-01T00:00:00.000Z");
-        var remote = CreateEntry(2, "Order", "pk-1", "origin-B", "2025-01-01T00:00:01.000Z");
-
-        var result = ConflictResolver.IsConflict(local, remote);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void IsConflict_DifferentPk_ReturnsFalse()
-    {
-        var local = CreateEntry(1, "Person", "pk-1", "origin-A", "2025-01-01T00:00:00.000Z");
-        var remote = CreateEntry(2, "Person", "pk-2", "origin-B", "2025-01-01T00:00:01.000Z");
+        var remote = CreateEntry(2, caseValue6, caseValue7, caseValue8, "2025-01-01T00:00:01.000Z");
 
         var result = ConflictResolver.IsConflict(local, remote);
 

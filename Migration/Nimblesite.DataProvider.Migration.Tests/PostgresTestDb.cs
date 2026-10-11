@@ -1,3 +1,7 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -37,9 +41,7 @@ internal static class PostgresTestDb
     /// <summary>Executes a non-query SQL statement on the connection.</summary>
     internal static void Exec(NpgsqlConnection conn, string sql)
     {
-        using var command = conn.CreateCommand();
-        command.CommandText = sql;
-        command.ExecuteNonQuery();
+        DatabaseCommands.Execute(connection: conn, configure: command => command.CommandText = sql);
     }
 
     /// <summary>Executes a non-query SQL statement within the given transaction.</summary>
@@ -61,7 +63,7 @@ internal static class PostgresTestDb
         }
 
         Assert.Fail("Expected PostgreSQL schema inspection to succeed.");
-        return new SchemaDefinition { Name = "failed", Tables = [] };
+        return SchemaTestData.Schema(name: "failed", tables: []);
     }
 
     /// <summary>Calculates the schema diff between current and desired, asserting success.</summary>

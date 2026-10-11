@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-PG] DDL string-shape tests from docs/specs/rls-spec.md.
@@ -6,7 +7,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// String-assertion tests for the PostgreSQL RLS DDL generator. Verifies the
 /// shape of emitted SQL without needing a live database.
 /// </summary>
-public sealed class PostgresRlsDdlTests
+public sealed partial class PostgresRlsDdlTests
 {
     [Fact]
     public void Generate_EnableRls_EmitsAlterTableEnableRowLevelSecurity()
@@ -54,14 +55,13 @@ public sealed class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "owner_isolation",
-                    IsPermissive = true,
-                    Operations = [RlsOperation.All],
-                    UsingLql = "OwnerId = current_user_id()",
-                    WithCheckLql = "OwnerId = current_user_id()",
-                }
+                Fixture_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1(
+                    name: name,
+                    isPermissive: isPermissive,
+                    operations: operations,
+                    usingLql: usingLql,
+                    withCheckLql: withCheckLql
+                )
             )
         );
 
@@ -90,14 +90,13 @@ public sealed class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Audit",
-                new RlsPolicyDefinition
-                {
-                    Name = "audit_admin_only",
-                    IsPermissive = false,
-                    Operations = [RlsOperation.Select],
-                    Roles = ["admin", "auditor"],
-                    UsingLql = "true",
-                }
+                Fixture_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1(
+                    name: name,
+                    isPermissive: isPermissive,
+                    operations: operations,
+                    roles: roles,
+                    usingLql: usingLql
+                )
             )
         );
 
@@ -121,13 +120,13 @@ public sealed class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "group_read",
-                    IsPermissive = true,
-                    Operations = [RlsOperation.Select],
-                    UsingLql = $"exists({lql})",
-                }
+                Fixture_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(
+                    name: name,
+                    isPermissive: isPermissive,
+                    operations: operations,
+                    usingLql: usingLql,
+                    lql: lql
+                )
             )
         );
 
@@ -147,15 +146,14 @@ public sealed class PostgresRlsDdlTests
             new CreateRlsPolicyOperation(
                 "public",
                 "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "raw_sql",
-                    Operations = [RlsOperation.All],
-                    UsingLql = "OwnerId = current_user_id()",
-                    WithCheckLql = "OwnerId = current_user_id()",
-                    UsingSql = "is_member(\"GroupId\")",
-                    WithCheckSql = "can_write(\"GroupId\")",
-                }
+                Fixture_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1(
+                    name: name,
+                    operations: operations,
+                    usingLql: usingLql,
+                    withCheckLql: withCheckLql,
+                    usingSql: usingSql,
+                    withCheckSql: withCheckSql
+                )
             )
         );
 
@@ -176,7 +174,7 @@ public sealed class PostgresRlsDdlTests
                 new CreateRlsPolicyOperation(
                     "public",
                     "Documents",
-                    new RlsPolicyDefinition { Name = "broken", UsingLql = "" }
+                    SchemaTestData.RlsPolicy(name: "broken", usingLql: "")
                 )
             )
         );
@@ -191,11 +189,10 @@ public sealed class PostgresRlsDdlTests
                 new CreateRlsPolicyOperation(
                     "public",
                     "Documents",
-                    new RlsPolicyDefinition
-                    {
-                        Name = "broken_check",
-                        Operations = [RlsOperation.Insert],
-                    }
+                    SchemaTestData.RlsPolicy(
+                        name: "broken_check",
+                        operations: [RlsOperation.Insert]
+                    )
                 )
             )
         );

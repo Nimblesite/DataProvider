@@ -1,10 +1,11 @@
+// Implements [MIG-TEST-ID-NAME-COLUMNS].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
 /// Corner case and edge case tests for migrations.
 /// Tests special characters, reserved words, extreme values, and unusual schemas.
 /// </summary>
-public sealed class MigrationCornerCaseTests
+public sealed partial class MigrationCornerCaseTests
 {
     private readonly ILogger _logger = NullLogger.Instance;
 
@@ -41,16 +42,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "user_roles_history",
-                    t =>
-                        t.Column("id", PortableTypes.BigInt, c => c.PrimaryKey())
-                            .Column("user_id", PortableTypes.Uuid)
-                            .Column("role_name", PortableTypes.VarChar(100))
-                )
-                .Build();
+            var schema = Fixture_TableName_WithUnderscores_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -70,20 +62,7 @@ public sealed class MigrationCornerCaseTests
         try
         {
             // Common reserved words as column names
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "DataTable",
-                    t =>
-                        t.Column("index", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("order", PortableTypes.Int)
-                            .Column("group", PortableTypes.VarChar(50))
-                            .Column("select", PortableTypes.Text)
-                            .Column("where", PortableTypes.Boolean)
-                            .Column("from", PortableTypes.DateTime())
-                            .Column("table", PortableTypes.VarChar(100))
-                )
-                .Build();
+            var schema = Fixture_ColumnName_IsReservedWord_HandledCorrectly_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -107,16 +86,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "UserAccountSettings",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("UserId", PortableTypes.Uuid)
-                            .Column("EnableNotifications", PortableTypes.Boolean)
-                )
-                .Build();
+            var schema = Fixture_TableName_CamelCase_PreservedCorrectly_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -139,17 +109,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Metrics",
-                    t =>
-                        t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("value1", PortableTypes.Decimal(10, 2))
-                            .Column("value2", PortableTypes.Decimal(10, 2))
-                            .Column("metric99", PortableTypes.Float)
-                )
-                .Build();
+            var schema = Fixture_ColumnName_WithNumbers_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -172,21 +132,7 @@ public sealed class MigrationCornerCaseTests
         try
         {
             // Build wide table with many columns
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "WideTable",
-                    t =>
-                    {
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey());
-                        // Add 20 columns (enough to test wide tables)
-                        for (var i = 1; i <= 20; i++)
-                        {
-                            t.Column($"Col{i}", PortableTypes.VarChar(100));
-                        }
-                    }
-                )
-                .Build();
+            var schema = Fixture_Table_ManyColumns_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -209,18 +155,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "LargeText",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("ShortText", PortableTypes.VarChar(10))
-                            .Column("MediumText", PortableTypes.VarChar(4000))
-                            .Column("LargeText", PortableTypes.VarChar(8000))
-                            .Column("MaxText", PortableTypes.Text)
-                )
-                .Build();
+            var schema = Fixture_Column_MaximumVarCharLength_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -238,19 +173,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Financials",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("TinyMoney", PortableTypes.Decimal(5, 2))
-                            .Column("StandardMoney", PortableTypes.Decimal(10, 2))
-                            .Column("BigMoney", PortableTypes.Decimal(18, 4))
-                            .Column("HugeMoney", PortableTypes.Decimal(28, 8))
-                            .Column("CryptoValue", PortableTypes.Decimal(38, 18))
-                )
-                .Build();
+            var schema = Fixture_Decimal_ExtremeScaleAndPrecision_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -273,18 +196,7 @@ public sealed class MigrationCornerCaseTests
         try
         {
             // Test multi-column unique constraint (composite PK requires different builder API)
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "CompositeUnique",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("TenantId", PortableTypes.Uuid, c => c.NotNull())
-                            .Column("EntityId", PortableTypes.Uuid, c => c.NotNull())
-                            .Column("Data", PortableTypes.Text)
-                            .Unique("UQ_tenant_entity", "TenantId", "EntityId")
-                )
-                .Build();
+            var schema = Fixture_Table_MultiColumnUniqueConstraint_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -302,22 +214,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Events",
-                    t =>
-                        t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey())
-                            .Column("TenantId", PortableTypes.Uuid)
-                            .Column("EntityType", PortableTypes.VarChar(100))
-                            .Column("EntityId", PortableTypes.Uuid)
-                            .Column("EventDate", PortableTypes.DateTime())
-                            .Index(
-                                "idx_events_tenant_entity",
-                                ["TenantId", "EntityType", "EntityId"]
-                            )
-                )
-                .Build();
+            var schema = Fixture_Table_MultiColumnIndex_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -347,17 +244,11 @@ public sealed class MigrationCornerCaseTests
                 cmd.ExecuteNonQuery();
             }
 
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Categories",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(100), c => c.NotNull())
-                            .Column("ParentId", PortableTypes.Int)
-                            .ForeignKey("ParentId", "Categories", "Id", ForeignKeyAction.SetNull)
-                )
-                .Build();
+            var schema = Fixture_Table_SelfReferencingForeignKey_Success_1(
+                table: table,
+                idType: idType,
+                nameType: nameType
+            );
 
             var result = ApplySchema(connection, schema);
 
@@ -382,20 +273,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Documents",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Title", PortableTypes.VarChar(500))
-                            .Column("Status", PortableTypes.VarChar(20))
-                            .Column("CreatedAt", PortableTypes.DateTime())
-                            .Index("idx_docs_title", "Title")
-                            .Index("idx_docs_status", "Status")
-                            .Index("idx_docs_status_created", ["Status", "CreatedAt"])
-                )
-                .Build();
+            var schema = Fixture_Table_MultipleIndexesOnSameColumn_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -422,19 +300,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "OptionalData",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(100))
-                            .Column("Email", PortableTypes.VarChar(255))
-                            .Column("Age", PortableTypes.Int)
-                            .Column("Balance", PortableTypes.Decimal(10, 2))
-                            .Column("Active", PortableTypes.Boolean)
-                )
-                .Build();
+            var schema = Fixture_AllColumnsNullable_ExceptPrimaryKey_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -462,21 +328,11 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "RequiredData",
-                    t =>
-                        t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(100), c => c.NotNull())
-                            .Column("Email", PortableTypes.VarChar(255), c => c.NotNull())
-                            .Column(
-                                "Status",
-                                PortableTypes.VarChar(20),
-                                c => c.NotNull().Default("'active'")
-                            )
-                )
-                .Build();
+            var schema = Fixture_AllColumnsNotNull_Success_1(
+                table: table,
+                idType: idType,
+                nameType: nameType
+            );
 
             var result = ApplySchema(connection, schema);
 
@@ -498,20 +354,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Defaults",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "Status",
-                                PortableTypes.VarChar(50),
-                                c => c.Default("'pending'")
-                            )
-                            .Column("Type", PortableTypes.VarChar(50), c => c.Default("'default'"))
-                )
-                .Build();
+            var schema = Fixture_DefaultValue_StringWithQuotes_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -529,16 +372,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Counters",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Count", PortableTypes.Int, c => c.Default("0"))
-                            .Column("Balance", PortableTypes.Decimal(10, 2), c => c.Default("0.00"))
-                )
-                .Build();
+            var schema = Fixture_DefaultValue_NumericZero_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -556,16 +390,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Flags",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("IsActive", PortableTypes.Boolean, c => c.Default("0"))
-                            .Column("IsVerified", PortableTypes.Boolean, c => c.Default("1"))
-                )
-                .Build();
+            var schema = Fixture_DefaultValue_BooleanFalse_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -583,20 +408,7 @@ public sealed class MigrationCornerCaseTests
         var (connection, dbPath) = CreateTestDb();
         try
         {
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Auditable",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column(
-                                "CreatedAt",
-                                PortableTypes.DateTime(),
-                                c => c.Default("CURRENT_TIMESTAMP")
-                            )
-                            .Column("UpdatedAt", PortableTypes.DateTime())
-                )
-                .Build();
+            var schema = Fixture_DefaultValue_CurrentTimestamp_Success_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -671,23 +483,7 @@ public sealed class MigrationCornerCaseTests
             }
 
             // Create tables without FK first, then add FKs
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Authors",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(100))
-                )
-                .Table(
-                    "Books",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Title", PortableTypes.VarChar(200))
-                            .Column("AuthorId", PortableTypes.Int)
-                            .ForeignKey("AuthorId", "Authors", "Id")
-                )
-                .Build();
+            var schema = Fixture_MultipleTables_CircularForeignKeys_DeferredConstraints_1();
 
             var result = ApplySchema(connection, schema);
 
@@ -718,20 +514,11 @@ public sealed class MigrationCornerCaseTests
             ApplySchema(connection, v1);
 
             // Upgrade to full table
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Products",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                            .Column("Price", PortableTypes.Decimal(10, 2))
-                            .Column("CategoryId", PortableTypes.Int)
-                            .Column("CreatedAt", PortableTypes.DateTime())
-                            .Index("idx_products_name", "Name")
-                            .Index("idx_products_category", "CategoryId")
-                )
-                .Build();
+            var v2 = Fixture_UpgradeFrom_EmptyTable_ToFullSchema_Success_1(
+                table: table,
+                idType: idType,
+                nameType: nameType
+            );
 
             var currentSchema = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -767,33 +554,12 @@ public sealed class MigrationCornerCaseTests
         try
         {
             // V1 with one index
-            var v1 = Schema
-                .Define("Test")
-                .Table(
-                    "Items",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Code", PortableTypes.VarChar(50))
-                            .Column("Category", PortableTypes.VarChar(50))
-                            .Index("idx_items_code", "Code")
-                )
-                .Build();
+            var v1 = Fixture_AddIndex_ThenAddAnother_Success_1();
 
             ApplySchema(connection, v1);
 
             // V2 - add another index (additive change)
-            var v2 = Schema
-                .Define("Test")
-                .Table(
-                    "Items",
-                    t =>
-                        t.Column("Id", PortableTypes.Int, c => c.PrimaryKey())
-                            .Column("Code", PortableTypes.VarChar(50))
-                            .Column("Category", PortableTypes.VarChar(50))
-                            .Index("idx_items_code", "Code")
-                            .Index("idx_items_category", "Category")
-                )
-                .Build();
+            var v2 = Fixture_AddIndex_ThenAddAnother_Success_2();
 
             var currentSchema = (
                 (SchemaResultOk)SqliteSchemaInspector.Inspect(connection, _logger)
@@ -843,16 +609,7 @@ public sealed class MigrationCornerCaseTests
         try
         {
             // SQLite only allows one ROWID alias (INTEGER PRIMARY KEY)
-            var schema = Schema
-                .Define("Test")
-                .Table(
-                    "Sequenced",
-                    t =>
-                        t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey().Identity())
-                            .Column("Name", PortableTypes.VarChar(100))
-                            .Column("OrderNum", PortableTypes.Int) // Not identity
-                )
-                .Build();
+            var schema = Fixture_Table_MultipleIdentityColumns_OnePerTable_1();
 
             var result = ApplySchema(connection, schema);
 

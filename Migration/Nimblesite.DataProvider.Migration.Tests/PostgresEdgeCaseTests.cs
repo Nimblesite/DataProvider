@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -31,19 +31,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void NullableColumn_InsertNull_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "nullable_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Column("age", PortableTypes.Int)
-                        .Column("balance", PortableTypes.Decimal(18, 2))
-            )
-            .Build();
+        var schema = Fixture_NullableColumn_InsertNull_Success_1();
 
         ApplySchema(schema);
 
@@ -66,16 +54,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     public void AddNullableColumn_ExistingDataUnaffected_Success()
     {
         // Create v1 schema with data
-        var v1 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "evolving_table",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-            )
-            .Build();
+        var v1 = Fixture_AddNullableColumn_ExistingDataUnaffected_Success_1();
 
         ApplySchema(v1);
 
@@ -85,17 +64,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
         cmd.ExecuteNonQuery();
 
         // Upgrade to v2 with new nullable column
-        var v2 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "evolving_table",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var v2 = Fixture_AddNullableColumn_ExistingDataUnaffected_Success_2();
 
         var currentSchema = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
@@ -132,17 +101,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_NegativeNumber_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "negative_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("balance", PortableTypes.Decimal(10, 2), c => c.Default("-100.50"))
-                        .Column("adjustment", PortableTypes.Int, c => c.Default("-1")) // Not "offset" - reserved word
-            )
-            .Build();
+        var schema = Fixture_DefaultValue_NegativeNumber_Success_1();
 
         ApplySchema(schema);
 
@@ -160,16 +119,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_EmptyString_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "empty_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("notes", PortableTypes.VarChar(500), c => c.Default("''"))
-            )
-            .Build();
+        var schema = Fixture_DefaultValue_EmptyString_Success_1();
 
         ApplySchema(schema);
 
@@ -185,17 +135,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_BooleanTrue_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "bool_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("is_active", PortableTypes.Boolean, c => c.Default("true"))
-                        .Column("is_deleted", PortableTypes.Boolean, c => c.Default("false"))
-            )
-            .Build();
+        var schema = Fixture_DefaultValue_BooleanTrue_Success_1();
 
         ApplySchema(schema);
 
@@ -213,20 +153,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_UuidGeneration_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "uuid_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "external_id",
-                            PortableTypes.Uuid,
-                            c => c.Default("gen_random_uuid()")
-                        )
-            )
-            .Build();
+        var schema = Fixture_DefaultValue_UuidGeneration_Success_1();
 
         ApplySchema(schema);
 
@@ -254,17 +181,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void UnicodeData_InsertAndRetrieve_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "unicode_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.NVarChar(200))
-                        .Column("description", PortableTypes.Text)
-            )
-            .Build();
+        var schema = Fixture_UnicodeData_InsertAndRetrieve_Success_1();
 
         ApplySchema(schema);
 
@@ -307,16 +224,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void SpecialChars_InData_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "special_chars",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("value", PortableTypes.Text)
-            )
-            .Build();
+        var schema = Fixture_SpecialChars_InData_Success_1();
 
         ApplySchema(schema);
 
@@ -362,16 +270,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void JsonColumn_StoreAndQuery_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "json_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("data", PortableTypes.Json)
-            )
-            .Build();
+        var schema = Fixture_JsonColumn_StoreAndQuery_Success_1();
 
         ApplySchema(schema);
 
@@ -409,16 +308,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void JsonColumn_NullVsJsonNull_Distinction()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "json_null_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("data", PortableTypes.Json)
-            )
-            .Build();
+        var schema = Fixture_JsonColumn_NullVsJsonNull_Distinction_1();
 
         ApplySchema(schema);
 
@@ -453,18 +343,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Decimal_ExtremeValues_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "decimal_extremes",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("tiny", PortableTypes.Decimal(5, 4))
-                        .Column("large", PortableTypes.Decimal(18, 0)) // Fits in .NET decimal
-                        .Column("precise", PortableTypes.Decimal(18, 8))
-            )
-            .Build();
+        var schema = Fixture_Decimal_ExtremeValues_Success_1();
 
         ApplySchema(schema);
 
@@ -486,18 +365,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Decimal_ZeroAndNegative_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "decimal_zero_neg",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("zero", PortableTypes.Decimal(10, 2))
-                        .Column("negative", PortableTypes.Decimal(10, 2))
-                        .Column("negative_small", PortableTypes.Decimal(10, 8))
-            )
-            .Build();
+        var schema = Fixture_Decimal_ZeroAndNegative_Success_1();
 
         ApplySchema(schema);
 
@@ -522,17 +390,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Timestamp_ExtremeValues_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "timestamp_extremes",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("past", PortableTypes.DateTimeOffset)
-                        .Column("future", PortableTypes.DateTimeOffset)
-            )
-            .Build();
+        var schema = Fixture_Timestamp_ExtremeValues_Success_1();
 
         ApplySchema(schema);
 
@@ -563,17 +421,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     {
         var longName = "idx_" + new string('a', 59); // Max 63 chars in PG
 
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "long_index_name",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("value", PortableTypes.VarChar(100))
-                        .Index(longName, "value")
-            )
-            .Build();
+        var schema = Fixture_Index_VeryLongName_Success_1(longName: longName);
 
         var result = ApplySchema(schema);
 
@@ -583,19 +431,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Index_AllColumnsInTable_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "all_indexed",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("a", PortableTypes.VarChar(50))
-                        .Column("b", PortableTypes.VarChar(50))
-                        .Column("c", PortableTypes.VarChar(50))
-                        .Index("idx_all", ["a", "b", "c"])
-            )
-            .Build();
+        var schema = Fixture_Index_AllColumnsInTable_Success_1();
 
         var result = ApplySchema(schema);
 
@@ -609,38 +445,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void ForeignKey_AllCascadeTypes_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "parent_table",
-                t => t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "child_cascade",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.Cascade)
-            )
-            .Table(
-                "public",
-                "child_setnull",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.SetNull)
-            )
-            .Table(
-                "public",
-                "child_restrict",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.Restrict)
-            )
-            .Build();
+        var schema = Fixture_ForeignKey_AllCascadeTypes_Success_1();
 
         var result = ApplySchema(schema);
 
@@ -679,39 +484,12 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     public void MultipleOperations_CorrectOrder_Success()
     {
         // Start with minimal schema
-        var v1 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "ordered_ops",
-                t => t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-            )
-            .Build();
+        var v1 = Fixture_MultipleOperations_CorrectOrder_Success_1();
 
         ApplySchema(v1);
 
         // Upgrade with multiple changes
-        var v2 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "ordered_ops",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_name", "name")
-                        .Index("idx_email", "email", unique: true)
-            )
-            .Table(
-                "public",
-                "related",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("ordered_id", PortableTypes.Int)
-                        .ForeignKey("ordered_id", "ordered_ops", "id")
-            )
-            .Build();
+        var v2 = Fixture_MultipleOperations_CorrectOrder_Success_2(unique: unique);
 
         var currentSchema = (
             (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)

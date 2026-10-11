@@ -1,3 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
+using Tests.Shared;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -10,7 +13,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _pgConnection = null!;
     private SqliteConnection _sqliteConnection = null!;
@@ -54,16 +57,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlBoolean_True_WorksOnBothPlatforms()
     {
         // Arrange - Same LQL schema for both platforms
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "settings",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("enabled", PortableTypes.Boolean, c => c.DefaultLql("true"))
-            )
-            .Build();
+        var schema = Fixture_LqlBoolean_True_WorksOnBothPlatforms_1();
 
         // Act - Apply to both databases
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -108,16 +102,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlBoolean_False_WorksOnBothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "flags",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("disabled", PortableTypes.Boolean, c => c.DefaultLql("false"))
-            )
-            .Build();
+        var schema = Fixture_LqlBoolean_False_WorksOnBothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -158,20 +143,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlNow_DefaultsToCurrentTime_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "events",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "created_at",
-                            PortableTypes.DateTimeOffset,
-                            c => c.DefaultLql("now()")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlNow_DefaultsToCurrentTime_BothPlatforms_1();
 
         var beforeTest = DateTime.UtcNow.AddSeconds(-1);
 
@@ -217,20 +189,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlCurrentTimestamp_SameAsNow_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "logs",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "timestamp",
-                            PortableTypes.DateTimeOffset,
-                            c => c.DefaultLql("current_timestamp()")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlCurrentTimestamp_SameAsNow_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -251,20 +210,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlCurrentDate_ReturnsDateOnly_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "daily_records",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "record_date",
-                            PortableTypes.Date,
-                            c => c.DefaultLql("current_date()")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlCurrentDate_ReturnsDateOnly_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -292,18 +238,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlNumericInteger_DefaultsCorrectly_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "counters",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("count", PortableTypes.Int, c => c.DefaultLql("42"))
-                        .Column("negative", PortableTypes.Int, c => c.DefaultLql("-100"))
-                        .Column("zero", PortableTypes.Int, c => c.DefaultLql("0"))
-            )
-            .Build();
+        var schema = Fixture_LqlNumericInteger_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -327,26 +262,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlNumericDecimal_DefaultsCorrectly_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "prices",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("amount", PortableTypes.Decimal(10, 2), c => c.DefaultLql("99.99"))
-                        .Column(
-                            "tax_rate",
-                            PortableTypes.Decimal(5, 4),
-                            c => c.DefaultLql("0.0825")
-                        )
-                        .Column(
-                            "discount",
-                            PortableTypes.Decimal(5, 2),
-                            c => c.DefaultLql("-10.50")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlNumericDecimal_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -374,22 +290,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlStringLiteral_DefaultsCorrectly_BothPlatforms()
     {
         // Arrange - Strings must be quoted with single quotes in LQL
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "statuses",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("status", PortableTypes.VarChar(50), c => c.DefaultLql("'active'"))
-                        .Column(
-                            "category",
-                            PortableTypes.VarChar(100),
-                            c => c.DefaultLql("'uncategorized'")
-                        )
-                        .Column("empty", PortableTypes.VarChar(10), c => c.DefaultLql("''"))
-            )
-            .Build();
+        var schema = Fixture_LqlStringLiteral_DefaultsCorrectly_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -423,16 +324,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlGenUuid_GeneratesValidUuid_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "entities",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey().DefaultLql("gen_uuid()"))
-                        .Column("name", PortableTypes.VarChar(100))
-            )
-            .Build();
+        var schema = Fixture_LqlGenUuid_GeneratesValidUuid_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -490,16 +382,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlUuidAlias_SameAsGenUuid_BothPlatforms()
     {
         // Arrange - uuid() should work the same as gen_uuid()
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "items",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey().DefaultLql("uuid()"))
-                        .Column("label", PortableTypes.VarChar(50))
-            )
-            .Build();
+        var schema = Fixture_LqlUuidAlias_SameAsGenUuid_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -525,25 +408,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlMultipleDefaults_AllWorkTogether_BothPlatforms()
     {
         // Arrange - Real-world scenario with multiple LQL defaults
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "audit_records",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey().DefaultLql("gen_uuid()"))
-                        .Column("action", PortableTypes.VarChar(100), c => c.NotNull())
-                        .Column("is_success", PortableTypes.Boolean, c => c.DefaultLql("true"))
-                        .Column("retry_count", PortableTypes.Int, c => c.DefaultLql("0"))
-                        .Column("priority", PortableTypes.Decimal(3, 1), c => c.DefaultLql("5.0"))
-                        .Column("status", PortableTypes.VarChar(20), c => c.DefaultLql("'pending'"))
-                        .Column(
-                            "created_at",
-                            PortableTypes.DateTimeOffset,
-                            c => c.DefaultLql("now()")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlMultipleDefaults_AllWorkTogether_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -650,17 +515,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlDefaults_Idempotent_BothPlatforms()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "rerunnable",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("active", PortableTypes.Boolean, c => c.DefaultLql("true"))
-                        .Column("count", PortableTypes.Int, c => c.DefaultLql("1"))
-            )
-            .Build();
+        var schema = Fixture_LqlDefaults_Idempotent_BothPlatforms_1();
 
         // Act - Apply FIRST time
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -734,17 +589,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlNumeric_LargeInteger_SameValueBothPlatforms()
     {
         // Arrange - Test large integer values (near int32 boundaries)
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "large_nums",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("big_pos", PortableTypes.BigInt, c => c.DefaultLql("2147483647")) // int32 max
-                        .Column("big_neg", PortableTypes.BigInt, c => c.DefaultLql("-2147483648")) // int32 min
-            )
-            .Build();
+        var schema = Fixture_LqlNumeric_LargeInteger_SameValueBothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -765,25 +610,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlNumeric_VerySmallDecimal_SameValueBothPlatforms()
     {
         // Arrange - Test precision with very small decimal values
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "precision_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "tiny",
-                            PortableTypes.Decimal(10, 8),
-                            c => c.DefaultLql("0.00000001")
-                        )
-                        .Column(
-                            "scientific",
-                            PortableTypes.Decimal(15, 10),
-                            c => c.DefaultLql("3.1415926535")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlNumeric_VerySmallDecimal_SameValueBothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -815,35 +642,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlString_SpecialCharacters_SameValueBothPlatforms()
     {
         // Arrange - Test strings with special characters (escaped in LQL as SQL single quotes)
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "special_strings",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "with_spaces",
-                            PortableTypes.VarChar(50),
-                            c => c.DefaultLql("'hello world'")
-                        )
-                        .Column(
-                            "with_numbers",
-                            PortableTypes.VarChar(50),
-                            c => c.DefaultLql("'test123'")
-                        )
-                        .Column(
-                            "with_hyphen",
-                            PortableTypes.VarChar(50),
-                            c => c.DefaultLql("'foo-bar-baz'")
-                        )
-                        .Column(
-                            "with_underscore",
-                            PortableTypes.VarChar(50),
-                            c => c.DefaultLql("'snake_case_value'")
-                        )
-            )
-            .Build();
+        var schema = Fixture_LqlString_SpecialCharacters_SameValueBothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -894,19 +693,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlBoolean_MultipleColumns_AllDefaultCorrectly()
     {
         // Arrange - Test multiple boolean defaults in various combinations
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "feature_flags",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("flag_a", PortableTypes.Boolean, c => c.DefaultLql("true"))
-                        .Column("flag_b", PortableTypes.Boolean, c => c.DefaultLql("false"))
-                        .Column("flag_c", PortableTypes.Boolean, c => c.DefaultLql("true"))
-                        .Column("flag_d", PortableTypes.Boolean, c => c.DefaultLql("false"))
-            )
-            .Build();
+        var schema = Fixture_LqlBoolean_MultipleColumns_AllDefaultCorrectly_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -933,16 +720,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlUuid_MultipleInserts_AllUnique_BothPlatforms()
     {
         // Arrange - Verify UUID generation is truly unique across many inserts
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "uuid_test",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey().DefaultLql("gen_uuid()"))
-                        .Column("seq", PortableTypes.Int, c => c.NotNull())
-            )
-            .Build();
+        var schema = Fixture_LqlUuid_MultipleInserts_AllUnique_BothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -972,23 +750,7 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
     public void LqlTimestamp_AllTimeTypes_WorkBothPlatforms()
     {
         // Arrange - Test all time-related LQL functions
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "time_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("ts1", PortableTypes.DateTimeOffset, c => c.DefaultLql("now()"))
-                        .Column(
-                            "ts2",
-                            PortableTypes.DateTimeOffset,
-                            c => c.DefaultLql("current_timestamp()")
-                        )
-                        .Column("d", PortableTypes.Date, c => c.DefaultLql("current_date()"))
-                        .Column("t", PortableTypes.Time(), c => c.DefaultLql("current_time()"))
-            )
-            .Build();
+        var schema = Fixture_LqlTimestamp_AllTimeTypes_WorkBothPlatforms_1();
 
         // Act
         ApplySchema(_pgConnection, schema, PostgresDdlGenerator.Generate);
@@ -1057,16 +819,18 @@ public sealed class LqlDefaultsTests(PostgresContainerFixture fixture) : IAsyncL
 
     private void ExecutePg(string sql)
     {
-        using var cmd = _pgConnection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _pgConnection,
+            configure: command => command.CommandText = sql
+        );
     }
 
     private void ExecuteSqlite(string sql)
     {
-        using var cmd = _sqliteConnection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _sqliteConnection,
+            configure: command => command.CommandText = sql
+        );
     }
 
     private T QueryPg<T>(string sql)

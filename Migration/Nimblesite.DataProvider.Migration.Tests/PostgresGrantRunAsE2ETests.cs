@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 [Collection(PostgresTestSuite.Name)]
@@ -61,14 +62,13 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
             operations:
             [
                 new GrantPrivilegesOperation(
-                    new PostgresGrantDefinition
-                    {
-                        Schema = "public",
-                        Target = PostgresGrantTarget.Schema,
-                        Privileges = ["USAGE"],
-                        Roles = [appUser],
-                        RunAs = owner,
-                    }
+                    SchemaTestData.PostgresGrant(
+                        schema: "public",
+                        target: PostgresGrantTarget.Schema,
+                        privileges: ["USAGE"],
+                        roles: [appUser],
+                        runAs: owner
+                    )
                 ),
             ],
             logger: NullLogger.Instance
@@ -99,36 +99,33 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
     ) =>
         [
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = [appUser, appAdmin],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Schema,
+                    privileges: ["USAGE"],
+                    roles: [appUser, appAdmin],
+                    runAs: owner
+                )
             ),
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = [appAdmin],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["SELECT", "INSERT"],
+                    roles: [appAdmin],
+                    runAs: owner
+                )
             ),
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["SELECT"],
-                    Roles = [appUser],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["SELECT"],
+                    roles: [appUser],
+                    runAs: owner
+                )
             ),
         ];
 

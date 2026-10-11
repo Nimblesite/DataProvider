@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TRIGGER-YAML] from docs/specs/declarative-triggers-spec.md
@@ -6,7 +7,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// YAML round-trip tests for declarative trigger definitions.
 /// </summary>
-public sealed class TriggerYamlSerializerTests
+public sealed partial class TriggerYamlSerializerTests
 {
     private const string TriggerYaml = """
         name: tenant_app
@@ -73,18 +74,14 @@ public sealed class TriggerYamlSerializerTests
     [Fact]
     public void Triggers_Absent_DoNotAppearInYaml()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "plain",
-                    Columns = [new ColumnDefinition { Name = "id", Type = new UuidType() }],
-                },
-            ],
-        };
+        var schema = Fixture_Triggers_Absent_DoNotAppearInYaml_1(
+            name: name,
+            tables: tables,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 

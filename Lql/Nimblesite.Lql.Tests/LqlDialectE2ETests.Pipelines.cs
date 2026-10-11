@@ -132,10 +132,10 @@ public sealed partial class LqlDialectE2ETests
         }
     }
 
-    [Fact]
-    public void GroupByWithMultipleAggregates_AllDialects_GeneratesCorrectSQL()
-    {
-        var lql = """
+    [Theory]
+    // GroupByWithMultipleAggregates_AllDialects_GeneratesCorrectSQL
+    [InlineData(
+        """
             orders
             |> group_by(orders.status)
             |> select(
@@ -146,16 +146,51 @@ public sealed partial class LqlDialectE2ETests
                 count(distinct orders.user_id) as unique_users
             )
             |> order_by(total desc)
-            """;
+            """,
+        "COUNT",
+        "SUM",
+        "AVG",
+        "GROUP BY",
+        "ORDER BY"
+    )]
+    // CaseExpression_AllDialects_GeneratesCaseWhenSQL
+    [InlineData(
+        """
+            orders
+            |> select(
+                orders.id,
+                case
+                    when orders.total > 1000 then orders.total * 0.95
+                    when orders.total > 500 then orders.total * 0.97
+                    else orders.total
+                end as discounted
+            )
+            """,
+        "CASE",
+        "WHEN",
+        "THEN",
+        "ELSE",
+        "END"
+    )]
+    public void GroupByWithMultipleAggregates_AllDialects_GeneratesCorrectSQL_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2,
+        string caseValue3,
+        string caseValue4,
+        string caseValue5
+    )
+    {
+        var lql = caseValue0;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("SUM", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("AVG", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue1, sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue2, sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue3, sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue4, sql, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue5, sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -191,32 +226,6 @@ public sealed partial class LqlDialectE2ETests
             Assert.Contains("+", sql, StringComparison.Ordinal);
             Assert.Contains("total_value", sql, StringComparison.Ordinal);
             Assert.Contains("price_plus_ten", sql, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void CaseExpression_AllDialects_GeneratesCaseWhenSQL()
-    {
-        var lql = """
-            orders
-            |> select(
-                orders.id,
-                case
-                    when orders.total > 1000 then orders.total * 0.95
-                    when orders.total > 500 then orders.total * 0.97
-                    else orders.total
-                end as discounted
-            )
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("CASE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("WHEN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("THEN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("ELSE", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("END", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
 

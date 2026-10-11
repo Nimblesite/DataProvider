@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-YAML] from docs/specs/rls-spec.md.
@@ -5,54 +6,28 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// YAML round-trip tests for row-level security policy definitions.
 /// </summary>
-public sealed class RlsYamlSerializerTests
+public sealed partial class RlsYamlSerializerTests
 {
     [Fact]
     public void RlsPolicyDefinition_YamlRoundTrip_Simple()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "test",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "Documents",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "Id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "OwnerId",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["Id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_isolation",
-                                IsPermissive = true,
-                                Operations = [RlsOperation.All],
-                                UsingLql = "OwnerId = current_user_id()",
-                                WithCheckLql = "OwnerId = current_user_id()",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_RlsPolicyDefinition_YamlRoundTrip_Simple_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            type: type,
+            primaryKey: primaryKey,
+            rowLevelSecurity: rowLevelSecurity,
+            enabled: enabled,
+            policies: policies,
+            name: name,
+            isPermissive: isPermissive,
+            operations: operations,
+            usingLql: usingLql,
+            withCheckLql: withCheckLql
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var deserialized = SchemaYamlSerializer.FromYaml(yaml);
@@ -117,30 +92,19 @@ public sealed class RlsYamlSerializerTests
     {
         foreach (var op in Enum.GetValues<RlsOperation>())
         {
-            var schema = new SchemaDefinition
-            {
-                Name = "t",
-                Tables =
-                [
-                    new TableDefinition
-                    {
-                        Name = "T",
-                        Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
-                        RowLevelSecurity = new RlsPolicySetDefinition
-                        {
-                            Policies =
-                            [
-                                new RlsPolicyDefinition
-                                {
-                                    Name = $"p_{op}",
-                                    Operations = [op],
-                                    UsingLql = "Id = current_user_id()",
-                                },
-                            ],
-                        },
-                    },
-                ],
-            };
+            var schema = Fixture_RlsOperation_AllValues_SerializeDeserialize_1(
+                name: name,
+                tables: tables,
+                name: name,
+                columns: columns,
+                name: name,
+                type: type,
+                rowLevelSecurity: rowLevelSecurity,
+                name: name,
+                op: op,
+                operations: operations,
+                usingLql: usingLql
+            );
 
             var yaml = SchemaYamlSerializer.ToYaml(schema);
             var back = SchemaYamlSerializer.FromYaml(yaml);
@@ -151,32 +115,18 @@ public sealed class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicy_RestrictiveAndRoles_RoundTrip()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "Audit",
-                    Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "audit_only_admins",
-                                IsPermissive = false,
-                                Operations = [RlsOperation.Select, RlsOperation.Delete],
-                                Roles = ["admin", "auditor"],
-                                UsingLql = "true",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_RlsPolicy_RestrictiveAndRoles_RoundTrip_1(
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            rowLevelSecurity: rowLevelSecurity,
+            name: name,
+            isPermissive: isPermissive,
+            operations: operations,
+            roles: roles,
+            usingLql: usingLql
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var policy = SchemaYamlSerializer.FromYaml(yaml).Tables[0].RowLevelSecurity!.Policies[0];
@@ -193,19 +143,14 @@ public sealed class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicySet_DisabledFlag_RoundTrip()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "T",
-                    Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
-                    RowLevelSecurity = new RlsPolicySetDefinition { Enabled = false },
-                },
-            ],
-        };
+        var schema = Fixture_RlsPolicySet_DisabledFlag_RoundTrip_1(
+            name: name,
+            tables: tables,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
         var back = SchemaYamlSerializer.FromYaml(yaml);
@@ -218,29 +163,17 @@ public sealed class RlsYamlSerializerTests
     {
         // Defaults: Enabled=true, IsPermissive=true, Operations=[All].
         // These should not appear in serialized YAML.
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "T",
-                    Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "p",
-                                UsingLql = "Id = current_user_id()",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_RlsPolicySet_DefaultsOmittedFromYaml_1(
+            name: name,
+            tables: tables,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            rowLevelSecurity: rowLevelSecurity,
+            name: name,
+            usingLql: usingLql
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
@@ -251,18 +184,14 @@ public sealed class RlsYamlSerializerTests
     [Fact]
     public void RowLevelSecurity_Absent_DoesNotAppearInYaml()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "Plain",
-                    Columns = [new ColumnDefinition { Name = "Id", Type = new UuidType() }],
-                },
-            ],
-        };
+        var schema = Fixture_RowLevelSecurity_Absent_DoesNotAppearInYaml_1(
+            name: name,
+            tables: tables,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type
+        );
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 

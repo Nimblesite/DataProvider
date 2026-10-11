@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // EXHAUSTIVE end-to-end proof that NAP can build production RLS using ONLY
@@ -18,7 +19,8 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture)
+    : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
     private readonly ILogger _logger = NullLogger.Instance;
@@ -157,103 +159,79 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
     }
 
     private static SchemaDefinition TenantMembersSchema() =>
-        new()
-        {
-            Name = "lql",
-            Tables =
+        SchemaTestData.Schema(
+            name: "lql",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "tenant_members",
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "tenant_members",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "user_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                        SchemaTestData.Column(
+                            name: "user_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "tenant_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+            ]
+        );
 
     private static SchemaDefinition TenantTableLqlOnly(string name) =>
-        new()
-        {
-            Name = "lql",
-            Tables =
+        SchemaTestData.Schema(
+            name: "lql",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = name,
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: name,
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "title",
-                            Type = new VarCharType(200),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
+                        SchemaTestData.Column(
+                            name: "tenant_id",
+                            type: new UuidType(),
+                            isNullable: false
+                        ),
+                        SchemaTestData.Column(
+                            name: "title",
+                            type: new VarCharType(200),
+                            isNullable: false
+                        ),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    rowLevelSecurity: SchemaTestData.RlsPolicySet(
+                        enabled: true,
+                        forced: true,
+                        policies:
                         [
-                            new RlsPolicyDefinition
-                            {
-                                Name = $"{name}_member",
-                                Operations = [RlsOperation.All],
-                                Roles = ["lql_user"],
-                                // PURE LQL - no usingSql.
-                                UsingLql =
-                                    "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
-                                WithCheckLql =
-                                    "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = $"{name}_admin_all",
-                                Operations = [RlsOperation.All],
-                                Roles = ["lql_admin"],
-                                UsingLql = "true",
-                                WithCheckLql = "true",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+                            SchemaTestData.RlsPolicy(
+                                name: $"{name}_member",
+                                operations: [RlsOperation.All],
+                                roles: ["lql_user"],
+                                usingLql: "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())",
+                                withCheckLql: "tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id())"
+                            ),
+                            SchemaTestData.RlsPolicy(
+                                name: $"{name}_admin_all",
+                                operations: [RlsOperation.All],
+                                roles: ["lql_admin"],
+                                usingLql: "true",
+                                withCheckLql: "true"
+                            ),
+                        ]
+                    )
+                ),
+            ]
+        );
 
     [Fact]
     public void LqlOnly_NapShape_AppliesAndCreatesPolicies()
@@ -430,56 +408,25 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
     {
         ApplyAndGrant(TenantMembersSchema(), "tenant_members");
         BootstrapMembershipFns(_connection);
-        var schema = new SchemaDefinition
-        {
-            Name = "lql",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "self_owner",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "user_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "self_or_member",
-                                Operations = [RlsOperation.Select],
-                                Roles = ["lql_user"],
-                                UsingLql =
-                                    "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_member(app_user_id(), app_tenant_id()))",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_LqlOnly_OrCombination_SelfOrOwner_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey,
+            rowLevelSecurity: rowLevelSecurity,
+            enabled: enabled,
+            forced: forced,
+            policies: policies,
+            name: name,
+            operations: operations,
+            roles: roles,
+            usingLql: usingLql
+        );
         ApplyAndGrant(schema, "self_owner");
 
         // Verify the OR-combination predicate landed in pg_policies.
@@ -500,51 +447,26 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         // USING is_member(...), WITH CHECK is_member(...) AND is_member(...).
         ApplyAndGrant(TenantMembersSchema(), "tenant_members");
         BootstrapMembershipFns(_connection);
-        var schema = new SchemaDefinition
-        {
-            Name = "lql",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "asymmetric",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "asym_pol",
-                                Operations = [RlsOperation.All],
-                                Roles = ["lql_user"],
-                                UsingLql = "is_member(app_user_id(), app_tenant_id())",
-                                WithCheckLql =
-                                    "is_member(app_user_id(), app_tenant_id()) and tenant_id = app_tenant_id()",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_LqlOnly_DifferentUsingVsWithCheck_ApiKeysShape_1(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey,
+            rowLevelSecurity: rowLevelSecurity,
+            enabled: enabled,
+            forced: forced,
+            policies: policies,
+            name: name,
+            operations: operations,
+            roles: roles,
+            usingLql: usingLql,
+            withCheckLql: withCheckLql
+        );
         ApplyAndGrant(schema, "asymmetric");
 
         using var cmd = _connection.CreateCommand();
@@ -574,91 +496,41 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
         BootstrapMembershipFns(_connection);
 
         // Parent table: conversations.
-        var convSchema = new SchemaDefinition
-        {
-            Name = "lql",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "conversations",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
+        var convSchema =
+            Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_1(
+                name: name,
+                tables: tables,
+                schema: schema,
+                name: name,
+                columns: columns,
+                name: name,
+                type: type,
+                isNullable: isNullable,
+                primaryKey: primaryKey
+            );
         ApplyAndGrant(convSchema, "conversations");
 
         // Child table: messages — RLS via exists() over conversations.
-        var msgSchema = new SchemaDefinition
-        {
-            Name = "lql",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "messages",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "conversation_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "body",
-                            Type = new TextType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "messages_member",
-                                Operations = [RlsOperation.All],
-                                Roles = ["lql_user"],
-                                // NAP's EXACT shape: bare is_member fn call
-                                // inside the lambda body's AND clause.
-                                UsingLql =
-                                    "exists(conversations |> filter(fn(c) => c.id = conversation_id and is_member(app_user_id(), c.tenant_id)))",
-                                WithCheckLql =
-                                    "exists(conversations |> filter(fn(c) => c.id = conversation_id and is_member(app_user_id(), c.tenant_id)))",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var msgSchema = Fixture_LqlOnly_NapMessagesShape_BareFnCallInLambdaBody_EnforcesIsolation_2(
+            name: name,
+            tables: tables,
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey,
+            rowLevelSecurity: rowLevelSecurity,
+            enabled: enabled,
+            forced: forced,
+            policies: policies,
+            name: name,
+            operations: operations,
+            roles: roles,
+            usingLql: usingLql,
+            withCheckLql: withCheckLql
+        );
         ApplyAndGrant(msgSchema, "messages");
 
         // Set up: tenantA has userA as member, tenantB has userB as member.
@@ -745,12 +617,11 @@ public sealed class PostgresLqlOnlyE2ETests(PostgresContainerFixture fixture) : 
             [
                 TenantTableLqlOnly("docs_drop").Tables[0] with
                 {
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies = [],
-                    },
+                    RowLevelSecurity = SchemaTestData.RlsPolicySet(
+                        enabled: true,
+                        forced: true,
+                        policies: []
+                    ),
                 },
             ],
         };

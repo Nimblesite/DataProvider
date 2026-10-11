@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TEST-DIFF-SHARED].
@@ -14,16 +15,7 @@ public sealed partial class SchemaDiffTests
         // Arrange
         var current = Schema.Define("Current").Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100), c => c.NotNull())
-            )
-            .Build();
+        var desired = Fixture_Calculate_EmptyCurrentToNewDesired_CreatesTable_1();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
@@ -38,16 +30,7 @@ public sealed partial class SchemaDiffTests
     public void Calculate_SameSchema_NoOperations()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-            )
-            .Build();
+        var schema = Fixture_Calculate_SameSchema_NoOperations_1();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: schema, desired: schema);
@@ -61,16 +44,7 @@ public sealed partial class SchemaDiffTests
         // Arrange
         var current = UsersSchema(name: "Current");
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255), c => c.NotNull())
-            )
-            .Build();
+        var desired = Fixture_Calculate_NewColumn_AddsColumn_1();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
@@ -103,38 +77,9 @@ public sealed partial class SchemaDiffTests
     public void Calculate_NewForeignKey_AddsForeignKey()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-            )
-            .Build();
+        var current = Fixture_Calculate_NewForeignKey_AddsForeignKey_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-                        .ForeignKey("dept_id", "departments", "id", ForeignKeyAction.Cascade)
-            )
-            .Build();
+        var desired = Fixture_Calculate_NewForeignKey_AddsForeignKey_2();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
@@ -184,16 +129,7 @@ public sealed partial class SchemaDiffTests
     public void Calculate_CaseInsensitiveColumnMatching()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("EMAIL", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var current = Fixture_Calculate_CaseInsensitiveColumnMatching_1();
 
         var desired = UsersSchema(name: "Desired", email: true);
 
@@ -210,20 +146,7 @@ public sealed partial class SchemaDiffTests
         // Arrange
         var current = Schema.Define("Current").Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "countries",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "regions",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table("public", "cities", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = Fixture_Calculate_MultipleNewTables_CreatesAll_1();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
@@ -236,41 +159,9 @@ public sealed partial class SchemaDiffTests
     public void Calculate_ComplexMigration_CombinesOperations()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("old_field", PortableTypes.VarChar(100))
-            )
-            .Table(
-                "public",
-                "obsolete_table",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
+        var current = Fixture_Calculate_ComplexMigration_CombinesOperations_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("new_field", PortableTypes.VarChar(200))
-                        .Index("idx_users_new", "new_field")
-            )
-            .Table(
-                "public",
-                "new_table",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("user_id", PortableTypes.Uuid)
-                        .ForeignKey("user_id", "users", "id")
-            )
-            .Build();
+        var desired = Fixture_Calculate_ComplexMigration_CombinesOperations_2();
 
         // Act
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
@@ -299,17 +190,15 @@ public sealed partial class SchemaDiffTests
     [Fact]
     public void Calculate_DesiredForcedRls_EmitsEnableForceRls()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "Current",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Enabled = false })],
-        };
+        var current = SchemaTestData.Schema(
+            name: "Current",
+            tables: [RlsTable(new RlsPolicySetDefinition { Enabled = false })]
+        );
 
-        var desired = new SchemaDefinition
-        {
-            Name = "Desired",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
-        };
+        var desired = SchemaTestData.Schema(
+            name: "Desired",
+            tables: [RlsTable(new RlsPolicySetDefinition { Forced = true })]
+        );
 
         var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
         Assert.Contains(ops, op => op is EnableRlsOperation);
@@ -317,22 +206,16 @@ public sealed partial class SchemaDiffTests
     }
 
     private static TableDefinition RlsTable(RlsPolicySetDefinition rls) =>
-        new()
-        {
-            Schema = "public",
-            Name = "documents",
-            Columns =
+        SchemaTestData.Table(
+            schema: "public",
+            name: "documents",
+            columns:
             [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
+                SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
             ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            RowLevelSecurity = rls,
-        };
+            primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+            rowLevelSecurity: rls
+        );
 
     // Implements [MIG-TEST-USER-FIXTURE].
     private static SchemaDefinition UsersSchema(

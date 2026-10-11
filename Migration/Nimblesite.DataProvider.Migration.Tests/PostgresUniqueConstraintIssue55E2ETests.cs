@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -9,7 +10,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// case where a foreign key was declared in the same table.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -89,69 +92,34 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
 
     private static SchemaDefinition Schema(bool includeUnique)
     {
-        var tenants = new TableDefinition
-        {
-            Schema = SchemaName,
-            Name = "tenants",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
-        var agentConfigs = new TableDefinition
-        {
-            Schema = SchemaName,
-            Name = "agent_configs",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "tenant_id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "name",
-                    Type = PortableTypes.Text,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            ForeignKeys =
-            [
-                new ForeignKeyDefinition
-                {
-                    Columns = ["tenant_id"],
-                    ReferencedSchema = SchemaName,
-                    ReferencedTable = "tenants",
-                    ReferencedColumns = ["id"],
-                    OnDelete = ForeignKeyAction.Cascade,
-                },
-            ],
-            UniqueConstraints = includeUnique
-                ?
-                [
-                    new UniqueConstraintDefinition
-                    {
-                        Name = "uq_agent_configs_tenant_name",
-                        Columns = ["tenant_id", "name"],
-                    },
-                ]
-                : [],
-        };
-        return new SchemaDefinition { Name = "issue55", Tables = [tenants, agentConfigs] };
+        var tenants = Fixture_Schema_1(
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey
+        );
+        var agentConfigs = Fixture_Schema_2(
+            schema: schema,
+            name: name,
+            columns: columns,
+            name: name,
+            type: type,
+            isNullable: isNullable,
+            primaryKey: primaryKey,
+            foreignKeys: foreignKeys,
+            columns: columns,
+            referencedSchema: referencedSchema,
+            referencedTable: referencedTable,
+            referencedColumns: referencedColumns,
+            onDelete: onDelete,
+            uniqueConstraints: uniqueConstraints,
+            includeUnique: includeUnique,
+            name: name,
+            columns: columns
+        );
+        return SchemaTestData.Schema(name: "issue55", tables: [tenants, agentConfigs]);
     }
 }

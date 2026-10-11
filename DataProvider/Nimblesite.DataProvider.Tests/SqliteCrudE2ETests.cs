@@ -1,5 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
 using Outcome;
+using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -21,31 +23,33 @@ public sealed class SqliteCrudE2ETests : IDisposable
 
     private void CreateSchema()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Patients (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Age INTEGER NOT NULL,
-                Email TEXT,
-                IsActive INTEGER NOT NULL DEFAULT 1
-            );
-            CREATE TABLE Appointments (
-                Id TEXT PRIMARY KEY,
-                PatientId TEXT NOT NULL,
-                AppointmentDate TEXT NOT NULL,
-                Notes TEXT,
-                FOREIGN KEY (PatientId) REFERENCES Patients(Id)
-            );
-            CREATE TABLE Medications (
-                Id TEXT PRIMARY KEY,
-                PatientId TEXT NOT NULL,
-                DrugName TEXT NOT NULL,
-                Dosage TEXT NOT NULL,
-                FOREIGN KEY (PatientId) REFERENCES Patients(Id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Patients (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Age INTEGER NOT NULL,
+                    Email TEXT,
+                    IsActive INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE Appointments (
+                    Id TEXT PRIMARY KEY,
+                    PatientId TEXT NOT NULL,
+                    AppointmentDate TEXT NOT NULL,
+                    Notes TEXT,
+                    FOREIGN KEY (PatientId) REFERENCES Patients(Id)
+                );
+                CREATE TABLE Medications (
+                    Id TEXT PRIMARY KEY,
+                    PatientId TEXT NOT NULL,
+                    DrugName TEXT NOT NULL,
+                    Dosage TEXT NOT NULL,
+                    FOREIGN KEY (PatientId) REFERENCES Patients(Id)
+                );
+                """
+        );
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+// Implements [DP-SQL-MODEL-TEST-FRAGMENTS].
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
@@ -367,30 +368,25 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(
-            sqlResult is StringSqlOk,
-            $"SQL generation should succeed, got: {(sqlResult as StringSqlError)?.Value.Message}"
-        );
-
-        var sql = ((StringSqlOk)sqlResult).Value;
-
         // Verify JOIN is included
-        Assert.Contains("INNER JOIN", sql);
-        Assert.Contains("Customer", sql);
-        Assert.Contains("ON o.CustomerId = c.Id", sql);
-
         // Verify table aliases are included
-        Assert.Contains("FROM Orders o", sql);
-        Assert.Contains("Customer c", sql);
-
         // Verify full expected SQL structure
-        Assert.Contains(
-            "SELECT o.OrderNumber, o.TotalAmount, o.Status, c.CustomerName, c.Email",
-            sql
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "INNER JOIN",
+                "Customer",
+                "ON o.CustomerId = c.Id",
+                "FROM Orders o",
+                "Customer c",
+                "SELECT o.OrderNumber, o.TotalAmount, o.Status, c.CustomerName, c.Email",
+                "WHERE o.TotalAmount > '400.00'",
+                "ORDER BY o.TotalAmount DESC",
+                "LIMIT 5",
+            ],
+            message: $"SQL generation should succeed, got: {(sqlResult as StringSqlError)?.Value.Message}"
         );
-        Assert.Contains("WHERE o.TotalAmount > '400.00'", sql);
-        Assert.Contains("ORDER BY o.TotalAmount DESC", sql);
-        Assert.Contains("LIMIT 5", sql);
     }
 
     [Fact]
@@ -406,13 +402,16 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("LEFT JOIN", sql);
-        Assert.Contains("Customer cust", sql);
-        Assert.Contains("FROM Orders ord", sql);
-        Assert.Contains("ON ord.CustomerId = cust.Id", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "LEFT JOIN",
+                "Customer cust",
+                "FROM Orders ord",
+                "ON ord.CustomerId = cust.Id",
+            ]
+        );
     }
 
     [Fact]
@@ -429,14 +428,17 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
         // Verify both JOINs are present
-        Assert.Contains("INNER JOIN Customer c", sql);
-        Assert.Contains("LEFT JOIN Address a", sql);
-        Assert.Contains("ON o.CustomerId = c.Id", sql);
-        Assert.Contains("ON c.Id = a.CustomerId", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "INNER JOIN Customer c",
+                "LEFT JOIN Address a",
+                "ON o.CustomerId = c.Id",
+                "ON c.Id = a.CustomerId",
+            ]
+        );
     }
 
     [Fact]
@@ -484,72 +486,8 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // inserts/updates are supposed to be extension methods.
 
         // Create all tables
-        var createTablesScript = """
-            CREATE TABLE IF NOT EXISTS Invoice (
-                Id TEXT PRIMARY KEY,
-                InvoiceNumber TEXT NOT NULL,
-                InvoiceDate TEXT NOT NULL,
-                CustomerName TEXT NOT NULL,
-                CustomerEmail TEXT NULL,
-                TotalAmount REAL NOT NULL,
-                DiscountAmount REAL NULL,
-                Notes TEXT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS InvoiceLine (
-                Id TEXT PRIMARY KEY,
-                InvoiceId TEXT NOT NULL,
-                Description TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                UnitPrice REAL NOT NULL,
-                Amount REAL NOT NULL,
-                DiscountPercentage REAL NULL,
-                Notes TEXT NULL,
-                FOREIGN KEY (InvoiceId) REFERENCES Invoice (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Customer (
-                Id TEXT PRIMARY KEY,
-                CustomerName TEXT NOT NULL,
-                Email TEXT NULL,
-                Phone TEXT NULL,
-                CreatedDate TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS Address (
-                Id TEXT PRIMARY KEY,
-                CustomerId TEXT NOT NULL,
-                Street TEXT NOT NULL,
-                City TEXT NOT NULL,
-                State TEXT NOT NULL,
-                ZipCode TEXT NOT NULL,
-                Country TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Orders (
-                Id TEXT PRIMARY KEY,
-                OrderNumber TEXT NOT NULL,
-                OrderDate TEXT NOT NULL,
-                CustomerId TEXT NOT NULL,
-                TotalAmount REAL NOT NULL,
-                Status TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS OrderItem (
-                Id TEXT PRIMARY KEY,
-                OrderId TEXT NOT NULL,
-                ProductName TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                Price REAL NOT NULL,
-                Subtotal REAL NOT NULL,
-                FOREIGN KEY (OrderId) REFERENCES Orders (Id)
-            );
-            """;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        // Implements [EXAMPLE-SCHEMA-SHARED].
+        await DatabaseManager.CreateSchemaAsync(connection: _connection).ConfigureAwait(false);
 
         // Insert comprehensive test data
         var insertScript = """
@@ -957,11 +895,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("AND o.TotalAmount = '500.00'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.Status = 'Completed'", "AND o.TotalAmount = '500.00'"]
+        );
     }
 
     [Fact]
@@ -978,11 +915,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("OR o.Status = 'Processing'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.Status = 'Completed'", "OR o.Status = 'Processing'"]
+        );
     }
 
     [Fact]
@@ -994,10 +930,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("SELECT DISTINCT", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["SELECT DISTINCT"]);
     }
 
     [Fact]
@@ -1009,11 +942,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("OFFSET 10", sql);
-        Assert.Contains("LIMIT 5", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["OFFSET 10", "LIMIT 5"]
+        );
     }
 
     [Fact]
@@ -1025,10 +957,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("SELECT o.*", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["SELECT o.*"]);
     }
 
     [Fact]
@@ -1040,10 +969,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("GROUP BY o.Status", sql);
+        var sql = SqlResultAssertions.Contains(result: sqlResult, fragments: ["GROUP BY o.Status"]);
     }
 
     [Fact]
@@ -1059,10 +985,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.TotalAmount >= '100.00'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.TotalAmount >= '100.00'"]
+        );
     }
 
     [Fact]
@@ -1078,10 +1004,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("GROUP BY o.Status, o.CustomerId", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["GROUP BY o.Status, o.CustomerId"]
+        );
     }
 
     [Fact]
@@ -1099,12 +1025,15 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("AND o.TotalAmount = '500.00'", sql);
-        Assert.Contains("OR o.Status = 'VIP'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "WHERE o.Status = 'Completed'",
+                "AND o.TotalAmount = '500.00'",
+                "OR o.Status = 'VIP'",
+            ]
+        );
     }
 
     [Fact]
@@ -1116,10 +1045,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.IsActive = 1", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.IsActive = 1"]
+        );
     }
 
     [Fact]
@@ -1132,10 +1061,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.OrderDate = '2024-06-15 10:30:00'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.OrderDate = '2024-06-15 10:30:00'"]
+        );
     }
 
     [Fact]
@@ -1147,10 +1076,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.CustomerId = 42", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.CustomerId = 42"]
+        );
     }
 
     [Fact]
@@ -1166,10 +1095,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.CustomerName = 'O''Brien'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["WHERE o.CustomerName = 'O''Brien'"]
+        );
     }
 
     [Fact]
@@ -1185,10 +1114,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("ORDER BY o.OrderDate DESC", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: ["ORDER BY o.OrderDate DESC"]
+        );
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-PG-SUPPORT-DDL].
@@ -108,68 +109,53 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
     ) => ((OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)).Value;
 
     private static SchemaDefinition SupportSchema() =>
-        new()
-        {
-            Name = "support_readback",
-            Roles =
+        SchemaTestData.Schema(
+            name: "support_readback",
+            roles:
             [
-                new PostgresRoleDefinition
-                {
-                    Name = "nap_app_user",
-                    Login = false,
-                    BypassRls = false,
-                },
+                SchemaTestData.PostgresRole(name: "nap_app_user", login: false, bypassRls: false),
             ],
-            Functions =
+            functions:
             [
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "current_tenant_id",
-                    Returns = "uuid",
-                    Language = "sql",
-                    Volatility = "stable",
-                    SecurityDefiner = true,
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                    ExecuteRoles = ["nap_app_user"],
-                    RevokePublicExecute = true,
-                },
+                SchemaTestData.PostgresFunction(
+                    schema: "public",
+                    name: "current_tenant_id",
+                    returns: "uuid",
+                    language: "sql",
+                    volatility: "stable",
+                    securityDefiner: true,
+                    body: "SELECT current_setting('app.tenant_id', true)::uuid",
+                    executeRoles: ["nap_app_user"],
+                    revokePublicExecute: true
+                ),
             ],
-            Grants =
+            grants:
             [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["nap_app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "documents",
-                    Privileges = ["SELECT"],
-                    Roles = ["nap_app_user"],
-                },
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.Schema,
+                    privileges: ["USAGE"],
+                    roles: ["nap_app_user"]
+                ),
+                SchemaTestData.PostgresGrant(
+                    schema: "public",
+                    target: PostgresGrantTarget.Table,
+                    objectName: "documents",
+                    privileges: ["SELECT"],
+                    roles: ["nap_app_user"]
+                ),
             ],
-            Tables =
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "documents",
-                    Columns =
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "documents",
+                    columns:
                     [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
+                        SchemaTestData.Column(name: "id", type: new UuidType(), isNullable: false),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+            ]
+        );
 }

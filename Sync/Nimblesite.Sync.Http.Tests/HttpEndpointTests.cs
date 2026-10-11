@@ -1,5 +1,8 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Net;
 using System.Text.Json;
+using Tests.Shared;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -223,15 +226,17 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
         SyncSchema.SetOriginId(_connection, _originId);
 
         // Create test table with triggers
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT
+                );
+                """
+        );
 
         TriggerGenerator.CreateTriggers(_connection, "Person", NullLogger.Instance);
     }
@@ -277,19 +282,19 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
     public void Update_CreatesChangelog()
     {
         // Arrange
-        using (var cmd = _connection.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Bob', 'bob@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('p2', 'Bob', 'bob@test.com')"
+        );
 
         // Act
-        using (var cmd = _connection.CreateCommand())
-        {
-            cmd.CommandText = "UPDATE Person SET Name = 'Bob Updated' WHERE Id = 'p2'";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText = "UPDATE Person SET Name = 'Bob Updated' WHERE Id = 'p2'"
+        );
 
         // Assert
         var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
@@ -302,19 +307,18 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
     public void Delete_CreatesTombstone()
     {
         // Arrange
-        using (var cmd = _connection.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Charlie', 'charlie@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('p3', 'Charlie', 'charlie@test.com')"
+        );
 
         // Act
-        using (var cmd = _connection.CreateCommand())
-        {
-            cmd.CommandText = "DELETE FROM Person WHERE Id = 'p3'";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = 'p3'"
+        );
 
         // Assert
         var changes = SyncLogRepository.FetchChanges(_connection, 0, 100);
@@ -328,12 +332,12 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
     {
         // Act - insert with suppression enabled
         SyncSessionManager.EnableSuppression(_connection);
-        using (var cmd = _connection.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('suppressed', 'Suppressed', 's@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _connection,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('suppressed', 'Suppressed', 's@test.com')"
+        );
         SyncSessionManager.DisableSuppression(_connection);
 
         // Assert - no changes logged

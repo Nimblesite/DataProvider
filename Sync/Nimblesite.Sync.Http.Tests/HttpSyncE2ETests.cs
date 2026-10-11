@@ -1,4 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Text.Json;
+using Tests.Shared;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -41,15 +44,17 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
         SyncSchema.CreateSchema(conn);
         SyncSchema.SetOriginId(conn, originId);
 
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: conn,
+            configure: command =>
+                command.CommandText = """
+                CREATE TABLE Person (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Email TEXT
+                );
+                """
+        );
 
         TriggerGenerator.CreateTriggers(conn, "Person", NullLogger.Instance);
     }
@@ -119,12 +124,12 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
     public async Task PushChanges_InsertsOnClient_AppearsOnServer()
     {
         // Arrange - insert data on client
-        using (var cmd = _clientConn.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('http1', 'HTTP Test', 'http@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _clientConn,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('http1', 'HTTP Test', 'http@test.com')"
+        );
 
         // Get changes from client
         var clientChanges = SyncLogRepository.FetchChanges(_clientConn, 0, 100);
@@ -202,12 +207,12 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
     public async Task PullChanges_ChangesOnServer_AppearsOnClient()
     {
         // Arrange - insert data on server
-        using (var cmd = _serverConn.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('pull1', 'Pull Test', 'pull@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _serverConn,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('pull1', 'Pull Test', 'pull@test.com')"
+        );
 
         var connStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
 
@@ -274,19 +279,19 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
     public async Task BidirectionalSync_ChangesBothWays_BothDatabasesHaveBothRecords()
     {
         // Arrange - insert different data on each side
-        using (var cmd = _serverConn.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_server', 'Server Record', 'server@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _serverConn,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_server', 'Server Record', 'server@test.com')"
+        );
 
-        using (var cmd = _clientConn.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_client', 'Client Record', 'client@test.com')";
-            cmd.ExecuteNonQuery();
-        }
+        DatabaseCommands.Execute(
+            connection: _clientConn,
+            configure: cmd =>
+                cmd.CommandText =
+                    "INSERT INTO Person (Id, Name, Email) VALUES ('bidir_client', 'Client Record', 'client@test.com')"
+        );
 
         var serverConnStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
         var clientConnStr = Uri.EscapeDataString($"Data Source={_clientDbPath}");
@@ -396,10 +401,12 @@ public sealed class HttpSyncE2ETests : IClassFixture<SyncApiWebApplicationFactor
         // Arrange - insert multiple records
         for (var i = 0; i < 5; i++)
         {
-            using var cmd = _serverConn.CreateCommand();
-            cmd.CommandText =
-                $"INSERT INTO Person (Id, Name, Email) VALUES ('state{i}', 'Person {i}', 'p{i}@test.com')";
-            cmd.ExecuteNonQuery();
+            DatabaseCommands.Execute(
+                connection: _serverConn,
+                configure: command =>
+                    command.CommandText =
+                        $"INSERT INTO Person (Id, Name, Email) VALUES ('state{i}', 'Person {i}', 'p{i}@test.com')"
+            );
         }
 
         var connStr = Uri.EscapeDataString($"Data Source={_serverDbPath}");
