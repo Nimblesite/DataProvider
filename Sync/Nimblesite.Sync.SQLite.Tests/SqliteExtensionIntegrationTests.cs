@@ -265,12 +265,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: _db,
             configure: cmd =>
-                cmd.CommandText = """
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Orders', '{"Id":"o1"}', 'insert', '{}', @origin, @ts);
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Orders', '{"Id":"o2"}', 'insert', '{}', @origin, @ts);
-                """,
+                cmd.CommandText = Data_GetOldestSyncLogVersion_WithEntries_ReturnsMinVersion_1,
             parameters: () => [("@origin", _originId), ("@ts", Timestamp)]
         );
 
@@ -287,12 +282,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     {
         // Arrange - Insert some entries
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o1"}', 'delete', NULL, @origin, @ts);
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o2"}', 'insert', '{}', @origin, @ts);
-            """;
+        cmd.CommandText = Data_PurgeTombstones_RemovesDeletesBeforeVersion_1;
         cmd.Parameters.AddWithValue("@origin", _originId);
         cmd.Parameters.AddWithValue("@ts", Timestamp);
         cmd.ExecuteNonQuery();
@@ -318,12 +308,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     {
         // Arrange
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o1"}', 'insert', '{}', @origin, @ts);
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ('Orders', '{"Id":"o2"}', 'update', '{}', @origin, @ts);
-            """;
+        cmd.CommandText = Data_PurgeSyncLog_RemovesAllBeforeVersion_1;
         cmd.Parameters.AddWithValue("@origin", _originId);
         cmd.Parameters.AddWithValue("@ts", Timestamp);
         cmd.ExecuteNonQuery();

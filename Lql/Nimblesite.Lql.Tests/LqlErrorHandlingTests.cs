@@ -24,7 +24,7 @@ namespace Nimblesite.Lql.Tests;
 /// Tests for error handling in LQL to PostgreSQL transformation.
 /// Tests invalid syntax, malformed queries, and edge cases using Result types.
 /// </summary>
-public class LqlErrorHandlingTests
+public partial class LqlErrorHandlingTests
 {
     [Fact]
     public void EmptyInput_ShouldReturnError() =>
@@ -137,23 +137,14 @@ public class LqlErrorHandlingTests
     [Fact]
     public void CircularReference_ShouldReturnError() =>
         SyntaxError(
-            lqlCode: """
-            let a = b |> select(id)
-            let b = a |> select(name)
-            a
-            """
+            lqlCode: Data_CircularReference_ShouldReturnError_1
         );
 
     [Fact]
     public void ErrorMessage_ShouldIncludeLineAndColumn()
     {
         var error = ParseError(
-            lqlCode: """
-            users |> select(
-                users.id,
-                users.name,
-                invalid_syntax_here
-            """
+            lqlCode: Data_ErrorMessage_ShouldIncludeLineAndColumn_1
         );
         Assert.Contains("line", error.FormattedMessage, StringComparison.Ordinal);
         Assert.Contains("column", error.FormattedMessage, StringComparison.Ordinal);

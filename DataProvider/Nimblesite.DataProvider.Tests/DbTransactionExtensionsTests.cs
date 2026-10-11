@@ -19,7 +19,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for DbTransactionExtensions Query method to improve coverage
 /// </summary>
-public sealed class DbTransactionExtensionsTests : IDisposable
+public sealed partial class DbTransactionExtensionsTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly SqliteTransaction _transaction;
@@ -40,13 +40,7 @@ public sealed class DbTransactionExtensionsTests : IDisposable
     private void CreateSchema()
     {
         using var command = new SqliteCommand(
-            """
-            CREATE TABLE TestTable (
-                Id INTEGER PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Value INTEGER NOT NULL
-            );
-            """,
+            Data_CreateSchema_1,
             _connection
         );
         command.ExecuteNonQuery();

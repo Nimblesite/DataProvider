@@ -23,7 +23,7 @@ namespace Nimblesite.Lql.Tests;
 /// CTEs, derived-table joins and EXISTS/IN bodies share one layout on every dialect;
 /// only paging differs. Tests [LQL-CTE], [LQL-DERIVED-TABLE] and [LQL-SUBQUERY-LAYOUT].
 /// </summary>
-public sealed class LqlSubqueryLayoutTests
+public sealed partial class LqlSubqueryLayoutTests
 {
     [Theory]
     [InlineData("SQLite")]
@@ -31,15 +31,7 @@ public sealed class LqlSubqueryLayoutTests
     [InlineData("SqlServer")]
     public void ExistsBody_WithTwoFilters_KeepsBothAndGroupsEach(string dialect) =>
         Assert.Equal(
-            """
-            SELECT users.id
-            FROM users
-            WHERE EXISTS (
-                SELECT 1
-                FROM orders
-                WHERE (orders.user_id = users.id) AND (orders.total > 100 OR orders.vip = 1)
-            )
-            """,
+            Data_ExistsBody_WithTwoFilters_KeepsBothAndGroupsEach_1,
             Transpile(
                 "users |> filter(fn(row) => exists(orders |> filter(fn(o) => o.orders.user_id = row.users.id) |> filter(fn(o) => o.orders.total > 100 or o.orders.vip = 1))) |> select(users.id)",
                 dialect

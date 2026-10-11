@@ -57,11 +57,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void CountFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> select(orders.user_id, count(*) as order_count)
-            """;
+        var lql = Data_CountFunction_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         Assert.Contains("COUNT(*)", pg, StringComparison.OrdinalIgnoreCase);
@@ -78,15 +74,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.status)
-            |> select(
-                orders.status,
-                sum(orders.total) as total_amount,
-                avg(orders.total) as avg_amount
-            )
-            """;
+        var lql = Data_SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -102,11 +90,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void CountDistinctFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> select(orders.user_id, count(distinct orders.product_id) as unique_products)
-            """;
+        var lql = Data_CountDistinctFunction_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -156,13 +140,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void OffsetAndLimit_AllDialects_GeneratesCorrectPagination()
     {
-        var lql = """
-            users
-            |> order_by(users.name asc)
-            |> offset(20)
-            |> limit(10)
-            |> select(users.id, users.name)
-            """;
+        var lql = Data_OffsetAndLimit_AllDialects_GeneratesCorrectPagination_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         Assert.Contains("OFFSET", pg, StringComparison.OrdinalIgnoreCase);
@@ -186,12 +164,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void HavingClause_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> having(fn(group) => count(*) > 5)
-            |> select(orders.user_id, count(*) as order_count)
-            """;
+        var lql = Data_HavingClause_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -204,11 +177,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void LeftJoin_AllDialects_GeneratesLeftJoinSQL()
     {
-        var lql = """
-            users
-            |> left_join(orders, on = users.id = orders.user_id)
-            |> select(users.name, orders.total)
-            """;
+        var lql = Data_LeftJoin_AllDialects_GeneratesLeftJoinSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -224,12 +193,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void MultipleJoins_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            users
-            |> join(orders, on = users.id = orders.user_id)
-            |> join(products, on = orders.product_id = products.id)
-            |> select(users.name, orders.total, products.name)
-            """;
+        var lql = Data_MultipleJoins_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })

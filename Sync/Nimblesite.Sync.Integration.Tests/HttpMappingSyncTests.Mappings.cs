@@ -171,14 +171,7 @@ public sealed partial class HttpMappingSyncTests
         // Use SalesOrder instead of Order (reserved word in SQL)
         using (var cmd = source.CreateCommand())
         {
-            cmd.CommandText = """
-                CREATE TABLE SalesOrder (
-                    Id TEXT PRIMARY KEY,
-                    CustomerId TEXT NOT NULL,
-                    Total REAL NOT NULL,
-                    CreatedAt TEXT
-                );
-                """;
+            cmd.CommandText = Data_MultiTargetMapping_OneSourceToManyTargets_1;
             cmd.ExecuteNonQuery();
         }
 

@@ -17,7 +17,7 @@ namespace Nimblesite.Sync.Postgres.Tests;
     "CA2100:Review SQL queries for security vulnerabilities",
     Justification = "Test code"
 )]
-public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : IAsyncLifetime
 {
     private NpgsqlConnection _pgConn = null!;
     private SqliteConnection _sqliteConn = null!;
@@ -74,13 +74,7 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE IF NOT EXISTS person (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    email TEXT
-                )
-                """
+                command.CommandText = Data_CreateTestTable_1
         );
     }
 
@@ -89,13 +83,7 @@ public sealed class CrossDatabaseSyncTests(PostgresContainerFixture fixture) : I
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE IF NOT EXISTS Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Email TEXT
-                )
-                """
+                command.CommandText = Data_CreateTestTable_2
         );
     }
 

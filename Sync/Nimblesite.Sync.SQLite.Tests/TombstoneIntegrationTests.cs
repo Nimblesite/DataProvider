@@ -12,7 +12,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests safe purge calculation, stale client handling, and full resync protocol.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class TombstoneIntegrationTests : IDisposable
+public sealed partial class TombstoneIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _serverDb;
     private readonly SqliteConnection _clientDb;
@@ -339,12 +339,7 @@ public sealed class TombstoneIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: db,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL
-                );
-                """
+                command.CommandText = Data_CreatePersonTable_1
         );
     }
 

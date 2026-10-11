@@ -21,7 +21,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// to a Postgres / SQLite / SQL Server CREATE POLICY clause that the
 /// platform engine accepts, without any raw SQL escape hatch.
 /// </summary>
-public sealed class RlsLqlExhaustiveTests
+public sealed partial class RlsLqlExhaustiveTests
 {
     private static string Pg(string lql) =>
         ((TranspileOk)RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, "p")).Value;
@@ -423,11 +423,7 @@ public sealed class RlsLqlExhaustiveTests
     [Fact]
     public void ExistsSubquery_GroupMembership_TranspilesViaLqlEngine()
     {
-        var lql = """
-            users
-            |> filter(fn(u) => u.id = current_user_id())
-            |> select(users.id)
-            """;
+        var lql = Data_ExistsSubquery_GroupMembership_TranspilesViaLqlEngine_1;
         var sql = Pg($"exists({lql})");
         Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
         Assert.Contains(
@@ -483,11 +479,7 @@ public sealed class RlsLqlExhaustiveTests
     [Fact]
     public void ExistsPipeline_LambdaWithFnCallInAndClause_Parses()
     {
-        var lql = """
-            conversations
-            |> filter(fn(p) => p.id = '00000000-0000-0000-0000-000000000000' and is_member('a', p.tenant_id))
-            |> select(p.id)
-            """;
+        var lql = Data_ExistsPipeline_LambdaWithFnCallInAndClause_Parses_1;
         var result = RlsPredicateTranspiler.Translate(
             $"exists({lql})",
             RlsPlatform.Postgres,
@@ -506,11 +498,7 @@ public sealed class RlsLqlExhaustiveTests
         // NAP shape diagnostic: c.id and c.tenant_id should emit as
         // bare 'id'/'tenant_id' in the inner SQL because 'c' is the
         // lambda parameter bound to the FROM table (conversations).
-        var lql = """
-            conversations
-            |> filter(fn(c) => c.id = '00000000-0000-0000-0000-000000000000' and is_member('a', c.tenant_id))
-            |> select(c.id)
-            """;
+        var lql = Data_ExistsPipeline_LambdaScope_StripsLambdaVarFromQualifiedRefs_1;
         var result = RlsPredicateTranspiler.Translate(
             $"exists({lql})",
             RlsPlatform.Postgres,
@@ -540,11 +528,7 @@ public sealed class RlsLqlExhaustiveTests
     public void ExistsPipeline_LambdaWithSecurityDefinerFnAtTopLevel_Parses()
     {
         // Even simpler: lambda body is a single fn call, no comparison.
-        var lql = """
-            conversations
-            |> filter(fn(p) => is_member('a', p.tenant_id))
-            |> select(p.id)
-            """;
+        var lql = Data_ExistsPipeline_LambdaWithSecurityDefinerFnAtTopLevel_Parses_1;
         var result = RlsPredicateTranspiler.Translate(
             $"exists({lql})",
             RlsPlatform.Postgres,

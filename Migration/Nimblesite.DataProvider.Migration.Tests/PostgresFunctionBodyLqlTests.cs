@@ -37,12 +37,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void TranslatePostgresBody_ExistsPipeline_EmitsSelectExists()
     {
         var sql = Body(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.user_id = u and m.tenant_id = t)
-            )
-            """
+            Data_TranslatePostgresBody_ExistsPipeline_EmitsSelectExists_1
         );
 
         Assert.StartsWith("SELECT EXISTS (", sql, StringComparison.Ordinal);
@@ -56,12 +51,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     {
         // Implements [LQL-PREDICATE-IN-LIST].
         var sql = Body(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.user_id = u and m.tenant_id = t and m.role in ('owner', 'admin'))
-            )
-            """
+            Data_TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate_1
         );
 
         Assert.Contains("role IN ('owner', 'admin')", sql, StringComparison.Ordinal);
@@ -71,15 +61,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     public void FromYaml_FunctionBodyLql_Deserializes()
     {
         var schema = SchemaYamlSerializer.FromYaml(
-            """
-            name: nap
-            functions:
-              - schema: public
-                name: app_tenant_id
-                returns: uuid
-                bodyLql: current_setting('app.tenant_id')::uuid
-            tables: []
-            """
+            Data_FromYaml_FunctionBodyLql_Deserializes_1
         );
 
         Assert.Single(schema.Functions);
@@ -92,15 +74,7 @@ public sealed partial class PostgresFunctionBodyLqlTests
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
             SchemaYamlSerializer.FromYaml(
-                """
-                name: nap
-                functions:
-                  - name: app_tenant_id
-                    returns: uuid
-                    body: SELECT NULL::uuid
-                    bodyLql: current_setting('app.tenant_id')::uuid
-                tables: []
-                """
+                Data_FromYaml_FunctionBodyAndBodyLql_Throws_1
             )
         );
 

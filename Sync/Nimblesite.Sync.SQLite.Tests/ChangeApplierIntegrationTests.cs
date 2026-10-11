@@ -33,14 +33,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: _db,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Age INTEGER,
-                    Email TEXT
-                );
-                """
+                command.CommandText = Data_Shared_1
         );
     }
 
@@ -344,15 +337,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: _db,
             configure: command =>
-                command.CommandText = """
-                PRAGMA foreign_keys = ON;
-                CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-                CREATE TABLE Employee (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT,
-                    DeptId TEXT REFERENCES Department(Id)
-                );
-                """
+                command.CommandText = Data_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1
         );
 
         var entry = Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1();
@@ -372,16 +357,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: _db,
             configure: command =>
-                command.CommandText = """
-                PRAGMA foreign_keys = ON;
-                CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-                INSERT INTO Department (Id, Name) VALUES ('d1', 'Engineering');
-                CREATE TABLE Employee (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT,
-                    DeptId TEXT REFERENCES Department(Id)
-                );
-                """
+                command.CommandText = Data_ApplyChange_Insert_WithValidForeignKey_Succeeds_1
         );
 
         var entry = Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1();

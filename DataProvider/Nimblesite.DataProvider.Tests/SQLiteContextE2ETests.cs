@@ -8,7 +8,7 @@ using Tests.Shared;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed class SQLiteContextE2ETests : IDisposable
+public sealed partial class SQLiteContextE2ETests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(
         Path.GetTempPath(),
@@ -65,41 +65,13 @@ public sealed class SQLiteContextE2ETests : IDisposable
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE users (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
-                    age INTEGER NOT NULL, country TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'active'
-                );
-                CREATE TABLE orders (
-                    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total REAL NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                );
-                CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT NOT NULL, price REAL NOT NULL);
-                """
+                command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                INSERT INTO users VALUES ('u1','Alice','alice@test.com',30,'US','active');
-                INSERT INTO users VALUES ('u2','Bob','bob@test.com',25,'UK','active');
-                INSERT INTO users VALUES ('u3','Charlie','charlie@test.com',45,'US','inactive');
-                INSERT INTO users VALUES ('u4','Diana','diana@test.com',35,'AU','active');
-                INSERT INTO users VALUES ('u5','Eve','eve@test.com',22,'US','active');
-                INSERT INTO orders VALUES ('o1','u1',150.00,'completed');
-                INSERT INTO orders VALUES ('o2','u1',75.50,'completed');
-                INSERT INTO orders VALUES ('o3','u2',200.00,'pending');
-                INSERT INTO orders VALUES ('o4','u3',50.00,'completed');
-                INSERT INTO orders VALUES ('o5','u4',300.00,'shipped');
-                INSERT INTO orders VALUES ('o6','u4',125.00,'completed');
-                INSERT INTO orders VALUES ('o7','u5',45.00,'pending');
-                INSERT INTO products VALUES ('p1','Widget',9.99);
-                INSERT INTO products VALUES ('p2','Gadget',19.99);
-                INSERT INTO products VALUES ('p3','Widget',9.99);
-                """
+                command.CommandText = Data_CreateSchemaAndSeed_2
         );
     }
 

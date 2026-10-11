@@ -14,7 +14,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// Unit tests for the RLS LQL predicate transpiler.
 /// </summary>
-public sealed class RlsPredicateTranspilerTests
+public sealed partial class RlsPredicateTranspilerTests
 {
     [Fact]
     public void CurrentUserIdExpression_Postgres_UsesCurrentSetting()
@@ -113,11 +113,7 @@ public sealed class RlsPredicateTranspilerTests
     [Fact]
     public void Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers()
     {
-        const string lql = """
-            users
-            |> filter(fn(u) => u.id = current_user_id())
-            |> select(users.id)
-            """;
+        const string lql = Data_Translate_ExistsSubquery_Postgres_WrapsWithExistsAndQuotesIdentifiers_1;
         var input = $"exists({lql})";
 
         var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Postgres, "ex");
@@ -145,11 +141,7 @@ public sealed class RlsPredicateTranspilerTests
     [Fact]
     public void Translate_ExistsSubquery_Sqlite_SubstitutesContextLookup()
     {
-        const string lql = """
-            users
-            |> filter(fn(u) => u.id = current_user_id())
-            |> select(users.id)
-            """;
+        const string lql = Data_Translate_ExistsSubquery_Sqlite_SubstitutesContextLookup_1;
         var input = $"exists({lql})";
 
         var result = RlsPredicateTranspiler.Translate(input, RlsPlatform.Sqlite, "ex");

@@ -71,16 +71,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         DatabaseCommands.Execute(
             connection: _sqliteConn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE User (
-                    Id TEXT PRIMARY KEY,
-                    FullName TEXT NOT NULL,
-                    EmailAddress TEXT NOT NULL,
-                    PasswordHash TEXT,
-                    SecurityStamp TEXT,
-                    CreatedAt TEXT NOT NULL
-                );
-                """
+                command.CommandText = Data_SetupSqliteSource_1
         );
 
         TriggerGenerator.CreateTriggers(_sqliteConn, "User", _logger);
@@ -98,17 +89,7 @@ public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture
         Assert.True(originResult is BoolSyncOk, $"Origin ID failed: {originResult}");
 
         using var cmd = _postgresConn.CreateCommand();
-        cmd.CommandText = """
-            DROP TABLE IF EXISTS customer CASCADE;
-            CREATE TABLE customer (
-                customer_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                name_upper TEXT,
-                source TEXT,
-                registered_date TEXT
-            );
-            """;
+        cmd.CommandText = Data_SetupPostgresTarget_1;
         cmd.ExecuteNonQuery();
     }
 

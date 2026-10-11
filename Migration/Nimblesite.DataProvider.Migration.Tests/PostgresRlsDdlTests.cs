@@ -98,11 +98,7 @@ public sealed partial class PostgresRlsDdlTests
     [Fact]
     public void Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps()
     {
-        var lql = """
-            UserGroupMemberships
-            |> filter(fn(m) => m.user_id = current_user_id())
-            |> select(m.user_id)
-            """;
+        var lql = Data_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1;
 
         var ddl = PostgresDdlGenerator.Generate(
             new CreateRlsPolicyOperation(

@@ -11,7 +11,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Real end-to-end integration tests that sync data between two SQLite databases.
 /// No mocks - actual database operations with triggers and change capture.
 /// </summary>
-public sealed class EndToEndSyncTests : IDisposable
+public sealed partial class EndToEndSyncTests : IDisposable
 {
     private readonly SqliteConnection _sourceDb;
     private readonly SqliteConnection _targetDb;
@@ -241,13 +241,7 @@ public sealed class EndToEndSyncTests : IDisposable
         DatabaseCommands.Execute(
             connection: connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Email TEXT NOT NULL
-                );
-                """
+                command.CommandText = Data_SetupSchema_1
         );
 
         // Use TriggerGenerator to create sync triggers (spec Section 9)

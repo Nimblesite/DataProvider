@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for DbConnectionExtensions methods to improve coverage
 /// </summary>
-public sealed class DbConnectionExtensionsTests : IDisposable
+public sealed partial class DbConnectionExtensionsTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly string _dbPath;
@@ -23,16 +23,7 @@ public sealed class DbConnectionExtensionsTests : IDisposable
     private void CreateSchema()
     {
         using var command = new SqliteCommand(
-            """
-            CREATE TABLE TestTable (
-                Id INTEGER PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Value INTEGER NOT NULL
-            );
-            INSERT INTO TestTable (Name, Value) VALUES ('Alpha', 10);
-            INSERT INTO TestTable (Name, Value) VALUES ('Beta', 20);
-            INSERT INTO TestTable (Name, Value) VALUES ('Gamma', 30);
-            """,
+            Data_CreateSchema_1,
             _connection
         );
         command.ExecuteNonQuery();

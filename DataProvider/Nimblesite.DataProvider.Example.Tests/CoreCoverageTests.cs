@@ -12,7 +12,7 @@ namespace Nimblesite.DataProvider.Example.Tests;
 /// <summary>
 /// Tests for DataProvider.Core methods: DbConnectionExtensions, DbTransact, DbTransactionExtensions
 /// </summary>
-public sealed class CoreCoverageTests : IDisposable
+public sealed partial class CoreCoverageTests : IDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteConnection _connection;
@@ -869,24 +869,12 @@ public sealed class CoreCoverageTests : IDisposable
     {
         await _connection.OpenAsync().ConfigureAwait(false);
 
-        var createTablesScript = """
-            CREATE TABLE IF NOT EXISTS Customer (
-                Id TEXT PRIMARY KEY,
-                CustomerName TEXT NOT NULL,
-                Email TEXT NULL,
-                Phone TEXT NULL,
-                CreatedDate TEXT NOT NULL
-            );
-            """;
+        var createTablesScript = Data_SetupDatabase_1;
 
         using var command = new SqliteCommand(createTablesScript, _connection);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-        var insertScript = """
-            INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES
-            ('cust-1', 'Acme Corp', 'contact@acme.com', '555-0100', '2024-01-01'),
-            ('cust-2', 'Tech Solutions', 'info@techsolutions.com', '555-0200', '2024-01-02');
-            """;
+        var insertScript = Data_SetupDatabase_2;
 
         using var insertCommand = new SqliteCommand(insertScript, _connection);
         await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);

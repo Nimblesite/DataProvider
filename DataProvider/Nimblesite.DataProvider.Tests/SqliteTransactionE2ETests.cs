@@ -9,7 +9,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: transaction workflows with real SQLite databases.
 /// Tests commit, rollback, multi-table transactions, and DbTransact helpers.
 /// </summary>
-public sealed class SqliteTransactionE2ETests : IDisposable
+public sealed partial class SqliteTransactionE2ETests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(
         Path.GetTempPath(),
@@ -49,37 +49,14 @@ public sealed class SqliteTransactionE2ETests : IDisposable
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Orders (
-                    Id TEXT PRIMARY KEY,
-                    CustomerId TEXT NOT NULL,
-                    Total REAL NOT NULL,
-                    Status TEXT NOT NULL DEFAULT 'pending'
-                );
-                CREATE TABLE OrderItems (
-                    Id TEXT PRIMARY KEY,
-                    OrderId TEXT NOT NULL,
-                    ProductName TEXT NOT NULL,
-                    Quantity INTEGER NOT NULL,
-                    UnitPrice REAL NOT NULL,
-                    FOREIGN KEY (OrderId) REFERENCES Orders(Id)
-                );
-                CREATE TABLE Inventory (
-                    ProductName TEXT PRIMARY KEY,
-                    StockCount INTEGER NOT NULL
-                );
-                """
+                command.CommandText = Data_CreateSchema_1
         );
 
         // Seed inventory
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                INSERT INTO Inventory VALUES ('Widget', 100);
-                INSERT INTO Inventory VALUES ('Gadget', 50);
-                INSERT INTO Inventory VALUES ('Doohickey', 25);
-                """
+                command.CommandText = Data_CreateSchema_2
         );
     }
 

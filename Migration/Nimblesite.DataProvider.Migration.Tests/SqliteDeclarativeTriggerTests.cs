@@ -8,7 +8,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// declares a last-owner guard on TenantMembers: demoting or deleting the
 /// only 'owner' row of a tenant must fail with the declared error message.
 /// </summary>
-public sealed class SqliteDeclarativeTriggerTests
+public sealed partial class SqliteDeclarativeTriggerTests
 {
     private static readonly ILogger Logger = NullLogger.Instance;
     private static readonly string OwnerA = Guid.NewGuid().ToString();
@@ -17,56 +17,9 @@ public sealed class SqliteDeclarativeTriggerTests
     private static readonly string Tenant1 = Guid.NewGuid().ToString();
     private static readonly string Tenant2 = Guid.NewGuid().ToString();
 
-    private const string GuardYaml = """
-        name: tenant_app
-        tables:
-          - name: TenantMembers
-            schema: main
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: TenantId
-                type: Text
-                isNullable: false
-              - name: Role
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-            triggers:
-              - name: assert_not_last_owner
-                timing: Before
-                events: [Update, Delete]
-                forEachRow: true
-                raiseWhen: |
-                  old.Role = 'owner' and not exists(
-                    TenantMembers
-                    |> filter(fn(m) => m.TenantId = old.TenantId and m.Role = 'owner' and m.Id <> old.Id)
-                  )
-                errorMessage: cannot remove the last owner of a tenant
-        """;
+    private const string GuardYaml = Data_Shared_1;
 
-    private const string PlainYaml = """
-        name: tenant_app
-        tables:
-          - name: TenantMembers
-            schema: main
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: TenantId
-                type: Text
-                isNullable: false
-              - name: Role
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-        """;
+    private const string PlainYaml = Data_Shared_2;
 
     [Fact]
     public void Sqlite_TriggerGuard_BlocksDeleteOfLastOwner()

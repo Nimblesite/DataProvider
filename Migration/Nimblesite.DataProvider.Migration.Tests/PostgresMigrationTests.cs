@@ -243,11 +243,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify native types are used
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_name = 'type_test'
-            """;
+        cmd.CommandText = Data_CreateTable_PostgresNativeTypes_Success_1;
         using var reader = cmd.ExecuteReader();
 
         var columns = new Dictionary<string, string>();
@@ -305,11 +301,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify index exists and is unique
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT indexname, indexdef
-            FROM pg_indexes
-            WHERE tablename = 'artists' AND indexname = 'uq_artists_name'
-            """;
+        cmd.CommandText = Data_ExpressionIndex_CreateWithLowerFunction_Success_1;
         using var reader = cmd.ExecuteReader();
 
         Assert.True(reader.Read(), "Expression index should exist");
@@ -368,11 +360,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
 
         // Verify composite expression index exists
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = 'places' AND indexname = 'uq_places_name_suburb'
-            """;
+        cmd.CommandText = Data_ExpressionIndex_MultiExpression_CompositeIndexSuccess_1;
         var indexDef = (string?)cmd.ExecuteScalar();
 
         Assert.NotNull(indexDef);
@@ -397,20 +385,12 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                INSERT INTO regions (id, name) VALUES
-                ('11111111-1111-1111-1111-111111111111', 'Melbourne'),
-                ('22222222-2222-2222-2222-222222222222', 'Sydney')
-                """
+                command.CommandText = Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_1
         );
 
         // Act - Insert same name in different regions (should succeed)
         using var insertCmd = _connection.CreateCommand();
-        insertCmd.CommandText = """
-            INSERT INTO locations (name, region_id) VALUES
-            ('The Corner', '11111111-1111-1111-1111-111111111111'),
-            ('The Corner', '22222222-2222-2222-2222-222222222222')
-            """;
+        insertCmd.CommandText = Data_ExpressionIndex_MultiExpression_AllowsSameNameDifferentSuburb_2;
         var rowsAffected = insertCmd.ExecuteNonQuery();
 
         // Assert - Both inserts should succeed
@@ -688,11 +668,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             connection: _connection,
             configure: command =>
                 command.CommandText =
-                    @"
-            INSERT INTO items (name) VALUES ('Item 1');
-            INSERT INTO items (name) VALUES ('Item 2');
-            INSERT INTO items (name) VALUES ('Item 3');
-        "
+                    Data_LqlDefault_GenUuidFunction_GeneratesValidUuid_1
         );
 
         // Verify UUIDs were generated and are unique

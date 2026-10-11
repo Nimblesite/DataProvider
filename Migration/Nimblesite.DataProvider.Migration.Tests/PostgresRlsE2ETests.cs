@@ -121,13 +121,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
                             SchemaTestData.RlsPolicy(
                                 name: "group_read_access",
                                 operations: [RlsOperation.Select],
-                                usingLql: """
-                                exists(
-                                  user_group_memberships
-                                  |> filter(fn(m) => m.user_id = current_user_id() and m.group_id = documents.group_id)
-                                  |> select(id)
-                                )
-                                """
+                                usingLql: Data_BuildGroupMembershipSchema_1
                             ),
                         ],
                     }
@@ -188,11 +182,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         ApplyAndForceRls(BuildOwnerIsolationSchema(), "documents");
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT c.relrowsecurity
-            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND c.relname = 'documents'
-            """;
+        cmd.CommandText = Data_EnableRls_TableHasRlsEnabled_1;
         Assert.True((bool)cmd.ExecuteScalar()!);
     }
 

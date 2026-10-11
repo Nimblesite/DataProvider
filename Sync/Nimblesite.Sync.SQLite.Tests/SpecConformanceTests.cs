@@ -42,12 +42,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     {
         // Arrange: Create table with UUID primary key (spec recommended)
         ExecuteSql(
-            """
-            CREATE TABLE UuidTable (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-            """
+            Data_Spec4_1_SingleColumnUuidPrimaryKey_IsSupported_1
         );
         var triggerResult = TriggerGenerator.CreateTriggers(_db, "UuidTable", TestLogger.L);
         Assert.IsType<BoolSyncOk>(triggerResult);
@@ -578,14 +573,7 @@ public sealed partial class SpecConformanceTests : IDisposable
     {
         // Arrange: Table with composite PK
         ExecuteSql(
-            """
-            CREATE TABLE CompositePkTable (
-                Key1 TEXT,
-                Key2 TEXT,
-                Value TEXT,
-                PRIMARY KEY (Key1, Key2)
-            );
-            """
+            Data_Spec17_1_SingleColumnPrimaryKey_Required_1
         );
 
         // Act
@@ -652,13 +640,7 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     private void CreatePersonTable() =>
         ExecuteSql(
-            """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Email TEXT NOT NULL
-            );
-            """
+            Data_CreatePersonTable_1
         );
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(

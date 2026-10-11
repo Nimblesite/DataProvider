@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// E2E tests for SQLite row-level security trigger emulation.
 /// </summary>
-public sealed class SqliteRlsMigrationTests
+public sealed partial class SqliteRlsMigrationTests
 {
     [Fact]
     public void Sqlite_EnableRls_CreatesRlsContextTable()
@@ -206,13 +206,7 @@ public sealed class SqliteRlsMigrationTests
     public void Sqlite_TriggerPredicate_IgnoresKeywordsInsideComments()
     {
         var predicate = SqliteRlsPredicateReader.TriggerPredicate(
-            triggerSql: """
-            CREATE TRIGGER [rls_insert_owner_Documents] -- BEGIN
-            BEFORE INSERT ON [Documents]
-            BEGIN
-              SELECT RAISE(ABORT, 'RLS') WHERE NOT (NEW.[OwnerId] = 'allowed');
-            END -- END
-            """
+            triggerSql: Data_Sqlite_TriggerPredicate_IgnoresKeywordsInsideComments_1
         );
         Assert.Equal(expected: "[OwnerId] = 'allowed'", actual: predicate);
     }
@@ -315,12 +309,7 @@ public sealed class SqliteRlsMigrationTests
         SchemaTestData.RlsPolicy(
             name: "group_member_insert",
             operations: [RlsOperation.Insert],
-            withCheckLql: """
-            exists(
-              UserGroupMemberships
-              |> filter(fn(m) => m.UserId = current_user_id())
-            )
-            """
+            withCheckLql: Data_GroupMembershipPolicy_1
         );
 
     private static void InsertDocument(SqliteConnection connection, string id, string ownerId) =>

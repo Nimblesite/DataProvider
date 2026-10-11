@@ -7,7 +7,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// CLI tests for unsupported SQL Server RLS migration attempts.
 /// </summary>
-public sealed class DataProviderMigrateRlsUnsupportedTests
+public sealed partial class DataProviderMigrateRlsUnsupportedTests
 {
     [Fact]
     public void Migrate_SqlServerProviderWithRlsSchema_ReturnsCanonicalUnsupportedError()
@@ -62,26 +62,5 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
     }
 
     private static string RlsSchemaYaml() =>
-        """
-            name: sqlserver_rls_guard
-            tables:
-              - name: documents
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: owner_id
-                    type: Uuid
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-                rowLevelSecurity:
-                  policies:
-                    - name: owner_isolation
-                      operations:
-                        - Select
-                      using: owner_id = current_user_id()
-            """;
+        Data_RlsSchemaYaml_1;
 }

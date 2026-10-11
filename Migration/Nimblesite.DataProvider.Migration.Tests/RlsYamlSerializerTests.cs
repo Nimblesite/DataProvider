@@ -34,12 +34,7 @@ public sealed partial class RlsYamlSerializerTests
     [Fact]
     public void RlsPolicyDefinition_YamlRoundTrip_SubqueryPolicy()
     {
-        var subqueryLql = """
-            exists(
-              UserGroupMemberships
-              |> filter(fn(m) => m.UserId = current_user_id() and m.GroupId = GroupId)
-            )
-            """;
+        var subqueryLql = Data_RlsPolicyDefinition_YamlRoundTrip_SubqueryPolicy_1;
 
         var yaml = $$"""
             name: app
@@ -139,33 +134,7 @@ public sealed partial class RlsYamlSerializerTests
     public void RlsPolicy_FullSpecExampleYaml_DeserializesCorrectly()
     {
         // Mirrors the example in [RLS-YAML] from docs/specs/rls-spec.md.
-        var yaml = """
-            name: MyApp
-            tables:
-              - name: Documents
-                schema: public
-                columns:
-                  - name: Id
-                    type: Uuid
-                    isNullable: false
-                  - name: OwnerId
-                    type: Uuid
-                    isNullable: false
-                  - name: GroupId
-                    type: Uuid
-                primaryKey:
-                  columns:
-                    - Id
-                rowLevelSecurity:
-                  enabled: true
-                  policies:
-                    - name: owner_isolation
-                      permissive: true
-                      operations: [All]
-                      roles: []
-                      using: "OwnerId = current_user_id()"
-                      withCheck: "OwnerId = current_user_id()"
-            """;
+        var yaml = Data_RlsPolicy_FullSpecExampleYaml_DeserializesCorrectly_1;
 
         var schema = SchemaYamlSerializer.FromYaml(yaml);
 

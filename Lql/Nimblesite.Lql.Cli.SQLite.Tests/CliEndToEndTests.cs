@@ -10,7 +10,7 @@ namespace Nimblesite.Lql.Cli.SQLite.Tests;
 /// <summary>
 /// End-to-end tests for the LQL CLI tool
 /// </summary>
-public sealed class CliEndToEndTests : IDisposable
+public sealed partial class CliEndToEndTests : IDisposable
 {
     private static readonly string[] SubcommandOnly = ["sqlite"];
     private static readonly string[] SubcommandHelp = ["sqlite", "--help"];
@@ -98,11 +98,7 @@ public sealed class CliEndToEndTests : IDisposable
     public async Task TranspileWithFilter_ToConsole_ReturnsCorrectSQL()
     {
         // Arrange
-        var lql = """
-            employees
-            |> select(employees.id, employees.name, employees.salary)
-            |> filter(fn(row) => row.employees.salary > 50000 and row.employees.salary < 100000)
-            """;
+        var lql = Data_TranspileWithFilter_ToConsole_ReturnsCorrectSQL_1;
         var inputFile = CreateTempFile(lql);
 
         // Act
@@ -187,11 +183,7 @@ public sealed class CliEndToEndTests : IDisposable
     public async Task TranspileAggregation_ToConsole_ReturnsCorrectSQL()
     {
         // Arrange - This is based on the test data files
-        var lql = """
-            orders
-            |> select(orders.customer_id, COUNT(*) as order_count, SUM(orders.total) as total_amount)
-            |> group_by(orders.customer_id)
-            """;
+        var lql = Data_TranspileAggregation_ToConsole_ReturnsCorrectSQL_1;
         var inputFile = CreateTempFile(lql);
 
         // Act

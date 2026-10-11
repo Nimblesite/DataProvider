@@ -41,24 +41,7 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
     {
         PostgresTestDb.Exec(
             conn,
-            """
-            DO $$ BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nap_app_user') THEN
-                    CREATE ROLE nap_app_user NOLOGIN NOBYPASSRLS;
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nap_app_admin') THEN
-                    CREATE ROLE nap_app_admin NOLOGIN NOBYPASSRLS;
-                END IF;
-            END$$;
-
-            CREATE OR REPLACE FUNCTION app_user_id() RETURNS uuid AS $$
-                SELECT NULLIF(current_setting('rls.user_id', true), '')::uuid
-            $$ LANGUAGE sql STABLE;
-
-            CREATE OR REPLACE FUNCTION app_tenant_id() RETURNS uuid AS $$
-                SELECT NULLIF(current_setting('rls.tenant_id', true), '')::uuid
-            $$ LANGUAGE sql STABLE;
-            """
+            Data_BootstrapNapPrelude_1
         );
     }
 
@@ -158,12 +141,7 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
         ApplyAndGrant(NapSchema());
 
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT relname, relrowsecurity, relforcerowsecurity
-            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname='public' AND relname IN ('agent_configs','conversations','messages','api_keys')
-            ORDER BY relname
-            """;
+        cmd.CommandText = Data_NapShape_FourTenantTables_AppliesCleanlyAndIsForced_1;
         using var r = cmd.ExecuteReader();
         var rows = new List<(string Name, bool Enabled, bool Forced)>();
         while (r.Read())

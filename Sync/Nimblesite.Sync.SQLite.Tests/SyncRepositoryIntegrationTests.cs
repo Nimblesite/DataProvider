@@ -10,7 +10,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests SyncClientRepository, SyncLogRepository, and SubscriptionRepository.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class SyncRepositoryIntegrationTests : IDisposable
+public sealed partial class SyncRepositoryIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly string _dbPath = Path.Combine(
@@ -31,13 +31,7 @@ public sealed class SyncRepositoryIntegrationTests : IDisposable
         DatabaseCommands.Execute(
             connection: _db,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Age INTEGER
-                );
-                """
+                command.CommandText = Data_Shared_1
         );
         TriggerGenerator.CreateTriggers(_db, "Person", NullLogger.Instance);
     }

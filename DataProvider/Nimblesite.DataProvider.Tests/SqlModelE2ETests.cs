@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: SQL model types (SelectStatementBuilder, WhereCondition, ColumnInfo,
 /// ComparisonOperator, JoinGraph, PredicateBuilder) -> ToSQLite -> execute -> verify.
 /// </summary>
-public sealed class SqlModelE2ETests : IDisposable
+public sealed partial class SqlModelE2ETests : IDisposable
 {
     private readonly SqliteTestDatabase _db = new("model_e2e");
     private SqliteConnection _connection => _db.Connection;
@@ -28,38 +28,13 @@ public sealed class SqlModelE2ETests : IDisposable
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Employees (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Department TEXT NOT NULL,
-                    Salary REAL NOT NULL,
-                    YearsExp INTEGER NOT NULL
-                );
-                CREATE TABLE Departments (
-                    Name TEXT PRIMARY KEY,
-                    Budget REAL NOT NULL,
-                    HeadCount INTEGER NOT NULL
-                );
-                """
+                command.CommandText = Data_CreateSchemaAndSeed_1
         );
 
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                INSERT INTO Employees VALUES ('e1', 'Alice', 'Engineering', 95000, 5);
-                INSERT INTO Employees VALUES ('e2', 'Bob', 'Engineering', 105000, 8);
-                INSERT INTO Employees VALUES ('e3', 'Charlie', 'Sales', 75000, 3);
-                INSERT INTO Employees VALUES ('e4', 'Diana', 'Sales', 85000, 6);
-                INSERT INTO Employees VALUES ('e5', 'Eve', 'Marketing', 70000, 2);
-                INSERT INTO Employees VALUES ('e6', 'Frank', 'Engineering', 120000, 12);
-                INSERT INTO Employees VALUES ('e7', 'Grace', 'Marketing', 80000, 4);
-                INSERT INTO Employees VALUES ('e8', 'Hank', 'Sales', 90000, 7);
-                INSERT INTO Departments VALUES ('Engineering', 500000, 3);
-                INSERT INTO Departments VALUES ('Sales', 300000, 3);
-                INSERT INTO Departments VALUES ('Marketing', 200000, 2);
-                """
+                command.CommandText = Data_CreateSchemaAndSeed_2
         );
     }
 

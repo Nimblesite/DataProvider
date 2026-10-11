@@ -209,7 +209,7 @@ public sealed class HttpEndpointTests : IClassFixture<SyncApiWebApplicationFacto
 /// <summary>
 /// E2E tests with real SQLite database for HTTP endpoints.
 /// </summary>
-public sealed class HttpEndpointWithDatabaseTests : IDisposable
+public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteConnection _connection;
@@ -229,13 +229,7 @@ public sealed class HttpEndpointWithDatabaseTests : IDisposable
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Email TEXT
-                );
-                """
+                command.CommandText = Data_Shared_1
         );
 
         TriggerGenerator.CreateTriggers(_connection, "Person", NullLogger.Instance);

@@ -91,12 +91,7 @@ public sealed partial class RlsCurrentSettingLqlTests
     public void Translate_CurrentSetting_ExistsPipeline_RewritesSettingsAfterLqlTranspile()
     {
         var sql = Pg(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.tenant_id = current_setting('app.tenant_id')::uuid and m.user_id = current_setting('app.user_id')::uuid)
-            )
-            """
+            Data_Translate_CurrentSetting_ExistsPipeline_RewritesSettingsAfterLqlTranspile_1
         );
 
         Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
@@ -118,12 +113,7 @@ public sealed partial class RlsCurrentSettingLqlTests
     public void Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting()
     {
         var sql = Pg(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => is_member(current_setting('app.user_id')::uuid, m.tenant_id))
-            )
-            """
+            Data_Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting_1
         );
 
         Assert.Contains(

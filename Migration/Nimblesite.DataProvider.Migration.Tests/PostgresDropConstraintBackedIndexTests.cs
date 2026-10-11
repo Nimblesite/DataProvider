@@ -1,7 +1,7 @@
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixture fixture)
+public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresContainerFixture fixture)
 {
     private const string SchemaName = "public";
     private const string TableName = "api_keys";
@@ -141,17 +141,7 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
     private static bool ConstraintExists(NpgsqlConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_constraint c
-                JOIN pg_class t ON t.oid = c.conrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                WHERE n.nspname = @schema
-                AND t.relname = @table
-                AND c.conname = @constraint
-            )
-            """;
+        command.CommandText = Data_ConstraintExists_1;
         AddObjectParameters(command);
         return command.ExecuteScalar() is bool exists && exists;
     }
@@ -159,16 +149,7 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
     private static bool IndexExists(NpgsqlConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_class i
-                JOIN pg_namespace n ON n.oid = i.relnamespace
-                WHERE n.nspname = @schema
-                AND i.relname = @constraint
-                AND i.relkind = 'i'
-            )
-            """;
+        command.CommandText = Data_IndexExists_1;
         AddObjectParameters(command);
         return command.ExecuteScalar() is bool exists && exists;
     }

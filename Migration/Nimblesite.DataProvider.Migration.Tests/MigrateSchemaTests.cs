@@ -147,26 +147,11 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     {
         // Arrange - Create only the first two tables manually
         ExecuteSql(
-            """
-            CREATE TABLE IF NOT EXISTS "public"."countries" (
-                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                "name" VARCHAR(100) NOT NULL,
-                "code" VARCHAR(10) NOT NULL,
-                CONSTRAINT "uq_countries_code" UNIQUE ("code")
-            )
-            """
+            Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_1
         );
 
         ExecuteSql(
-            """
-            CREATE TABLE IF NOT EXISTS "public"."regions" (
-                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                "name" VARCHAR(100) NOT NULL,
-                "country_id" UUID NOT NULL,
-                CONSTRAINT "fk_regions_country" FOREIGN KEY ("country_id")
-                    REFERENCES "public"."countries" ("id") ON DELETE CASCADE
-            )
-            """
+            Data_MigrateSchema_PartiallyMigrated_CreatesRemainingTables_2
         );
 
         Assert.True(TableExists("countries"));
@@ -199,12 +184,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
         // Arrange - Create a conflicting table that will cause FK failure
         // Create suburbs without its parent (regions) - this will cause venues to fail FK
         ExecuteSql(
-            """
-            CREATE TABLE IF NOT EXISTS "public"."orphan_suburbs" (
-                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                "name" VARCHAR(100) NOT NULL
-            )
-            """
+            Data_MigrateSchema_TableCreationFails_ContinuesWithOtherTables_1
         );
 
         // Create a schema where one table references a non-existent table
@@ -345,13 +325,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     private bool TableExists(string tableName)
     {
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = @tableName
-            )
-            """;
+        cmd.CommandText = Data_TableExists_1;
         var param = cmd.CreateParameter();
         param.ParameterName = "@tableName";
         param.Value = tableName;
@@ -362,13 +336,7 @@ public sealed partial class MigrateSchemaTests(PostgresContainerFixture fixture)
     private bool IndexExists(string indexName)
     {
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT EXISTS (
-                SELECT FROM pg_indexes
-                WHERE schemaname = 'public'
-                AND indexname = @indexName
-            )
-            """;
+        cmd.CommandText = Data_IndexExists_1;
         var param = cmd.CreateParameter();
         param.ParameterName = "@indexName";
         param.Value = indexName;

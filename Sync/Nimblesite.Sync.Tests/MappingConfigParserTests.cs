@@ -6,7 +6,7 @@ namespace Nimblesite.Sync.Tests;
 /// Tests for MappingConfigParser - JSON configuration parsing.
 /// Covers spec Section 7.3 - Mapping Configuration Schema.
 /// </summary>
-public sealed class MappingConfigParserTests
+public sealed partial class MappingConfigParserTests
 {
     private readonly NullLogger<MappingConfigParserTests> _logger = new();
 
@@ -27,20 +27,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_SimpleMapping_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "enabled": true
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_SimpleMapping_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -57,23 +44,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_PkMapping_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "pk_mapping": {
-                            "source_column": "Id",
-                            "target_column": "CustomerId"
-                        }
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_PkMapping_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -87,23 +58,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_ColumnMappings_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "column_mappings": [
-                            {"source": "FullName", "target": "Name"},
-                            {"source": "EmailAddress", "target": "Email"}
-                        ]
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_ColumnMappings_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -117,22 +72,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_ConstantTransform_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "column_mappings": [
-                            {"source": null, "target": "Source", "transform": "constant", "value": "mobile-app"}
-                        ]
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_ConstantTransform_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -147,22 +87,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_LqlTransform_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "column_mappings": [
-                            {"source": "CreatedAt", "target": "RegisteredDate", "transform": "lql", "lql": "CreatedAt |> dateFormat('yyyy-MM-dd')"}
-                        ]
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_LqlTransform_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -175,20 +100,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_ExcludedColumns_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "excluded_columns": ["PasswordHash", "SecurityStamp"]
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_ExcludedColumns_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -202,20 +114,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_Filter_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "filter": {"lql": "IsActive = true AND DeletedAt IS NULL"}
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_Filter_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -228,24 +127,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_SyncTracking_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "sync_tracking": {
-                            "enabled": true,
-                            "strategy": "hash",
-                            "tracking_column": "_synced_version"
-                        }
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_SyncTracking_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -259,35 +141,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_MultiTarget_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "order-split",
-                        "source_table": "Order",
-                        "direction": "push",
-                        "multi_target": true,
-                        "targets": [
-                            {
-                                "table": "OrderHeader",
-                                "column_mappings": [
-                                    {"source": "Id", "target": "OrderId"},
-                                    {"source": "Total", "target": "Amount"}
-                                ]
-                            },
-                            {
-                                "table": "OrderAudit",
-                                "column_mappings": [
-                                    {"source": "Id", "target": "OrderId"},
-                                    {"source": null, "target": "EventType", "transform": "constant", "value": "created"}
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_MultiTarget_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -303,19 +157,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_DirectionPull_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "pull-mapping",
-                        "source_table": "Customer",
-                        "target_table": "User",
-                        "direction": "pull"
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_DirectionPull_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -326,19 +168,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_DirectionBoth_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "bi-dir-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "both"
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_DirectionBoth_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -349,13 +179,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_UnmappedTableBehaviorPassthrough_ParsesCorrectly()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "unmapped_table_behavior": "passthrough",
-                "mappings": []
-            }
-            """;
+        var json = Data_Parse_UnmappedTableBehaviorPassthrough_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -377,15 +201,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void Parse_MissingRequiredFields_SkipsInvalidMapping()
     {
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {"id": "", "source_table": ""},
-                    {"id": "valid", "source_table": "User", "target_table": "Customer", "direction": "push"}
-                ]
-            }
-            """;
+        var json = Data_Parse_MissingRequiredFields_SkipsInvalidMapping_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 
@@ -419,24 +235,7 @@ public sealed class MappingConfigParserTests
     [Fact]
     public void ToJson_RoundTrip_PreservesData()
     {
-        var originalJson = """
-            {
-                "version": "1.0",
-                "unmapped_table_behavior": "strict",
-                "mappings": [
-                    {
-                        "id": "test-mapping",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "enabled": true,
-                        "column_mappings": [
-                            {"source": "Name", "target": "FullName"}
-                        ]
-                    }
-                ]
-            }
-            """;
+        var originalJson = Data_ToJson_RoundTrip_PreservesData_1;
 
         var parseResult = MappingConfigParser.Parse(originalJson, _logger);
         var config = ((MappingConfigParseOk)parseResult).Config;
@@ -458,57 +257,7 @@ public sealed class MappingConfigParserTests
     public void Parse_FullSpecExample_ParsesCorrectly()
     {
         // This is the example from spec Section 7.3
-        var json = """
-            {
-                "version": "1.0",
-                "mappings": [
-                    {
-                        "id": "user-to-customer",
-                        "source_table": "User",
-                        "target_table": "Customer",
-                        "direction": "push",
-                        "enabled": true,
-                        "pk_mapping": {
-                            "source_column": "Id",
-                            "target_column": "CustomerId"
-                        },
-                        "column_mappings": [
-                            {
-                                "source": "FullName",
-                                "target": "Name",
-                                "transform": null
-                            },
-                            {
-                                "source": "EmailAddress",
-                                "target": "Email",
-                                "transform": null
-                            },
-                            {
-                                "source": null,
-                                "target": "Source",
-                                "transform": "constant",
-                                "value": "mobile-app"
-                            },
-                            {
-                                "source": "CreatedAt",
-                                "target": "RegisteredDate",
-                                "transform": "lql",
-                                "lql": "CreatedAt |> dateFormat('yyyy-MM-dd')"
-                            }
-                        ],
-                        "excluded_columns": ["PasswordHash", "SecurityStamp"],
-                        "filter": {
-                            "lql": "IsActive = true AND DeletedAt IS NULL"
-                        },
-                        "sync_tracking": {
-                            "enabled": true,
-                            "tracking_column": "_synced_version",
-                            "strategy": "version"
-                        }
-                    }
-                ]
-            }
-            """;
+        var json = Data_Parse_FullSpecExample_ParsesCorrectly_1;
 
         var result = MappingConfigParser.Parse(json, _logger);
 

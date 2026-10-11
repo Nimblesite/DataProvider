@@ -9,7 +9,7 @@ namespace Nimblesite.Sync.Http.Tests;
 /// These tests MUST FAIL until the underlying issues are fixed.
 /// Based on sync errors: Connection timeout, Version mismatch, Pending stuck state.
 /// </summary>
-public sealed class SyncFailureIsolationTests : IDisposable
+public sealed partial class SyncFailureIsolationTests : IDisposable
 {
     private readonly string _serverDbPath;
     private readonly SqliteConnection _serverConn;
@@ -43,46 +43,7 @@ public sealed class SyncFailureIsolationTests : IDisposable
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE fhir_Encounter (
-                    Id TEXT PRIMARY KEY,
-                    PatientReference TEXT NOT NULL,
-                    Status TEXT NOT NULL,
-                    Class TEXT,
-                    ServiceType TEXT,
-                    ReasonCode TEXT,
-                    StartDate TEXT,
-                    EndDate TEXT,
-                    Version INTEGER DEFAULT 1
-                );
-
-                CREATE TABLE fhir_Practitioner (
-                    Id TEXT PRIMARY KEY,
-                    Identifier TEXT,
-                    Active INTEGER DEFAULT 1,
-                    NameFamily TEXT,
-                    NameGiven TEXT,
-                    Qualification TEXT,
-                    Specialty TEXT,
-                    TelecomEmail TEXT,
-                    TelecomPhone TEXT,
-                    Version INTEGER DEFAULT 1
-                );
-
-                CREATE TABLE fhir_Appointment (
-                    Id TEXT PRIMARY KEY,
-                    ServiceCategory TEXT,
-                    ServiceType TEXT,
-                    Priority TEXT,
-                    Description TEXT,
-                    Start TEXT,
-                    End TEXT,
-                    Status TEXT DEFAULT 'pending',
-                    PatientReference TEXT,
-                    PractitionerReference TEXT,
-                    Version INTEGER DEFAULT 1
-                );
-                """
+                command.CommandText = Data_InitializeDatabase_1
         );
 
         TriggerGenerator.CreateTriggers(conn, "fhir_Encounter", NullLogger.Instance);
@@ -582,15 +543,7 @@ public sealed class SyncFailureIsolationTests : IDisposable
         // Create Patient table for the test
         using (var cmd = _clientConn.CreateCommand())
         {
-            cmd.CommandText = """
-                CREATE TABLE IF NOT EXISTS fhir_Patient (
-                    Id TEXT PRIMARY KEY,
-                    Active INTEGER DEFAULT 1,
-                    GivenName TEXT,
-                    FamilyName TEXT,
-                    Gender TEXT
-                );
-                """;
+            cmd.CommandText = Data_CrossServiceSync_ClinicalToScheduling_ShouldSyncAllEntityTypes_1;
             cmd.ExecuteNonQuery();
         }
 
@@ -625,15 +578,7 @@ public sealed class SyncFailureIsolationTests : IDisposable
         // Create Patient table on server too
         using (var cmd = _serverConn.CreateCommand())
         {
-            cmd.CommandText = """
-                CREATE TABLE IF NOT EXISTS fhir_Patient (
-                    Id TEXT PRIMARY KEY,
-                    Active INTEGER DEFAULT 1,
-                    GivenName TEXT,
-                    FamilyName TEXT,
-                    Gender TEXT
-                );
-                """;
+            cmd.CommandText = Data_CrossServiceSync_ClinicalToScheduling_ShouldSyncAllEntityTypes_2;
             cmd.ExecuteNonQuery();
         }
 

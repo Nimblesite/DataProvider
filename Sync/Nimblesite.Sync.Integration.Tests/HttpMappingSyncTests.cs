@@ -62,16 +62,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE User (
-                    Id TEXT PRIMARY KEY,
-                    FullName TEXT NOT NULL,
-                    EmailAddress TEXT,
-                    PasswordHash TEXT,
-                    SecurityStamp TEXT,
-                    CreatedAt TEXT
-                );
-                """
+                command.CommandText = Data_CreateSourceDb_1
         );
 
         TriggerGenerator.CreateTriggers(conn, "User", NullLogger.Instance);
@@ -110,16 +101,7 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
 
         // Target schema is DIFFERENT from source!
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            DROP TABLE IF EXISTS customer CASCADE;
-            CREATE TABLE customer (
-                customer_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT,
-                source TEXT,
-                registered_date TEXT
-            );
-            """;
+        cmd.CommandText = Data_CreateTargetDb_1;
         cmd.ExecuteNonQuery();
 
         return conn;

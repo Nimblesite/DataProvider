@@ -9,7 +9,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: full CRUD workflows against real SQLite databases.
 /// Each test is a complete user workflow with multiple operations and assertions.
 /// </summary>
-public sealed class SqliteCrudE2ETests : IDisposable
+public sealed partial class SqliteCrudE2ETests : IDisposable
 {
     private readonly SqliteTestDatabase _db = new("crud_e2e");
     private SqliteConnection _connection => _db.Connection;
@@ -26,29 +26,7 @@ public sealed class SqliteCrudE2ETests : IDisposable
         DatabaseCommands.Execute(
             connection: _connection,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Patients (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Age INTEGER NOT NULL,
-                    Email TEXT,
-                    IsActive INTEGER NOT NULL DEFAULT 1
-                );
-                CREATE TABLE Appointments (
-                    Id TEXT PRIMARY KEY,
-                    PatientId TEXT NOT NULL,
-                    AppointmentDate TEXT NOT NULL,
-                    Notes TEXT,
-                    FOREIGN KEY (PatientId) REFERENCES Patients(Id)
-                );
-                CREATE TABLE Medications (
-                    Id TEXT PRIMARY KEY,
-                    PatientId TEXT NOT NULL,
-                    DrugName TEXT NOT NULL,
-                    Dosage TEXT NOT NULL,
-                    FOREIGN KEY (PatientId) REFERENCES Patients(Id)
-                );
-                """
+                command.CommandText = Data_CreateSchema_1
         );
     }
 
@@ -260,12 +238,7 @@ public sealed class SqliteCrudE2ETests : IDisposable
 
         // Query with JOIN: patient + appointments
         var joinResult = _connection.Query<(string, string, string)>(
-            sql: """
-            SELECT p.Name, a.AppointmentDate, a.Notes
-            FROM Patients p
-            INNER JOIN Appointments a ON p.Id = a.PatientId
-            ORDER BY a.AppointmentDate
-            """,
+            sql: Data_MultiTableWorkflow_PatientsAppointmentsMedications_RelatedDataManagement_1,
             mapper: r => (r.GetString(0), r.GetString(1), r.GetString(2))
         );
         var appointmentsOk = Assert.IsType<Result<
@@ -280,12 +253,7 @@ public sealed class SqliteCrudE2ETests : IDisposable
 
         // Query with JOIN: patient + medications
         var medResult = _connection.Query<(string, string, string)>(
-            sql: """
-            SELECT p.Name, m.DrugName, m.Dosage
-            FROM Patients p
-            INNER JOIN Medications m ON p.Id = m.PatientId
-            ORDER BY m.DrugName
-            """,
+            sql: Data_MultiTableWorkflow_PatientsAppointmentsMedications_RelatedDataManagement_2,
             mapper: r => (r.GetString(0), r.GetString(1), r.GetString(2))
         );
         var medsOk = Assert.IsType<Result<IReadOnlyList<(string, string, string)>, SqlError>.Ok<

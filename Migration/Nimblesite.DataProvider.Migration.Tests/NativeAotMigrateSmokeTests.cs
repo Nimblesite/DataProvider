@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// facts skip, so <c>make test</c> stays fast and self-contained while the CI
 /// native job runs the real thing.
 /// </summary>
-public sealed class NativeAotMigrateSmokeTests
+public sealed partial class NativeAotMigrateSmokeTests
 {
     private const string BinEnvVar = "DATAPROVIDERMIGRATE_AOT_BIN";
 
@@ -26,29 +26,7 @@ public sealed class NativeAotMigrateSmokeTests
     // would (correctly) flag as drift — that is a SQLite behaviour, not an AOT
     // concern, so the smoke schema avoids it to keep the test focused on the
     // native binary running the full pipeline.
-    private const string SmokeSchema = """
-        name: aot_smoke
-        tables:
-          - name: Widget
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: Label
-                type: Text
-                isNullable: false
-              - name: Quantity
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-            indexes:
-              - name: idx_widget_label
-                columns:
-                  - Label
-                isUnique: true
-        """;
+    private const string SmokeSchema = Data_Shared_1;
 
     [SkippableFact]
     public void NativeBinary_MigratesSqliteSchema_ExitZero()

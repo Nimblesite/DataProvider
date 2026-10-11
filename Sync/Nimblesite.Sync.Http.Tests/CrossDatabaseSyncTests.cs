@@ -61,13 +61,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = """
-                CREATE TABLE Person (
-                    Id TEXT PRIMARY KEY,
-                    Name TEXT NOT NULL,
-                    Email TEXT
-                );
-                """
+                command.CommandText = Data_CreateSqliteDb_1
         );
 
         // Create triggers
@@ -101,14 +95,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
 
         // Create test table - lowercase for PostgreSQL compatibility
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            DROP TABLE IF EXISTS person CASCADE;
-            CREATE TABLE person (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT
-            );
-            """;
+        cmd.CommandText = Data_CreatePostgresDb_1;
         cmd.ExecuteNonQuery();
 
         return conn;

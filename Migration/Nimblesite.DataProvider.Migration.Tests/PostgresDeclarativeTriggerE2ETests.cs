@@ -18,7 +18,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture fixture)
     : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
@@ -34,33 +34,7 @@ public sealed class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture 
         await _connection.DisposeAsync().ConfigureAwait(false);
     }
 
-    private const string GuardYaml = """
-        name: tenant_app
-        tables:
-          - name: tenant_members
-            columns:
-              - name: id
-                type: Uuid
-                isNullable: false
-              - name: tenant_id
-                type: Uuid
-                isNullable: false
-              - name: role
-                type: VarChar(50)
-                isNullable: false
-            primaryKey:
-              columns:
-                - id
-            triggers:
-              - name: assert_not_last_owner
-                events: [Update, Delete]
-                raiseWhen: |
-                  old.role = 'owner' and not exists(
-                    tenant_members
-                    |> filter(fn(m) => m.tenant_id = old.tenant_id and m.role = 'owner' and m.id <> old.id)
-                  )
-                errorMessage: cannot remove the last owner of a tenant
-        """;
+    private const string GuardYaml = Data_Shared_1;
 
     [Fact]
     public void PgTriggerGuard_BlocksDeleteOfLastOwner()
@@ -125,33 +99,7 @@ public sealed class PostgresDeclarativeTriggerE2ETests(PostgresContainerFixture 
         Assert.Empty(ops);
     }
 
-    private const string PascalCaseGuardYaml = """
-        name: tenant_app
-        tables:
-          - name: TenantMembers
-            columns:
-              - name: Id
-                type: Uuid
-                isNullable: false
-              - name: TenantId
-                type: Uuid
-                isNullable: false
-              - name: Role
-                type: VarChar(50)
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-            triggers:
-              - name: assert_not_last_owner
-                events: [Update, Delete]
-                raiseWhen: |
-                  old.Role = 'owner' and not exists(
-                    TenantMembers
-                    |> filter(fn(m) => m.TenantId = old.TenantId and m.Role = 'owner' and m.Id <> old.Id)
-                  )
-                errorMessage: cannot remove the last owner of a tenant
-        """;
+    private const string PascalCaseGuardYaml = Data_Shared_2;
 
     [Fact]
     public void PgTriggerGuard_PascalCaseIdentifiers_EnforcedAtRuntime()

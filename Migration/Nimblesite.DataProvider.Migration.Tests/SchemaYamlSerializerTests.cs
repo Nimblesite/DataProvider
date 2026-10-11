@@ -32,25 +32,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void FromYaml_ValidYaml_DeserializesCorrectly()
     {
         // Arrange
-        var yaml = """
-            name: test_schema
-            tables:
-              - name: Products
-                schema: public
-                columns:
-                  - name: Id
-                    type: Uuid
-                    isNullable: false
-                  - name: Name
-                    type: VarChar(200)
-                    isNullable: false
-                  - name: Price
-                    type: Decimal(10,2)
-                    isNullable: true
-                primaryKey:
-                  columns:
-                    - Id
-            """;
+        var yaml = Data_FromYaml_ValidYaml_DeserializesCorrectly_1;
 
         // Act
         var schema = SchemaYamlSerializer.FromYaml(yaml);
@@ -231,15 +213,7 @@ public sealed partial class SchemaYamlSerializerTests
     {
         // Arrange
         var tempFile = Path.GetTempFileName();
-        var yaml = """
-            name: file_test
-            tables:
-              - name: TestTable
-                columns:
-                  - name: Id
-                    type: Int
-                    isNullable: false
-            """;
+        var yaml = Data_FromYamlFile_ValidFile_LoadsSchema_1;
         File.WriteAllText(tempFile, yaml);
 
         try
@@ -355,55 +329,7 @@ public sealed partial class SchemaYamlSerializerTests
     public void IntegrationTest_YamlToSqlite_CreatesDatabaseSuccessfully()
     {
         // Arrange - Create schema from YAML
-        var yaml = """
-            name: integration_test
-            tables:
-              - name: Users
-                schema: public
-                columns:
-                  - name: Id
-                    type: Uuid
-                    isNullable: false
-                  - name: Email
-                    type: VarChar(255)
-                    isNullable: false
-                  - name: Name
-                    type: Text
-                    isNullable: true
-                primaryKey:
-                  columns:
-                    - Id
-                indexes:
-                  - name: idx_users_email
-                    columns:
-                      - Email
-                    isUnique: true
-              - name: Orders
-                schema: public
-                columns:
-                  - name: Id
-                    type: BigInt
-                    isNullable: false
-                    isIdentity: true
-                  - name: UserId
-                    type: Uuid
-                    isNullable: false
-                  - name: Total
-                    type: Decimal(12,2)
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - Id
-                foreignKeys:
-                  - columns:
-                      - UserId
-                    referencedTable: Users
-                    referencedSchema: public
-                    referencedColumns:
-                      - Id
-                    onDelete: Cascade
-                    onUpdate: NoAction
-            """;
+        var yaml = Data_IntegrationTest_YamlToSqlite_CreatesDatabaseSuccessfully_1;
 
         var schema = SchemaYamlSerializer.FromYaml(yaml);
 

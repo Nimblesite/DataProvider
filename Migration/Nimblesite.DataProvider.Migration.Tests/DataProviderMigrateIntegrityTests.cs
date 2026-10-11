@@ -86,23 +86,7 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
         ApplySchema(schema: baseline);
 
         var schemaPath = WriteTempSchemaFile(
-            contents: """
-            name: nap
-            tables:
-              - name: settings
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tier
-                    type: Text
-                    isNullable: false
-                    defaultValue: "'pro'"
-                primaryKey:
-                  columns:
-                    - id
-            """
+            contents: Data_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1
         );
 
         try
@@ -196,51 +180,10 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
             .Build();
 
     private static string DesiredAgentConfigsYaml() =>
-        """
-            name: nap
-            tables:
-              - name: agent_configs
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tenant_id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-            """;
+        Data_DesiredAgentConfigsYaml_1;
 
     private static string DesiredAgentConfigsWithUniqueYaml() =>
-        """
-            name: nap
-            tables:
-              - name: agent_configs
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tenant_id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-                uniqueConstraints:
-                  - name: uq_agent_configs_tenant_name
-                    columns:
-                      - tenant_id
-                      - name
-            """;
+        Data_DesiredAgentConfigsWithUniqueYaml_1;
 
     private static void ConfigureNameColumn(ColumnBuilder builder, bool nameIsNullable)
     {

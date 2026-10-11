@@ -7,7 +7,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for DbTransact extension methods
 /// </summary>
-public sealed class DbTransactTests : IDisposable
+public sealed partial class DbTransactTests : IDisposable
 {
     private readonly string _dbPath;
     private readonly string _connectionString;
@@ -232,11 +232,7 @@ public sealed class DbTransactTests : IDisposable
     private async Task CreateTestTable(SqliteTransaction? transaction = null)
     {
         using var command = new SqliteCommand(
-            @"
-            CREATE TABLE IF NOT EXISTS TestTable (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            )",
+            Data_CreateTestTable_1,
             _connection,
             transaction
         );

@@ -42,11 +42,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.age > 18 and row.users.country = 'US' or row.users.status = 'premium')
-            |> select(users.id, users.name)
-            """;
+        var lql = Data_ComplexFilterWithAndOr_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -60,11 +56,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void OrderByDescending_AllDialects_GeneratesDescSQL()
     {
-        var lql = """
-            users
-            |> order_by(users.age desc, users.name asc)
-            |> select(users.id, users.name, users.age)
-            """;
+        var lql = Data_OrderByDescending_AllDialects_GeneratesDescSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -78,11 +70,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void FilterWithStringLiteral_AllDialects_PreservesQuotes()
     {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.status = 'active')
-            |> select(users.id, users.name)
-            """;
+        var lql = Data_FilterWithStringLiteral_AllDialects_PreservesQuotes_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -95,11 +83,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            products
-            |> filter(fn(row) => row.products.price >= 100 and row.products.price <= 500)
-            |> select(products.id, products.name, products.price)
-            """;
+        var lql = Data_FilterWithNumericComparison_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -113,14 +97,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks()
     {
-        var lql = """
-            users
-            |> join(orders, on = users.id = orders.user_id)
-            |> filter(fn(row) => row.orders.total > 100)
-            |> order_by(orders.total desc)
-            |> limit(50)
-            |> select(users.name, orders.total, orders.status)
-            """;
+        var lql = Data_JoinWithFilterAndOrderBy_AllDialects_FullPipelineWorks_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -210,14 +187,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void ArithmeticExpressions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            products
-            |> select(
-                products.id,
-                products.price * products.quantity as total_value,
-                products.price + 10 as price_plus_ten
-            )
-            """;
+        var lql = Data_ArithmeticExpressions_AllDialects_GeneratesCorrectSQL_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })
@@ -232,11 +202,7 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void FilterWithNotEquals_AllDialects_GeneratesCorrectOperator()
     {
-        var lql = """
-            users
-            |> filter(fn(row) => row.users.status != 'deleted')
-            |> select(users.id, users.name)
-            """;
+        var lql = Data_FilterWithNotEquals_AllDialects_GeneratesCorrectOperator_1;
         var (pg, ss, sl) = ConvertToAllDialects(lql);
 
         foreach (var sql in new[] { pg, ss, sl })

@@ -82,16 +82,7 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(Postg
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT pg_get_constraintdef(c.oid)
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            WHERE n.nspname = 'public'
-              AND t.relname = 'usage_events'
-              AND c.contype = 'c'
-              AND c.conname = 'usage_events_kind_check'
-            """;
+        command.CommandText = Data_LiveExpressionContains_1;
         var def = command.ExecuteScalar() as string;
         return def is not null && def.Contains(needle, StringComparison.Ordinal);
     }
