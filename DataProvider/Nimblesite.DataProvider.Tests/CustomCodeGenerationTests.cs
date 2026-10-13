@@ -391,7 +391,7 @@ public record {entityName}(
         return GenerateRepositoryMethod(
             entityName: entityName,
             methodName: "CreateAsync",
-            sqlExpression: $"\"\"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\"\"",
+            sqlExpression: $"\"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\"",
             bindColumns: insertableColumns,
             gap: ""
         );
@@ -410,7 +410,7 @@ public record {entityName}(
         return GenerateRepositoryMethod(
             entityName: entityName,
             methodName: "UpdateAsync",
-            sqlExpression: $"\"\"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\"\"",
+            sqlExpression: $"\"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\"",
             bindColumns: table.Columns,
             gap: "        "
         );
