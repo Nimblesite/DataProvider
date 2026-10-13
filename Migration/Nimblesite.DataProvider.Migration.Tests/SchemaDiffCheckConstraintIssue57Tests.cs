@@ -1,4 +1,7 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
+
+// Implements [MIG-TEST-DIFF-SHARED].
 
 /// <summary>
 /// Implements [MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT] (#57): when a
@@ -8,70 +11,36 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// enum-style CHECK was silently skipped because the diff matched on name
 /// only.
 /// </summary>
-public sealed class SchemaDiffCheckConstraintIssue57Tests
+public sealed partial class SchemaDiffCheckConstraintIssue57Tests
 {
     [Fact]
     public void Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
                     CheckConstraints =
                     [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression =
-                                "kind IN ('request','input_tokens','output_tokens','sandbox_seconds')",
-                        },
+                        Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_1(),
                     ],
                 },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                current.Tables[0] with
-                {
-                    CheckConstraints =
-                    [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression =
-                                "kind IN ('llm_request','llm_input_tokens','llm_output_tokens','machine_seconds')",
-                        },
-                    ],
-                },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(
-            current: current,
-            desired: desired,
-            allowDestructive: false,
-            logger: NullLogger.Instance
+            ]
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-        Assert.Contains(
-            ops,
-            op =>
-                op is DropCheckConstraintOperation drop
-                && drop.ConstraintName == "usage_events_kind_check"
+        var ops = VerifySharedStep5(
+            input0: Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_2,
+            input1: current
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropCheckConstraintOperation>(
             ops,
-            op =>
-                op is AddCheckConstraintOperation add
-                && add.CheckConstraint.Name == "usage_events_kind_check"
+            drop => drop.ConstraintName == "usage_events_kind_check"
+        );
+        SchemaDiffAssertions.AssertContainsOperation<AddCheckConstraintOperation>(
+            ops,
+            add =>
+                add.CheckConstraint.Name == "usage_events_kind_check"
                 && add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
         );
     }
@@ -79,10 +48,9 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
     [Fact]
     public void Calculate_ColumnCheckConstraintExpressionChanged_DropsAndReadds()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
@@ -96,8 +64,8 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
                         },
                     ],
                 },
-            ],
-        };
+            ]
+        );
         var desired = current with
         {
             Tables =
@@ -117,79 +85,61 @@ public sealed class SchemaDiffCheckConstraintIssue57Tests
             ],
         };
 
-        var result = SchemaDiff.Calculate(
+        var ops = SchemaDiffAssertions.Diff(
             current: current,
             desired: desired,
-            allowDestructive: false,
+            destructive: false,
             logger: NullLogger.Instance
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
         Assert.Contains(ops, op => op is DropCheckConstraintOperation);
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<AddCheckConstraintOperation>(
             ops,
-            op =>
-                op is AddCheckConstraintOperation add
-                && add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
+            add => add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
         );
     }
 
     [Fact]
     public void Calculate_CheckConstraintUnchanged_EmitsNoCheckConstraintOps()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "stable",
-            Tables =
+        var schema = SchemaTestData.Schema(
+            name: "stable",
+            tables:
             [
                 BaseUsageEventsTable() with
                 {
                     CheckConstraints =
                     [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression = "kind IN ('a','b')",
-                        },
+                        Dataset_Calculate_CheckConstraintUnchanged_EmitsNoCheckConstraintOps_1(),
                     ],
                 },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(
-            current: schema,
-            desired: schema,
-            allowDestructive: false,
-            logger: NullLogger.Instance
+            ]
         );
 
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(
+            current: schema,
+            desired: schema,
+            destructive: false,
+            logger: NullLogger.Instance
+        );
         Assert.DoesNotContain(ops, op => op is DropCheckConstraintOperation);
         Assert.DoesNotContain(ops, op => op is AddCheckConstraintOperation);
     }
 
-    private static TableDefinition BaseUsageEventsTable() =>
-        new()
-        {
-            Schema = "public",
-            Name = "usage_events",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "kind",
-                    Type = PortableTypes.Text,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifySharedStep5(
+        Func<SchemaDefinition, SchemaDefinition> input0,
+        SchemaDefinition input1
+    )
+    {
+        var desired = input0(input1);
+
+        var ops = SchemaDiffAssertions.Diff(
+            current: input1,
+            desired: desired,
+            destructive: false,
+            logger: NullLogger.Instance
+        );
+
+        return ops;
+    }
 }

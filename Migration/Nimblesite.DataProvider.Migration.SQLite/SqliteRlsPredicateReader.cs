@@ -60,23 +60,10 @@ internal static class SqliteRlsPredicateReader
         }
     }
 
-    private static string? GuardPredicate(string bodySql)
-    {
-        try
-        {
-            var statements = new Parser().ParseSql(bodySql, new SQLiteDialect());
-            return
-                statements.Count == 1
-                && statements[0] is Statement.Select select
-                && select.Query.Body is SetExpression.SelectExpression body
-                ? GuardedPredicate(body.Select.Selection)
-                : null;
-        }
-        catch (ParserException)
-        {
-            return null;
-        }
-    }
+    private static string? GuardPredicate(string bodySql) =>
+        GuardedPredicate(
+            SqlSelectionExtractor.ParseSingleSelectSelection(bodySql, new SQLiteDialect())
+        );
 
     // The generated body is `SELECT RAISE(ABORT, ...) WHERE NOT (<predicate>)`.
     private static string? GuardedPredicate(Expression? selection) =>

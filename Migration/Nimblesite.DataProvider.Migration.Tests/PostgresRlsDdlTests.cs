@@ -1,3 +1,6 @@
+using static global::Tests.Shared.StringAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-PG] DDL string-shape tests from docs/specs/rls-spec.md.
@@ -6,7 +9,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// String-assertion tests for the PostgreSQL RLS DDL generator. Verifies the
 /// shape of emitted SQL without needing a live database.
 /// </summary>
-public sealed class PostgresRlsDdlTests
+public sealed partial class PostgresRlsDdlTests
 {
     [Fact]
     public void Generate_EnableRls_EmitsAlterTableEnableRowLevelSecurity()
@@ -51,35 +54,23 @@ public sealed class PostgresRlsDdlTests
     public void Generate_CreateRlsPolicy_OwnerIsolation_FullShape()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "owner_isolation",
-                    IsPermissive = true,
-                    Operations = [RlsOperation.All],
-                    UsingLql = "OwnerId = current_user_id()",
-                    WithCheckLql = "OwnerId = current_user_id()",
-                }
-            )
+            Dataset_Generate_CreateRlsPolicy_OwnerIsolation_FullShape_1()
         );
 
-        Assert.Contains(
-            "CREATE POLICY \"owner_isolation\" ON \"public\".\"Documents\"",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains("AS PERMISSIVE", ddl, StringComparison.Ordinal);
-        Assert.Contains("FOR ALL", ddl, StringComparison.Ordinal);
-        Assert.Contains("TO PUBLIC", ddl, StringComparison.Ordinal);
-        Assert.Contains("USING (", ddl, StringComparison.Ordinal);
-        Assert.Contains("WITH CHECK (", ddl, StringComparison.Ordinal);
-        Assert.Contains("\"OwnerId\"", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE POLICY \"owner_isolation\" ON \"public\".\"Documents\"",
+                "AS PERMISSIVE",
+                "FOR ALL",
+                "TO PUBLIC",
+                "USING (",
+                "WITH CHECK (",
+                "\"OwnerId\"",
+                "current_setting('rls.current_user_id', true)",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -87,118 +78,103 @@ public sealed class PostgresRlsDdlTests
     public void Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Audit",
-                new RlsPolicyDefinition
-                {
-                    Name = "audit_admin_only",
-                    IsPermissive = false,
-                    Operations = [RlsOperation.Select],
-                    Roles = ["admin", "auditor"],
-                    UsingLql = "true",
-                }
-            )
+            Dataset_Generate_CreateRlsPolicy_RestrictiveSelectOnly_OnSpecificRoles_1()
         );
 
-        Assert.Contains("AS RESTRICTIVE", ddl, StringComparison.Ordinal);
-        Assert.Contains("FOR SELECT", ddl, StringComparison.Ordinal);
-        Assert.Contains("TO \"admin\", \"auditor\"", ddl, StringComparison.Ordinal);
-        Assert.Contains("USING (", ddl, StringComparison.Ordinal);
-        Assert.DoesNotContain("WITH CHECK", ddl, StringComparison.Ordinal);
+        VerifyReusableWorkflow17(
+            input0: ContainsAll,
+            input1: ddl,
+            value0: "AS RESTRICTIVE",
+            value1: "FOR SELECT",
+            value2: "TO \"admin\", \"auditor\"",
+            value3: "USING (",
+            value5: "WITH CHECK"
+        );
     }
 
     [Fact]
     public void Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps()
     {
-        var lql = """
-            UserGroupMemberships
-            |> filter(fn(m) => m.user_id = current_user_id())
-            |> select(m.user_id)
-            """;
+        var lql = Data_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1;
 
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "group_read",
-                    IsPermissive = true,
-                    Operations = [RlsOperation.Select],
-                    UsingLql = $"exists({lql})",
-                }
-            )
+            Dataset_Generate_CreateRlsPolicy_LqlExistsSubquery_TranspilesAndWraps_1(lql: lql)
         );
 
-        Assert.Contains("USING (EXISTS (", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "USING (EXISTS (",
+                "current_setting('rls.current_user_id', true)",
+                "UserGroupMemberships",
+            ],
+            comparison: StringComparison.Ordinal
         );
-        Assert.Contains("UserGroupMemberships", ddl, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "Documents",
-                new RlsPolicyDefinition
-                {
-                    Name = "raw_sql",
-                    Operations = [RlsOperation.All],
-                    UsingLql = "OwnerId = current_user_id()",
-                    WithCheckLql = "OwnerId = current_user_id()",
-                    UsingSql = "is_member(\"GroupId\")",
-                    WithCheckSql = "can_write(\"GroupId\")",
-                }
-            )
+            Dataset_Generate_CreateRlsPolicy_RawSqlPredicates_EmitVerbatim_1()
         );
 
-        Assert.Contains("USING (is_member(\"GroupId\"))", ddl, StringComparison.Ordinal);
-        Assert.Contains("WITH CHECK (can_write(\"GroupId\"))", ddl, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "current_setting('rls.current_user_id', true)",
-            ddl,
-            StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: ddl,
+            value0: "USING (is_member(\"GroupId\"))",
+            value1: "WITH CHECK (can_write(\"GroupId\"))",
+            value3: "current_setting('rls.current_user_id', true)"
         );
     }
 
-    [Fact]
-    public void Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_ContextCasesData)
+    )]
+    public void Generate_CreateRlsPolicy_EmptyPredicate_ThrowsWithRlsErrorCode_ContextCases(
+        string caseName,
+        Func<CreateRlsPolicyOperation> input0,
+        string value0
+    )
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                new CreateRlsPolicyOperation(
-                    "public",
-                    "Documents",
-                    new RlsPolicyDefinition { Name = "broken", UsingLql = "" }
-                )
-            )
-        );
-        Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", ex.Message, StringComparison.Ordinal);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix6(input0: input0, value0: value0);
     }
 
-    [Fact]
-    public void Generate_CreateRlsPolicy_EmptyWithCheck_ThrowsWithRlsErrorCode()
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow17(
+        Action<
+            string?,
+            System.Collections.Immutable.ImmutableArray<string>,
+            StringComparison
+        > input0,
+        string input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value5
+    )
+    {
+        input0(
+            arg1: input1,
+            arg2: [value0, value1, value2, value3],
+            arg3: StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(value5, input1, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix6(
+        Func<CreateRlsPolicyOperation> input0,
+        string value0
+    )
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                new CreateRlsPolicyOperation(
-                    "public",
-                    "Documents",
-                    new RlsPolicyDefinition
-                    {
-                        Name = "broken_check",
-                        Operations = [RlsOperation.Insert],
-                    }
-                )
-            )
+            PostgresDdlGenerator.Generate(input0())
         );
-        Assert.Contains("MIG-E-RLS-EMPTY-CHECK", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(value0, ex.Message, StringComparison.Ordinal);
     }
 }

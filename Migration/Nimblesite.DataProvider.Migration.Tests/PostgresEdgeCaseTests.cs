@@ -6,56 +6,30 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
-public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresEdgeCaseTests(PostgresContainerFixture fixture)
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("edge_test").ConfigureAwait(false);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
+    protected override string DatabaseName => "edge_test";
 
     #region Nullable Column Edge Cases
 
     [Fact]
     public void NullableColumn_InsertNull_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "nullable_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Column("age", PortableTypes.Int)
-                        .Column("balance", PortableTypes.Decimal(18, 2))
-            )
-            .Build();
-
-        ApplySchema(schema);
+        VerifySharedChecks1(input0: Fixture_NullableColumn_InsertNull_Success_1);
 
         // Insert row with all nulls except PK
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO nullable_test (id) VALUES (1)";
         cmd.ExecuteNonQuery();
 
         // Verify nulls are stored
-        cmd.CommandText = "SELECT name, email, age, balance FROM nullable_test WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command =>
+                command.CommandText =
+                    "SELECT name, email, age, balance FROM nullable_test WHERE id = 1"
+        );
         Assert.True(reader.IsDBNull(0));
         Assert.True(reader.IsDBNull(1));
         Assert.True(reader.IsDBNull(2));
@@ -66,62 +40,36 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     public void AddNullableColumn_ExistingDataUnaffected_Success()
     {
         // Create v1 schema with data
-        var v1 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "evolving_table",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-            )
-            .Build();
+        var v1 = Fixture_AddNullableColumn_ExistingDataUnaffected_Success_1();
 
         ApplySchema(v1);
 
         // Insert data
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO evolving_table (id, name) VALUES (1, 'Test User')";
         cmd.ExecuteNonQuery();
 
         // Upgrade to v2 with new nullable column
-        var v2 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "evolving_table",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var v2 = Fixture_AddNullableColumn_ExistingDataUnaffected_Success_2();
 
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-        ).Value;
+        var operations = VerifyUnifiedWorkflow103(input0: v2);
 
         Assert.Single(operations);
         Assert.IsType<AddColumnOperation>(operations[0]);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: PostgresTestDb.TryApply(
+                connection: Connection,
+                operations: operations,
+                logger: Logger
+            )
         );
 
-        Assert.True(result is MigrationApplyResultOk);
-
         // Verify existing data preserved with NULL in new column
-        cmd.CommandText = "SELECT id, name, email FROM evolving_table";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT id, name, email FROM evolving_table"
+        );
         Assert.Equal(1, reader.GetInt32(0));
         Assert.Equal("Test User", reader.GetString(1));
         Assert.True(reader.IsDBNull(2));
@@ -134,52 +82,26 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_NegativeNumber_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "negative_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("balance", PortableTypes.Decimal(10, 2), c => c.Default("-100.50"))
-                        .Column("adjustment", PortableTypes.Int, c => c.Default("-1")) // Not "offset" - reserved word
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO negative_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT balance, adjustment FROM negative_defaults WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal(-100.50m, reader.GetDecimal(0));
-        Assert.Equal(-1, reader.GetInt32(1));
+        InsertAndAssertRow(
+            input0: Fixture_DefaultValue_NegativeNumber_Success_1,
+            value0: "INSERT INTO negative_defaults (id) VALUES (1)",
+            value1: "SELECT balance, adjustment FROM negative_defaults WHERE id = 1",
+            assert: reader =>
+            {
+                Assert.Equal(-100.50m, reader.GetDecimal(0));
+                Assert.Equal(-1, reader.GetInt32(1));
+            }
+        );
     }
 
     [Fact]
     public void DefaultValue_EmptyString_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "empty_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("notes", PortableTypes.VarChar(500), c => c.Default("''"))
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO empty_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT notes FROM empty_defaults WHERE id = 1";
+        using var cmd = PrepareRow(
+            input0: Fixture_DefaultValue_EmptyString_Success_1,
+            value0: "INSERT INTO empty_defaults (id) VALUES (1)",
+            value1: "SELECT notes FROM empty_defaults WHERE id = 1"
+        );
         var result = cmd.ExecuteScalar();
         Assert.Equal("", result);
     }
@@ -187,56 +109,26 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void DefaultValue_BooleanTrue_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "bool_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("is_active", PortableTypes.Boolean, c => c.Default("true"))
-                        .Column("is_deleted", PortableTypes.Boolean, c => c.Default("false"))
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO bool_defaults (id) VALUES (1)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT is_active, is_deleted FROM bool_defaults WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.True(reader.GetBoolean(0));
-        Assert.False(reader.GetBoolean(1));
+        InsertAndAssertRow(
+            input0: Fixture_DefaultValue_BooleanTrue_Success_1,
+            value0: "INSERT INTO bool_defaults (id) VALUES (1)",
+            value1: "SELECT is_active, is_deleted FROM bool_defaults WHERE id = 1",
+            assert: reader =>
+            {
+                Assert.True(reader.GetBoolean(0));
+                Assert.False(reader.GetBoolean(1));
+            }
+        );
     }
 
     [Fact]
     public void DefaultValue_UuidGeneration_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "uuid_defaults",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column(
-                            "external_id",
-                            PortableTypes.Uuid,
-                            c => c.Default("gen_random_uuid()")
-                        )
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO uuid_defaults (id) VALUES (1), (2)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT external_id FROM uuid_defaults ORDER BY id";
+        using var cmd = PrepareRow(
+            input0: Fixture_DefaultValue_UuidGeneration_Success_1,
+            value0: "INSERT INTO uuid_defaults (id) VALUES (1), (2)",
+            value1: "SELECT external_id FROM uuid_defaults ORDER BY id"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         var uuid1 = reader.GetGuid(0);
@@ -253,109 +145,16 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
 
     #region Unicode and Special Characters
 
-    [Fact]
-    public void UnicodeData_InsertAndRetrieve_Success()
-    {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "unicode_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.NVarChar(200))
-                        .Column("description", PortableTypes.Text)
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        var unicodeStrings = new[]
-        {
-            "日本語テスト",
-            "العربية",
-            "🎉🚀💻",
-            "Ñoño español",
-            "Ελληνικά",
-            "中文测试",
-            "한국어 테스트",
-            "Тест кириллицы",
-        };
-
-        using var cmd = _connection.CreateCommand();
-        for (var i = 0; i < unicodeStrings.Length; i++)
-        {
-            cmd.CommandText = $"INSERT INTO unicode_test (id, name) VALUES ({i + 1}, @name)";
-            cmd.Parameters.Clear();
-            var param = cmd.CreateParameter();
-            param.ParameterName = "@name";
-            param.Value = unicodeStrings[i];
-            cmd.Parameters.Add(param);
-            cmd.ExecuteNonQuery();
-        }
-
-        // Verify all data retrieved correctly
-        cmd.CommandText = "SELECT id, name FROM unicode_test ORDER BY id";
-        cmd.Parameters.Clear();
-        using var reader = cmd.ExecuteReader();
-
-        for (var i = 0; i < unicodeStrings.Length; i++)
-        {
-            Assert.True(reader.Read());
-            Assert.Equal(unicodeStrings[i], reader.GetString(1));
-        }
-    }
-
-    [Fact]
-    public void SpecialChars_InData_Success()
-    {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "special_chars",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("value", PortableTypes.Text)
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        var specialStrings = new[]
-        {
-            "Line1\nLine2\nLine3",
-            "Tab\there\ttoo",
-            "Quote's \"double\" `backtick`",
-            "Backslash \\ path",
-            // Note: Null byte \0 is not valid in PostgreSQL text columns
-            "<html>&amp;entity</html>",
-            "{ \"json\": true }",
-            "100% of $money",
-        };
-
-        using var cmd = _connection.CreateCommand();
-        for (var i = 0; i < specialStrings.Length; i++)
-        {
-            cmd.CommandText = $"INSERT INTO special_chars (id, value) VALUES ({i + 1}, @value)";
-            cmd.Parameters.Clear();
-            var param = cmd.CreateParameter();
-            param.ParameterName = "@value";
-            param.Value = specialStrings[i];
-            cmd.Parameters.Add(param);
-            cmd.ExecuteNonQuery();
-        }
-
-        cmd.CommandText = "SELECT id, value FROM special_chars ORDER BY id";
-        cmd.Parameters.Clear();
-        using var reader = cmd.ExecuteReader();
-
-        for (var i = 0; i < specialStrings.Length; i++)
-        {
-            Assert.True(reader.Read(), $"Expected row {i + 1}");
-            Assert.Equal(specialStrings[i], reader.GetString(1));
-        }
-    }
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(InsertAndVerifyStringsCases))]
+    public void InsertAndVerifyStrings_ContextCases(
+        Func<SchemaDefinition> input0,
+        string insertTemplate,
+        string parameterName,
+        string selectSql,
+        string[] values
+    ) => InsertAndVerifyStrings(input0, insertTemplate, parameterName, selectSql, values);
 
     #endregion
 
@@ -364,18 +163,7 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void JsonColumn_StoreAndQuery_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "json_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("data", PortableTypes.Json)
-            )
-            .Build();
-
-        ApplySchema(schema);
+        VerifySharedChecks1(input0: Fixture_JsonColumn_StoreAndQuery_Success_1);
 
         var jsonValues = new[]
         {
@@ -389,16 +177,11 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
             "{\"special\": \"quote\\\"here\"}",
         };
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         for (var i = 0; i < jsonValues.Length; i++)
         {
             cmd.CommandText = $"INSERT INTO json_test (id, data) VALUES ({i + 1}, @data::jsonb)";
-            cmd.Parameters.Clear();
-            var param = cmd.CreateParameter();
-            param.ParameterName = "@data";
-            param.Value = jsonValues[i];
-            cmd.Parameters.Add(param);
-            cmd.ExecuteNonQuery();
+            VerifyReusableWorkflow6(input0: cmd, input1: jsonValues, input2: i, value0: "@data");
         }
 
         // Verify JSON query works
@@ -411,20 +194,9 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void JsonColumn_NullVsJsonNull_Distinction()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "json_null_test",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("data", PortableTypes.Json)
-            )
-            .Build();
+        VerifySharedChecks1(input0: Fixture_JsonColumn_NullVsJsonNull_Distinction_1);
 
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
 
         // Insert SQL NULL
         cmd.CommandText = "INSERT INTO json_null_test (id, data) VALUES (1, NULL)";
@@ -455,66 +227,35 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Decimal_ExtremeValues_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "decimal_extremes",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("tiny", PortableTypes.Decimal(5, 4))
-                        .Column("large", PortableTypes.Decimal(18, 0)) // Fits in .NET decimal
-                        .Column("precise", PortableTypes.Decimal(18, 8))
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            @"
+        InsertAndAssertRow(
+            input0: Fixture_Decimal_ExtremeValues_Success_1,
+            value0: @"
             INSERT INTO decimal_extremes (id, tiny, large, precise)
-            VALUES (1, 0.0001, 999999999999999999, 1234567890.12345678)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT tiny, large, precise FROM decimal_extremes WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal(0.0001m, reader.GetDecimal(0));
-        Assert.Equal(999999999999999999m, reader.GetDecimal(1));
-        Assert.Equal(1234567890.12345678m, reader.GetDecimal(2));
+            VALUES (1, 0.0001, 999999999999999999, 1234567890.12345678)",
+            value1: "SELECT tiny, large, precise FROM decimal_extremes WHERE id = 1",
+            assert: reader =>
+            {
+                Assert.Equal(0.0001m, reader.GetDecimal(0));
+                Assert.Equal(999999999999999999m, reader.GetDecimal(1));
+                Assert.Equal(1234567890.12345678m, reader.GetDecimal(2));
+            }
+        );
     }
 
     [Fact]
     public void Decimal_ZeroAndNegative_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "decimal_zero_neg",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("zero", PortableTypes.Decimal(10, 2))
-                        .Column("negative", PortableTypes.Decimal(10, 2))
-                        .Column("negative_small", PortableTypes.Decimal(10, 8))
-            )
-            .Build();
-
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO decimal_zero_neg (id, zero, negative, negative_small) VALUES (1, 0.00, -99999.99, -0.00000001)";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText =
-            "SELECT zero, negative, negative_small FROM decimal_zero_neg WHERE id = 1";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal(0.00m, reader.GetDecimal(0));
-        Assert.Equal(-99999.99m, reader.GetDecimal(1));
-        Assert.Equal(-0.00000001m, reader.GetDecimal(2));
+        InsertAndAssertRow(
+            input0: Fixture_Decimal_ZeroAndNegative_Success_1,
+            value0: "INSERT INTO decimal_zero_neg (id, zero, negative, negative_small) VALUES (1, 0.00, -99999.99, -0.00000001)",
+            value1: "SELECT zero, negative, negative_small FROM decimal_zero_neg WHERE id = 1",
+            assert: reader =>
+            {
+                Assert.Equal(0.00m, reader.GetDecimal(0));
+                Assert.Equal(-99999.99m, reader.GetDecimal(1));
+                Assert.Equal(-0.00000001m, reader.GetDecimal(2));
+            }
+        );
     }
 
     #endregion
@@ -524,28 +265,16 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void Timestamp_ExtremeValues_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "timestamp_extremes",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("past", PortableTypes.DateTimeOffset)
-                        .Column("future", PortableTypes.DateTimeOffset)
-            )
-            .Build();
+        VerifySharedChecks1(input0: Fixture_Timestamp_ExtremeValues_Success_1);
 
-        ApplySchema(schema);
-
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            @"
+        using var cmd = Connection.CreateCommand();
+        ExecuteAndPrepareCommand(
+            input0: cmd,
+            value0: @"
             INSERT INTO timestamp_extremes (id, past, future)
-            VALUES (1, '1900-01-01 00:00:00+00', '2999-12-31 23:59:59+00')";
-        cmd.ExecuteNonQuery();
-
-        cmd.CommandText = "SELECT past, future FROM timestamp_extremes WHERE id = 1";
+            VALUES (1, '1900-01-01 00:00:00+00', '2999-12-31 23:59:59+00')",
+            value1: "SELECT past, future FROM timestamp_extremes WHERE id = 1"
+        );
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
 
@@ -565,43 +294,17 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     {
         var longName = "idx_" + new string('a', 59); // Max 63 chars in PG
 
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "long_index_name",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("value", PortableTypes.VarChar(100))
-                        .Index(longName, "value")
-            )
-            .Build();
+        var schema = Fixture_Index_VeryLongName_Success_1(longName: longName);
 
-        var result = ApplySchema(schema);
-
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: ApplySchema(schema));
     }
 
     [Fact]
     public void Index_AllColumnsInTable_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "all_indexed",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("a", PortableTypes.VarChar(50))
-                        .Column("b", PortableTypes.VarChar(50))
-                        .Column("c", PortableTypes.VarChar(50))
-                        .Index("idx_all", ["a", "b", "c"])
-            )
-            .Build();
+        var schema = Fixture_Index_AllColumnsInTable_Success_1();
 
-        var result = ApplySchema(schema);
-
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: ApplySchema(schema));
     }
 
     #endregion
@@ -611,52 +314,13 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     [Fact]
     public void ForeignKey_AllCascadeTypes_Success()
     {
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "parent_table",
-                t => t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "child_cascade",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.Cascade)
-            )
-            .Table(
-                "public",
-                "child_setnull",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.SetNull)
-            )
-            .Table(
-                "public",
-                "child_restrict",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("parent_id", PortableTypes.Int)
-                        .ForeignKey("parent_id", "parent_table", "id", ForeignKeyAction.Restrict)
-            )
-            .Build();
+        var schema = Fixture_ForeignKey_AllCascadeTypes_Success_1();
 
-        var result = ApplySchema(schema);
-
-        Assert.True(result is MigrationApplyResultOk);
+        global::Tests.Shared.ResultAssertions.Ok(actual: ApplySchema(schema));
 
         // Test cascade behavior
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText =
-            @"
-            INSERT INTO parent_table (id) VALUES (1);
-            INSERT INTO child_cascade (id, parent_id) VALUES (1, 1);
-            INSERT INTO child_setnull (id, parent_id) VALUES (1, 1);
-            DELETE FROM parent_table WHERE id = 1;
-        ";
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = Data_ForeignKey_AllCascadeTypes_Success_1;
         cmd.ExecuteNonQuery();
 
         // Verify cascade delete worked
@@ -681,60 +345,25 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
     public void MultipleOperations_CorrectOrder_Success()
     {
         // Start with minimal schema
-        var v1 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "ordered_ops",
-                t => t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-            )
-            .Build();
+        var v1 = Fixture_MultipleOperations_CorrectOrder_Success_1();
 
         ApplySchema(v1);
 
         // Upgrade with multiple changes
-        var v2 = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "ordered_ops",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_name", "name")
-                        .Index("idx_email", "email", unique: true)
-            )
-            .Table(
-                "public",
-                "related",
-                t =>
-                    t.Column("id", PortableTypes.Int, c => c.PrimaryKey())
-                        .Column("ordered_id", PortableTypes.Int)
-                        .ForeignKey("ordered_id", "ordered_ops", "id")
-            )
-            .Build();
+        var v2 = Fixture_MultipleOperations_CorrectOrder_Success_2();
 
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, v2, logger: _logger)
-        ).Value;
+        var operations = VerifyUnifiedWorkflow103(input0: v2);
 
         // Should have: 2 AddColumn, 2 CreateIndex, 1 CreateTable
         Assert.Equal(5, operations.Count);
 
-        var result = MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: PostgresTestDb.TryApply(
+                connection: Connection,
+                operations: operations,
+                logger: Logger
+            )
         );
-
-        Assert.True(result is MigrationApplyResultOk);
     }
 
     #endregion
@@ -743,22 +372,125 @@ public sealed class PostgresEdgeCaseTests(PostgresContainerFixture fixture) : IA
 
     private Outcome.Result<bool, MigrationError> ApplySchema(SchemaDefinition schema)
     {
-        var currentSchema = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var operations = VerifyUnifiedWorkflow103(input0: schema);
 
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(currentSchema, schema, logger: _logger)
-        ).Value;
-
-        return MigrationRunner.Apply(
-            _connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        return PostgresTestDb.TryApply(
+            connection: Connection,
+            operations: operations,
+            logger: Logger
         );
     }
 
     #endregion
+
+    private void InsertAndAssertRow(
+        Func<SchemaDefinition> input0,
+        string value0,
+        string value1,
+        Action<NpgsqlDataReader> assert
+    )
+    {
+        using var cmd = PrepareRow(input0: input0, value0: value0, value1: value1);
+        using var reader = cmd.ExecuteReader();
+        Assert.True(reader.Read());
+        assert(obj: reader);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private NpgsqlCommand PrepareRow(Func<SchemaDefinition> input0, string value0, string value1)
+    {
+        VerifySharedChecks1(input0: input0);
+
+        var cmd = Connection.CreateCommand();
+        ExecuteAndPrepareCommand(input0: cmd, value0: value0, value1: value1);
+        return cmd;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void InsertAndVerifyStrings(
+        Func<SchemaDefinition> input0,
+        string insertTemplate,
+        string parameterName,
+        string selectSql,
+        string[] values
+    )
+    {
+        VerifySharedChecks1(input0: input0);
+
+        using var cmd = Connection.CreateCommand();
+        for (var i = 0; i < values.Length; i++)
+        {
+            cmd.CommandText = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                insertTemplate,
+                i + 1
+            );
+            VerifyReusableWorkflow6(input0: cmd, input1: values, input2: i, value0: parameterName);
+        }
+
+        cmd.CommandText = selectSql;
+        cmd.Parameters.Clear();
+        using var reader = cmd.ExecuteReader();
+        for (var i = 0; i < values.Length; i++)
+        {
+            Assert.True(reader.Read(), $"Expected row {i + 1}");
+            Assert.Equal(values[i], reader.GetString(1));
+        }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void ExecuteAndPrepareCommand(
+        global::Npgsql.NpgsqlCommand input0,
+        string value0,
+        string value1
+    )
+    {
+        input0.CommandText = value0;
+        input0.ExecuteNonQuery();
+
+        input0.CommandText = value1;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifySharedChecks1(Func<SchemaDefinition> input0)
+    {
+        var schema = input0();
+
+        ApplySchema(schema);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal IReadOnlyList<SchemaOperation> VerifyUnifiedWorkflow103(SchemaDefinition input0)
+    {
+        var currentSchema = global::Tests
+            .Shared.ResultAssertions.Ok(
+                actual: PostgresSchemaInspector.Inspect(Connection, "public", Logger)
+            )
+            .Value;
+
+        var operations = global::Tests
+            .Shared.ResultAssertions.Ok(
+                actual: SchemaDiff.Calculate(currentSchema, input0, logger: Logger)
+            )
+            .Value;
+
+        return operations;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow6(
+        NpgsqlCommand input0,
+        string[] input1,
+        int input2,
+        string value0
+    )
+    {
+        input0.Parameters.Clear();
+        global::Tests.Shared.DatabaseCommands.Bind(
+            command: input0,
+            name: value0,
+            value: input1[input2]
+        );
+        input0.ExecuteNonQuery();
+    }
 }

@@ -1,11 +1,3 @@
-using Nimblesite.Sql.Model;
-using Outcome;
-using Xunit;
-using AffectedRowsOk = Outcome.Result<int, Nimblesite.Sql.Model.SqlError>.Ok<
-    int,
-    Nimblesite.Sql.Model.SqlError
->;
-
 namespace Nimblesite.DataProvider.Example.Tests;
 
 /// <summary>Update operation coverage for the generated customer, invoice, address, and order methods.</summary>
@@ -21,15 +13,10 @@ public sealed partial class GeneratedOperationsCoverageTests
             .Transact(async tx =>
             {
                 // First get an existing customer ID
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Customer LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var customerId = VerifySharedContinuation2(
+                    input0: tx,
+                    value0: "SELECT Id FROM Customer LIMIT 1"
                 );
-                var customers = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
-                var customerId = customers.Value[0];
 
                 var result = await tx.UpdateCustomerAsync(
                         customerId,
@@ -39,7 +26,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         "2024-06-01"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -53,15 +43,10 @@ public sealed partial class GeneratedOperationsCoverageTests
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id FROM Invoice LIMIT 1",
-                    mapper: reader => reader.GetString(0)
+                var invoiceId = VerifySharedContinuation2(
+                    input0: tx,
+                    value0: "SELECT Id FROM Invoice LIMIT 1"
                 );
-                var invoices = (Result<IReadOnlyList<string>, SqlError>.Ok<
-                    IReadOnlyList<string>,
-                    SqlError
-                >)queryResult;
-                var invoiceId = invoices.Value[0];
 
                 var result = await tx.UpdateInvoiceAsync(
                         invoiceId,
@@ -74,7 +59,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         "Updated notes"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -88,19 +76,14 @@ public sealed partial class GeneratedOperationsCoverageTests
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, InvoiceId FROM InvoiceLine LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), InvoiceId: reader.GetString(1))
+                var line = CoreCoverageTests.SelectIdAndReference(
+                    transaction: tx,
+                    sql: "SELECT Id, InvoiceId FROM InvoiceLine LIMIT 1"
                 );
-                var lines = (Result<IReadOnlyList<(string Id, string InvoiceId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string InvoiceId)>,
-                    SqlError
-                >)queryResult;
-                var line = lines.Value[0];
 
                 var result = await tx.UpdateInvoiceLineAsync(
                         line.Id,
-                        line.InvoiceId,
+                        line.Reference,
                         "Updated Description",
                         3.0,
                         100.00,
@@ -109,7 +92,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         "Updated notes"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -123,19 +109,14 @@ public sealed partial class GeneratedOperationsCoverageTests
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, CustomerId FROM Address LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), CustomerId: reader.GetString(1))
+                var addr = CoreCoverageTests.SelectIdAndReference(
+                    transaction: tx,
+                    sql: "SELECT Id, CustomerId FROM Address LIMIT 1"
                 );
-                var addresses = (Result<IReadOnlyList<(string Id, string CustomerId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string CustomerId)>,
-                    SqlError
-                >)queryResult;
-                var addr = addresses.Value[0];
 
                 var result = await tx.UpdateAddressAsync(
                         addr.Id,
-                        addr.CustomerId,
+                        addr.Reference,
                         "200 Updated Ave",
                         "UpdatedCity",
                         "UC",
@@ -143,7 +124,10 @@ public sealed partial class GeneratedOperationsCoverageTests
                         "USA"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -157,26 +141,24 @@ public sealed partial class GeneratedOperationsCoverageTests
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, CustomerId FROM Orders LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), CustomerId: reader.GetString(1))
+                var order = CoreCoverageTests.SelectIdAndReference(
+                    transaction: tx,
+                    sql: "SELECT Id, CustomerId FROM Orders LIMIT 1"
                 );
-                var orders = (Result<IReadOnlyList<(string Id, string CustomerId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string CustomerId)>,
-                    SqlError
-                >)queryResult;
-                var order = orders.Value[0];
 
                 var result = await tx.UpdateOrdersAsync(
                         order.Id,
                         "ORD-UPDATED",
                         "2024-07-01",
-                        order.CustomerId,
+                        order.Reference,
                         1500.00,
                         "Completed"
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }
@@ -190,26 +172,24 @@ public sealed partial class GeneratedOperationsCoverageTests
         await _connection
             .Transact(async tx =>
             {
-                var queryResult = tx.Query(
-                    sql: "SELECT Id, OrderId FROM OrderItem LIMIT 1",
-                    mapper: reader => (Id: reader.GetString(0), OrderId: reader.GetString(1))
+                var item = CoreCoverageTests.SelectIdAndReference(
+                    transaction: tx,
+                    sql: "SELECT Id, OrderId FROM OrderItem LIMIT 1"
                 );
-                var items = (Result<IReadOnlyList<(string Id, string OrderId)>, SqlError>.Ok<
-                    IReadOnlyList<(string Id, string OrderId)>,
-                    SqlError
-                >)queryResult;
-                var item = items.Value[0];
 
                 var result = await tx.UpdateOrderItemAsync(
                         item.Id,
-                        item.OrderId,
+                        item.Reference,
                         "Updated Widget",
                         10.0,
                         50.00,
                         500.00
                     )
                     .ConfigureAwait(false);
-                Assert.Equal(1, Assert.IsType<AffectedRowsOk>(result).Value);
+                Assert.Equal(
+                    1,
+                    global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value
+                );
             })
             .ConfigureAwait(false);
     }

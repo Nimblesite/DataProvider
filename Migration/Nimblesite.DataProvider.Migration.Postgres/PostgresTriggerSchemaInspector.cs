@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// migration tool (e.g. Sync change tracking) stay invisible to the diff so
 /// destructive runs never drop them.
 /// </summary>
-internal static class PostgresTriggerSchemaInspector
+internal static partial class PostgresTriggerSchemaInspector
 {
     public static IReadOnlyList<TriggerDefinition> Inspect(
         NpgsqlConnection connection,
@@ -19,25 +19,23 @@ internal static class PostgresTriggerSchemaInspector
         string tableName
     )
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT trigger_name, event_manipulation, action_timing, action_orientation
-            FROM information_schema.triggers
-            WHERE event_object_schema = @schema AND event_object_table = @table
-              AND trigger_name LIKE @managedPattern ESCAPE '\'
-            ORDER BY trigger_name
-            """;
-        command.Parameters.AddWithValue("@schema", schemaName);
-        command.Parameters.AddWithValue("@table", tableName);
-        command.Parameters.AddWithValue(
-            "@managedPattern",
-            $"{TriggerDdlSupport.ManagedTriggerPrefix.Replace("_", "\\_", StringComparison.Ordinal)}%"
-        );
-
         var rows = new List<PostgresTriggerRow>();
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
+        PostgresCatalogQuery.Read(
+            connection: connection,
+            configure: command =>
+            {
+                PostgresCatalogQuery.Configure(
+                    command: command,
+                    sql: CatalogQuery_Inspect_1,
+                    schema: schemaName,
+                    table: tableName
+                );
+                command.Parameters.AddWithValue(
+                    "@managedPattern",
+                    $"{TriggerDdlSupport.ManagedTriggerPrefix.Replace("_", "\\_", StringComparison.Ordinal)}%"
+                );
+            },
+            read: reader =>
             {
                 rows.Add(
                     new PostgresTriggerRow(
@@ -48,7 +46,7 @@ internal static class PostgresTriggerSchemaInspector
                     )
                 );
             }
-        }
+        );
 
         return rows.GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Select(ToTrigger)

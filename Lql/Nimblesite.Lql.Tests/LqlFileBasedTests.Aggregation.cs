@@ -1,27 +1,16 @@
-using Xunit;
-
 namespace Nimblesite.Lql.Tests;
 
 /// <summary>
-/// File-based tests for LQL aggregation operations - group by, having, etc.
+/// File-based tests for all LQL operations and dialects.
 /// </summary>
 public partial class LqlFileBasedTests
 {
     [Theory]
-    [InlineData("aggregation_groupby", "PostgreSql")]
-    [InlineData("aggregation_groupby", "SqlServer")]
-    [InlineData("aggregation_groupby", "SQLite")]
-    [InlineData("having_clause", "PostgreSql")]
-    [InlineData("having_clause", "SqlServer")]
-    [InlineData("having_clause", "SQLite")]
-    [InlineData("order_limit", "PostgreSql")]
-    [InlineData("order_limit", "SqlServer")]
-    [InlineData("order_limit", "SQLite")]
-    [InlineData("offset_with_limit", "PostgreSql")]
-    [InlineData("offset_with_limit", "SqlServer")]
-    [InlineData("offset_with_limit", "SQLite")]
-    public void Aggregation_FileBasedTest_ShouldTransformCorrectly(
-        string testCaseName,
-        string dialect
-    ) => ExecuteFileBasedTest(testCaseName, dialect);
+    [MemberData(nameof(Aggregation_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
+    [MemberData(nameof(AdvancedQueries_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
+    [MemberData(nameof(Joins_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
+    [MemberData(nameof(Arithmetic_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
+    [MemberData(nameof(BasicOperations_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
+    public void FileBasedTest_ShouldTransformCorrectly(string testCaseName, string dialect) =>
+        ExecuteFileBasedTest(testCaseName, dialect);
 }

@@ -1,4 +1,7 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
+
+// Implements [MIG-TEST-DIFF-SHARED].
 
 /// <summary>
 /// Implements [MIG-UNIQUE-CONSTRAINT-DIFF] (#55): adding a
@@ -6,84 +9,39 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <see cref="AddUniqueConstraintOperation"/> regardless of how many other
 /// columns, foreign keys, or constraints the table already carries.
 /// </summary>
-public sealed class SchemaDiffUniqueConstraintIssue55Tests
+public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
 {
     private static IReadOnlyList<ColumnDefinition> AgentConfigColumns() =>
         [
-            new ColumnDefinition
-            {
-                Name = "id",
-                Type = PortableTypes.Uuid,
-                IsNullable = false,
-            },
-            new ColumnDefinition
-            {
-                Name = "tenant_id",
-                Type = PortableTypes.Uuid,
-                IsNullable = false,
-            },
-            new ColumnDefinition
-            {
-                Name = "name",
-                Type = PortableTypes.Text,
-                IsNullable = false,
-            },
+            SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false),
+            SchemaTestData.Column(name: "tenant_id", type: PortableTypes.Uuid, isNullable: false),
+            SchemaTestData.Column(name: "name", type: PortableTypes.Text, isNullable: false),
         ];
 
     [Fact]
     public void Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var current = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = AgentConfigColumns(),
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = current.Tables[0].Columns,
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    UniqueConstraints =
-                    [
-                        new UniqueConstraintDefinition
-                        {
-                            Name = "uq_agent_configs_tenant_name",
-                            Columns = ["tenant_id", "name"],
-                        },
-                    ],
-                },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(
-            current: current,
-            desired: desired,
-            allowDestructive: false,
-            logger: NullLogger.Instance
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "agent_configs",
+                    columns: AgentConfigColumns(),
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] }
+                ),
+            ]
         );
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-        Assert.Contains(
+        var ops =
+            global::Nimblesite.DataProvider.Migration.Tests.SchemaDiffCheckConstraintIssue57Tests.VerifySharedStep5(
+                input0: Dataset_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1,
+                input1: current
+            );
+        SchemaDiffAssertions.AssertContainsOperation<AddUniqueConstraintOperation>(
             ops,
-            op =>
-                op is AddUniqueConstraintOperation add
-                && add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
+            add =>
+                add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
                 && add.UniqueConstraint.Columns.SequenceEqual(["tenant_id", "name"])
         );
     }
@@ -91,36 +49,28 @@ public sealed class SchemaDiffUniqueConstraintIssue55Tests
     [Fact]
     public void Calculate_ReplayAfterUniqueConstraintApplied_YieldsNoUniqueOperation()
     {
-        var unique = new UniqueConstraintDefinition
-        {
-            Name = "uq_agent_configs_tenant_name",
-            Columns = ["tenant_id", "name"],
-        };
-        var converged = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
+        var unique =
+            Dataset_Calculate_ReplayAfterUniqueConstraintApplied_YieldsNoUniqueOperation_1();
+        var converged = SchemaTestData.Schema(
+            name: "live",
+            tables:
             [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "agent_configs",
-                    Columns = AgentConfigColumns(),
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    UniqueConstraints = [unique],
-                },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(
-            current: converged,
-            desired: converged,
-            allowDestructive: false,
-            logger: NullLogger.Instance
+                SchemaTestData.Table(
+                    schema: "public",
+                    name: "agent_configs",
+                    columns: AgentConfigColumns(),
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    uniqueConstraints: [unique]
+                ),
+            ]
         );
 
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(
+            current: converged,
+            desired: converged,
+            destructive: false,
+            logger: NullLogger.Instance
+        );
         Assert.DoesNotContain(ops, op => op is AddUniqueConstraintOperation);
     }
 }

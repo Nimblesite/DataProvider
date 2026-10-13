@@ -1,10 +1,13 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
+
+// Implements [MIG-TEST-DIFF-SHARED].
 
 /// <summary>
 /// Tests for SchemaDiff.Calculate() method.
 /// Covers: create tables, add columns, create indexes, add foreign keys, destructive operations.
 /// </summary>
-public sealed class SchemaDiffTests
+public sealed partial class SchemaDiffTests
 {
     [Fact]
     public void Calculate_EmptyCurrentToNewDesired_CreatesTable()
@@ -12,27 +15,13 @@ public sealed class SchemaDiffTests
         // Arrange
         var current = Schema.Define("Current").Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100), c => c.NotNull())
-            )
-            .Build();
+        var desired = Fixture_Calculate_EmptyCurrentToNewDesired_CreatesTable_1();
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<CreateTableOperation>(ops[0]);
-        var createOp = (CreateTableOperation)ops[0];
+        var createOp = VerifyReusableWorkflow9<CreateTableOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("users", createOp.Table.Name);
     }
 
@@ -40,23 +29,10 @@ public sealed class SchemaDiffTests
     public void Calculate_SameSchema_NoOperations()
     {
         // Arrange
-        var schema = Schema
-            .Define("Test")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("name", PortableTypes.VarChar(100))
-            )
-            .Build();
+        var schema = Fixture_Calculate_SameSchema_NoOperations_1();
 
         // Act
-        var result = SchemaDiff.Calculate(schema, schema);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: schema, desired: schema);
 
         Assert.Empty(ops);
     }
@@ -65,29 +41,15 @@ public sealed class SchemaDiffTests
     public void Calculate_NewColumn_AddsColumn()
     {
         // Arrange
-        var current = UsersIdOnly("Current");
+        var current = UsersSchema(name: "Current");
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255), c => c.NotNull())
-            )
-            .Build();
+        var desired = Fixture_Calculate_NewColumn_AddsColumn_1();
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<AddColumnOperation>(ops[0]);
-        var addColOp = (AddColumnOperation)ops[0];
+        var addColOp = VerifyReusableWorkflow9<AddColumnOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("email", addColOp.Column.Name);
         Assert.Equal("users", addColOp.TableName);
     }
@@ -96,39 +58,15 @@ public sealed class SchemaDiffTests
     public void Calculate_NewIndex_CreatesIndex()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var current = UsersSchema(name: "Current", email: true);
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_users_email", "email")
-            )
-            .Build();
+        var desired = UsersSchema(name: "Desired", indexEmail: true);
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<CreateIndexOperation>(ops[0]);
-        var createIdxOp = (CreateIndexOperation)ops[0];
+        var createIdxOp = VerifyReusableWorkflow9<CreateIndexOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("idx_users_email", createIdxOp.Index.Name);
     }
 
@@ -136,287 +74,16 @@ public sealed class SchemaDiffTests
     public void Calculate_NewForeignKey_AddsForeignKey()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-            )
-            .Build();
+        var current = Fixture_Calculate_NewForeignKey_AddsForeignKey_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-                        .ForeignKey("dept_id", "departments", "id", ForeignKeyAction.Cascade)
-            )
-            .Build();
+        var desired = Fixture_Calculate_NewForeignKey_AddsForeignKey_2();
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<AddForeignKeyOperation>(ops[0]);
-        var addFkOp = (AddForeignKeyOperation)ops[0];
+        var addFkOp = VerifyReusableWorkflow9<AddForeignKeyOperation>(
+            input0: current,
+            input1: desired
+        );
         Assert.Equal("employees", addFkOp.TableName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedTable_NotDroppedByDefault()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Table(
-                "public",
-                "obsolete",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
-
-        var desired = UsersIdOnly("Desired");
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: false);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Empty(ops);
-    }
-
-    [Fact]
-    public void Calculate_RemovedTable_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Table(
-                "public",
-                "obsolete",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
-
-        var desired = UsersIdOnly("Desired");
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<DropTableOperation>(ops[0]);
-        var dropOp = (DropTableOperation)ops[0];
-        Assert.Equal("obsolete", dropOp.TableName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedColumn_NotDroppedByDefault()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("old_field", PortableTypes.VarChar(100))
-            )
-            .Build();
-
-        var desired = UsersIdOnly("Desired");
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: false);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Empty(ops);
-    }
-
-    [Fact]
-    public void Calculate_RemovedColumn_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("old_field", PortableTypes.VarChar(100))
-            )
-            .Build();
-
-        var desired = UsersIdOnly("Desired");
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<DropColumnOperation>(ops[0]);
-        var dropColOp = (DropColumnOperation)ops[0];
-        Assert.Equal("old_field", dropColOp.ColumnName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedIndex_NotDroppedByDefault()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_users_email", "email")
-            )
-            .Build();
-
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: false);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Empty(ops);
-    }
-
-    [Fact]
-    public void Calculate_RemovedIndex_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_users_email", "email")
-            )
-            .Build();
-
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<DropIndexOperation>(ops[0]);
-        var dropIdxOp = (DropIndexOperation)ops[0];
-        Assert.Equal("idx_users_email", dropIdxOp.IndexName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedForeignKey_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-                        .ForeignKey("dept_id", "departments", "id", ForeignKeyAction.Cascade)
-            )
-            .Build();
-
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "departments",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "employees",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("dept_id", PortableTypes.Uuid)
-            )
-            .Build();
-
-        // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        Assert.Single(ops);
-        Assert.IsType<DropForeignKeyOperation>(ops[0]);
     }
 
     [Fact]
@@ -425,24 +92,10 @@ public sealed class SchemaDiffTests
         // Arrange
         var current = Schema.Define("Current").Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-                        .Index("idx_users_email", "email")
-            )
-            .Build();
+        var desired = UsersSchema(name: "Desired", indexEmail: true);
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.Equal(2, ops.Count);
         Assert.IsType<CreateTableOperation>(ops[0]);
@@ -453,66 +106,24 @@ public sealed class SchemaDiffTests
     public void Calculate_CaseInsensitiveTableMatching()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table("public", "USERS", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var current = Data_Calculate_CaseInsensitiveTableMatching_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var desired = UsersSchema(name: "Desired", email: true);
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-
-        // Should recognize USERS and users as the same table, just add the column
-        Assert.Single(ops);
-        Assert.IsType<AddColumnOperation>(ops[0]);
+        _ = VerifyReusableWorkflow9<AddColumnOperation>(input0: current, input1: desired);
     }
 
     [Fact]
     public void Calculate_CaseInsensitiveColumnMatching()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("EMAIL", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var current = Fixture_Calculate_CaseInsensitiveColumnMatching_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("email", PortableTypes.VarChar(255))
-            )
-            .Build();
+        var desired = UsersSchema(name: "Desired", email: true);
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         // Should recognize EMAIL and email as the same column
         Assert.Empty(ops);
@@ -524,27 +135,10 @@ public sealed class SchemaDiffTests
         // Arrange
         var current = Schema.Define("Current").Build();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "countries",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table(
-                "public",
-                "regions",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Table("public", "cities", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var desired = Fixture_Calculate_MultipleNewTables_CreatesAll_1();
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.Equal(3, ops.Count);
         Assert.All(ops, op => Assert.IsType<CreateTableOperation>(op));
@@ -554,136 +148,104 @@ public sealed class SchemaDiffTests
     public void Calculate_ComplexMigration_CombinesOperations()
     {
         // Arrange
-        var current = Schema
-            .Define("Current")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("old_field", PortableTypes.VarChar(100))
-            )
-            .Table(
-                "public",
-                "obsolete_table",
-                t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-            )
-            .Build();
+        var current = Fixture_Calculate_ComplexMigration_CombinesOperations_1();
 
-        var desired = Schema
-            .Define("Desired")
-            .Table(
-                "public",
-                "users",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("new_field", PortableTypes.VarChar(200))
-                        .Index("idx_users_new", "new_field")
-            )
-            .Table(
-                "public",
-                "new_table",
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("user_id", PortableTypes.Uuid)
-                        .ForeignKey("user_id", "users", "id")
-            )
-            .Build();
+        var desired = Fixture_Calculate_ComplexMigration_CombinesOperations_2();
 
         // Act
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        // Assert
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
 
         // Should have: add column (new_field), create index, drop column (old_field),
         // create table (new_table), drop table (obsolete_table)
         Assert.Contains(ops, op => op is AddColumnOperation add && add.Column.Name == "new_field");
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<CreateIndexOperation>(
             ops,
-            op => op is CreateIndexOperation idx && idx.Index.Name == "idx_users_new"
+            idx => idx.Index.Name == "idx_users_new"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropColumnOperation>(
             ops,
-            op => op is DropColumnOperation drop && drop.ColumnName == "old_field"
+            drop => drop.ColumnName == "old_field"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<CreateTableOperation>(
             ops,
-            op => op is CreateTableOperation create && create.Table.Name == "new_table"
+            create => create.Table.Name == "new_table"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropTableOperation>(
             ops,
-            op => op is DropTableOperation dropTable && dropTable.TableName == "obsolete_table"
+            dropTable => dropTable.TableName == "obsolete_table"
         );
     }
 
     [Fact]
     public void Calculate_DesiredForcedRls_EmitsEnableForceRls()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "Current",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Enabled = false })],
-        };
+        var current = RlsSchema("Current", new RlsPolicySetDefinition { Enabled = false });
 
-        var desired = new SchemaDefinition
-        {
-            Name = "Desired",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
-        };
+        var desired = RlsSchema("Desired", new RlsPolicySetDefinition { Forced = true });
 
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
         Assert.Contains(ops, op => op is EnableRlsOperation);
         Assert.Contains(ops, op => op is EnableForceRlsOperation);
     }
 
-    [Fact]
-    public void Calculate_CurrentForcedRls_AllowDestructive_EmitsDisableForceRls()
-    {
-        var current = new SchemaDefinition
-        {
-            Name = "Current",
-            Tables = [RlsTable(new RlsPolicySetDefinition { Forced = true })],
-        };
-
-        var desired = new SchemaDefinition
-        {
-            Name = "Desired",
-            Tables = [RlsTable(new RlsPolicySetDefinition())],
-        };
-
-        var result = SchemaDiff.Calculate(current, desired, allowDestructive: true);
-
-        Assert.True(result is OperationsResultOk);
-        var ops = ((OperationsResultOk)result).Value;
-        Assert.Contains(ops, op => op is DisableForceRlsOperation);
-    }
-
-    private static TableDefinition RlsTable(RlsPolicySetDefinition rls) =>
-        new()
-        {
-            Schema = "public",
-            Name = "documents",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            RowLevelSecurity = rls,
-        };
-
-    private static SchemaDefinition UsersIdOnly(string name) =>
+    // Implements [MIG-TEST-USER-FIXTURE].
+    private static SchemaDefinition UsersSchema(
+        string name,
+        bool email = false,
+        bool indexEmail = false,
+        bool oldField = false
+    ) =>
         Schema
             .Define(name)
-            .Table("public", "users", t => t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey()))
+            .Table(
+                schema: "public",
+                name: "users",
+                configure: table =>
+                    ConfigureUsers(
+                        table: table,
+                        email: email,
+                        indexEmail: indexEmail,
+                        oldField: oldField
+                    )
+            )
             .Build();
+
+    private static void ConfigureUsers(
+        TableBuilder table,
+        bool email,
+        bool indexEmail,
+        bool oldField
+    )
+    {
+        table.Column(name: "id", type: PortableTypes.Uuid, configure: c => c.PrimaryKey());
+        if (oldField)
+            table.Column(name: "old_field", type: PortableTypes.VarChar(100));
+        if (email || indexEmail)
+            table.Column(name: "email", type: PortableTypes.VarChar(255));
+        if (indexEmail)
+            table.Index(name: "idx_users_email", column: "email");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SchemaDefinition RlsSchema(string name, RlsPolicySetDefinition rls) =>
+        SchemaTestData.Schema(name: name, tables: [RlsTable(rls)]);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static T VerifyReusableWorkflow9<T>(SchemaDefinition input0, SchemaDefinition input1)
+        where T : SchemaOperation =>
+        Assert.IsType<T>(Assert.Single(VerifyReusableWorkflow9(input0, input1)));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow9(
+        SchemaDefinition input0,
+        SchemaDefinition input1
+    )
+    {
+        // Act
+        var ops = SchemaDiffAssertions.Diff(current: input0, desired: input1);
+
+        Assert.Single(ops);
+
+        return ops;
+    }
 }

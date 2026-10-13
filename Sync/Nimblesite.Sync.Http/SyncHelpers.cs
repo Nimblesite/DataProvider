@@ -1,4 +1,6 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
+using Nimblesite.Sync.SqlServer;
 using Npgsql;
 
 // TODO: Logging!!
@@ -31,6 +33,18 @@ public static class SyncHelpers
                 batchSize,
                 logger
             ),
+            "sqlserver" or "mssql" => WithSqlServer(
+                connectionString,
+                connection =>
+                    SqlServerSyncStore
+                        .FetchChanges(
+                            connection: connection,
+                            fromVersion: fromVersion,
+                            limit: batchSize,
+                            logger: logger
+                        )
+                        .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])
+            ),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -48,6 +62,12 @@ public static class SyncHelpers
         {
             "sqlite" => ApplyChangesToSqlite(connectionString, changes, originId, logger),
             "postgres" => ApplyChangesToPostgres(connectionString, changes, originId, logger),
+            "sqlserver" or "mssql" => ApplyChangesToSqlServer(
+                connectionString,
+                changes,
+                originId,
+                logger
+            ),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -64,6 +84,13 @@ public static class SyncHelpers
         {
             "sqlite" => UpsertClientSqlite(connectionString, client, logger),
             "postgres" => UpsertClientPostgres(connectionString, client, logger),
+            "sqlserver" or "mssql" => WithSqlServer(
+                connectionString,
+                connection =>
+                    SqlServerSyncStore
+                        .UpsertClient(connection: connection, client: client)
+                        .Match(ok => ok, _ => false)
+            ),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -75,6 +102,11 @@ public static class SyncHelpers
         {
             "sqlite" => GetMaxVersionSqlite(connectionString, logger),
             "postgres" => GetMaxVersionPostgres(connectionString, logger),
+            "sqlserver" or "mssql" => WithSqlServer(
+                connectionString,
+                connection =>
+                    SqlServerSyncStore.GetMaxVersion(connection: connection).Match(ok => ok, _ => 0)
+            ),
             _ => throw new ArgumentException($"Unknown database type: {dbType}"),
         };
 
@@ -83,82 +115,98 @@ public static class SyncHelpers
         long fromVersion,
         int batchSize,
         ILogger logger
-    )
-    {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        return SQLite
-            .SyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-            .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
-    }
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                SQLite
+                    .SyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])
+        );
 
     private static List<SyncLogEntry> FetchChangesFromPostgres(
         string connectionString,
         long fromVersion,
         int batchSize,
         ILogger logger
-    )
-    {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        return Postgres
-            .PostgresSyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-            .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
-    }
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                Postgres
+                    .PostgresSyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])
+        );
 
     private static int ApplyChangesToSqlite(
         string connectionString,
         List<SyncLogEntryDto> changes,
         string originId,
         ILogger logger
-    )
-    {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-
-        SQLite.SyncSessionManager.EnableSuppression(conn);
-
-        try
-        {
-            return ApplyChangesCore(
-                changes: changes,
-                originId: originId,
-                applyChange: entry =>
-                    SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
-                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
-            );
-        }
-        finally
-        {
-            SQLite.SyncSessionManager.DisableSuppression(conn);
-        }
-    }
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                WithSuppression(
+                    connection: conn,
+                    enable: SQLite.SyncSessionManager.EnableSuppression,
+                    disable: SQLite.SyncSessionManager.DisableSuppression,
+                    run: () =>
+                        ApplyChangesCore(
+                            changes: changes,
+                            originId: originId,
+                            applyChange: entry =>
+                                SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
+                                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                    {
+                                        Value: true
+                                    }
+                        )
+                )
+        );
 
     private static int ApplyChangesToPostgres(
         string connectionString,
         List<SyncLogEntryDto> changes,
         string originId,
         ILogger logger
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                WithSuppression(
+                    connection: conn,
+                    enable: Postgres.PostgresSyncSession.EnableSuppression,
+                    disable: Postgres.PostgresSyncSession.DisableSuppression,
+                    run: () =>
+                        ApplyChangesCore(
+                            changes: changes,
+                            originId: originId,
+                            applyChange: entry =>
+                                Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
+                                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                    {
+                                        Value: true
+                                    }
+                        )
+                )
+        );
+
+    private static TResult WithSuppression<TConnection, TResult>(
+        TConnection connection,
+        Func<TConnection, object?> enable,
+        Func<TConnection, object?> disable,
+        Func<TResult> run
     )
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-
-        Postgres.PostgresSyncSession.EnableSuppression(conn);
-
+        _ = enable(connection);
         try
         {
-            return ApplyChangesCore(
-                changes: changes,
-                originId: originId,
-                applyChange: entry =>
-                    Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
-                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
-            );
+            return run();
         }
         finally
         {
-            Postgres.PostgresSyncSession.DisableSuppression(conn);
+            _ = disable(connection);
         }
     }
 
@@ -196,37 +244,99 @@ public static class SyncHelpers
         string connectionString,
         SyncClient client,
         ILogger logger
-    )
-    {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        var result = SQLite.SyncClientRepository.Upsert(conn, client);
-        return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
-    }
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                SQLite.SyncClientRepository.Upsert(conn, client)
+                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+        );
 
     private static bool UpsertClientPostgres(
         string connectionString,
         SyncClient client,
         ILogger logger
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                Postgres.PostgresSyncClientRepository.Upsert(conn, client)
+                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+        );
+
+    private static long GetMaxVersionSqlite(string connectionString, ILogger logger) =>
+        WithSqlite(
+            connectionString,
+            conn => SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0)
+        );
+
+    private static long GetMaxVersionPostgres(string connectionString, ILogger logger) =>
+        WithPostgres(
+            connectionString,
+            conn => Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0)
+        );
+
+    private static T WithSqlite<T>(string connectionString, Func<SqliteConnection, T> run) =>
+        WithConnection(create: () => new SqliteConnection(connectionString), run: run);
+
+    private static T WithPostgres<T>(string connectionString, Func<NpgsqlConnection, T> run) =>
+        WithConnection(create: () => new NpgsqlConnection(connectionString), run: run);
+
+    private static T WithSqlServer<T>(string connectionString, Func<SqlConnection, T> run) =>
+        WithConnection(create: () => new SqlConnection(connectionString), run: run);
+
+    private static int ApplyChangesToSqlServer(
+        string connectionString,
+        List<SyncLogEntryDto> changes,
+        string originId,
+        ILogger logger
+    ) =>
+        WithSqlServer(
+            connectionString,
+            connection =>
+            {
+                var suppression = SqlServerSyncStore.SetSuppression(
+                    connection: connection,
+                    enabled: true
+                );
+                if (
+                    suppression
+                    is not Outcome.Result<bool, SyncError>.Ok<bool, SyncError> { Value: true }
+                )
+                    return 0;
+                try
+                {
+                    return ApplyChangesCore(
+                        changes: changes,
+                        originId: originId,
+                        applyChange: entry =>
+                            SqlServerChangeApplier.ApplyChange(
+                                connection: connection,
+                                entry: entry,
+                                logger: logger
+                            )
+                                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                {
+                                    Value: true
+                                }
+                    );
+                }
+                finally
+                {
+                    SqlServerSyncStore.SetSuppression(connection: connection, enabled: false);
+                }
+            }
+        );
+
+    // Implements [SYNC-HTTP-SHARED-CONNECTION-LIFETIME].
+    private static TResult WithConnection<TConnection, TResult>(
+        Func<TConnection> create,
+        Func<TConnection, TResult> run
     )
+        where TConnection : global::System.Data.Common.DbConnection
     {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        var result = Postgres.PostgresSyncClientRepository.Upsert(conn, client);
-        return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
-    }
-
-    private static long GetMaxVersionSqlite(string connectionString, ILogger logger)
-    {
-        using var conn = new SqliteConnection(connectionString);
-        conn.Open();
-        return SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
-    }
-
-    private static long GetMaxVersionPostgres(string connectionString, ILogger logger)
-    {
-        using var conn = new NpgsqlConnection(connectionString);
-        conn.Open();
-        return Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
+        using var connection = create();
+        connection.Open();
+        return run(arg: connection);
     }
 }

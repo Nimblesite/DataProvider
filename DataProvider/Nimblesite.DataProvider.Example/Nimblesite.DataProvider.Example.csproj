@@ -51,6 +51,10 @@
     <DataProviderToolDll>$(MSBuildThisFileDirectory)../DataProvider/bin/$(Configuration)/net10.0/DataProvider.dll</DataProviderToolDll>
   </PropertyGroup>
 
+  <ItemGroup>
+    <DataProviderToolAssemblies Include="$(MSBuildThisFileDirectory)../DataProvider/bin/$(Configuration)/net10.0/*.dll" />
+  </ItemGroup>
+
   <Target Name="BuildCodegenTools" BeforeTargets="CreateDatabaseSchema">
     <MSBuild
       Projects="$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/DataProviderMigrate.csproj"
@@ -83,7 +87,7 @@
   <Target
     Name="TranspileLqlAndGenerateDataProvider"
     BeforeTargets="BeforeCompile;CoreCompile"
-    Inputs="$(MSBuildProjectDirectory)/DataProvider.json;@(AdditionalFiles);@(LqlFiles);$(DataProviderToolDll)"
+    Inputs="$(MSBuildProjectDirectory)/DataProvider.json;@(AdditionalFiles);@(LqlFiles);$(DataProviderToolDll);@(DataProviderToolAssemblies)"
     Outputs="$(MSBuildProjectDirectory)/Generated/.timestamp"
   >
     <!-- Clean and recreate Generated folder to avoid stale files -->

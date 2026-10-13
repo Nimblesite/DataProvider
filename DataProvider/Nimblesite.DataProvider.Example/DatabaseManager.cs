@@ -59,7 +59,8 @@ internal static class DatabaseManager
     /// Creates all necessary database tables and schema
     /// </summary>
     /// <param name="connection">The SQLite connection to create tables in</param>
-    private static async Task CreateSchemaAsync(SqliteConnection connection)
+    // Implements [EXAMPLE-SCHEMA-SHARED].
+    internal static async Task CreateSchemaAsync(SqliteConnection connection)
     {
         using var command = new SqliteCommand(
             """

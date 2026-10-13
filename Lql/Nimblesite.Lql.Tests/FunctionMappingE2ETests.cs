@@ -2,7 +2,7 @@ using Nimblesite.Lql.Core.FunctionMapping;
 using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
-using Xunit;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -10,7 +10,7 @@ namespace Nimblesite.Lql.Tests;
 /// E2E tests for function mapping providers across all SQL dialects.
 /// Tests function lookup, transpilation, syntax mapping, and special handlers.
 /// </summary>
-public sealed class FunctionMappingE2ETests
+public sealed partial class FunctionMappingE2ETests
 {
     private static readonly IFunctionMappingProvider[] AllProviders =
     [
@@ -21,12 +21,7 @@ public sealed class FunctionMappingE2ETests
     ];
 
     [Theory]
-    [InlineData("count")]
-    [InlineData("sum")]
-    [InlineData("avg")]
-    [InlineData("min")]
-    [InlineData("max")]
-    [InlineData("coalesce")]
+    [MemberData(nameof(CoreAggregateFunctions_AllProviders_AreMappedInlineCases))]
     public void CoreAggregateFunctions_AllProviders_AreMapped(string functionName)
     {
         foreach (var provider in AllProviders)
@@ -39,8 +34,7 @@ public sealed class FunctionMappingE2ETests
     }
 
     [Theory]
-    [InlineData("upper")]
-    [InlineData("lower")]
+    [MemberData(nameof(StringFunctions_AllProviders_AreMappedInlineCases))]
     public void StringFunctions_AllProviders_AreMapped(string functionName)
     {
         foreach (var provider in AllProviders)
@@ -61,47 +55,29 @@ public sealed class FunctionMappingE2ETests
         }
     }
 
-    [Fact]
-    public void CountWithColumn_AllProviders_ProducesCorrectSQL()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("count", "user_id");
-            Assert.Contains("COUNT", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", result, StringComparison.Ordinal);
-        }
-    }
+    [Theory]
+    // CountWithColumn_AllProviders_ProducesCorrectSQL
+    [MemberData(nameof(CountWithColumn_AllProviders_ProducesCorrectSQL_CasesInlineCases))]
+    // SumFunction_AllProviders_TranspilesCorrectly
 
-    [Fact]
-    public void SumFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("sum", "amount");
-            Assert.Contains("SUM", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("amount", result, StringComparison.Ordinal);
-        }
-    }
+    // UpperFunction_AllProviders_TranspilesCorrectly
 
-    [Fact]
-    public void UpperFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("upper", "name");
-            Assert.Contains("UPPER", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("name", result, StringComparison.Ordinal);
-        }
-    }
+    // LowerFunction_AllProviders_TranspilesCorrectly
 
-    [Fact]
-    public void LowerFunction_AllProviders_TranspilesCorrectly()
+    // AvgFunction_AllProviders_TranspilesCorrectly
+
+    public void CountWithColumn_AllProviders_ProducesCorrectSQL_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2,
+        string caseValue3
+    )
     {
         foreach (var provider in AllProviders)
         {
-            var result = provider.TranspileFunction("lower", "email");
-            Assert.Contains("LOWER", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("email", result, StringComparison.Ordinal);
+            var result = provider.TranspileFunction(caseValue0, caseValue1);
+            Assert.Contains(caseValue2, result, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(caseValue3, result, StringComparison.Ordinal);
         }
     }
 
@@ -112,8 +88,11 @@ public sealed class FunctionMappingE2ETests
         {
             var result = provider.TranspileFunction("nonexistent_func", "arg1", "arg2");
             Assert.Contains("NONEXISTENT_FUNC", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("arg1", result, StringComparison.Ordinal);
-            Assert.Contains("arg2", result, StringComparison.Ordinal);
+            ContainsAll(
+                actual: result,
+                expected: ["arg1", "arg2"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 
@@ -248,9 +227,11 @@ public sealed class FunctionMappingE2ETests
         {
             var result = provider.TranspileFunction("coalesce", "col1", "col2", "'default'");
             Assert.Contains("COALESCE", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("col1", result, StringComparison.Ordinal);
-            Assert.Contains("col2", result, StringComparison.Ordinal);
-            Assert.Contains("'default'", result, StringComparison.Ordinal);
+            ContainsAll(
+                actual: result,
+                expected: ["col1", "col2", "'default'"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 
@@ -264,17 +245,6 @@ public sealed class FunctionMappingE2ETests
 
             var maxResult = provider.TranspileFunction("max", "price");
             Assert.Contains("MAX", maxResult, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public void AvgFunction_AllProviders_TranspilesCorrectly()
-    {
-        foreach (var provider in AllProviders)
-        {
-            var result = provider.TranspileFunction("avg", "rating");
-            Assert.Contains("AVG", result, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("rating", result, StringComparison.Ordinal);
         }
     }
 

@@ -192,11 +192,12 @@ public static class SqliteMigrationApplier
     )
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT name, sql FROM sqlite_master
-            WHERE type IN ('index', 'trigger') AND tbl_name = $table AND sql IS NOT NULL
-            ORDER BY type, name
-            """;
+        command.CommandText = global::Nimblesite
+            .DataProvider
+            .Migration
+            .SQLite
+            .SqliteSchemaInspector
+            .SqlSpecification2;
         command.Parameters.AddWithValue("$table", table);
         using var reader = command.ExecuteReader();
         var sql = new List<string>();

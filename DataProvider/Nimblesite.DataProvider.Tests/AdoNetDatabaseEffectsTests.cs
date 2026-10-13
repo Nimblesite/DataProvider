@@ -1,6 +1,4 @@
-using Microsoft.Data.Sqlite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 
 #pragma warning disable CA2007 // No ConfigureAwait in tests
 #pragma warning disable CA1849 // Tests can use sync over async
@@ -11,7 +9,7 @@ namespace Nimblesite.DataProvider.Tests;
 // AdoNetDatabaseEffects through a real in-memory SQLite connection so the
 // happy path, validation branches, and DbException / InvalidOperationException
 // catch arms are all exercised.
-public sealed class AdoNetDatabaseEffectsTests
+public sealed partial class AdoNetDatabaseEffectsTests
 {
     private static string MapType(Type fieldType, string dataTypeName, bool isNullable) =>
         fieldType == typeof(long) ? (isNullable ? "long?" : "long")
@@ -21,40 +19,22 @@ public sealed class AdoNetDatabaseEffectsTests
     private static AdoNetDatabaseEffects CreateSqliteEffects() =>
         new(cs => new SqliteConnection(cs), MapType);
 
-    [Fact]
-    public async Task Rejects_null_connection_string()
-    {
-        var effects = CreateSqliteEffects();
-        var result = await effects.GetColumnMetadataFromSqlAsync(
-            "",
-            "SELECT 1",
-            Array.Empty<ParameterInfo>()
-        );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-    }
+    [Theory]
+    // Rejects_null_connection_string
+    [MemberData(nameof(Rejects_null_connection_string_CasesInlineCases))]
+    // Rejects_whitespace_sql
 
-    [Fact]
-    public async Task Rejects_whitespace_sql()
+    // Returns_error_for_invalid_sql
+
+    public async Task Rejects_null_connection_string_Cases(string caseValue0, string caseValue1)
     {
         var effects = CreateSqliteEffects();
         var result = await effects.GetColumnMetadataFromSqlAsync(
-            "Data Source=:memory:",
-            "   ",
+            caseValue0,
+            caseValue1,
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
     }
 
     [Fact]
@@ -66,13 +46,7 @@ public sealed class AdoNetDatabaseEffectsTests
             "SELECT 1",
             null!
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
     }
 
     [Fact]
@@ -84,18 +58,7 @@ public sealed class AdoNetDatabaseEffectsTests
             "SELECT 1 AS id, 'x' AS name",
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-        var ok = (Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-            IReadOnlyList<DatabaseColumn>,
-            SqlError
-        >)result;
-        Assert.Equal(2, ok.Value.Count);
+        var ok = VerifyReusableWorkflow17(input0: result);
         Assert.Equal("id", ok.Value[0].Name);
         Assert.Equal("name", ok.Value[1].Name);
     }
@@ -110,38 +73,9 @@ public sealed class AdoNetDatabaseEffectsTests
             "SELECT @id AS matched_id, @limit AS matched_limit",
             parameters
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
-        var ok = (Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-            IReadOnlyList<DatabaseColumn>,
-            SqlError
-        >)result;
-        Assert.Equal(2, ok.Value.Count);
+        var ok = VerifyReusableWorkflow17(input0: result);
         Assert.Contains(ok.Value, c => c.Name == "matched_id");
         Assert.Contains(ok.Value, c => c.Name == "matched_limit");
-    }
-
-    [Fact]
-    public async Task Returns_error_for_invalid_sql()
-    {
-        var effects = CreateSqliteEffects();
-        var result = await effects.GetColumnMetadataFromSqlAsync(
-            "Data Source=:memory:",
-            "SELECT * FROM table_that_does_not_exist",
-            Array.Empty<ParameterInfo>()
-        );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
     }
 
     [Fact]
@@ -155,12 +89,18 @@ public sealed class AdoNetDatabaseEffectsTests
             "SELECT 1",
             Array.Empty<ParameterInfo>()
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<DatabaseColumn>, SqlError>.Error<
-                    IReadOnlyList<DatabaseColumn>,
-                    SqlError
-                >
-        );
+        _ = global::Tests.Shared.ResultAssertions.Error(actual: result);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Result<IReadOnlyList<DatabaseColumn>, Sql.Model.SqlError>.Ok<
+        IReadOnlyList<DatabaseColumn>,
+        Sql.Model.SqlError
+    > VerifyReusableWorkflow17(Result<IReadOnlyList<DatabaseColumn>, Sql.Model.SqlError> input0)
+    {
+        var ok = Ok(actual: input0);
+        Assert.Equal(2, ok.Value.Count);
+
+        return ok;
     }
 }

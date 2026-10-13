@@ -1,5 +1,5 @@
 using Nimblesite.Lql.Postgres;
-using Nimblesite.Sql.Model;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -13,9 +13,14 @@ public sealed class PostgresSqlModelIdentifierTests
             .AddTable("Users")
             .Build();
 
-        var sql = Assert.IsType<StringOk>(statement.ToPostgreSql()).Value;
+        var sql = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statement.ToPostgreSql())
+            .Value;
 
-        Assert.Contains("SELECT \"Id\"", sql, StringComparison.Ordinal);
-        Assert.Contains("FROM \"Users\"", sql, StringComparison.Ordinal);
+        ContainsAll(
+            actual: sql,
+            expected: ["SELECT \"Id\"", "FROM \"Users\""],
+            comparison: StringComparison.Ordinal
+        );
     }
 }

@@ -1,6 +1,6 @@
+use std::{collections::HashMap, time::Duration};
+
 use lql_analyzer::{ColumnInfo, SchemaCache, TableInfo};
-use std::collections::HashMap;
-use std::time::Duration;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const QUERY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -207,33 +207,64 @@ pub async fn fetch_postgres_schema(
 mod tests {
     use super::*;
 
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Seeds `path` with `ddl`, creating the SQLite file if needed.
+    fn seed_sqlite(path: &str, ddl: &str) {
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute_batch(ddl)
+            .unwrap();
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Seeds `path` with `ddl` then fetches the schema through `connection`.
+    async fn seeded_schema(path: &str, connection: &str, ddl: &str) -> SchemaCache {
+        seed_sqlite(path, ddl);
+        fetch_schema(connection).await.unwrap()
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Seeds `path` with `ddl`, fetches through `connection`, asserts `table`.
+    async fn assert_seeded_table(path: &str, connection: &str, ddl: &str, table: &str) {
+        let schema = seeded_schema(path, connection, ddl).await;
+        assert!(
+            schema.get_table(table).is_some(),
+            "expected {table} in schema"
+        );
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Returns a UTF-8 temp-database path for `name`.
+    fn temp_db_path(name: &str) -> String {
+        std::env::temp_dir()
+            .join(name)
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
     // ── normalize_connection_string ────────────────────────────────────
     #[test]
-    fn passthrough_postgres_uri() {
-        let uri = "postgres://user:pass@localhost/mydb";
-        assert_eq!(normalize_connection_string(uri), uri);
-    }
-
-    #[test]
-    fn passthrough_postgresql_uri() {
-        let uri = "postgresql://user:pass@localhost/mydb";
-        assert_eq!(normalize_connection_string(uri), uri);
-    }
-
-    #[test]
-    fn passthrough_libpq_format() {
-        let s = "host=localhost dbname=mydb user=postgres";
-        assert_eq!(normalize_connection_string(s), s);
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn passthrough_postgres_uri_cases() {
+        for &(input0,) in named_cases(NAMED_CASES_1) {
+            verify_expanded_passthrough_postgres_uri(input0);
+        }
     }
 
     #[test]
     fn convert_npgsql_basic() {
         let result =
             normalize_connection_string("Host=localhost;Database=mydb;Username=user;Password=pass");
-        assert!(result.contains("host=localhost"));
-        assert!(result.contains("dbname=mydb"));
-        assert!(result.contains("user=user"));
-        assert!(result.contains("password=pass"));
+        crate::test_support::assert_contains_all(
+            &result,
+            &[
+                "host=localhost",
+                "dbname=mydb",
+                "user=user",
+                "password=pass",
+            ],
+        );
     }
 
     #[test]
@@ -249,10 +280,10 @@ mod tests {
     fn convert_npgsql_alternative_keys() {
         let result =
             normalize_connection_string("Server=db;Initial Catalog=mydb;User Id=admin;Pwd=secret");
-        assert!(result.contains("host=db"));
-        assert!(result.contains("dbname=mydb"));
-        assert!(result.contains("user=admin"));
-        assert!(result.contains("password=secret"));
+        crate::test_support::assert_contains_all(
+            &result,
+            &["host=db", "dbname=mydb", "user=admin", "password=secret"],
+        );
     }
 
     #[test]
@@ -350,12 +381,11 @@ mod tests {
     // ── fetch_sqlite_schema ───────────────────────────────────────────
     #[test]
     fn fetch_sqlite_schema_reads_tables_and_columns() {
-        let dir = std::env::temp_dir().join("lql_test_schema.db");
-        let path = dir.to_str().unwrap();
+        let path = temp_db_path("lql_test_schema.db");
 
         // Create a test database
-        let conn = rusqlite::Connection::open(path).unwrap();
-        conn.execute_batch(
+        seed_sqlite(
+            &path,
             "CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
@@ -366,11 +396,9 @@ mod tests {
                 user_id TEXT NOT NULL,
                 total REAL NOT NULL
             );",
-        )
-        .unwrap();
-        drop(conn);
+        );
 
-        let schema = fetch_sqlite_schema(path).unwrap();
+        let schema = fetch_sqlite_schema(&path).unwrap();
         assert_eq!(schema.table_count(), 2);
 
         let users = schema.get_table("users").expect("users table missing");
@@ -389,7 +417,7 @@ mod tests {
             .any(|c| c.name == "name" && !c.is_nullable));
 
         // Cleanup
-        std::fs::remove_file(path).ok();
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]
@@ -406,39 +434,33 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_schema_dispatches_to_sqlite_for_db_extension() {
-        let path = std::env::temp_dir().join("lql_dispatch_test.db");
-        let path_str = path.to_str().unwrap();
+        let path = temp_db_path("lql_dispatch_test.db");
 
-        let conn = rusqlite::Connection::open(path_str).unwrap();
-        conn.execute_batch(
+        assert_seeded_table(
+            &path,
+            &path,
             "CREATE TABLE IF NOT EXISTS dispatch_users (id TEXT PRIMARY KEY NOT NULL);",
+            "dispatch_users",
         )
-        .unwrap();
-        drop(conn);
+        .await;
 
-        let schema = fetch_schema(path_str).await.unwrap();
-        assert!(schema.get_table("dispatch_users").is_some());
-
-        std::fs::remove_file(path_str).ok();
+        std::fs::remove_file(&path).ok();
     }
 
     #[tokio::test]
     async fn fetch_schema_dispatches_to_sqlite_for_sqlite_prefix() {
-        let path = std::env::temp_dir().join("lql_dispatch_prefix.db");
-        let path_str = path.to_str().unwrap();
+        let path = temp_db_path("lql_dispatch_prefix.db");
 
-        let conn = rusqlite::Connection::open(path_str).unwrap();
-        conn.execute_batch(
+        let connection = format!("sqlite:{path}");
+        assert_seeded_table(
+            &path,
+            &connection,
             "CREATE TABLE IF NOT EXISTS dispatch_orders (id TEXT PRIMARY KEY NOT NULL);",
+            "dispatch_orders",
         )
-        .unwrap();
-        drop(conn);
+        .await;
 
-        let with_prefix = format!("sqlite:{path_str}");
-        let schema = fetch_schema(&with_prefix).await.unwrap();
-        assert!(schema.get_table("dispatch_orders").is_some());
-
-        std::fs::remove_file(path_str).ok();
+        std::fs::remove_file(&path).ok();
     }
 
     // ── fetch_postgres_schema connect failure ─────────────────────────
@@ -467,4 +489,16 @@ mod tests {
             fetch_postgres_schema("Host=127.0.0.1;Port=1;Database=x;Username=u;Password=p").await;
         assert!(result.is_err());
     }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_passthrough_postgres_uri(input0: &str) {
+        let uri = input0;
+        assert_eq!(normalize_connection_string(uri), uri);
+    }
+
+    include!("db_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }

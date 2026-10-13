@@ -99,3 +99,111 @@ does not regress it, clone ClinicalCoding next to this checkout and run
 into `artifacts/local-feed` with a unique `0.0.0-local.<timestamp>` version, then
 runs ClinicalCoding's make targets (default `lint test build`) with that version
 and feed. The ClinicalCoding working tree is restored on exit.
+
+## Shared test command execution [CI-TEST-SHARED-COMMAND]
+
+Database test fixtures share synchronous command creation, execution, and disposal
+through a typed DbConnection helper linked from Tests.Shared. Typed configuration
+callbacks keep SQL assignment at each test site, preserving analyzer visibility.
+Every SQL literal, connection, test case, and assertion is retained. Parameterized
+commands, commands reused for multiple operations, and explicit command transactions
+keep their existing lifetimes and execution paths.
+
+### Shared test command bindings [CI-TEST-SHARED-COMMAND-PARAMETERS]
+
+Database command fixtures bind ordered name/value rows using parameters created by
+the command's provider. The parameter factory runs after SQL configuration, before
+execution. Calls retain their SQL, parameter names and values, transaction assignments
+and assertions. Only two-argument AddWithValue bindings with independent values use
+the fixture. The existing person fixture reuses the same provider parameter binder.
+
+### Independent scenario data [CI-DESLOP-INDEPENDENT-DATA]
+
+`**/Fixtures/*.Fixtures.cs` contains only independent test schema and mapping
+datasets. Their repeated shapes express different scenarios, and are excluded
+from clone analysis. Test runners, database setup and all assertions remain in
+the audited files. Fixture functions evaluate at their original call sites,
+with the same captured values and constructor/default semantics. Standalone
+teaching applications are also excluded; their complete examples are intentional.
+
+### Shared result assertions [CI-TEST-SHARED-RESULT]
+
+Tests reuse a type assertion followed by an assignable result value. The original
+boolean assertion and optional diagnostic message remain in the helper; casts
+and null-forgiving operators are replaced by xUnit's checked result.
+
+### Shared scenario execution [CI-TEST-SHARED-SCENARIOS]
+
+Tests with the same execution and assertion sequence call one typed routine.
+Every scenario retains its input values and assertions, including result checks,
+query checks and provider-specific entry points. Shared routines return the
+original typed values needed for the scenario's remaining assertions.
+
+### Shared test case matrices [CI-TEST-SHARED-CASE-MATRIX]
+
+Tests with the same algorithm use one theory and explicit independent case rows.
+Rows retain original test names for discovery and all original input and expected
+values. Only data rows live in excluded Fixtures files; runners and assertions
+remain in the audited source.
+
+### Public contract data [CI-DESLOP-CONTRACT-DATA]
+
+Deslop excludes the explicit declaration-only schema operation, column and step
+model files listed in .deslop.toml. These distinct exported data types contain no
+query, migration or transformation algorithms. Combining their shapes would change
+the public NuGet contracts; executable implementations remain audited.
+
+### Shared string assertions [CI-TEST-SHARED-STRING-ASSERTIONS]
+
+Consecutive fragment checks use one ordered assertion loop. The original expected
+strings, actual value and comparison behavior are preserved, including xUnit's default
+current-culture comparison and explicit string comparison modes. Every original fragment check still executes.
+
+### Shared scalar-query execution [CI-TEST-SHARED-SCALAR-QUERY]
+
+Scalar-query tests share command creation, configuration, binding and execution.
+Their original conversions, assertions, SQL and parameter evaluation order remain
+at the call sites. The command is disposed after its scalar value is read.
+
+Result checks can evaluate a typed operation callback before checking its
+success/error variant. This consolidates repeated read/check sequences while
+preserving operation order, diagnostics and assertions. Implements [CI-TEST-SHARED-RESULT].
+
+### Shared temporary database cleanup [CI-TEST-SHARED-TEMP-CLEANUP]
+
+Database fixtures reuse file cleanup after disposing their connections. The
+original existence check, deletion attempt, ignored teardown failures and order
+of connection disposal and file cleanup are preserved.
+
+### Shared mapped payload assertions [CI-TEST-SHARED-MAPPED-PAYLOAD]
+
+Mapping scenarios share the exact success-type assertion and JSON document
+lifetime. Each scenario supplies its original payload assertions as a callback;
+field checks, expected values and scenario coverage remain explicit. HTTP and
+integration tests also share the three User-to-Customer table/key assertions,
+retaining each scenario's original primary-key substring.
+
+### Shared test imports [CI-TEST-SHARED-IMPORTS]
+
+Test projects declare common namespace imports and identical result aliases once.
+File-specific imports and aliases with differing targets retain their local scope.
+
+### Shared named case assertion [CI-TEST-SHARED-NAMED-CASE]
+
+Parameterized test runners share the same nonempty case-label assertion. Each
+original assertion still executes before its scenario; input and result checks
+remain in their existing runners.
+
+- **[CI-TEST-SHARED-ROW-ASSERTIONS]**: Database tests share typed projected row-presence assertions. Each original expected row value still requires an independently matching row.
+
+- **[SYNC-TEST-SHARED-SCENARIOS]**: Sync HTTP integration scenarios share their existing PostgreSQL or dual-SQLite fixture lifecycle, schema/origin setup and cleanup. Retain each scenario database name, independent resources, setup errors and native disposal order.
+
+- **[CI-TEST-SHARED-READ-FIRST-ROW]**: Native database test commands share execution and the original first-row read assertion, retaining caller ownership of reader disposal.
+
+- **[CI-TEST-SHARED-READ-COLUMN]**: Native reader tests share iteration through every result row with a typed caller projection and original row order.
+
+- **[SYNC-TEST-SHARED-SQLITE-HELPERS]**: Sync SQLite tests share native inserts, updates, deletes and name lookups while retaining each schema shape and original parameter names and values.
+
+- **[MIG-TEST-SHARED-ASSERTIONS]**: Migration SQL tests share exact ordinal prefix and fragment assertions without removing an original expectation.
+
+- **[CI-CLI-SHARED-DISPATCH]**: DataProvider and LQL CLI entry points share native root command construction and dispatch. Preserve descriptions, argument arrays, exit codes and the original ordered build/add sequence for every platform subcommand.

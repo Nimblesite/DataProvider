@@ -1,7 +1,6 @@
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using Microsoft.Data.Sqlite;
-using Xunit;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -10,17 +9,15 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests safe purge calculation, stale client handling, and full resync protocol.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class TombstoneIntegrationTests : IDisposable
+public sealed partial class TombstoneIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _serverDb;
     private readonly SqliteConnection _clientDb;
-    private readonly string _serverDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"tombstoneintegrationtests_server_{Guid.NewGuid()}.db"
+    private readonly string _serverDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "tombstoneintegrationtests_server"
     );
-    private readonly string _clientDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"tombstoneintegrationtests_client_{Guid.NewGuid()}.db"
+    private readonly string _clientDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "tombstoneintegrationtests_client"
     );
     private readonly string _serverOrigin = "server-" + Guid.NewGuid();
     private readonly string _clientOrigin = "client-" + Guid.NewGuid();
@@ -42,18 +39,16 @@ public sealed class TombstoneIntegrationTests : IDisposable
         // Act: Query table info
         using var cmd = _serverDb.CreateCommand();
         cmd.CommandText = "PRAGMA table_info(_sync_clients)";
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
+        var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
-        Assert.Contains("origin_id", columns);
-        Assert.Contains("last_sync_version", columns);
-        Assert.Contains("last_sync_timestamp", columns);
-        Assert.Contains("created_at", columns);
+        VerifySyncLoopWorkflow1(
+            input0: columns,
+            value0: "origin_id",
+            value1: "last_sync_version",
+            value2: "last_sync_timestamp",
+            value3: "created_at"
+        );
     }
 
     /// <summary>
@@ -63,12 +58,7 @@ public sealed class TombstoneIntegrationTests : IDisposable
     public void Spec13_3_UpdateClientSyncState_TracksVersion()
     {
         // Arrange
-        var existingClient = new SyncClient(
-            _clientOrigin,
-            50,
-            "2024-12-01T00:00:00.000Z",
-            "2024-01-01T00:00:00.000Z"
-        );
+        var existingClient = Dataset_Spec13_3_UpdateClientSyncState_TracksVersion_1();
 
         // Act
         var updated = TombstoneManager.UpdateClientSyncState(
@@ -135,7 +125,7 @@ public sealed class TombstoneIntegrationTests : IDisposable
         );
 
         // Assert
-        Assert.IsType<IntSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Equal(200, purgedVersion); // Called with minimum version
     }
 
@@ -153,18 +143,8 @@ public sealed class TombstoneIntegrationTests : IDisposable
         var now = new DateTime(2025, 4, 10, 0, 0, 0, DateTimeKind.Utc);
         var clients = new[]
         {
-            new SyncClient(
-                "stale-client",
-                100,
-                "2025-01-01T00:00:00.000Z", // 100 days ago
-                "2024-01-01T00:00:00.000Z"
-            ),
-            new SyncClient(
-                "active-client",
-                200,
-                "2025-04-01T00:00:00.000Z", // 9 days ago
-                "2024-01-01T00:00:00.000Z"
-            ),
+            Dataset_Spec13_5_StaleClients_IdentifiedByInactivity_1(),
+            Dataset_Spec13_5_StaleClients_IdentifiedByInactivity_2(),
         };
 
         // Act
@@ -280,10 +260,13 @@ public sealed class TombstoneIntegrationTests : IDisposable
         );
 
         // Retrieve
-        using var cmd = _serverDb.CreateCommand();
-        cmd.CommandText = "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin";
-        cmd.Parameters.AddWithValue("$origin", _clientOrigin);
-        var storedVersion = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        var storedVersion = global::Tests.Shared.DatabaseCommands.ScalarInt64(
+            connection: _serverDb,
+            configure: command =>
+                command.CommandText =
+                    "SELECT last_sync_version FROM _sync_clients WHERE origin_id = $origin",
+            parameters: () => [("$origin", _clientOrigin)]
+        );
 
         // Assert
         Assert.Equal(100, storedVersion);
@@ -298,18 +281,8 @@ public sealed class TombstoneIntegrationTests : IDisposable
         // Arrange: Two clients, one behind
         var clients = new[]
         {
-            new SyncClient(
-                "fast-client",
-                100,
-                "2025-01-01T00:00:00.000Z",
-                "2025-01-01T00:00:00.000Z"
-            ),
-            new SyncClient(
-                "slow-client",
-                20,
-                "2025-01-01T00:00:00.000Z",
-                "2025-01-01T00:00:00.000Z"
-            ), // Can't purge past this
+            Dataset_Spec13_7_TombstonesPreserved_UntilAllClientsSynced_1(),
+            Dataset_Spec13_7_TombstonesPreserved_UntilAllClientsSynced_2(), // Can't purge past this
         };
 
         // Act
@@ -325,23 +298,16 @@ public sealed class TombstoneIntegrationTests : IDisposable
 
     private static SqliteConnection CreateSyncDatabase(string dbPath, string originId)
     {
-        var conn = new SqliteConnection($"Data Source={dbPath}");
-        conn.Open();
-        SyncSchema.CreateSchema(conn);
-        SyncSchema.SetOriginId(conn, originId);
+        var conn = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: dbPath, origin: originId);
         return conn;
     }
 
     private static void CreatePersonTable(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: command => command.CommandText = Data_CreatePersonTable_1
+        );
     }
 
     [SuppressMessage(
@@ -351,48 +317,47 @@ public sealed class TombstoneIntegrationTests : IDisposable
     )]
     private static void ExecuteSql(SqliteConnection db, string sql)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(connection: db, configure: command => command.CommandText = sql);
     }
 
     private static long GetOldestVersion(SqliteConnection db)
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT MIN(version) FROM _sync_log";
-        var result = cmd.ExecuteScalar();
+        var result = global::Tests.Shared.DatabaseCommands.Scalar(
+            connection: db,
+            configure: command => command.CommandText = "SELECT MIN(version) FROM _sync_log"
+        );
+
         return result == DBNull.Value ? 0 : Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
     public void Dispose()
     {
         _serverDb.Dispose();
-        _clientDb.Dispose();
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _clientDb,
+            input1: _serverDbPath
+        );
 
-        if (File.Exists(_serverDbPath))
-        {
-            try
-            {
-                File.Delete(_serverDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
-
-        if (File.Exists(_clientDbPath))
-        {
-            try
-            {
-                File.Delete(_clientDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _clientDbPath);
     }
 
     #endregion
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow1(
+        List<string> input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        // Assert: All spec columns exist
+        global::Nimblesite.Sync.SQLite.Tests.SpecConformanceTests.VerifyReusableWorkflow1(
+            input0: input0,
+            value0: value0,
+            value1: value1,
+            value2: value2
+        );
+        Assert.Contains(value3, input0);
+    }
 }

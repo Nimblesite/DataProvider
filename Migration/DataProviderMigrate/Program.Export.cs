@@ -61,11 +61,7 @@ public static partial class Program
                 return 1;
             }
 
-            var directory = Path.GetDirectoryName(args.OutputPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            EnsureOutputDirectory(args.OutputPath);
 
             SchemaYamlSerializer.ToYamlFile(schema, args.OutputPath);
             Console.WriteLine(

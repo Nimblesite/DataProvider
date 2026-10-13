@@ -13,41 +13,13 @@ public static class SqlStatementExtensionsSqlServer
     /// </summary>
     /// <param name="statement">The LqlStatement to convert</param>
     /// <returns>A Result containing either SQL Server SQL string or a SqlError</returns>
-    public static Result<string, SqlError> ToSqlServer(this LqlStatement statement)
-    {
-        ArgumentNullException.ThrowIfNull(statement);
-
-        if (LqlStatementValidator.Validate(statement) is SqlError error)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(error);
-        }
-
-        try
-        {
-            // Implements [LQL-CTE] and [LQL-DERIVED-TABLE].
-            if (statement.AstNode is { } node && SubqueryLayout.Applies(node))
-            {
-                return new Result<string, SqlError>.Ok<string, SqlError>(
-                    SubqueryLayout.Render(node, SqlServerPaging)
-                );
-            }
-
-            if (statement.AstNode is Pipeline pipeline)
-            {
-                var sql = ConvertPipelineToSqlServer(pipeline);
-                return new Result<string, SqlError>.Ok<string, SqlError>(sql);
-            }
-
-            var unknownSql = statement.AstNode is Identifier identifier
-                ? $"SELECT *\nFROM {identifier.Name}"
-                : "-- Unknown AST node type";
-            return new Result<string, SqlError>.Ok<string, SqlError>(unknownSql);
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
-        }
-    }
+    // Implements [LQL-RENDER-SHARED].
+    public static Result<string, SqlError> ToSqlServer(this LqlStatement statement) =>
+        StatementRendering.Render(
+            statement: statement,
+            paging: SqlServerPaging,
+            renderPipeline: ConvertPipelineToSqlServer
+        );
 
     /// <summary>
     /// Converts a pipeline to SQL Server with proper table aliases and column handling
@@ -66,18 +38,9 @@ public static class SqlStatementExtensionsSqlServer
     /// </summary>
     /// <param name="statement">The SelectStatement to convert</param>
     /// <returns>A Result containing either SQL Server SQL string or a SqlError</returns>
-    public static Result<string, SqlError> ToSqlServer(this SelectStatement statement)
-    {
-        try
-        {
-            var sql = SqlServerContext.ToSqlServerSql(statement);
-            return new Result<string, SqlError>.Ok<string, SqlError>(sql);
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
-        }
-    }
+    // Implements [LQL-RENDER-SHARED].
+    public static Result<string, SqlError> ToSqlServer(this SelectStatement statement) =>
+        StatementRendering.Capture(render: () => SqlServerContext.ToSqlServerSql(statement));
 
     /// <summary>
     /// SQL Server paging: TOP for a bare limit, OFFSET/FETCH once an offset is involved.

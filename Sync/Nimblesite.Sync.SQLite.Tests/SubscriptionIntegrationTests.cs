@@ -1,5 +1,4 @@
-using Microsoft.Data.Sqlite;
-using Xunit;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -8,22 +7,18 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests subscription creation, matching, and notification delivery.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed class SubscriptionIntegrationTests : IDisposable
+public sealed partial class SubscriptionIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"subscriptionintegrationtests_{Guid.NewGuid()}.db"
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
+        "subscriptionintegrationtests"
     );
     private readonly string _originId = Guid.NewGuid().ToString();
     private const string Timestamp = "2025-01-01T00:00:00.000Z";
 
     public SubscriptionIntegrationTests()
     {
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
     }
 
     #region Section 10.2: Subscription Types
@@ -51,8 +46,7 @@ public sealed class SubscriptionIntegrationTests : IDisposable
         );
 
         // Act & Assert
-        Assert.True(SubscriptionManager.MatchesChange(sub, matchingChange));
-        Assert.False(SubscriptionManager.MatchesChange(sub, nonMatchingChange));
+        AssertMatches(sub, matchingChange, nonMatchingChange);
     }
 
     /// <summary>
@@ -77,8 +71,7 @@ public sealed class SubscriptionIntegrationTests : IDisposable
         // Act & Assert
         Assert.True(SubscriptionManager.MatchesChange(sub, insertChange));
         Assert.True(SubscriptionManager.MatchesChange(sub, updateChange));
-        Assert.True(SubscriptionManager.MatchesChange(sub, deleteChange));
-        Assert.False(SubscriptionManager.MatchesChange(sub, otherTableChange));
+        AssertMatches(sub, deleteChange, otherTableChange);
     }
 
     /// <summary>
@@ -120,15 +113,7 @@ public sealed class SubscriptionIntegrationTests : IDisposable
             SubscriptionManager.CreateTableSubscription("sub-3", "origin-3", "Products", Timestamp),
         };
 
-        var change = new SyncLogEntry(
-            Version: 100,
-            TableName: "Orders",
-            PkValue: "{\"Id\":\"order-123\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"order-123\",\"Status\":\"shipped\",\"Total\":99.99}",
-            Origin: "server-origin",
-            Timestamp: Timestamp
-        );
+        var change = Fixture_Spec10_4_CreateNotifications_IncludesFullChangePayload_1();
 
         // Act
         var notifications = SubscriptionManager.CreateNotifications(subscriptions, change);
@@ -235,21 +220,19 @@ public sealed class SubscriptionIntegrationTests : IDisposable
         // Act: Query table info
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "PRAGMA table_info(_sync_subscriptions)";
-        var columns = new List<string>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            columns.Add(reader.GetString(1));
-        }
+        var columns = DatabaseCommands.ReadStrings(cmd, ordinal: 1);
 
         // Assert: All spec columns exist
-        Assert.Contains("subscription_id", columns);
-        Assert.Contains("origin_id", columns);
-        Assert.Contains("subscription_type", columns);
-        Assert.Contains("table_name", columns);
-        Assert.Contains("filter", columns);
-        Assert.Contains("created_at", columns);
-        Assert.Contains("expires_at", columns);
+        global::Nimblesite.Sync.SQLite.Tests.SpecComplianceTests.VerifyDatabaseWorkflow2(
+            input0: columns,
+            value0: "subscription_id",
+            value1: "origin_id",
+            value2: "subscription_type",
+            value3: "table_name",
+            value4: "filter",
+            value5: "created_at",
+            value6: "expires_at"
+        );
     }
 
     /// <summary>
@@ -346,15 +329,7 @@ public sealed class SubscriptionIntegrationTests : IDisposable
             "Orders",
             Timestamp
         );
-        var change = new SyncLogEntry(
-            1,
-            "Orders",
-            "{\"Id\":\"o1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"o1\",\"Status\":\"shipped\",\"Amount\":150.00}",
-            "server",
-            Timestamp
-        );
+        var change = Fixture_Spec10_7_Notifications_IncludeFullPayload_1();
 
         // Act
         var notifications = SubscriptionManager.CreateNotifications([sub], change);
@@ -375,36 +350,13 @@ public sealed class SubscriptionIntegrationTests : IDisposable
 
     #region Helpers
 
-    private static SyncLogEntry CreateChange(
-        string tableName,
-        string pkValue,
-        SyncOperation operation,
-        long version = 1
-    ) =>
-        new(
-            version,
-            tableName,
-            pkValue,
-            operation,
-            operation == SyncOperation.Delete ? null : "{\"Id\":\"test\"}",
-            "server-origin",
-            Timestamp
-        );
 
     public void Dispose()
     {
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
     }
 
     #endregion

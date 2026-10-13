@@ -1,4 +1,3 @@
-using SqlParser;
 using SqlParser.Ast;
 using SqlParser.Dialects;
 using PredicateOk = Outcome.Result<
@@ -125,31 +124,13 @@ internal static class RlsPolicyPredicates
         return translated is PredicateOk ok ? (true, ok.Value) : (false, null);
     }
 
-    private static Expression? Parse(string? sql, RlsPlatform platform)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-        {
-            return null;
-        }
-        try
-        {
-            var statements = new Parser().ParseSql($"SELECT 1 WHERE {sql}", Dialect(platform));
-            if (
-                statements.Count == 1
-                && statements[0] is Statement.Select select
-                && select.Query.Body is SetExpression.SelectExpression body
-                && body.Select.Selection is Expression expression
-            )
-            {
-                return expression;
-            }
-        }
-        catch (ParserException)
-        {
-            // Keep unparseable SQL distinct unless its text is exactly equal.
-        }
-        return null;
-    }
+    private static Expression? Parse(string? sql, RlsPlatform platform) =>
+        string.IsNullOrWhiteSpace(sql)
+            ? null
+            : SqlSelectionExtractor.ParseSingleSelectSelection(
+                $"SELECT 1 WHERE {sql}",
+                Dialect(platform)
+            );
 
     // SQL Server policies fail closed before the diff runs, so unlisted
     // platforms keep the Postgres dialect used before SQLite comparison existed.

@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Globalization;
 using Nimblesite.DataProvider.Core;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
@@ -9,9 +8,7 @@ public sealed partial record MigrationPlatformRegressionTests
 {
     // Implements [MIG-TEST-CROSS-PLATFORM]: one transaction contract for every provider.
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(Transact_ReturnsValuePropagatesFailureAndReleasesTransactionInlineCases))]
     public async Task Transact_ReturnsValuePropagatesFailureAndReleasesTransaction(string provider)
     {
         await WithAsyncTargetAsync(provider, AssertTransactionContractAsync).ConfigureAwait(true);
@@ -21,15 +18,8 @@ public sealed partial record MigrationPlatformRegressionTests
     {
         Assert.Equal(ConnectionState.Open, target.Connection.State);
         var callbacks = 0;
-        var committed = await target
-            .Connection.Transact(async transaction =>
-            {
-                callbacks++;
-                await AssertTransactionQueryAsync(target, transaction).ConfigureAwait(false);
-                return 42;
-            })
-            .ConfigureAwait(false);
-        Assert.Equal(42, committed);
+        callbacks = await AssertTransactsAsync(target, expectedValue: 42, callbacks: callbacks)
+            .ConfigureAwait(true);
         Assert.Equal(1, callbacks);
         Assert.Equal(ConnectionState.Open, target.Connection.State);
         AssertCanStartAnotherTransaction(target);
@@ -49,17 +39,29 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.Equal(ConnectionState.Open, target.Connection.State);
         AssertCanStartAnotherTransaction(target);
 
-        var recovered = await target
+        callbacks = await AssertTransactsAsync(target, expectedValue: 7, callbacks: callbacks)
+            .ConfigureAwait(true);
+        Assert.Equal(3, callbacks);
+        AssertCanStartAnotherTransaction(target);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static async Task<int> AssertTransactsAsync(
+        MigrationTarget target,
+        int expectedValue,
+        int callbacks
+    )
+    {
+        var value = await target
             .Connection.Transact(async transaction =>
             {
                 callbacks++;
                 await AssertTransactionQueryAsync(target, transaction).ConfigureAwait(false);
-                return 7;
+                return expectedValue;
             })
             .ConfigureAwait(false);
-        Assert.Equal(7, recovered);
-        Assert.Equal(3, callbacks);
-        AssertCanStartAnotherTransaction(target);
+        Assert.Equal(expectedValue, value);
+        return callbacks;
     }
 
     private static async Task AssertTransactionQueryAsync(
@@ -67,11 +69,10 @@ public sealed partial record MigrationPlatformRegressionTests
         IDbTransaction transaction
     )
     {
-        if (transaction is not DbTransaction dbTransaction)
-        {
-            Assert.Fail($"{target.Provider} returned a transaction without DbTransaction support");
-            return;
-        }
+        var dbTransaction = global::Tests.Shared.ResultAssertions.Expected<DbTransaction>(
+            actual: transaction,
+            message: $"{target.Provider} returned a transaction without DbTransaction support"
+        );
         Assert.Same(target.Connection, dbTransaction.Connection);
         using var command = target.Connection.CreateCommand();
         command.Transaction = dbTransaction;

@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using Nimblesite.Sql.Model;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -7,43 +7,40 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: DataAccessGenerator code generation with full verification.
 /// Each test generates code and validates the output contains correct C# constructs.
 /// </summary>
-public sealed class CodeGenerationE2ETests
+public sealed partial class CodeGenerationE2ETests
 {
+    // Implements [DP-CODEGEN-SHARED-BULK-LOOP].
+    [Theory]
+    [MemberData(
+        nameof(GenerateQueryMethod_PostgresNullParameter_UsesMatchingColumnTypeInlineCases)
+    )]
+    public void GenerateQueryMethod_PostgresNullParameter_UsesMatchingColumnType(
+        string cSharpType,
+        string databaseType
+    )
+    {
+        var result = DataAccessGenerator.GenerateQueryMethod(
+            className: "PeopleQueries",
+            methodName: "Find",
+            returnTypeName: "Person",
+            sql: "SELECT Id FROM People WHERE Id = @id",
+            parameters: [new ParameterInfo(Name: "id")],
+            columns: [new DatabaseColumn { Name = "Id", CSharpType = cSharpType }],
+            connectionType: "NpgsqlConnection"
+        );
+        var code = global::Tests.Shared.ResultAssertions.ExactOk(actual: result).Value;
+        Assert.Contains(
+            expectedSubstring: $"new NpgsqlParameter(\"@id\", NpgsqlTypes.NpgsqlDbType.{databaseType}) {{ Value = DBNull.Value }}",
+            actualString: code
+        );
+        Assert.Contains(
+            expectedSubstring: "command.Parameters.AddWithValue(\"@id\", id);",
+            actualString: code
+        );
+    }
+
     private static readonly IReadOnlyList<DatabaseColumn> PatientColumns =
-    [
-        new DatabaseColumn
-        {
-            Name = "Id",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-            IsPrimaryKey = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "Name",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new DatabaseColumn
-        {
-            Name = "Age",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-        new DatabaseColumn
-        {
-            Name = "Email",
-            SqlType = "TEXT",
-            CSharpType = "string",
-            IsNullable = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "IsActive",
-            SqlType = "INTEGER",
-            CSharpType = "bool",
-        },
-    ];
+        CodeGenerationColumnSets.PatientColumns;
 
     private static readonly IReadOnlyList<ParameterInfo> QueryParameters =
     [
@@ -70,23 +67,21 @@ public sealed class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify class structure
-        Assert.Contains("public static partial class PatientQueries", code);
-        Assert.Contains("GetActivePatients", code);
-        Assert.Contains("SqliteConnection", code);
-
-        // Verify parameter handling
-        Assert.Contains("minAge", code);
-        Assert.Contains("status", code);
-
-        // Verify SQL embedding
-        Assert.Contains("SELECT Id, Name, Age, Email FROM Patients", code);
-
-        // Verify mapper generation
-        Assert.Contains("PatientRecord", code);
-
-        // Verify XML docs
-        Assert.Contains("/// <summary>", code);
-        Assert.Contains("/// </summary>", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public static partial class PatientQueries",
+                "GetActivePatients",
+                "SqliteConnection",
+                "minAge",
+                "status",
+                "SELECT Id, Name, Age, Email FROM Patients",
+                "PatientRecord",
+                "/// <summary>",
+                "/// </summary>",
+            ]
+        );
     }
 
     [Fact]
@@ -112,49 +107,55 @@ public sealed class CodeGenerationE2ETests
         }
 
         // Empty method name
-        var emptyMethod = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "",
             returnTypeName: "TestRecord",
             sql: "SELECT 1",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptyMethod is StringError);
 
         // Empty return type
-        var emptyReturn = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "",
             sql: "SELECT 1",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptyReturn is StringError);
 
         // Empty SQL
-        var emptySql = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "TestRecord",
             sql: "",
-            parameters: [],
             columns: PatientColumns
         );
-        Assert.True(emptySql is StringError);
 
         // Empty columns
-        var emptyColumns = DataAccessGenerator.GenerateQueryMethod(
-            className: "TestClass",
+        AssertGenerateQueryMethodError(
             methodName: "Test",
             returnTypeName: "TestRecord",
             sql: "SELECT 1",
-            parameters: [],
             columns: []
         );
-        Assert.True(emptyColumns is StringError);
     }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertGenerateQueryMethodError(
+        string methodName,
+        string returnTypeName,
+        string sql,
+        IReadOnlyList<DatabaseColumn> columns
+    ) =>
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateQueryMethod(
+                className: "TestClass",
+                methodName: methodName,
+                returnTypeName: returnTypeName,
+                sql: sql,
+                parameters: [],
+                columns: columns
+            )
+        );
 
     [Fact]
     public void GenerateNonQueryMethod_FullWorkflow_ProducesValidCode()
@@ -173,22 +174,23 @@ public sealed class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify it generates non-query method
-        Assert.Contains("PatientCommands", code);
-        Assert.Contains("DeactivatePatient", code);
-        Assert.Contains("UPDATE Patients", code);
-        Assert.Contains("@id", code);
-        Assert.Contains("SqliteConnection", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "PatientCommands",
+                "DeactivatePatient",
+                "UPDATE Patients",
+                "@id",
+                "SqliteConnection",
+            ]
+        );
     }
 
     [Fact]
     public void GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateInsertMethod_WithAllColumnTypes_ProducesCorrectCode_1();
 
         var result = DataAccessGenerator.GenerateInsertMethod(
             table: table,
@@ -202,13 +204,7 @@ public sealed class CodeGenerationE2ETests
 
         // Verify INSERT statement
         Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Patients", code);
-
-        // Verify non-identity columns are included
-        Assert.Contains("Name", code);
-        Assert.Contains("Age", code);
-        Assert.Contains("Email", code);
-        Assert.Contains("IsActive", code);
+        ContainsAll(actual: code, expected: ["Patients", "Name", "Age", "Email", "IsActive"]);
     }
 
     [Fact]
@@ -220,8 +216,7 @@ public sealed class CodeGenerationE2ETests
 
         // Single parameter
         var single = DataAccessGenerator.GenerateParameterList([new ParameterInfo(Name: "userId")]);
-        Assert.Contains("userId", single);
-        Assert.Contains("object", single);
+        ContainsAll(actual: single, expected: ["userId", "object"]);
 
         // Multiple parameters
         var multi = DataAccessGenerator.GenerateParameterList([
@@ -229,10 +224,7 @@ public sealed class CodeGenerationE2ETests
             new ParameterInfo(Name: "age", SqlType: "INTEGER"),
             new ParameterInfo(Name: "email", SqlType: "TEXT"),
         ]);
-        Assert.Contains("name", multi);
-        Assert.Contains("age", multi);
-        Assert.Contains("email", multi);
-        Assert.Contains(",", multi);
+        ContainsAll(actual: multi, expected: ["name", "age", "email", ","]);
     }
 
     [Fact]
@@ -245,15 +237,7 @@ public sealed class CodeGenerationE2ETests
             returnTypeName: "TestRecord",
             sql: "SELECT * FROM Items WHERE class = @class AND int = @int",
             parameters: [new ParameterInfo(Name: "class"), new ParameterInfo(Name: "int")],
-            columns:
-            [
-                new DatabaseColumn
-                {
-                    Name = "Id",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                },
-            ]
+            columns: [ColumnTestData.Create(name: "Id", cSharpType: "string", sqlType: "TEXT")]
         );
 
         Assert.True(result is StringOk);
@@ -261,19 +245,13 @@ public sealed class CodeGenerationE2ETests
             return;
         var code = ok.Value;
         // Reserved keywords should be escaped with @
-        Assert.Contains("@class", code);
-        Assert.Contains("@int", code);
+        ContainsAll(actual: code, expected: ["@class", "@int"]);
     }
 
     [Fact]
     public void GenerateBulkInsertMethod_ProducesValidBatchCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateBulkInsertMethod_ProducesValidBatchCode_1();
 
         var result = DataAccessGenerator.GenerateBulkInsertMethod(table: table, batchSize: 100);
 
@@ -284,21 +262,17 @@ public sealed class CodeGenerationE2ETests
 
         // Verify bulk insert structure
         Assert.Contains("Patients", code);
-        Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-
-        // Verify batch handling
-        Assert.Contains("100", code);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: code,
+            value0: "INSERT",
+            value2: "100"
+        );
     }
 
     [Fact]
     public void GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode()
     {
-        var table = new DatabaseTable
-        {
-            Name = "Patients",
-            Schema = "main",
-            Columns = PatientColumns,
-        };
+        var table = Fixture_GenerateBulkUpsertMethod_SQLite_ProducesValidUpsertCode_1();
 
         var result = DataAccessGenerator.GenerateBulkUpsertMethod(
             table: table,
@@ -326,19 +300,7 @@ public sealed class CodeGenerationE2ETests
     {
         var manyColumns = Enumerable
             .Range(0, 15)
-            .Select(i => new DatabaseColumn
-            {
-                Name = $"Column{i}",
-                CSharpType =
-                    i % 3 == 0 ? "int"
-                    : i % 3 == 1 ? "string"
-                    : "bool",
-                SqlType =
-                    i % 3 == 0 ? "INTEGER"
-                    : i % 3 == 1 ? "TEXT"
-                    : "BOOLEAN",
-                IsNullable = i % 4 == 0,
-            })
+            .Select(i => Dataset_GenerateQueryMethod_MultipleColumns_MapsAllColumns_1(i: i))
             .ToImmutableArray();
 
         var result = DataAccessGenerator.GenerateQueryMethod(
@@ -356,37 +318,40 @@ public sealed class CodeGenerationE2ETests
         var code = ok.Value;
 
         // Verify columns appear in the generated code (may use reader ordinal or column name)
-        Assert.Contains("WideRecord", code);
-        Assert.Contains("WideTableQueries", code);
-        Assert.Contains("GetWideData", code);
-        Assert.Contains("SELECT * FROM WideTable", code);
+        ContainsAll(
+            actual: code,
+            expected: ["WideRecord", "WideTableQueries", "GetWideData", "SELECT * FROM WideTable"]
+        );
     }
 
     [Fact]
     public void GenerateNonQueryMethod_ValidationErrors_ReturnErrors()
     {
-        var emptyClass = DataAccessGenerator.GenerateNonQueryMethod(
-            className: " ",
-            methodName: "Test",
-            sql: "DELETE FROM T",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: " ",
+                methodName: "Test",
+                sql: "DELETE FROM T",
+                parameters: []
+            )
         );
-        Assert.True(emptyClass is StringError);
 
-        var emptyMethod = DataAccessGenerator.GenerateNonQueryMethod(
-            className: "TestClass",
-            methodName: "",
-            sql: "DELETE FROM T",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: "TestClass",
+                methodName: "",
+                sql: "DELETE FROM T",
+                parameters: []
+            )
         );
-        Assert.True(emptyMethod is StringError);
 
-        var emptySql = DataAccessGenerator.GenerateNonQueryMethod(
-            className: "TestClass",
-            methodName: "Test",
-            sql: "",
-            parameters: []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                className: "TestClass",
+                methodName: "Test",
+                sql: "",
+                parameters: []
+            )
         );
-        Assert.True(emptySql is StringError);
     }
 }

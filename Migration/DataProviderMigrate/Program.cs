@@ -168,11 +168,7 @@ public static partial class Program
     {
         try
         {
-            var directory = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            EnsureOutputDirectory(outputPath);
 
             var connectionString = $"Data Source={outputPath}";
             using var connection = new SqliteConnection(connectionString);
@@ -307,30 +303,17 @@ public static partial class Program
         >? normalize = null
     )
     {
-        var inspectResult = inspect();
-        if (
-            inspectResult
-            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
-                SchemaDefinition,
-                MigrationError
-            > inspectErr
-        )
-        {
-            Console.WriteLine($"Error: schema inspection failed: {inspectErr.Value}");
-            return 1;
-        }
-        var current = (
-            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
-                SchemaDefinition,
-                MigrationError
-            >)inspectResult
-        ).Value;
-
-        var comparisonSchema = NormalizeDesired(current, schema, normalize);
-        if (comparisonSchema is null)
+        var resolved = ResolveSchema(
+            inspect: inspect,
+            schema: schema,
+            normalize: normalize,
+            errorMessage: "schema inspection failed"
+        );
+        if (resolved is null)
         {
             return 1;
         }
+        var (current, comparisonSchema) = resolved.Value;
         var diff = SchemaDiff.Calculate(current, comparisonSchema, allowDestructive);
         if (
             diff
@@ -415,30 +398,17 @@ public static partial class Program
         >? normalize = null
     )
     {
-        var inspectResult = inspect();
-        if (
-            inspectResult
-            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
-                SchemaDefinition,
-                MigrationError
-            > inspectErr
-        )
-        {
-            Console.WriteLine($"Error: schema integrity inspection failed: {inspectErr.Value}");
-            return 1;
-        }
-
-        var live = (
-            (Outcome.Result<SchemaDefinition, MigrationError>.Ok<
-                SchemaDefinition,
-                MigrationError
-            >)inspectResult
-        ).Value;
-        var comparisonSchema = NormalizeDesired(live, schema, normalize);
-        if (comparisonSchema is null)
+        var resolved = ResolveSchema(
+            inspect: inspect,
+            schema: schema,
+            normalize: normalize,
+            errorMessage: "schema integrity inspection failed"
+        );
+        if (resolved is null)
         {
             return 1;
         }
+        var (live, comparisonSchema) = resolved.Value;
         var verification = SchemaIntegrityVerifier.Verify(
             live: live,
             desired: comparisonSchema,
@@ -451,6 +421,60 @@ public static partial class Program
             SchemaIntegrityResultOk ok => WriteIntegrityResult(mismatches: ok.Value),
             SchemaIntegrityResultError error => WriteIntegrityError(error: error.Value),
         };
+    }
+
+    private static (SchemaDefinition Inspected, SchemaDefinition Comparison)? ResolveSchema(
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
+        SchemaDefinition schema,
+        Func<
+            SchemaDefinition,
+            SchemaDefinition,
+            Outcome.Result<SchemaDefinition, MigrationError>
+        >? normalize,
+        string errorMessage
+    )
+    {
+        var inspected = InspectOrReportError(inspect: inspect, errorMessage: errorMessage);
+        if (inspected is null)
+        {
+            return null;
+        }
+
+        var comparison = NormalizeDesired(inspected, schema, normalize);
+        return comparison is null ? null : (inspected, comparison);
+    }
+
+    private static SchemaDefinition? InspectOrReportError(
+        Func<Outcome.Result<SchemaDefinition, MigrationError>> inspect,
+        string errorMessage
+    )
+    {
+        var inspectResult = inspect();
+        if (
+            inspectResult
+            is Outcome.Result<SchemaDefinition, MigrationError>.Ok<
+                SchemaDefinition,
+                MigrationError
+            > ok
+        )
+        {
+            return ok.Value;
+        }
+
+        if (
+            inspectResult
+            is Outcome.Result<SchemaDefinition, MigrationError>.Error<
+                SchemaDefinition,
+                MigrationError
+            > error
+        )
+        {
+            Console.WriteLine($"Error: {errorMessage}: {error.Value}");
+            return null;
+        }
+
+        Console.WriteLine($"Error: {errorMessage}: unknown inspection failure");
+        return null;
     }
 
     private static SchemaDefinition? NormalizeDesired(
@@ -576,6 +600,17 @@ public static partial class Program
     {
         Console.WriteLine($"Error: Unknown command '{command}'\nValid commands: migrate, export");
         return 1;
+    }
+
+    // Implements [MIG-CLI-COMMANDS]: both migrate and export create the output
+    // directory when it does not yet exist.
+    internal static void EnsureOutputDirectory(string outputPath)
+    {
+        var directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 
     private static int ShowMigrateError(MigrateParseResult.Failure failure)

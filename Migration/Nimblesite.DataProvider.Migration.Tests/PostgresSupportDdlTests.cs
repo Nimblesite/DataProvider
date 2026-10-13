@@ -1,65 +1,48 @@
+using static global::Tests.Shared.StringAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class PostgresSupportDdlTests
+public sealed partial class PostgresSupportDdlTests
 {
     [Fact]
     public void Generate_CreateOrAlterRole_EmitsNoLoginNoBypassRlsAndMembershipGrant()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrAlterRoleOperation(
-                new PostgresRoleDefinition { Name = "app_user", GrantTo = ["postgres"] }
-            )
+            Dataset_Generate_CreateOrAlterRole_EmitsNoLoginNoBypassRlsAndMembershipGrant_1()
         );
 
-        Assert.Contains("CREATE ROLE \"app_user\" NOLOGIN NOBYPASSRLS;", ddl);
-        Assert.Contains("ALTER ROLE \"app_user\" NOLOGIN NOBYPASSRLS", ddl);
-        Assert.Contains("GRANT \"app_user\" TO \"postgres\"", ddl);
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE ROLE \"app_user\" NOLOGIN NOBYPASSRLS;",
+                "ALTER ROLE \"app_user\" NOLOGIN NOBYPASSRLS",
+                "GRANT \"app_user\" TO \"postgres\"",
+            ]
+        );
     }
 
     [Fact]
     public void Generate_CreateOrReplaceFunction_EmitsSecurityDefinerAndExecuteGrants()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "is_member",
-                    Arguments =
-                    [
-                        new PostgresFunctionArgumentDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = "uuid",
-                        },
-                        new PostgresFunctionArgumentDefinition { Name = "user_id", Type = "uuid" },
-                    ],
-                    Returns = "boolean",
-                    SecurityDefiner = true,
-                    Body = "SELECT true",
-                    ExecuteRoles = ["app_user", "app_admin"],
-                }
-            )
+            Dataset_Generate_CreateOrReplaceFunction_EmitsSecurityDefinerAndExecuteGrants_1()
         );
 
-        Assert.Contains(
-            "CREATE OR REPLACE FUNCTION \"public\".\"is_member\"(\"tenant_id\" uuid, \"user_id\" uuid)",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains("RETURNS boolean", ddl, StringComparison.Ordinal);
-        Assert.Contains("LANGUAGE sql", ddl, StringComparison.Ordinal);
-        Assert.Contains("STABLE", ddl, StringComparison.Ordinal);
-        Assert.Contains("SECURITY DEFINER", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "REVOKE EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) FROM PUBLIC",
-            ddl,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "GRANT EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) TO \"app_user\", \"app_admin\"",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "CREATE OR REPLACE FUNCTION \"public\".\"is_member\"(\"tenant_id\" uuid, \"user_id\" uuid)",
+                "RETURNS boolean",
+                "LANGUAGE sql",
+                "STABLE",
+                "SECURITY DEFINER",
+                "REVOKE EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) FROM PUBLIC",
+                "GRANT EXECUTE ON FUNCTION \"public\".\"is_member\"(uuid, uuid) TO \"app_user\", \"app_admin\"",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
@@ -67,15 +50,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_GrantPrivileges_EmitsAllTablesInSchemaGrant()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["select", "insert", "update", "delete"],
-                    Roles = ["app_user", "app_admin"],
-                }
-            )
+            Dataset_Generate_GrantPrivileges_EmitsAllTablesInSchemaGrant_1()
         );
 
         Assert.Equal(
@@ -88,27 +63,26 @@ public sealed class PostgresSupportDdlTests
     public void Generate_GrantPrivileges_WithRunAs_WrapsGrantInLocalRole()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "auth",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["select", "insert"],
-                    Roles = ["app_admin"],
-                    RunAs = "supabase_admin",
-                }
-            )
+            Dataset_Generate_GrantPrivileges_WithRunAs_WrapsGrantInLocalRole_1()
         );
 
-        Assert.Contains("pg_has_role(current_user, 'supabase_admin', 'MEMBER')", ddl);
-        Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", ddl);
-        Assert.Contains("GRANT \"supabase_admin\" TO", ddl, StringComparison.Ordinal);
-        Assert.Contains("SET LOCAL ROLE \"supabase_admin\";", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "GRANT SELECT, INSERT ON TABLE \"auth\".\"users\" TO \"app_admin\";",
-            ddl,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "pg_has_role(current_user, 'supabase_admin', 'MEMBER')",
+                "MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP",
+            ]
+        );
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "GRANT \"supabase_admin\" TO",
+                "SET LOCAL ROLE \"supabase_admin\";",
+                "GRANT SELECT, INSERT ON TABLE \"auth\".\"users\" TO \"app_admin\";",
+            ],
+            comparison: StringComparison.Ordinal
         );
         Assert.EndsWith("RESET ROLE", ddl, StringComparison.Ordinal);
     }
@@ -117,16 +91,7 @@ public sealed class PostgresSupportDdlTests
     public void Generate_RevokePrivileges_EmitsTableRevoke()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new RevokePrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "documents",
-                    Privileges = ["select"],
-                    Roles = ["app_user"],
-                }
-            )
+            Dataset_Generate_RevokePrivileges_EmitsTableRevoke_1()
         );
 
         Assert.Equal("REVOKE SELECT ON TABLE \"public\".\"documents\" FROM \"app_user\"", ddl);

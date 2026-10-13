@@ -154,9 +154,7 @@ function isCompletionItem(value: unknown): value is LspCompletionItem {
  * Extracts completion items from an LSP completion response.
  * The response may be an array of items or a CompletionList with an items property.
  */
-function extractCompletionItems(
-  result: unknown,
-): readonly LspCompletionItem[] {
+function extractCompletionItems(result: unknown): readonly LspCompletionItem[] {
   if (Array.isArray(result)) {
     return result.filter(isCompletionItem);
   }
@@ -182,12 +180,9 @@ function extractHoverText(hover: LspHoverResult): string {
 /**
  * Type guard for PublishDiagnosticsParams.
  */
-function isDiagnosticsParams(
-  value: unknown,
-): value is PublishDiagnosticsParams {
+function isDiagnosticsParams(value: unknown): value is PublishDiagnosticsParams {
   return isRecord(value) && typeof value["uri"] === "string" && Array.isArray(value["diagnostics"]);
 }
-
 
 /**
  * Persistent LSP client that maintains a single data listener for the entire
@@ -199,10 +194,7 @@ class LspClient {
   private messageId = 0;
   /** Raw byte buffer — Content-Length is in bytes, not characters */
   private rawBuffer: Buffer = Buffer.alloc(0);
-  private pendingRequests = new Map<
-    number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
-  >();
+  private pendingRequests = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private notifications: LspNotification[] = [];
 
   constructor(binary: string, env?: Record<string, string>) {
@@ -224,24 +216,30 @@ class LspClient {
   private processBuffer(): void {
     for (;;) {
       const headerEnd = this.rawBuffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) {break;}
+      if (headerEnd === -1) {
+        break;
+      }
 
       const header = this.rawBuffer.subarray(0, headerEnd).toString("utf-8");
       const match = header.match(/Content-Length:\s*(\d+)/i);
-      if (match?.[1] === undefined) {break;}
+      if (match?.[1] === undefined) {
+        break;
+      }
 
       const contentLength = parseInt(match[1], 10);
       const bodyStart = headerEnd + 4;
-      if (this.rawBuffer.length < bodyStart + contentLength) {break;}
+      if (this.rawBuffer.length < bodyStart + contentLength) {
+        break;
+      }
 
-      const body = this.rawBuffer
-        .subarray(bodyStart, bodyStart + contentLength)
-        .toString("utf-8");
+      const body = this.rawBuffer.subarray(bodyStart, bodyStart + contentLength).toString("utf-8");
       this.rawBuffer = this.rawBuffer.subarray(bodyStart + contentLength);
 
       try {
         const parsed: unknown = JSON.parse(body);
-        if (!isRecord(parsed)) {continue;}
+        if (!isRecord(parsed)) {
+          continue;
+        }
 
         const msg = parsed as JsonRpcMessage;
 
@@ -251,9 +249,7 @@ class LspClient {
           if (pending) {
             this.pendingRequests.delete(msg.id);
             if (msg.error !== undefined) {
-              pending.reject(
-                new Error(`LSP error: ${JSON.stringify(msg.error)}`),
-              );
+              pending.reject(new Error(`LSP error: ${JSON.stringify(msg.error)}`));
             } else {
               pending.resolve(msg.result);
             }
@@ -273,9 +269,8 @@ class LspClient {
 
   async request(method: string, params?: unknown): Promise<unknown> {
     const id = ++this.messageId;
-    const msg: JsonRpcRequest = params !== undefined
-      ? { jsonrpc: "2.0", id, method, params }
-      : { jsonrpc: "2.0", id, method };
+    const msg: JsonRpcRequest =
+      params !== undefined ? { jsonrpc: "2.0", id, method, params } : { jsonrpc: "2.0", id, method };
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
@@ -289,11 +284,7 @@ class LspClient {
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
-          reject(
-            new Error(
-              `Timeout waiting for response to ${method} (id=${String(id)})`,
-            ),
-          );
+          reject(new Error(`Timeout waiting for response to ${method} (id=${String(id)})`));
         }
       }, 10000);
     });
@@ -308,42 +299,25 @@ class LspClient {
     stdin.write(encode(msg));
   }
 
-  /** Drain collected notifications, optionally filtering by method. */
-  drainNotifications(method?: string): LspNotification[] {
-    if (method !== undefined) {
-      const matching = this.notifications.filter((n) => n.method === method);
-      this.notifications = this.notifications.filter(
-        (n) => n.method !== method,
-      );
-      return matching;
-    }
-    const all = [...this.notifications];
-    this.notifications = [];
-    return all;
+  /** Remove and return all notifications for a method. */
+  private takeNotifications(method: string): LspNotification[] {
+    const matching = this.notifications.filter((n) => n.method === method);
+    this.notifications = this.notifications.filter((n) => n.method !== method);
+    return matching;
   }
 
   /** Wait for at least one notification of a given method. */
-  async waitForNotification(
-    method: string,
-    timeoutMs: number = 5000,
-  ): Promise<unknown[]> {
+  async waitForNotification(method: string, timeoutMs: number = 5000): Promise<unknown[]> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      const matching = this.notifications.filter((n) => n.method === method);
+      const matching = this.takeNotifications(method);
       if (matching.length > 0) {
-        this.notifications = this.notifications.filter(
-          (n) => n.method !== method,
-        );
         return matching.map((n) => n.params);
       }
       await new Promise<void>((r) => setTimeout(r, 100));
     }
     // Return whatever we have
-    const matching = this.notifications.filter((n) => n.method === method);
-    this.notifications = this.notifications.filter(
-      (n) => n.method !== method,
-    );
-    return matching.map((n) => n.params);
+    return this.takeNotifications(method).map((n) => n.params);
   }
 
   kill(): void {
@@ -366,26 +340,19 @@ function findLspBinary(): string {
     }
   }
 
-  throw new Error(
-    `LSP binary not found. Searched:\n${candidates.join("\n")}\nBuild with: cargo build -p lql-lsp`,
-  );
+  throw new Error(`LSP binary not found. Searched:\n${candidates.join("\n")}\nBuild with: cargo build -p lql-lsp`);
 }
 
 /** Read a test fixture file */
 function readFixture(name: string): string {
   const fixturePath = path.join(__dirname, "..", "fixtures", name);
-  const altPath = path.join(
-    __dirname,
-    "..",
-    "..",
-    "..",
-    "src",
-    "test",
-    "fixtures",
-    name,
-  );
-  if (fs.existsSync(fixturePath)) {return fs.readFileSync(fixturePath, "utf8");}
-  if (fs.existsSync(altPath)) {return fs.readFileSync(altPath, "utf8");}
+  const altPath = path.join(__dirname, "..", "..", "..", "src", "test", "fixtures", name);
+  if (fs.existsSync(fixturePath)) {
+    return fs.readFileSync(fixturePath, "utf8");
+  }
+  if (fs.existsSync(altPath)) {
+    return fs.readFileSync(altPath, "utf8");
+  }
   throw new Error(`Fixture not found: ${name}`);
 }
 
@@ -424,19 +391,334 @@ suite("LSP Protocol E2E Tests", function () {
     return result as LspInitializeResult;
   }
 
+  // Implements [LQL-HOVER-TEST-REQUEST].
+  // Implements [LQL-PROTOCOL-SHARED-POSITION-REQUEST].
+  async function requestAt(method: string, uri: string, position: LspPosition): Promise<unknown> {
+    return client.request(method, { textDocument: { uri }, position });
+  }
+
+  async function hoverAt(uri: string, position: LspPosition, message: string): Promise<LspHoverResult> {
+    const raw = await requestAt("textDocument/hover", uri, position);
+    assert.ok(raw !== null && raw !== undefined, message);
+    // Safe: LSP hover response always has this shape when non-null
+    return raw as LspHoverResult;
+  }
+
   /** Open a document and wait for diagnostics */
-  async function openDocument(
-    uri: string,
-    content: string,
-  ): Promise<PublishDiagnosticsParams[]> {
+  async function openDocument(uri: string, content: string): Promise<PublishDiagnosticsParams[]> {
     client.notify("textDocument/didOpen", {
       textDocument: { uri, languageId: "lql", version: 1, text: content },
     });
-    const raw = await client.waitForNotification(
-      "textDocument/publishDiagnostics",
-      5000,
-    );
+    const raw = await client.waitForNotification("textDocument/publishDiagnostics", 5000);
     return raw.filter(isDiagnosticsParams);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function assertCompletionLabels(
+    labels: string[],
+    firstLabel: string,
+    firstMessage: string,
+    secondLabel: string,
+    secondMessage: string,
+    thirdLabel: string,
+    thirdMessage: string
+  ): void {
+    assert.ok(labels.includes(firstLabel), firstMessage);
+    assert.ok(labels.includes(secondLabel), secondMessage);
+    assert.ok(labels.includes(thirdLabel), thirdMessage);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openAndReadCompletionsAt(
+    uri: string,
+    content: string,
+    position: LspPosition
+  ): Promise<readonly LspCompletionItem[]> {
+    await openDocument(uri, content);
+    const result = await requestAt("textDocument/completion", uri, position);
+    return extractCompletionItems(result);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openAndReadCompletions(
+    uri: string,
+    content: string,
+    character: number
+  ): Promise<readonly LspCompletionItem[]> {
+    return openAndReadCompletionsAt(uri, content, { line: 0, character: character });
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openCompletionsAndAssertLabel(
+    uri: string,
+    content: string,
+    character: number,
+    expectedLabel: string,
+    message: string
+  ): Promise<string[]> {
+    const items = await openAndReadCompletions(uri, content, character);
+    const labels = items.map((i) => i.label);
+    assert.ok(labels.includes(expectedLabel), message);
+    return labels;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function requestCompletion(
+    uri: string,
+    position: LspPosition,
+    message: string
+  ): Promise<unknown> {
+    const result = await requestAt("textDocument/completion", uri, position);
+    assert.ok(result !== null && result !== undefined, message);
+    return result;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function requestDocumentSymbols(uri: string): Promise<unknown> {
+    return client.request("textDocument/documentSymbol", { textDocument: { uri } });
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function assertFixtureHasNoSeverityOneErrors(
+    fixture: string,
+    uri: string,
+    errorMessage: (errors: readonly LspDiagnostic[]) => string,
+    publishMessage?: string,
+    predicate: (diagnostic: LspDiagnostic) => boolean = (d) => d.severity === 1
+  ): Promise<void> {
+    const notifications = await openInvalidFixture(fixture, uri);
+    assert.ok(notifications.length > 0, publishMessage);
+    const errors = notifications[0].diagnostics.filter(predicate);
+    assert.strictEqual(errors.length, 0, errorMessage(errors));
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function assertTextIncludes(text: string, expectations: readonly (readonly [string, string, boolean?])[]): void { for (const [needle, message, ignoreCase = true] of expectations) { assert.ok((ignoreCase ? text.toLowerCase() : text).includes(needle), message); } }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function initializeAndHoverText(
+    content: string,
+    uri: string,
+    line: number,
+    character: number,
+    message: string
+  ): Promise<string> {
+    const hover = await initializeAndHover(content, uri, line, character, message);
+    assert.ok(hover.contents !== undefined, "Hover must have contents");
+    return extractHoverText(hover);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openDocumentAndReadSeverityOneErrors(
+    uri: string,
+    content: string,
+    publishMessage: string
+  ): Promise<readonly LspDiagnostic[]> {
+    const notifications = await openDocument(uri, content);
+    assert.ok(notifications.length > 0, publishMessage);
+    return notifications[0].diagnostics.filter((d) => d.severity === 1);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openDocumentAndReadSymbols(
+    uri: string,
+    content: string,
+    notNullMessage: string,
+    arrayMessage: string
+  ): Promise<LspDocumentSymbol[]> {
+    await openDocument(uri, content);
+    const result = requireArrayResult(await requestDocumentSymbols(uri), notNullMessage, arrayMessage);
+    // Safe: LSP documentSymbol returns an array of SymbolInformation
+    return result as LspDocumentSymbol[];
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function requireSymbolLocation(sym: LspDocumentSymbol): NonNullable<LspDocumentSymbol["location"]> {
+    assert.ok(sym.name !== undefined, "Symbol must have a name");
+    assert.ok(sym.kind !== undefined, "Symbol must have a kind");
+    assert.ok(sym.location !== undefined, "Symbol must have a location");
+    return sym.location;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function requireRange(range: LspRange | undefined, rangeMessage: string): LspRange {
+    assert.ok(range !== undefined, rangeMessage);
+    return range;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function requireRangeStart(
+    range: LspRange | undefined,
+    rangeMessage: string
+  ): NonNullable<LspRange["start"]> {
+    const resolved = requireRange(range, rangeMessage);
+    assert.ok(resolved.start !== undefined, "Range must have start");
+    return resolved.start;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function assertAllLabelsIncluded(
+    labels: readonly string[],
+    required: readonly string[],
+    message: (label: string) => string
+  ): void {
+    for (const label of required) {
+      assert.ok(labels.includes(label), message(label));
+    }
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function assertNamesInclude(
+    names: readonly (string | undefined)[],
+    expectations: readonly (readonly [string, string])[]
+  ): void {
+    for (const [name, message] of expectations) {
+      assert.ok(names.includes(name), message);
+    }
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function findCompletionItem(
+    items: readonly LspCompletionItem[],
+    label: string,
+    message: string
+  ): LspCompletionItem {
+    const item = items.find((i) => i.label === label);
+    assert.ok(item !== undefined, message);
+    return item;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  function requireArrayResult(result: unknown, notNullMessage: string, arrayMessage: string): unknown[] {
+    assert.ok(result !== null && result !== undefined, notNullMessage);
+    assert.ok(Array.isArray(result), arrayMessage);
+    return result;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function initializeOpenAndFormat(
+    uri: string,
+    content: string,
+    resultMessage: string,
+    arrayMessage: string,
+    editMessage: string
+  ): Promise<LspTextEdit> {
+    await initServer();
+    await openDocument(uri, content);
+    return formatAndRequireEdit(uri, resultMessage, arrayMessage, editMessage);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function initializeAndReadCompletionLabels(
+    uri: string,
+    content: string,
+    character: number
+  ): Promise<string[]> {
+    await initServer();
+    const items = await openAndReadCompletions(uri, content, character);
+    return items.map((i) => i.label);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function changeAndReadErrorDiagnostics(
+    uri: string,
+    content: string,
+    message: string
+  ): Promise<readonly LspDiagnostic[]> {
+    const notifications = await changeAndReadDiagnostics(uri, content, message);
+    return notifications[notifications.length - 1].diagnostics.filter((d) => d.severity === 1);
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function initializeAndRequestAt(
+    uri: string,
+    content: string,
+    method: string,
+    character: number
+  ): Promise<unknown> {
+    await initServer();
+    await openDocument(uri, content);
+
+    const result = await requestAt(method, uri, { line: 0, character: character });
+    return result;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function initializeAndHover(
+    content: string,
+    uri: string,
+    line: number,
+    character: number,
+    message: string
+  ): Promise<LspHoverResult> {
+    await initServer();
+    
+    await openDocument(uri, content);
+
+    const hover = await hoverAt(uri, { line: line, character: character }, message);
+    return hover;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function assertHoverAndReadNext(
+    previousText: string,
+    expectedText: string,
+    previousMessage: string,
+    uri: string,
+    line: number,
+    character: number,
+    hoverMessage: string
+  ): Promise<string> {
+    assert.ok(previousText.toLowerCase().includes(expectedText), previousMessage);
+
+    const sumHoverTyped = await hoverAt(uri, { line: line, character: character }, hoverMessage);
+    const sumText = extractHoverText(sumHoverTyped);
+    return sumText;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function changeAndReadDiagnostics(
+    uri: string,
+    content: string,
+    message: string
+  ): Promise<PublishDiagnosticsParams[]> {
+    client.notify("textDocument/didChange", {
+      textDocument: { uri: uri, version: 2 },
+      contentChanges: [{ text: content }],
+    });
+
+    const rawNotifications = await client.waitForNotification("textDocument/publishDiagnostics", 5000);
+    const notifications = rawNotifications.filter(isDiagnosticsParams);
+    assert.ok(notifications.length > 0, message);
+    return notifications;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function formatAndRequireEdit(
+    uri: string,
+    resultMessage: string,
+    arrayMessage: string,
+    editMessage: string
+  ): Promise<LspTextEdit> {
+    const result = await client.request("textDocument/formatting", {
+      textDocument: { uri: uri },
+      options: { tabSize: 4, insertSpaces: true },
+    });
+
+    // Safe: LSP formatting returns an array of TextEdit
+    const edits = requireArrayResult(result, resultMessage, arrayMessage) as LspTextEdit[];
+    assert.ok(edits.length > 0, editMessage);
+
+    const edit = edits[0];
+    return edit;
+  }
+
+  // Implements [LQL-PROTOCOL-SHARED-SCENARIOS].
+  async function openInvalidFixture(fixture: string, uri: string): Promise<PublishDiagnosticsParams[]> {
+    await initServer();
+    const invalidContent = readFixture(fixture);
+    const notifications = await openDocument(uri, invalidContent);
+    return notifications;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -449,53 +731,21 @@ suite("LSP Protocol E2E Tests", function () {
     assert.notStrictEqual(result, undefined, "Initialize result should not be null");
     const caps = result.capabilities;
     assert.notStrictEqual(caps, undefined, "Should have capabilities object");
-    assert.notStrictEqual(
-      caps?.textDocumentSync,
-      undefined,
-      "Must support text document sync",
-    );
-    assert.notStrictEqual(
-      caps?.completionProvider,
-      undefined,
-      "Must support completions (IntelliSense)",
-    );
+    assert.notStrictEqual(caps?.textDocumentSync, undefined, "Must support text document sync");
+    assert.notStrictEqual(caps?.completionProvider, undefined, "Must support completions (IntelliSense)");
     const triggerChars = caps?.completionProvider?.triggerCharacters;
-    assert.notStrictEqual(
-      triggerChars,
-      undefined,
-      "Must have trigger characters",
-    );
+    assert.notStrictEqual(triggerChars, undefined, "Must have trigger characters");
     if (triggerChars === undefined) {
       assert.fail("Trigger characters must be defined");
     }
-    assert.strictEqual(
-      triggerChars.includes("|"),
-      true,
-      "Pipe should be a trigger character",
-    );
-    assert.strictEqual(
-      triggerChars.includes("."),
-      true,
-      "Dot should be a trigger character",
-    );
+    assert.strictEqual(triggerChars.includes("|"), true, "Pipe should be a trigger character");
+    assert.strictEqual(triggerChars.includes("."), true, "Dot should be a trigger character");
     if (caps === undefined) {
       assert.fail("Capabilities must be defined");
     }
-    assert.strictEqual(
-      caps.hoverProvider,
-      true,
-      "Must support hover (IntelliPrompt)",
-    );
-    assert.strictEqual(
-      caps.documentSymbolProvider,
-      true,
-      "Must support document symbols",
-    );
-    assert.strictEqual(
-      caps.documentFormattingProvider,
-      true,
-      "Must support document formatting",
-    );
+    assert.strictEqual(caps.hoverProvider, true, "Must support hover (IntelliPrompt)");
+    assert.strictEqual(caps.documentSymbolProvider, true, "Must support document symbols");
+    assert.strictEqual(caps.documentFormattingProvider, true, "Must support document formatting");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -503,25 +753,36 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("should provide pipeline completions after |>", async function () {
-    await initServer();
-    await openDocument("file:///test/completion.lql", "users |> ");
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/completion.lql" },
-      position: { line: 0, character: 9 },
-    });
+    const result = await initializeAndRequestAt(
+      "file:///test/completion.lql",
+      "users |> ",
+      "textDocument/completion",
+      9
+    );
 
     assert.ok(result !== null && result !== undefined, "Completion result should not be null");
     const items = extractCompletionItems(result);
     assert.ok(items.length > 0, "Should return completion items");
 
     const labels = items.map((i) => i.label);
-    assert.ok(labels.includes("select"), "Must suggest 'select'");
-    assert.ok(labels.includes("filter"), "Must suggest 'filter'");
-    assert.ok(labels.includes("join"), "Must suggest 'join'");
-    assert.ok(labels.includes("group_by"), "Must suggest 'group_by'");
-    assert.ok(labels.includes("order_by"), "Must suggest 'order_by'");
-    assert.ok(labels.includes("having"), "Must suggest 'having'");
+    assertCompletionLabels(
+      labels,
+      "select",
+      "Must suggest 'select'",
+      "filter",
+      "Must suggest 'filter'",
+      "join",
+      "Must suggest 'join'"
+    );
+    assertCompletionLabels(
+      labels,
+      "group_by",
+      "Must suggest 'group_by'",
+      "order_by",
+      "Must suggest 'order_by'",
+      "having",
+      "Must suggest 'having'"
+    );
     assert.ok(labels.includes("limit"), "Must suggest 'limit'");
 
     const selectItem = items.find((i) => i.label === "select");
@@ -532,36 +793,30 @@ suite("LSP Protocol E2E Tests", function () {
   });
 
   test("should provide aggregate function completions", async function () {
-    await initServer();
-    await openDocument("file:///test/agg.lql", "orders |> select(c");
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/agg.lql" },
-      position: { line: 0, character: 18 },
-    });
-
-    const items = extractCompletionItems(result);
-    const labels = items.map((i) => i.label);
-    assert.ok(labels.includes("count"), "Must suggest 'count'");
-    assert.ok(labels.includes("concat"), "Must suggest 'concat'");
-    assert.ok(labels.includes("case"), "Must suggest 'case' keyword");
+    const labels = await initializeAndReadCompletionLabels("file:///test/agg.lql", "orders |> select(c", 18);
+    assertCompletionLabels(
+      labels,
+      "count",
+      "Must suggest 'count'",
+      "concat",
+      "Must suggest 'concat'",
+      "case",
+      "Must suggest 'case' keyword"
+    );
     assert.ok(labels.includes("coalesce"), "Must suggest 'coalesce'");
   });
 
   test("should provide keyword completions", async function () {
-    await initServer();
-    await openDocument("file:///test/kw.lql", "l");
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/kw.lql" },
-      position: { line: 0, character: 1 },
-    });
-
-    const items = extractCompletionItems(result);
-    const labels = items.map((i) => i.label);
-    assert.ok(labels.includes("let"), "Must suggest 'let' keyword");
-    assert.ok(labels.includes("lower"), "Must suggest 'lower' function");
-    assert.ok(labels.includes("length"), "Must suggest 'length' function");
+    const labels = await initializeAndReadCompletionLabels("file:///test/kw.lql", "l", 1);
+    assertCompletionLabels(
+      labels,
+      "let",
+      "Must suggest 'let' keyword",
+      "lower",
+      "Must suggest 'lower' function",
+      "length",
+      "Must suggest 'length' function"
+    );
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -569,110 +824,66 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("should provide hover info for filter keyword", async function () {
-    await initServer();
-    const content =
-      "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)";
-    await openDocument("file:///test/hover.lql", content);
-
-    const filterHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/hover.lql" },
-      position: { line: 0, character: 12 },
-    });
-
-    assert.ok(filterHover !== null && filterHover !== undefined, "Hover result for 'filter' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = filterHover as LspHoverResult;
-    assert.ok(hover.contents !== undefined, "Hover must have contents");
-    const filterText = extractHoverText(hover);
-    assert.ok(
-      filterText.toLowerCase().includes("filter"),
-      "Hover for 'filter' must mention 'filter'",
+    const filterText = await initializeAndHoverText(
+      "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)",
+      "file:///test/hover.lql",
+      0,
+      12,
+      "Hover result for 'filter' must not be null"
     );
-    assert.ok(
-      filterText.includes("fn("),
-      "Hover for 'filter' should show lambda syntax",
-    );
+    assertTextIncludes(filterText, [
+      ["filter", "Hover for 'filter' must mention 'filter'"],
+      ["fn(", "Hover for 'filter' should show lambda syntax", false],
+    ]);
   });
 
   test("should provide hover info for select keyword", async function () {
-    await initServer();
-    const content =
-      "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)";
-    await openDocument("file:///test/hover2.lql", content);
-
-    const selectHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/hover2.lql" },
-      position: { line: 0, character: 52 },
-    });
-
-    assert.ok(selectHover !== null && selectHover !== undefined, "Hover result for 'select' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = selectHover as LspHoverResult;
+    const hover = await initializeAndHover(
+      "users |> filter(fn(row) => row.users.age > 18) |> select(users.name) |> limit(10)",
+      "file:///test/hover2.lql",
+      0,
+      52,
+      "Hover result for 'select' must not be null"
+    );
     const selectText = extractHoverText(hover);
-    assert.ok(
-      selectText.toLowerCase().includes("select"),
-      "Hover for 'select' must mention 'select'",
-    );
-    assert.ok(
-      selectText.toLowerCase().includes("project"),
-      "Hover for 'select' should describe projection",
-    );
+    assertTextIncludes(selectText, [
+      ["select", "Hover for 'select' must mention 'select'"],
+      ["project", "Hover for 'select' should describe projection"],
+    ]);
   });
 
   test("should provide hover for aggregate functions", async function () {
     await initServer();
-    await openDocument(
+    await openDocument("file:///test/agg_hover.lql", "orders |> select(count(*) as cnt, sum(orders.total) as total)");
+
+    const countHoverTyped = await hoverAt(
       "file:///test/agg_hover.lql",
-      "orders |> select(count(*) as cnt, sum(orders.total) as total)",
+      { line: 0, character: 19 },
+      "Hover for 'count' must not be null"
     );
-
-    const countHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/agg_hover.lql" },
-      position: { line: 0, character: 19 },
-    });
-
-    assert.ok(countHover !== null && countHover !== undefined, "Hover for 'count' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const countHoverTyped = countHover as LspHoverResult;
     assert.ok(countHoverTyped.contents !== undefined, "Hover must have contents");
     const countText = extractHoverText(countHoverTyped);
-    assert.ok(
-      countText.toLowerCase().includes("count"),
+    const sumText = await assertHoverAndReadNext(
+      countText,
+      "count",
       "Must describe count function",
+      "file:///test/agg_hover.lql",
+      0,
+      35,
+      "Hover for 'sum' must not be null"
     );
-
-    const sumHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/agg_hover.lql" },
-      position: { line: 0, character: 35 },
-    });
-
-    assert.ok(sumHover !== null && sumHover !== undefined, "Hover for 'sum' must not be null");
-    // Safe: LSP hover response always has this shape when non-null
-    const sumHoverTyped = sumHover as LspHoverResult;
-    const sumText = extractHoverText(sumHoverTyped);
-    assert.ok(
-      sumText.toLowerCase().includes("sum"),
-      "Must describe sum function",
-    );
+    assert.ok(sumText.toLowerCase().includes("sum"), "Must describe sum function");
   });
 
   test("should return null hover for unknown identifiers", async function () {
-    await initServer();
-    await openDocument(
+    const noHover = await initializeAndRequestAt(
       "file:///test/no_hover.lql",
       "users |> select(users.id)",
+      "textDocument/hover",
+      2
     );
 
-    const noHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/no_hover.lql" },
-      position: { line: 0, character: 2 },
-    });
-
-    assert.strictEqual(
-      noHover,
-      null,
-      "Hover for unknown identifier should be null",
-    );
+    assert.strictEqual(noHover, null, "Hover for unknown identifier should be null");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -680,72 +891,43 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("should publish diagnostics for syntax errors", async function () {
-    await initServer();
-    const invalidContent = readFixture("invalid_syntax.lql");
-    const notifications = await openDocument(
-      "file:///test/invalid.lql",
-      invalidContent,
-    );
+    const notifications = await openInvalidFixture("invalid_syntax.lql", "file:///test/invalid.lql");
 
     assert.ok(notifications.length > 0, "Must publish diagnostics");
     const diags = notifications[0];
     assert.ok(diags.uri !== undefined, "Diagnostics must have a URI");
-    assert.ok(
-      diags.diagnostics.length > 0,
-      "Must have at least one diagnostic for invalid syntax",
-    );
+    assert.ok(diags.diagnostics.length > 0, "Must have at least one diagnostic for invalid syntax");
 
     const firstDiag = diags.diagnostics[0];
-    assert.ok(firstDiag.range !== undefined, "Diagnostic must have a range");
-    assert.ok(firstDiag.range.start !== undefined, "Range must have start");
-    assert.ok(firstDiag.range.end !== undefined, "Range must have end");
+    const range = requireRange(firstDiag.range, "Diagnostic must have a range");
+    assert.ok(range.start !== undefined, "Range must have start");
+    assert.ok(range.end !== undefined, "Range must have end");
     assert.ok(firstDiag.message !== undefined, "Diagnostic must have a message");
     assert.ok(firstDiag.message.length > 0, "Message must not be empty");
     assert.ok(firstDiag.severity !== undefined, "Diagnostic must have severity");
   });
 
   test("should publish clean diagnostics for valid files", async function () {
-    await initServer();
-    const validContent = readFixture("simple_select.lql");
-    const notifications = await openDocument(
+    await assertFixtureHasNoSeverityOneErrors(
+      "simple_select.lql",
       "file:///test/valid.lql",
-      validContent,
-    );
-
-    assert.ok(notifications.length > 0, "Must publish diagnostics");
-    const diags = notifications[0];
-    const errors = diags.diagnostics.filter((d) => d.severity === 1);
-    assert.strictEqual(
-      errors.length,
-      0,
-      `Valid file should have no errors, got: ${JSON.stringify(errors)}`,
+      (errors) => `Valid file should have no errors, got: ${JSON.stringify(errors)}`,
+      "Must publish diagnostics"
     );
   });
 
   test("should update diagnostics on document change", async function () {
     await initServer();
-    await openDocument(
-      "file:///test/change.lql",
-      "users |> select(users.id)",
-    );
+    await openDocument("file:///test/change.lql", "users |> select(users.id)");
 
     // Change to invalid content
-    client.notify("textDocument/didChange", {
-      textDocument: { uri: "file:///test/change.lql", version: 2 },
-      contentChanges: [{ text: "users |> select(" }],
-    });
-
-    const rawNotifications = await client.waitForNotification(
-      "textDocument/publishDiagnostics",
-      5000,
+    const notifications = await changeAndReadDiagnostics(
+      "file:///test/change.lql",
+      "users |> select(",
+      "Must publish updated diagnostics"
     );
-    const notifications = rawNotifications.filter(isDiagnosticsParams);
-    assert.ok(notifications.length > 0, "Must publish updated diagnostics");
     const diags = notifications[notifications.length - 1];
-    assert.ok(
-      diags.diagnostics.length > 0,
-      "Changed invalid content should produce diagnostics",
-    );
+    assert.ok(diags.diagnostics.length > 0, "Changed invalid content should produce diagnostics");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -755,33 +937,22 @@ suite("LSP Protocol E2E Tests", function () {
   test("should return document symbols for let bindings", async function () {
     await initServer();
     const content = readFixture("complex_pipeline.lql");
-    await openDocument("file:///test/symbols.lql", content);
-
-    const result = await client.request("textDocument/documentSymbol", {
-      textDocument: { uri: "file:///test/symbols.lql" },
-    });
-
-    assert.ok(result !== null && result !== undefined, "Document symbols result should not be null");
-    assert.ok(Array.isArray(result), "Symbols should be an array");
-    // Safe: LSP documentSymbol returns an array of SymbolInformation
-    const symbols = result as LspDocumentSymbol[];
-    assert.ok(
-      symbols.length >= 2,
-      "Should find at least 2 let bindings (completed_orders, summary)",
+    const symbols = await openDocumentAndReadSymbols(
+      "file:///test/symbols.lql",
+      content,
+      "Document symbols result should not be null",
+      "Symbols should be an array"
     );
+    assert.ok(symbols.length >= 2, "Should find at least 2 let bindings (completed_orders, summary)");
 
     const names = symbols.map((s) => s.name);
-    assert.ok(
-      names.includes("completed_orders"),
-      "Must find 'completed_orders' binding",
-    );
-    assert.ok(names.includes("summary"), "Must find 'summary' binding");
+    assertNamesInclude(names, [
+      ["completed_orders", "Must find 'completed_orders' binding"],
+      ["summary", "Must find 'summary' binding"],
+    ]);
 
-    const sym = symbols[0];
-    assert.ok(sym.name !== undefined, "Symbol must have a name");
-    assert.ok(sym.kind !== undefined, "Symbol must have a kind");
-    assert.ok(sym.location !== undefined, "Symbol must have a location");
-    assert.ok(sym.location.range !== undefined, "Symbol location must have a range");
+    const location = requireSymbolLocation(symbols[0]);
+    assert.ok(location.range !== undefined, "Symbol location must have a range");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -789,22 +960,14 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("should format LQL documents", async function () {
-    await initServer();
     const uglyContent = "  users   |>   select(  users.id  ,  users.name  )  ";
-    await openDocument("file:///test/format.lql", uglyContent);
-
-    const result = await client.request("textDocument/formatting", {
-      textDocument: { uri: "file:///test/format.lql" },
-      options: { tabSize: 4, insertSpaces: true },
-    });
-
-    assert.ok(result !== null && result !== undefined, "Formatting result should not be null");
-    assert.ok(Array.isArray(result), "Formatting should return text edits");
-    // Safe: LSP formatting returns an array of TextEdit
-    const edits = result as LspTextEdit[];
-    assert.ok(edits.length > 0, "Should have at least one edit");
-
-    const edit = edits[0];
+    const edit = await initializeOpenAndFormat(
+      "file:///test/format.lql",
+      uglyContent,
+      "Formatting result should not be null",
+      "Formatting should return text edits",
+      "Should have at least one edit"
+    );
     assert.ok(edit.range !== undefined, "Edit must have a range");
     assert.ok(edit.newText !== undefined, "Edit must have new text");
     assert.ok(edit.newText.trim().length > 0, "Formatted text should not be empty");
@@ -815,69 +978,39 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("should handle complex pipeline with all features", async function () {
-    await initServer();
-    const content = readFixture("complex_pipeline.lql");
-    const notifications = await openDocument(
+    await assertFixtureHasNoSeverityOneErrors(
+      "complex_pipeline.lql",
       "file:///test/complex.lql",
-      content,
+      (errors) => `Complex pipeline should parse without errors, got: ${JSON.stringify(errors)}`,
+      "Must publish diagnostics",
+      (d) => d.severity === 1 && d.source === "lql"
     );
 
-    assert.ok(notifications.length > 0, "Must publish diagnostics");
-    const diags = notifications[0];
-    const parseErrors = diags.diagnostics.filter(
-      (d) => d.severity === 1 && d.source === "lql",
-    );
-    assert.strictEqual(
-      parseErrors.length,
-      0,
-      `Complex pipeline should parse without errors, got: ${JSON.stringify(parseErrors)}`,
-    );
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/complex.lql" },
-      position: { line: 17, character: 0 },
-    });
-    assert.ok(result !== null && result !== undefined, "Should provide completions in complex document");
+    await requestCompletion("file:///test/complex.lql", { line: 17, character: 0 }, "Should provide completions in complex document");
   });
 
   test("should handle window function documents cleanly", async function () {
-    await initServer();
-    const content = readFixture("window_functions.lql");
-    const notifications = await openDocument(
+    await assertFixtureHasNoSeverityOneErrors(
+      "window_functions.lql",
       "file:///test/window.lql",
-      content,
+      () => "Window function file should parse without errors"
     );
-
-    assert.ok(notifications.length > 0);
-    const diags = notifications[0];
-    const errors = diags.diagnostics.filter((d) => d.severity === 1);
-    assert.strictEqual(errors.length, 0, "Window function file should parse without errors");
   });
 
   test("should handle case expression documents cleanly", async function () {
-    await initServer();
-    const content = readFixture("case_expression.lql");
-    const notifications = await openDocument(
+    await assertFixtureHasNoSeverityOneErrors(
+      "case_expression.lql",
       "file:///test/case.lql",
-      content,
+      () => "Case expression should parse cleanly"
     );
-
-    const diags = notifications[0];
-    const errors = diags.diagnostics.filter((d) => d.severity === 1);
-    assert.strictEqual(errors.length, 0, "Case expression should parse cleanly");
   });
 
   test("should handle exists subquery documents cleanly", async function () {
-    await initServer();
-    const content = readFixture("subquery_exists.lql");
-    const notifications = await openDocument(
+    await assertFixtureHasNoSeverityOneErrors(
+      "subquery_exists.lql",
       "file:///test/exists.lql",
-      content,
+      () => "Exists subquery should parse cleanly"
     );
-
-    const diags = notifications[0];
-    const errors = diags.diagnostics.filter((d) => d.severity === 1);
-    assert.strictEqual(errors.length, 0, "Exists subquery should parse cleanly");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -893,34 +1026,16 @@ suite("LSP Protocol E2E Tests", function () {
 
   test("should handle multiple documents simultaneously", async function () {
     await initServer();
-    await openDocument(
-      "file:///test/doc1.lql",
-      "users |> select(users.id)",
-    );
-    await openDocument(
-      "file:///test/doc2.lql",
-      "orders |> select(orders.total)",
-    );
+    await openDocument("file:///test/doc1.lql", "users |> select(users.id)");
+    await openDocument("file:///test/doc2.lql", "orders |> select(orders.total)");
 
-    const result1 = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/doc1.lql" },
-      position: { line: 0, character: 24 },
-    });
-    const result2 = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/doc2.lql" },
-      position: { line: 0, character: 30 },
-    });
-
-    assert.ok(result1 !== null && result1 !== undefined, "Doc1 should return completions");
-    assert.ok(result2 !== null && result2 !== undefined, "Doc2 should return completions");
+    await requestCompletion("file:///test/doc1.lql", { line: 0, character: 24 }, "Doc1 should return completions");
+    await requestCompletion("file:///test/doc2.lql", { line: 0, character: 30 }, "Doc2 should return completions");
   });
 
   test("should handle document close and reopen", async function () {
     await initServer();
-    await openDocument(
-      "file:///test/reopen.lql",
-      "users |> select(users.id)",
-    );
+    await openDocument("file:///test/reopen.lql", "users |> select(users.id)");
 
     client.notify("textDocument/didClose", {
       textDocument: { uri: "file:///test/reopen.lql" },
@@ -928,17 +1043,9 @@ suite("LSP Protocol E2E Tests", function () {
 
     await new Promise<void>((r) => setTimeout(r, 300));
 
-    await openDocument(
-      "file:///test/reopen.lql",
-      "orders |> select(orders.total)",
-    );
+    await openDocument("file:///test/reopen.lql", "orders |> select(orders.total)");
 
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/reopen.lql" },
-      position: { line: 0, character: 30 },
-    });
-
-    assert.ok(result !== null && result !== undefined, "Should provide completions after reopen");
+    await requestCompletion("file:///test/reopen.lql", { line: 0, character: 30 }, "Should provide completions after reopen");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -950,97 +1057,78 @@ suite("LSP Protocol E2E Tests", function () {
     const content = `let active_users = users
 |> filter(fn(row) => row.users.status = 'active')
 |> `;
-    await openDocument("file:///test/intellisense_proof1.lql", content);
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/intellisense_proof1.lql" },
-      position: { line: 2, character: 3 },
-    });
-
-    const items = extractCompletionItems(result);
+    const items = await openAndReadCompletionsAt("file:///test/intellisense_proof1.lql", content, { line: 2, character: 3 });
     const labels = items.map((i) => i.label);
 
     // All pipeline operations MUST be offered after |>
     const requiredOps = [
-      "select", "filter", "join", "left_join", "group_by",
-      "order_by", "having", "limit", "offset", "union", "insert",
+      "select",
+      "filter",
+      "join",
+      "left_join",
+      "group_by",
+      "order_by",
+      "having",
+      "limit",
+      "offset",
+      "union",
+      "insert",
     ];
-    for (const op of requiredOps) {
-      assert.ok(labels.includes(op), `IntelliSense MUST suggest '${op}' after |>`);
-    }
+    assertAllLabelsIncluded(labels, requiredOps, (op) => `IntelliSense MUST suggest '${op}' after |>`);
 
     // Each completion MUST have kind, detail, documentation, and insert_text
     for (const op of requiredOps) {
-      const item = items.find((i) => i.label === op);
-      assert.ok(item !== undefined, `Completion for '${op}' must exist`);
+      const item = findCompletionItem(items, op, `Completion for '${op}' must exist`);
       assert.ok(item.kind !== undefined, `'${op}' must have a completion kind`);
-      assert.ok(
-        item.detail !== undefined && item.detail.length > 0,
-        `'${op}' must have non-empty detail`,
-      );
+      assert.ok(item.detail !== undefined && item.detail.length > 0, `'${op}' must have non-empty detail`);
       assert.ok(
         item.documentation !== undefined && item.documentation.length > 0,
-        `'${op}' must have non-empty documentation`,
+        `'${op}' must have non-empty documentation`
       );
     }
   });
 
   test("PROOF: IntelliSense delivers function completions inside select() arguments", async function () {
-    await initServer();
-    const content = "orders |> select(";
-    await openDocument("file:///test/intellisense_proof2.lql", content);
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/intellisense_proof2.lql" },
-      position: { line: 0, character: 17 },
-    });
-
-    const items = extractCompletionItems(result);
-    const labels = items.map((i) => i.label);
+    const labels = await initializeAndReadCompletionLabels("file:///test/intellisense_proof2.lql", "orders |> select(", 17);
 
     // Aggregate functions MUST be available inside select()
-    const requiredFunctions = [
-      "count", "sum", "avg", "max", "min",
-    ];
-    for (const fn of requiredFunctions) {
-      assert.ok(
-        labels.includes(fn),
-        `IntelliSense MUST suggest aggregate function '${fn}' inside select()`,
-      );
-    }
+    const requiredFunctions = ["count", "sum", "avg", "max", "min"];
+    assertAllLabelsIncluded(
+      labels,
+      requiredFunctions,
+      (fn) => `IntelliSense MUST suggest aggregate function '${fn}' inside select()`
+    );
 
     // String functions MUST be available
     const stringFunctions = ["concat", "substring", "length", "trim", "upper", "lower"];
-    for (const fn of stringFunctions) {
-      assert.ok(
-        labels.includes(fn),
-        `IntelliSense MUST suggest string function '${fn}' inside select()`,
-      );
-    }
+    assertAllLabelsIncluded(
+      labels,
+      stringFunctions,
+      (fn) => `IntelliSense MUST suggest string function '${fn}' inside select()`
+    );
 
     // Window functions MUST be available
-    assert.ok(labels.includes("row_number"), "Must suggest 'row_number' window function");
-    assert.ok(labels.includes("rank"), "Must suggest 'rank' window function");
-    assert.ok(labels.includes("dense_rank"), "Must suggest 'dense_rank' window function");
+    assertCompletionLabels(
+      labels,
+      "row_number",
+      "Must suggest 'row_number' window function",
+      "rank",
+      "Must suggest 'rank' window function",
+      "dense_rank",
+      "Must suggest 'dense_rank' window function"
+    );
   });
 
   test("PROOF: IntelliSense completions have correct LSP completion item kinds", async function () {
     await initServer();
-    await openDocument("file:///test/intellisense_kinds.lql", "orders |> ");
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/intellisense_kinds.lql" },
-      position: { line: 0, character: 10 },
-    });
-
-    const items = extractCompletionItems(result);
+    const items = await openAndReadCompletions("file:///test/intellisense_kinds.lql", "orders |> ", 10);
 
     // LSP completion item kind: Function = 3, Keyword = 14, Snippet = 15
     const selectItem = items.find((i) => i.label === "select");
     assert.ok(selectItem !== undefined, "Must have 'select' completion");
     assert.ok(
       selectItem.kind === 3 || selectItem.kind === 14 || selectItem.kind === 15,
-      `'select' must have a valid LSP completion kind, got: ${String(selectItem.kind)}`,
+      `'select' must have a valid LSP completion kind, got: ${String(selectItem.kind)}`
     );
 
     // Verify insert text has snippet syntax for complex operations
@@ -1051,27 +1139,19 @@ suite("LSP Protocol E2E Tests", function () {
     // Verify filter has lambda snippet
     const filterItem = items.find((i) => i.label === "filter");
     assert.ok(filterItem !== undefined, "Must have 'filter' completion");
-    assert.ok(
-      filterItem.insertText !== undefined,
-      "'filter' must have insertText for lambda snippet",
-    );
+    assert.ok(filterItem.insertText !== undefined, "'filter' must have insertText for lambda snippet");
   });
 
   test("PROOF: IntelliSense delivers prefix-filtered completions after pipe", async function () {
     await initServer();
     // Place cursor right after "|> s" — the word prefix is "s", after_pipe detected
-    await openDocument("file:///test/prefix_filter.lql", "orders |> s");
-
-    const result = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/prefix_filter.lql" },
-      position: { line: 0, character: 11 },
-    });
-
-    const items = extractCompletionItems(result);
-    const labels = items.map((i) => i.label);
-
-    // Pipeline ops starting with 's' must be offered
-    assert.ok(labels.includes("select"), "Must include 'select' matching prefix 's'");
+    const labels = await openCompletionsAndAssertLabel(
+      "file:///test/prefix_filter.lql",
+      "orders |> s",
+      11,
+      "select",
+      "Must include 'select' matching prefix 's'"
+    );
     // Pipeline ops NOT starting with 's' must be filtered out
     assert.ok(!labels.includes("filter"), "Must NOT include 'filter' (doesn't start with 's')");
     assert.ok(!labels.includes("join"), "Must NOT include 'join' (doesn't start with 's')");
@@ -1086,8 +1166,7 @@ suite("LSP Protocol E2E Tests", function () {
   // ═══════════════════════════════════════════════════════════════
 
   test("PROOF: IntelliPrompt delivers rich Markdown hover with signature for ALL pipeline ops", async function () {
-    await initServer();
-    // Build a document with all pipeline operations for hover testing
+    const uri = "file:///test/intelliprompt_proof1.lql";
     const content = `users
 |> filter(fn(row) => row.users.active = true)
 |> join(orders, on = users.id = orders.user_id)
@@ -1097,263 +1176,160 @@ suite("LSP Protocol E2E Tests", function () {
 |> order_by(order_count desc)
 |> limit(100)
 |> offset(10)`;
-    await openDocument("file:///test/intelliprompt_proof1.lql", content);
+    
+    const /* Const assertion retains readonly literal shapes for these scenario inputs. */ steps = [
+      { line: 1, character: 5, hoverMessage: "Hover for 'filter' must return data", assertContents: true, previous: [], current: [
+        ["filter", "Hover must mention 'filter'", false],
+        ["fn(", "Hover must show lambda syntax for filter", false],
+        ["```", "Hover must contain code block with signature", false],
+      ] },
+      { line: 2, character: 5, hoverMessage: "Hover for 'join' must return data", assertContents: false, previous: [], current: [
+        ["join", "Hover must describe join"],
+        ["```", "Hover must contain code signature for join", false],
+      ] },
+      { line: 3, character: 5, hoverMessage: "Hover for 'select' must return data", assertContents: false, previous: [], current: [
+        ["select", "Hover must describe select"],
+      ] },
+      { line: 4, character: 5, hoverMessage: "Hover for 'group_by' must return data", assertContents: false, previous: [
+        ["project", "Hover must explain select is for projection"],
+      ], current: [
+        ["group", "Hover must describe grouping"],
+      ] },
+      { line: 5, character: 5, hoverMessage: "Hover for 'having' must return data", assertContents: false, previous: [
+        ["group", "Hover must describe grouping"],
+      ], current: [
+        ["having", "Hover must describe having"],
+      ] },
+      { line: 6, character: 5, hoverMessage: "Hover for 'order_by' must return data", assertContents: false, previous: [
+        ["filter", "Having hover must mention filtering groups"],
+      ], current: [] },
+      { line: 7, character: 5, hoverMessage: "Hover for 'limit' must return data", assertContents: false, previous: [
+        ["order", "Hover must describe ordering"],
+      ], current: [] },
+      { line: 8, character: 5, hoverMessage: "Hover for 'offset' must return data", assertContents: false, previous: [
+        ["limit", "Hover must describe limit"],
+      ], current: [
+        ["offset", "Hover must describe offset"],
+        ["skip", "Offset hover must mention skipping rows"],
+      ] },
+    ] as const;
 
-    // Hover over 'filter' at line 1, char ~5
-    const filterHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 1, character: 5 },
-    });
-    assert.ok(filterHoverRaw !== null && filterHoverRaw !== undefined, "Hover for 'filter' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const filterHover = filterHoverRaw as LspHoverResult;
-    assert.ok(filterHover.contents !== undefined, "Hover must have contents");
-    const filterText = extractHoverText(filterHover);
-    assert.ok(filterText.includes("filter"), "Hover must mention 'filter'");
-    assert.ok(filterText.includes("fn("), "Hover must show lambda syntax for filter");
-    assert.ok(filterText.includes("```"), "Hover must contain code block with signature");
-
-    // Hover over 'join' at line 2, char ~5
-    const joinHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 2, character: 5 },
-    });
-    assert.ok(joinHoverRaw !== null && joinHoverRaw !== undefined, "Hover for 'join' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const joinHover = joinHoverRaw as LspHoverResult;
-    const joinText = extractHoverText(joinHover);
-    assert.ok(joinText.toLowerCase().includes("join"), "Hover must describe join");
-    assert.ok(joinText.includes("```"), "Hover must contain code signature for join");
-
-    // Hover over 'select' at line 3, char ~5
-    const selectHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 3, character: 5 },
-    });
-    assert.ok(selectHoverRaw !== null && selectHoverRaw !== undefined, "Hover for 'select' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const selectHover = selectHoverRaw as LspHoverResult;
-    const selectText = extractHoverText(selectHover);
-    assert.ok(selectText.toLowerCase().includes("select"), "Hover must describe select");
-    assert.ok(
-      selectText.toLowerCase().includes("project"),
-      "Hover must explain select is for projection",
-    );
-
-    // Hover over 'group_by' at line 4, char ~5
-    const groupHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 4, character: 5 },
-    });
-    assert.ok(groupHoverRaw !== null && groupHoverRaw !== undefined, "Hover for 'group_by' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const groupHover = groupHoverRaw as LspHoverResult;
-    const groupText = extractHoverText(groupHover);
-    assert.ok(groupText.toLowerCase().includes("group"), "Hover must describe grouping");
-
-    // Hover over 'having' at line 5, char ~5
-    const havingHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 5, character: 5 },
-    });
-    assert.ok(havingHoverRaw !== null && havingHoverRaw !== undefined, "Hover for 'having' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const havingHover = havingHoverRaw as LspHoverResult;
-    const havingText = extractHoverText(havingHover);
-    assert.ok(havingText.toLowerCase().includes("having"), "Hover must describe having");
-    assert.ok(havingText.toLowerCase().includes("filter"), "Having hover must mention filtering groups");
-
-    // Hover over 'order_by' at line 6, char ~5
-    const orderHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 6, character: 5 },
-    });
-    assert.ok(orderHoverRaw !== null && orderHoverRaw !== undefined, "Hover for 'order_by' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const orderHover = orderHoverRaw as LspHoverResult;
-    const orderText = extractHoverText(orderHover);
-    assert.ok(orderText.toLowerCase().includes("order"), "Hover must describe ordering");
-
-    // Hover over 'limit' at line 7, char ~5
-    const limitHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 7, character: 5 },
-    });
-    assert.ok(limitHoverRaw !== null && limitHoverRaw !== undefined, "Hover for 'limit' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const limitHover = limitHoverRaw as LspHoverResult;
-    const limitText = extractHoverText(limitHover);
-    assert.ok(limitText.toLowerCase().includes("limit"), "Hover must describe limit");
-
-    // Hover over 'offset' at line 8, char ~5
-    const offsetHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_proof1.lql" },
-      position: { line: 8, character: 5 },
-    });
-    assert.ok(offsetHoverRaw !== null && offsetHoverRaw !== undefined, "Hover for 'offset' must return data");
-    // Safe: LSP hover response always has this shape when non-null
-    const offsetHover = offsetHoverRaw as LspHoverResult;
-    const offsetText = extractHoverText(offsetHover);
-    assert.ok(offsetText.toLowerCase().includes("offset"), "Hover must describe offset");
-    assert.ok(offsetText.toLowerCase().includes("skip"), "Offset hover must mention skipping rows");
+    await initServer();
+    await openDocument(uri, content);
+    let previousText: string | undefined;
+    for (const step of steps) {
+      if (previousText !== undefined) {
+        assertTextIncludes(previousText, step.previous);
+      }
+      const hover = await hoverAt(uri, { line: step.line, character: step.character }, step.hoverMessage);
+      if (step.assertContents) {
+        assert.ok(hover.contents !== undefined, "Hover must have contents");
+      }
+      previousText = extractHoverText(hover);
+      assertTextIncludes(previousText, step.current);
+    }
   });
 
   test("PROOF: IntelliPrompt delivers hover for aggregate functions in real context", async function () {
-    await initServer();
-    const content = "orders |> select(count(*) as cnt, sum(orders.total) as total_sum, avg(orders.total) as avg_total, max(orders.total) as high, min(orders.total) as low)";
-    await openDocument("file:///test/intelliprompt_agg.lql", content);
-
-    // Hover over 'count' at position ~17
-    const countHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 19 },
-    });
-    assert.ok(countHoverRaw !== null && countHoverRaw !== undefined, "Must get hover for 'count'");
-    // Safe: LSP hover response always has this shape when non-null
-    const countHover = countHoverRaw as LspHoverResult;
+    const countHover = await initializeAndHover(
+      "orders |> select(count(*) as cnt, sum(orders.total) as total_sum, avg(orders.total) as avg_total, max(orders.total) as high, min(orders.total) as low)",
+      "file:///test/intelliprompt_agg.lql",
+      0,
+      19,
+      "Must get hover for 'count'"
+    );
     assert.ok(typeof countHover.contents !== "string", "Count hover contents must not be a plain string");
     assert.ok(countHover.contents?.kind === "markdown", "Hover contents must be Markdown format");
-    assert.ok(
-      countHover.contents.value?.includes("count") === true,
-      "Count hover must describe count function",
-    );
+    assert.ok(countHover.contents.value?.includes("count") === true, "Count hover must describe count function");
 
     // Hover over 'sum' at position ~37
-    const sumHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 35 },
-    });
-    assert.ok(sumHoverRaw !== null && sumHoverRaw !== undefined, "Must get hover for 'sum'");
-    // Safe: LSP hover response always has this shape when non-null
-    const sumHover = sumHoverRaw as LspHoverResult;
+    const sumHover = await hoverAt(
+      "file:///test/intelliprompt_agg.lql",
+      { line: 0, character: 35 },
+      "Must get hover for 'sum'"
+    );
     assert.ok(typeof sumHover.contents !== "string", "Sum hover contents must not be a plain string");
     assert.ok(sumHover.contents?.kind === "markdown", "Sum hover must be Markdown");
-    assert.ok(
-      extractHoverText(sumHover).toLowerCase().includes("sum"),
-      "Sum hover must describe sum",
-    );
+    assert.ok(extractHoverText(sumHover).toLowerCase().includes("sum"), "Sum hover must describe sum");
 
     // Hover over 'avg'
-    const avgHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 69 },
-    });
-    assert.ok(avgHoverRaw !== null && avgHoverRaw !== undefined, "Must get hover for 'avg'");
-    // Safe: LSP hover response always has this shape when non-null
-    const avgHover = avgHoverRaw as LspHoverResult;
+    const avgHover = await hoverAt(
+      "file:///test/intelliprompt_agg.lql",
+      { line: 0, character: 69 },
+      "Must get hover for 'avg'"
+    );
     assert.ok(extractHoverText(avgHover).toLowerCase().includes("avg"), "Avg hover must describe avg");
 
     // Hover over 'max'
-    const maxHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 99 },
-    });
-    assert.ok(maxHoverRaw !== null && maxHoverRaw !== undefined, "Must get hover for 'max'");
-    // Safe: LSP hover response always has this shape when non-null
-    const maxHover = maxHoverRaw as LspHoverResult;
+    const maxHover = await hoverAt(
+      "file:///test/intelliprompt_agg.lql",
+      { line: 0, character: 99 },
+      "Must get hover for 'max'"
+    );
     assert.ok(extractHoverText(maxHover).toLowerCase().includes("max"), "Max hover must describe max");
 
     // Hover over 'min'
-    const minHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_agg.lql" },
-      position: { line: 0, character: 127 },
-    });
-    assert.ok(minHoverRaw !== null && minHoverRaw !== undefined, "Must get hover for 'min'");
-    // Safe: LSP hover response always has this shape when non-null
-    const minHover = minHoverRaw as LspHoverResult;
+    const minHover = await hoverAt(
+      "file:///test/intelliprompt_agg.lql",
+      { line: 0, character: 127 },
+      "Must get hover for 'min'"
+    );
     assert.ok(extractHoverText(minHover).toLowerCase().includes("min"), "Min hover must describe min");
   });
 
   test("PROOF: IntelliPrompt delivers hover for string functions", async function () {
-    await initServer();
-    const content = "users |> select(concat(users.first, users.last) as name, upper(users.email) as email_upper, trim(users.bio) as bio, length(users.bio) as bio_len)";
-    await openDocument("file:///test/intelliprompt_string.lql", content);
-
-    // Hover over 'concat'
-    const concatHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 18 },
-    });
-    assert.ok(concatHoverRaw !== null && concatHoverRaw !== undefined, "Must get hover for 'concat'");
-    // Safe: LSP hover response always has this shape when non-null
-    const concatHover = concatHoverRaw as LspHoverResult;
-    assert.ok(
-      extractHoverText(concatHover).toLowerCase().includes("concat"),
-      "Concat hover must describe concatenation",
+    const concatText = await initializeAndHoverText(
+      "users |> select(concat(users.first, users.last) as name, upper(users.email) as email_upper, trim(users.bio) as bio, length(users.bio) as bio_len)",
+      "file:///test/intelliprompt_string.lql",
+      0,
+      18,
+      "Must get hover for 'concat'"
     );
-    assert.ok(
-      extractHoverText(concatHover).includes("```"),
-      "Concat hover must include code signature",
-    );
+    assertTextIncludes(concatText, [
+      ["concat", "Concat hover must describe concatenation"],
+      ["```", "Concat hover must include code signature", false],
+    ]);
 
     // Hover over 'upper'
-    const upperHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 60 },
-    });
-    assert.ok(upperHoverRaw !== null && upperHoverRaw !== undefined, "Must get hover for 'upper'");
-    // Safe: LSP hover response always has this shape when non-null
-    const upperHover = upperHoverRaw as LspHoverResult;
-    assert.ok(
-      extractHoverText(upperHover).toLowerCase().includes("upper"),
-      "Upper hover must describe uppercase",
+    const upperHover = await hoverAt(
+      "file:///test/intelliprompt_string.lql",
+      { line: 0, character: 60 },
+      "Must get hover for 'upper'"
     );
+    assert.ok(extractHoverText(upperHover).toLowerCase().includes("upper"), "Upper hover must describe uppercase");
 
     // Hover over 'trim'
-    const trimHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 94 },
-    });
-    assert.ok(trimHoverRaw !== null && trimHoverRaw !== undefined, "Must get hover for 'trim'");
-    // Safe: LSP hover response always has this shape when non-null
-    const trimHover = trimHoverRaw as LspHoverResult;
-    assert.ok(
-      extractHoverText(trimHover).toLowerCase().includes("trim"),
-      "Trim hover must describe trimming",
+    const trimHover = await hoverAt(
+      "file:///test/intelliprompt_string.lql",
+      { line: 0, character: 94 },
+      "Must get hover for 'trim'"
     );
+    assert.ok(extractHoverText(trimHover).toLowerCase().includes("trim"), "Trim hover must describe trimming");
 
     // Hover over 'length'
-    const lengthHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_string.lql" },
-      position: { line: 0, character: 117 },
-    });
-    assert.ok(lengthHoverRaw !== null && lengthHoverRaw !== undefined, "Must get hover for 'length'");
-    // Safe: LSP hover response always has this shape when non-null
-    const lengthHover = lengthHoverRaw as LspHoverResult;
+    const lengthHover = await hoverAt(
+      "file:///test/intelliprompt_string.lql",
+      { line: 0, character: 117 },
+      "Must get hover for 'length'"
+    );
     assert.ok(
       extractHoverText(lengthHover).toLowerCase().includes("length"),
-      "Length hover must describe string length",
+      "Length hover must describe string length"
     );
   });
 
   test("PROOF: IntelliPrompt returns null for non-LQL identifiers", async function () {
-    await initServer();
-    await openDocument(
+    const tableHover = await initializeAndRequestAt(
       "file:///test/intelliprompt_null.lql",
       "my_custom_table |> select(my_custom_table.some_column)",
+      "textDocument/hover",
+      5
     );
-
-    // Hover over 'my_custom_table' — not a keyword, should return null
-    const tableHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_null.lql" },
-      position: { line: 0, character: 5 },
-    });
-    assert.strictEqual(
-      tableHover,
-      null,
-      "Custom table names must NOT trigger hover (not a language construct)",
-    );
+    assert.strictEqual(tableHover, null, "Custom table names must NOT trigger hover (not a language construct)");
 
     // Hover over 'some_column' — not a keyword, should return null
-    const colHover = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/intelliprompt_null.lql" },
-      position: { line: 0, character: 45 },
-    });
-    assert.strictEqual(
-      colHover,
-      null,
-      "Custom column names must NOT trigger hover",
-    );
+    const colHover = await requestAt("textDocument/hover", "file:///test/intelliprompt_null.lql", { line: 0, character: 45 });
+    assert.strictEqual(colHover, null, "Custom column names must NOT trigger hover");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1363,10 +1339,7 @@ suite("LSP Protocol E2E Tests", function () {
   test("PROOF: LSP detects real syntax errors and provides actionable range info", async function () {
     await initServer();
     // Unclosed parenthesis
-    const notifications = await openDocument(
-      "file:///test/diag_proof1.lql",
-      "users |> select(users.id, users.name",
-    );
+    const notifications = await openDocument("file:///test/diag_proof1.lql", "users |> select(users.id, users.name");
 
     assert.ok(notifications.length > 0, "Must publish diagnostics");
     const diagsList = notifications[0].diagnostics;
@@ -1374,10 +1347,9 @@ suite("LSP Protocol E2E Tests", function () {
 
     const error = diagsList.find((d) => d.severity === 1);
     assert.ok(error !== undefined, "Must report at least one error-level diagnostic");
-    assert.ok(error.range !== undefined, "Error diagnostic must have a range");
-    assert.ok(error.range.start !== undefined, "Range must have start");
-    assert.ok(error.range.start.line >= 0, "Range must have valid start line");
-    assert.ok(error.range.start.character >= 0, "Range must have valid start character");
+    const start = requireRangeStart(error.range, "Error diagnostic must have a range");
+    assert.ok(start.line >= 0, "Range must have valid start line");
+    assert.ok(start.character >= 0, "Range must have valid start character");
     assert.ok(error.message !== undefined, "Error diagnostic must have a message");
     assert.ok(error.message.length > 0, "Error message must not be empty");
     assert.ok(error.source === "lql", "Error source must be 'lql'");
@@ -1395,53 +1367,32 @@ let summary = completed_orders
 |> select(users.name, sum(orders.total) as total_spent, count(*) as order_count)
 |> order_by(total_spent desc)
 |> limit(50)`;
-    const notifications = await openDocument(
+    const errors = await openDocumentAndReadSeverityOneErrors(
       "file:///test/diag_proof2.lql",
       validContent,
-    );
-
-    assert.ok(notifications.length > 0, "Must publish diagnostics");
-    const errors = notifications[0].diagnostics.filter(
-      (d) => d.severity === 1,
+      "Must publish diagnostics"
     );
     assert.strictEqual(
       errors.length,
       0,
-      `Valid multiline pipeline must produce zero errors, got: ${JSON.stringify(errors)}`,
+      `Valid multiline pipeline must produce zero errors, got: ${JSON.stringify(errors)}`
     );
   });
 
   test("PROOF: LSP detects errors and then clears them when content is fixed", async function () {
     await initServer();
     // Open with invalid content
-    const badNotifications = await openDocument(
-      "file:///test/diag_fix.lql",
-      "users |> select(",
-    );
-    const badErrors = badNotifications[0].diagnostics.filter(
-      (d) => d.severity === 1,
-    );
+    const badNotifications = await openDocument("file:///test/diag_fix.lql", "users |> select(");
+    const badErrors = badNotifications[0].diagnostics.filter((d) => d.severity === 1);
     assert.ok(badErrors.length > 0, "Must detect syntax error in broken content");
 
     // Fix the content
-    client.notify("textDocument/didChange", {
-      textDocument: { uri: "file:///test/diag_fix.lql", version: 2 },
-      contentChanges: [{ text: "users |> select(users.id)" }],
-    });
-    const rawFixedNotifications = await client.waitForNotification(
-      "textDocument/publishDiagnostics",
-      5000,
+    const fixedErrors = await changeAndReadErrorDiagnostics(
+      "file:///test/diag_fix.lql",
+      "users |> select(users.id)",
+      "Must publish updated diagnostics"
     );
-    const fixedNotifications = rawFixedNotifications.filter(isDiagnosticsParams);
-    assert.ok(fixedNotifications.length > 0, "Must publish updated diagnostics");
-    const fixedErrors = fixedNotifications[fixedNotifications.length - 1].diagnostics.filter(
-      (d) => d.severity === 1,
-    );
-    assert.strictEqual(
-      fixedErrors.length,
-      0,
-      "After fixing content, all errors must be cleared",
-    );
+    assert.strictEqual(fixedErrors.length, 0, "After fixing content, all errors must be cleared");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1460,16 +1411,12 @@ let order_summary = orders
 let final_report = users_active
 |> join(order_summary, on = users.id = orders.user_id)
 |> select(users.name, order_summary.cnt)`;
-    await openDocument("file:///test/symbols_proof.lql", content);
-
-    const result = await client.request("textDocument/documentSymbol", {
-      textDocument: { uri: "file:///test/symbols_proof.lql" },
-    });
-
-    assert.ok(result !== null && result !== undefined, "Document symbols must not be null");
-    assert.ok(Array.isArray(result), "Symbols must be an array");
-    // Safe: LSP documentSymbol returns an array of SymbolInformation
-    const symbols = result as LspDocumentSymbol[];
+    const symbols = await openDocumentAndReadSymbols(
+      "file:///test/symbols_proof.lql",
+      content,
+      "Document symbols must not be null",
+      "Symbols must be an array"
+    );
     assert.strictEqual(symbols.length, 3, "Must find exactly 3 let bindings");
 
     const names = symbols.map((s) => s.name);
@@ -1479,16 +1426,10 @@ let final_report = users_active
 
     // Each symbol must have proper location with range
     for (const sym of symbols) {
-      assert.ok(sym.name !== undefined, "Symbol must have a name");
-      assert.ok(sym.kind !== undefined, "Symbol must have a kind");
-      assert.ok(sym.location !== undefined, "Symbol must have a location");
-      assert.ok(sym.location.uri !== undefined, "Symbol location must have a URI");
-      assert.ok(sym.location.range !== undefined, "Symbol location must have a range");
-      assert.ok(sym.location.range.start !== undefined, "Range must have start");
-      assert.ok(
-        sym.location.range.start.line >= 0,
-        "Range start must have valid line",
-      );
+      const location = requireSymbolLocation(sym);
+      assert.ok(location.uri !== undefined, "Symbol location must have a URI");
+      const start = requireRangeStart(location.range, "Symbol location must have a range");
+      assert.ok(start.line >= 0, "Range start must have valid line");
     }
   });
 
@@ -1497,49 +1438,29 @@ let final_report = users_active
   // ═══════════════════════════════════════════════════════════════
 
   test("PROOF: LSP formats messy multiline LQL into properly indented output", async function () {
-    await initServer();
     // Multiline with bad indentation — formatter normalizes leading whitespace per line
     const messy = `       users
           |> filter(fn(row) => row.users.active = true)
   |> select(users.name, users.email)`;
-    await openDocument("file:///test/format_proof.lql", messy);
-
-    const editsRaw = await client.request("textDocument/formatting", {
-      textDocument: { uri: "file:///test/format_proof.lql" },
-      options: { tabSize: 4, insertSpaces: true },
-    });
-
-    assert.ok(editsRaw !== null && editsRaw !== undefined, "Formatting must return edits");
-    assert.ok(Array.isArray(editsRaw), "Edits must be an array");
-    // Safe: LSP formatting returns an array of TextEdit
-    const edits = editsRaw as LspTextEdit[];
-    assert.ok(edits.length > 0, "Must have at least one edit");
-
-    const edit = edits[0];
-    assert.ok(edit.newText !== undefined, "Edit must have newText");
-    assert.ok(
-      edit.newText !== messy,
-      "Formatted text must differ from messy input",
+    const edit = await initializeOpenAndFormat(
+      "file:///test/format_proof.lql",
+      messy,
+      "Formatting must return edits",
+      "Edits must be an array",
+      "Must have at least one edit"
     );
+    assert.ok(edit.newText !== undefined, "Edit must have newText");
+    assert.ok(edit.newText !== messy, "Formatted text must differ from messy input");
     // First line should not have leading whitespace (it's a table name)
     const lines = edit.newText.split("\n").filter((l: string) => l.trim().length > 0);
     assert.ok(lines.length >= 3, "Must have at least 3 non-empty lines");
-    assert.ok(
-      lines[0].trimStart() === lines[0].trim(),
-      "First line should be properly trimmed",
-    );
+    assert.ok(lines[0].trimStart() === lines[0].trim(), "First line should be properly trimmed");
     // Pipeline lines should have consistent indentation
     const pipelines = lines.filter((l: string) => l.trim().startsWith("|>"));
     for (const pl of pipelines) {
-      assert.ok(
-        pl.startsWith("    "),
-        "Pipeline continuation lines must be indented",
-      );
+      assert.ok(pl.startsWith("    "), "Pipeline continuation lines must be indented");
     }
-    assert.ok(
-      edit.newText.trim().length > 0,
-      "Formatted text must not be empty",
-    );
+    assert.ok(edit.newText.trim().length > 0, "Formatted text must not be empty");
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1556,34 +1477,22 @@ let final_report = users_active
 |> select(users.name, orders.amount, orders.date)
 |> order_by(orders.amount desc)
 |> limit(50)`;
-    const diagNotifs = await openDocument("file:///test/full_workflow.lql", content);
-
     // Step 2: Assert diagnostics published — zero errors on valid content
-    assert.ok(diagNotifs.length > 0, "Must publish diagnostics on open");
-    const errors = diagNotifs[0].diagnostics.filter((d) => d.severity === 1);
+    const errors = await openDocumentAndReadSeverityOneErrors(
+      "file:///test/full_workflow.lql",
+      content,
+      "Must publish diagnostics on open"
+    );
     assert.strictEqual(errors.length, 0, "Valid document must have zero errors");
 
     // Step 3: Request completions at a meaningful position
-    const completions = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/full_workflow.lql" },
-      position: { line: 5, character: 0 },
-    });
-    assert.ok(completions !== null && completions !== undefined, "Must get completions");
+    await requestCompletion("file:///test/full_workflow.lql", { line: 5, character: 0 }, "Must get completions");
 
     // Step 4: Hover over 'filter' on line 1
-    const hoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/full_workflow.lql" },
-      position: { line: 1, character: 5 },
-    });
-    assert.ok(hoverRaw !== null && hoverRaw !== undefined, "Must get hover info");
-    // Safe: LSP hover response always has this shape when non-null
-    const hover = hoverRaw as LspHoverResult;
+    const hover = await hoverAt("file:///test/full_workflow.lql", { line: 1, character: 5 }, "Must get hover info");
     assert.ok(typeof hover.contents !== "string", "Hover contents must not be a plain string");
     assert.ok(hover.contents?.kind === "markdown", "Hover must be Markdown");
-    assert.ok(
-      hover.contents.value?.includes("filter") === true,
-      "Hover must describe filter",
-    );
+    assert.ok(hover.contents.value?.includes("filter") === true, "Hover must describe filter");
 
     // Step 5: Request document symbols
     const symbols = await client.request("textDocument/documentSymbol", {
@@ -1592,26 +1501,18 @@ let final_report = users_active
     assert.ok(symbols !== undefined, "Must get symbol result (even if empty array)");
 
     // Step 6: Request formatting
-    void await client.request("textDocument/formatting", {
+    void (await client.request("textDocument/formatting", {
       textDocument: { uri: "file:///test/full_workflow.lql" },
       options: { tabSize: 4, insertSpaces: true },
-    });
+    }));
     // Formatting may return null if already formatted
     // Just assert it doesn't error
 
     // Step 7: Modify document and verify diagnostics update
-    client.notify("textDocument/didChange", {
-      textDocument: { uri: "file:///test/full_workflow.lql", version: 2 },
-      contentChanges: [{ text: "orders |> select(" }],
-    });
-    const rawNewDiags = await client.waitForNotification(
-      "textDocument/publishDiagnostics",
-      5000,
-    );
-    const newDiags = rawNewDiags.filter(isDiagnosticsParams);
-    assert.ok(newDiags.length > 0, "Must publish updated diagnostics after change");
-    const newErrors = newDiags[newDiags.length - 1].diagnostics.filter(
-      (d) => d.severity === 1,
+    const newErrors = await changeAndReadErrorDiagnostics(
+      "file:///test/full_workflow.lql",
+      "orders |> select(",
+      "Must publish updated diagnostics after change"
     );
     assert.ok(newErrors.length > 0, "Broken content must produce errors");
   });
@@ -1620,130 +1521,109 @@ let final_report = users_active
     await initServer();
 
     // In empty document: keywords like 'let', 'fn', 'case' should be available
-    await openDocument("file:///test/keyword_proof.lql", "");
-    const emptyResult = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/keyword_proof.lql" },
-      position: { line: 0, character: 0 },
-    });
-    const emptyItems = extractCompletionItems(emptyResult);
+    const emptyItems = await openAndReadCompletions("file:///test/keyword_proof.lql", "", 0);
     const emptyLabels = emptyItems.map((i) => i.label);
 
-    assert.ok(emptyLabels.includes("let"), "Must suggest 'let' keyword");
-    assert.ok(emptyLabels.includes("case"), "Must suggest 'case' keyword");
-    assert.ok(emptyLabels.includes("fn"), "Must suggest 'fn' keyword");
+    assertCompletionLabels(
+      emptyLabels,
+      "let",
+      "Must suggest 'let' keyword",
+      "case",
+      "Must suggest 'case' keyword",
+      "fn",
+      "Must suggest 'fn' keyword"
+    );
     assert.ok(emptyLabels.includes("distinct"), "Must suggest 'distinct' keyword");
     assert.ok(emptyLabels.includes("coalesce"), "Must suggest 'coalesce' function");
 
     // Keyword completions must have documentation
     for (const kw of ["let", "case", "fn"]) {
-      const item = emptyItems.find((i) => i.label === kw);
-      assert.ok(item !== undefined, `Must have '${kw}' completion`);
-      assert.ok(
-        item.documentation !== undefined && item.documentation.length > 0,
-        `'${kw}' must have documentation`,
-      );
+      const item = findCompletionItem(emptyItems, kw, `Must have '${kw}' completion`);
+      assert.ok(item.documentation !== undefined && item.documentation.length > 0, `'${kw}' must have documentation`);
     }
 
     // In lambda context: 'exists', 'and', 'or', 'not', 'in', 'like' should be offered
-    await openDocument(
+    const lambdaItems = await openAndReadCompletions(
       "file:///test/keyword_lambda.lql",
       "users |> filter(fn(row) => row.users.active = true and ",
+      56
     );
-    const lambdaResult = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/keyword_lambda.lql" },
-      position: { line: 0, character: 56 },
-    });
-    const lambdaItems = extractCompletionItems(lambdaResult);
     const lambdaLabels = lambdaItems.map((i) => i.label);
 
-    assert.ok(lambdaLabels.includes("exists"), "Must suggest 'exists' in lambda context");
-    assert.ok(lambdaLabels.includes("and"), "Must suggest 'and' in lambda context");
-    assert.ok(lambdaLabels.includes("or"), "Must suggest 'or' in lambda context");
-    assert.ok(lambdaLabels.includes("not"), "Must suggest 'not' in lambda context");
-    assert.ok(lambdaLabels.includes("in"), "Must suggest 'in' in lambda context");
-    assert.ok(lambdaLabels.includes("like"), "Must suggest 'like' in lambda context");
+    assertCompletionLabels(
+      lambdaLabels,
+      "exists",
+      "Must suggest 'exists' in lambda context",
+      "and",
+      "Must suggest 'and' in lambda context",
+      "or",
+      "Must suggest 'or' in lambda context"
+    );
+    assertCompletionLabels(
+      lambdaLabels,
+      "not",
+      "Must suggest 'not' in lambda context",
+      "in",
+      "Must suggest 'in' in lambda context",
+      "like",
+      "Must suggest 'like' in lambda context"
+    );
   });
 
   test("PROOF: IntelliPrompt hover for 'let' and 'fn' keywords", async function () {
-    await initServer();
-    const content = "let result = users |> filter(fn(row) => row.users.id > 0)";
-    await openDocument("file:///test/kw_hover_proof.lql", content);
-
-    // Hover over 'let' at position 0-2
-    const letHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/kw_hover_proof.lql" },
-      position: { line: 0, character: 1 },
-    });
-    assert.ok(letHoverRaw !== null && letHoverRaw !== undefined, "Must get hover for 'let'");
-    // Safe: LSP hover response always has this shape when non-null
-    const letHover = letHoverRaw as LspHoverResult;
-    assert.ok(
-      extractHoverText(letHover).toLowerCase().includes("bind"),
-      "Let hover must describe binding",
+    const letText = await initializeAndHoverText(
+      "let result = users |> filter(fn(row) => row.users.id > 0)",
+      "file:///test/kw_hover_proof.lql",
+      0,
+      1,
+      "Must get hover for 'let'"
     );
-    assert.ok(
-      extractHoverText(letHover).includes("```"),
-      "Let hover must include code signature",
-    );
+    assertTextIncludes(letText, [
+      ["bind", "Let hover must describe binding"],
+      ["```", "Let hover must include code signature", false],
+    ]);
 
     // Hover over 'fn' at position ~29
-    const fnHoverRaw = await client.request("textDocument/hover", {
-      textDocument: { uri: "file:///test/kw_hover_proof.lql" },
-      position: { line: 0, character: 29 },
-    });
-    assert.ok(fnHoverRaw !== null && fnHoverRaw !== undefined, "Must get hover for 'fn'");
-    // Safe: LSP hover response always has this shape when non-null
-    const fnHover = fnHoverRaw as LspHoverResult;
-    assert.ok(
-      extractHoverText(fnHover).toLowerCase().includes("lambda"),
-      "fn hover must describe lambda expressions",
+    const fnHover = await hoverAt(
+      "file:///test/kw_hover_proof.lql",
+      { line: 0, character: 29 },
+      "Must get hover for 'fn'"
     );
+    assert.ok(extractHoverText(fnHover).toLowerCase().includes("lambda"), "fn hover must describe lambda expressions");
   });
 
   test("PROOF: Window function completions available with correct prefix filtering", async function () {
     await initServer();
 
     // Prefix "ro" — should match row_number, round
-    await openDocument(
+    const labels1 = await openCompletionsAndAssertLabel(
       "file:///test/window_complete1.lql",
       "orders |> select(ro",
+      19,
+      "row_number",
+      "Must suggest 'row_number' with prefix 'ro'"
     );
-    const result1 = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/window_complete1.lql" },
-      position: { line: 0, character: 19 },
-    });
-    const items1 = extractCompletionItems(result1);
-    const labels1 = items1.map((i) => i.label);
-    assert.ok(labels1.includes("row_number"), "Must suggest 'row_number' with prefix 'ro'");
     assert.ok(labels1.includes("round"), "Must suggest 'round' with prefix 'ro'");
 
     // Prefix "row" — should match row_number only
-    await openDocument(
+    const labels2 = await openCompletionsAndAssertLabel(
       "file:///test/window_complete2.lql",
       "orders |> select(row",
+      20,
+      "row_number",
+      "Must suggest 'row_number' with prefix 'row'"
     );
-    const result2 = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/window_complete2.lql" },
-      position: { line: 0, character: 20 },
-    });
-    const items2 = extractCompletionItems(result2);
-    const labels2 = items2.map((i) => i.label);
-    assert.ok(labels2.includes("row_number"), "Must suggest 'row_number' with prefix 'row'");
     assert.ok(!labels2.includes("round"), "Must NOT suggest 'round' with prefix 'row' (prefix mismatch)");
     assert.ok(!labels2.includes("rank"), "Must NOT suggest 'rank' with prefix 'row' (prefix mismatch)");
 
     // Prefix "ra" — should match rank only
-    await openDocument(
+    const labels3 = await openCompletionsAndAssertLabel(
       "file:///test/window_complete3.lql",
       "orders |> select(ra",
+      19,
+      "rank",
+      "Must suggest 'rank' with prefix 'ra'"
     );
-    const result3 = await client.request("textDocument/completion", {
-      textDocument: { uri: "file:///test/window_complete3.lql" },
-      position: { line: 0, character: 19 },
-    });
-    const items3 = extractCompletionItems(result3);
-    const labels3 = items3.map((i) => i.label);
-    assert.ok(labels3.includes("rank"), "Must suggest 'rank' with prefix 'ra'");
     assert.ok(!labels3.includes("row_number"), "Must NOT suggest 'row_number' with prefix 'ra'");
   });
 });

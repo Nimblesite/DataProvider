@@ -1,6 +1,8 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.Sync.Tests;
 
-public sealed class TombstoneManagerTests
+public sealed partial class TombstoneManagerTests
 {
     [Fact]
     public void CalculateSafePurgeVersion_EmptyClients_ReturnsZero()
@@ -38,12 +40,19 @@ public sealed class TombstoneManagerTests
         Assert.Equal(100, result);
     }
 
-    [Fact]
-    public void RequiresFullResync_ClientAhead_ReturnsFalse()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData13))]
+    public void RequiresFullResync_ClientAhead_ReturnsFalse_ScenarioCases(
+        string scenarioName,
+        System.Int32 scenario1
+    )
     {
+        NamedCase(caseName: scenarioName);
+
         var result = TombstoneManager.RequiresFullResync(
             clientLastVersion: 100,
-            oldestAvailableVersion: 50
+            oldestAvailableVersion: scenario1
         );
 
         Assert.False(result);
@@ -58,17 +67,6 @@ public sealed class TombstoneManagerTests
         );
 
         Assert.True(result);
-    }
-
-    [Fact]
-    public void RequiresFullResync_ClientAtOldest_ReturnsFalse()
-    {
-        var result = TombstoneManager.RequiresFullResync(
-            clientLastVersion: 100,
-            oldestAvailableVersion: 100
-        );
-
-        Assert.False(result);
     }
 
     [Fact]
@@ -88,14 +86,7 @@ public sealed class TombstoneManagerTests
     [Fact]
     public void FindStaleClients_StaleClient_ReturnsOriginId()
     {
-        var now = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc);
-        var clients = new[]
-        {
-            new SyncClient("origin-1", 100, "2025-01-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"),
-            new SyncClient("origin-2", 200, "2025-05-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"),
-        };
-
-        var result = TombstoneManager.FindStaleClients(clients, now, TimeSpan.FromDays(90));
+        var result = VerifyReusableWorkflow9(value1: 6, value13: "2025-05-01T00:00:00.000Z");
 
         Assert.Single(result);
         Assert.Equal("origin-1", result[0]);
@@ -104,14 +95,7 @@ public sealed class TombstoneManagerTests
     [Fact]
     public void FindStaleClients_AllStale_ReturnsAll()
     {
-        var now = new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc);
-        var clients = new[]
-        {
-            new SyncClient("origin-1", 100, "2025-01-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"),
-            new SyncClient("origin-2", 200, "2025-02-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"),
-        };
-
-        var result = TombstoneManager.FindStaleClients(clients, now, TimeSpan.FromDays(90));
+        var result = VerifyReusableWorkflow9(value1: 12, value13: "2025-02-01T00:00:00.000Z");
 
         Assert.Equal(2, result.Count);
     }
@@ -130,7 +114,7 @@ public sealed class TombstoneManagerTests
             }
         );
 
-        Assert.IsType<IntSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Equal(-1, purgedVersion); // Never called
     }
 
@@ -153,9 +137,9 @@ public sealed class TombstoneManagerTests
             }
         );
 
-        Assert.IsType<IntSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         Assert.Equal(100, purgedVersion);
-        Assert.Equal(50, ((IntSyncOk)result).Value);
+        Assert.Equal(50, (Ok(actual: result)).Value);
     }
 
     [Fact]
@@ -177,12 +161,7 @@ public sealed class TombstoneManagerTests
     [Fact]
     public void UpdateClientSyncState_ExistingClient_UpdatesVersionAndTimestamp()
     {
-        var existing = new SyncClient(
-            "origin-1",
-            50,
-            "2024-12-01T00:00:00.000Z",
-            "2024-01-01T00:00:00.000Z"
-        );
+        var existing = Dataset_UpdateClientSyncState_ExistingClient_UpdatesVersionAndTimestamp_1();
 
         var result = TombstoneManager.UpdateClientSyncState(
             "origin-1",
@@ -204,5 +183,20 @@ public sealed class TombstoneManagerTests
 
         Assert.Equal(50, error.ClientVersion);
         Assert.Equal(100, error.OldestAvailableVersion);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<string> VerifyReusableWorkflow9(int value1, string value13)
+    {
+        var now = new DateTime(2025, value1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var clients = new[]
+        {
+            new SyncClient("origin-1", 100, "2025-01-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"),
+            new SyncClient("origin-2", 200, value13, "2025-01-01T00:00:00.000Z"),
+        };
+
+        var result = TombstoneManager.FindStaleClients(clients, now, TimeSpan.FromDays(90));
+
+        return result;
     }
 }

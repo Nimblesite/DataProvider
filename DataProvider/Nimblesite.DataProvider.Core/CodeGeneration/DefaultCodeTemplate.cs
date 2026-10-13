@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Nimblesite.Sql.Model;
 using Outcome;
 
@@ -48,49 +47,13 @@ public class DefaultCodeTemplate : ICodeTemplate
         string namespaceName,
         string modelCode,
         string dataAccessCode
-    )
-    {
-        if (string.IsNullOrWhiteSpace(namespaceName))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("namespaceName cannot be null or empty")
-            );
-
-        if (string.IsNullOrWhiteSpace(modelCode) && string.IsNullOrWhiteSpace(dataAccessCode))
-            return new Result<string, SqlError>.Error<string, SqlError>(
-                new SqlError("At least one of modelCode or dataAccessCode must be provided")
-            );
-
-        var sb = new StringBuilder();
-
-        // Generate using statements
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Collections.Generic;");
-        sb.AppendLine("using System.Collections.Immutable;");
-        sb.AppendLine("using System.Threading.Tasks;");
-        sb.AppendLine("using Microsoft.Data.Sqlite;");
-        sb.AppendLine("using Outcome;");
-        sb.AppendLine("using Nimblesite.Sql.Model;");
-        sb.AppendLine();
-
-        // Generate namespace
-        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {namespaceName};");
-        sb.AppendLine();
-
-        // Add data access code if provided
-        if (!string.IsNullOrWhiteSpace(dataAccessCode))
-        {
-            sb.AppendLine(dataAccessCode);
-            sb.AppendLine();
-        }
-
-        // Add model code if provided
-        if (!string.IsNullOrWhiteSpace(modelCode))
-        {
-            sb.Append(modelCode);
-        }
-
-        return new Result<string, SqlError>.Ok<string, SqlError>(sb.ToString());
-    }
+    ) =>
+        CodeGenerationConfig.GenerateSourceForConnection(
+            namespaceName: namespaceName,
+            modelCode: modelCode,
+            dataAccessCode: dataAccessCode,
+            connectionNamespace: "Microsoft.Data.Sqlite"
+        );
 
     /// <summary>
     /// Generates grouped parent-child model types

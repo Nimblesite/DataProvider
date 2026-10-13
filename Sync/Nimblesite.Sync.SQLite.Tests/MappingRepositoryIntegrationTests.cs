@@ -1,5 +1,3 @@
-using Microsoft.Data.Sqlite;
-using Xunit;
 using MappingStateListOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.MappingStateEntry>,
     Nimblesite.Sync.Core.SyncError
@@ -7,14 +5,6 @@ using MappingStateListOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.MappingStateEntry>,
     Nimblesite.Sync.Core.SyncError
 >;
-using MappingStateOk = Outcome.Result<
-    Nimblesite.Sync.Core.MappingStateEntry?,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.MappingStateEntry?, Nimblesite.Sync.Core.SyncError>;
-using RecordHashOk = Outcome.Result<
-    Nimblesite.Sync.Core.RecordHashEntry?,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.RecordHashEntry?, Nimblesite.Sync.Core.SyncError>;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -34,29 +24,42 @@ public sealed class MappingRepositoryIntegrationTests : IDisposable
     {
         _db = new SqliteConnection($"Data Source={_dbPath}");
         _db.Open();
-        Assert.IsType<BoolSyncOk>(SyncSchema.CreateSchema(_db));
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: SyncSchema.CreateSchema(_db));
     }
 
     [Fact]
     public void MappingState_UpsertGetListAndDelete_RoundTripsExactValues()
     {
         Assert.Null(
-            Assert.IsType<MappingStateOk>(MappingRepository.GetMappingState(_db, "b")).Value
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: MappingRepository.GetMappingState(_db, "b")
+                )
+                .Value
         );
 
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertMappingState(_db, new MappingStateEntry("b", 3, Timestamp, 7))
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.UpsertMappingState(
+                _db,
+                new MappingStateEntry("b", 3, Timestamp, 7)
+            )
         );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertMappingState(_db, MappingStateEntry.Initial("a", Timestamp))
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.UpsertMappingState(
+                _db,
+                MappingStateEntry.Initial("a", Timestamp)
+            )
         );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertMappingState(_db, new MappingStateEntry("b", 9, Timestamp, 12))
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.UpsertMappingState(
+                _db,
+                new MappingStateEntry("b", 9, Timestamp, 12)
+            )
         );
 
-        Assert.Equal(
-            new MappingStateEntry("b", 9, Timestamp, 12),
-            Assert.IsType<MappingStateOk>(MappingRepository.GetMappingState(_db, "b")).Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: new MappingStateEntry("b", 9, Timestamp, 12),
+            actual: MappingRepository.GetMappingState(_db, "b")
         );
         Assert.Equal(
             [
@@ -66,7 +69,9 @@ public sealed class MappingRepositoryIntegrationTests : IDisposable
             Assert.IsType<MappingStateListOk>(MappingRepository.GetAllMappingStates(_db)).Value
         );
 
-        Assert.IsType<BoolSyncOk>(MappingRepository.DeleteMappingState(_db, "a"));
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.DeleteMappingState(_db, "a")
+        );
         Assert.Equal(
             [new MappingStateEntry("b", 9, Timestamp, 12)],
             Assert.IsType<MappingStateListOk>(MappingRepository.GetAllMappingStates(_db)).Value
@@ -77,59 +82,55 @@ public sealed class MappingRepositoryIntegrationTests : IDisposable
     public void RecordHashes_UpsertCountAndDelete_TrackOnlyTheirMapping()
     {
         Assert.Null(
-            Assert.IsType<RecordHashOk>(MappingRepository.GetRecordHash(_db, "m1", "pk-1")).Value
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: MappingRepository.GetRecordHash(_db, "m1", "pk-1")
+                )
+                .Value
         );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertRecordHash(
-                _db,
-                new RecordHashEntry("m1", "pk-1", "h1", Timestamp)
-            )
+        VerifyReusableWorkflow2(
+            input0: _db,
+            value1: "pk-1",
+            value2: "h1",
+            value4: "m1",
+            value6: "h2"
         );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertRecordHash(
-                _db,
-                new RecordHashEntry("m1", "pk-1", "h2", Timestamp)
-            )
-        );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertRecordHash(
-                _db,
-                new RecordHashEntry("m1", "pk-2", "h3", Timestamp)
-            )
-        );
-        Assert.IsType<BoolSyncOk>(
-            MappingRepository.UpsertRecordHash(
-                _db,
-                new RecordHashEntry("m2", "pk-1", "h4", Timestamp)
-            )
+        VerifyReusableWorkflow2(
+            input0: _db,
+            value1: "pk-2",
+            value2: "h3",
+            value4: "m2",
+            value6: "h4"
         );
 
-        Assert.Equal(
-            new RecordHashEntry("m1", "pk-1", "h2", Timestamp),
-            Assert.IsType<RecordHashOk>(MappingRepository.GetRecordHash(_db, "m1", "pk-1")).Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: new RecordHashEntry("m1", "pk-1", "h2", Timestamp),
+            actual: MappingRepository.GetRecordHash(_db, "m1", "pk-1")
         );
-        Assert.Equal(
-            2L,
-            Assert.IsType<LongSyncOk>(MappingRepository.CountRecordHashes(_db, "m1")).Value
-        );
-
-        Assert.IsType<BoolSyncOk>(MappingRepository.DeleteRecordHash(_db, "m1", "pk-2"));
-        Assert.Equal(
-            1L,
-            Assert.IsType<LongSyncOk>(MappingRepository.CountRecordHashes(_db, "m1")).Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 2L,
+            actual: MappingRepository.CountRecordHashes(_db, "m1")
         );
 
-        Assert.Equal(
-            1,
-            Assert.IsType<IntSyncOk>(MappingRepository.DeleteRecordHashesByMapping(_db, "m1")).Value
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.DeleteRecordHash(_db, "m1", "pk-2")
         );
-        Assert.Equal(
-            0L,
-            Assert.IsType<LongSyncOk>(MappingRepository.CountRecordHashes(_db, "m1")).Value
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 1L,
+            actual: MappingRepository.CountRecordHashes(_db, "m1")
         );
-        Assert.Equal(
-            1L,
-            Assert.IsType<LongSyncOk>(MappingRepository.CountRecordHashes(_db, "m2")).Value
+
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 1,
+            actual: MappingRepository.DeleteRecordHashesByMapping(_db, "m1")
+        );
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 0L,
+            actual: MappingRepository.CountRecordHashes(_db, "m1")
+        );
+        global::Tests.Shared.ResultAssertions.EqualValue(
+            expected: 1L,
+            actual: MappingRepository.CountRecordHashes(_db, "m2")
         );
     }
 
@@ -176,5 +177,28 @@ public sealed class MappingRepositoryIntegrationTests : IDisposable
         _db.Dispose();
         SqliteConnection.ClearAllPools();
         File.Delete(_dbPath);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow2(
+        SqliteConnection input0,
+        string value1,
+        string value2,
+        string value4,
+        string value6
+    )
+    {
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.UpsertRecordHash(
+                input0,
+                new RecordHashEntry("m1", value1, value2, Timestamp)
+            )
+        );
+        global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: MappingRepository.UpsertRecordHash(
+                input0,
+                new RecordHashEntry(value4, "pk-1", value6, Timestamp)
+            )
+        );
     }
 }

@@ -145,18 +145,12 @@ public static class DbTransactionExtensions
         IEnumerable<IDataParameter>? parameters
     )
     {
-        var command = connection.CreateCommand();
+        var command = DbConnectionExtensions.CreateCommand(
+            connection: connection,
+            sql: sql,
+            parameters: parameters
+        );
         command.Transaction = transaction;
-        command.CommandText = sql;
-
-        if (parameters != null)
-        {
-            foreach (var parameter in parameters)
-            {
-                command.Parameters.Add(parameter);
-            }
-        }
-
         return command;
     }
 }

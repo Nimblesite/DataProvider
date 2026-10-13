@@ -6,3 +6,6 @@
 
 pub mod ai;
 pub mod db;
+
+#[cfg(test)]
+mod test_support;

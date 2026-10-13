@@ -1,17 +1,14 @@
-using Microsoft.Data.Sqlite;
+// Implements [CI-TEST-SHARED-COMMAND].
+
 using Nimblesite.Lql.Core;
 using Nimblesite.Lql.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed class SQLiteContextE2ETests : IDisposable
+public sealed partial class SQLiteContextE2ETests : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"ctx_e2e_{Guid.NewGuid()}.db"
-    );
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("ctx_e2e");
     private readonly SqliteConnection _connection;
 
     public SQLiteContextE2ETests()
@@ -42,6 +39,12 @@ public sealed class SQLiteContextE2ETests : IDisposable
 
     private static Identifier Id(string name) => new(name);
 
+    private static string ConvertPipeline(Pipeline pipeline)
+    {
+        var context = new SQLiteContext();
+        return PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
+    }
+
     private static Pipeline CountByCountryPipeline()
     {
         var pipeline = WithIdentity("users");
@@ -58,78 +61,33 @@ public sealed class SQLiteContextE2ETests : IDisposable
         return pipeline;
     }
 
-    private void CreateSchemaAndSeed()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE users (
-                id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
-                age INTEGER NOT NULL, country TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active'
-            );
-            CREATE TABLE orders (
-                id TEXT PRIMARY KEY, user_id TEXT NOT NULL, total REAL NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-            CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT NOT NULL, price REAL NOT NULL);
-            """;
-        cmd.ExecuteNonQuery();
-
-        using var seedCmd = _connection.CreateCommand();
-        seedCmd.CommandText = """
-            INSERT INTO users VALUES ('u1','Alice','alice@test.com',30,'US','active');
-            INSERT INTO users VALUES ('u2','Bob','bob@test.com',25,'UK','active');
-            INSERT INTO users VALUES ('u3','Charlie','charlie@test.com',45,'US','inactive');
-            INSERT INTO users VALUES ('u4','Diana','diana@test.com',35,'AU','active');
-            INSERT INTO users VALUES ('u5','Eve','eve@test.com',22,'US','active');
-            INSERT INTO orders VALUES ('o1','u1',150.00,'completed');
-            INSERT INTO orders VALUES ('o2','u1',75.50,'completed');
-            INSERT INTO orders VALUES ('o3','u2',200.00,'pending');
-            INSERT INTO orders VALUES ('o4','u3',50.00,'completed');
-            INSERT INTO orders VALUES ('o5','u4',300.00,'shipped');
-            INSERT INTO orders VALUES ('o6','u4',125.00,'completed');
-            INSERT INTO orders VALUES ('o7','u5',45.00,'pending');
-            INSERT INTO products VALUES ('p1','Widget',9.99);
-            INSERT INTO products VALUES ('p2','Gadget',19.99);
-            INSERT INTO products VALUES ('p3','Widget',9.99);
-            """;
-        seedCmd.ExecuteNonQuery();
-    }
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
+            connection: _connection,
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2
+        );
 
     [Fact]
     public void ProcessPipeline_SelectFilterOrderLimit_GeneratesCorrectSql()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("age")])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(
-            new FilterStep
-            {
-                Base = Id("users"),
-                Condition = WhereCondition.Comparison(
-                    left: ColumnInfo.Named("age"),
-                    @operator: ComparisonOperator.GreaterThan,
-                    right: "25"
-                ),
-            }
-        );
-        pipeline.Steps.Add(new OrderByStep([("name", "ASC")]) { Base = Id("users") });
-        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = "10" });
+        var pipeline = BuildFilteredUserPipeline(value7: "name", value11: "10");
 
         var sql = new SQLiteContext().ProcessPipeline(pipeline);
 
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("age", sql);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("> 25", sql);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT 10", sql, StringComparison.OrdinalIgnoreCase);
+        AssertGeneratedSql(
+            sql: sql,
+            selectFragment: "SELECT",
+            firstColumn: "name",
+            secondColumn: "age",
+            whereFragment: "WHERE",
+            whereValue: "> 25"
+        );
+        ContainsAll(
+            actual: sql,
+            expected: ["ORDER BY", "LIMIT 10"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Fact]
@@ -138,14 +96,16 @@ public sealed class SQLiteContextE2ETests : IDisposable
         var pipeline = CountByCountryPipeline();
         pipeline.Steps.Add(new HavingStep { Base = Id("users"), Condition = "COUNT(*) > 1" });
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
-
-        Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("country", sql);
-        Assert.Contains("COUNT(*)", sql);
-        Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("COUNT(*) > 1", sql);
+        VerifyCompletionWorkflow1(
+            input0: ConvertPipeline,
+            input1: pipeline,
+            input2: AssertGeneratedSql,
+            value0: "GROUP BY",
+            value1: "country",
+            value2: "COUNT(*)",
+            value3: "HAVING",
+            value4: "COUNT(*) > 1"
+        );
     }
 
     [Fact]
@@ -156,11 +116,13 @@ public sealed class SQLiteContextE2ETests : IDisposable
         pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = "10" });
         pipeline.Steps.Add(new OffsetStep { Base = Id("users"), Count = "5" });
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
+        var sql = ConvertPipeline(pipeline);
 
-        Assert.Contains("OFFSET 5", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT 10", sql, StringComparison.OrdinalIgnoreCase);
+        ContainsAll(
+            actual: sql,
+            expected: ["OFFSET 5", "LIMIT 10"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
         Assert.Contains("name", sql);
     }
 
@@ -172,11 +134,13 @@ public sealed class SQLiteContextE2ETests : IDisposable
             new SelectDistinctStep([ColumnInfo.Named("country")]) { Base = Id("users") }
         );
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
+        var sql = ConvertPipeline(pipeline);
 
-        Assert.Contains("SELECT DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("country", sql);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: sql,
+            value0: "SELECT DISTINCT",
+            value2: "country"
+        );
     }
 
     [Fact]
@@ -187,12 +151,7 @@ public sealed class SQLiteContextE2ETests : IDisposable
             new JoinStep
             {
                 Base = Id("users"),
-                JoinRelationship = new JoinRelationship(
-                    LeftTable: "users",
-                    RightTable: "orders",
-                    Condition: "users.id = orders.user_id",
-                    JoinType: "INNER"
-                ),
+                JoinRelationship = Dataset_PipelineProcessor_JoinStep_GeneratesJoinSql_1(),
             }
         );
         pipeline.Steps.Add(
@@ -205,46 +164,35 @@ public sealed class SQLiteContextE2ETests : IDisposable
             }
         );
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
+        var sql = ConvertPipeline(pipeline);
 
         Assert.Contains("INNER JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("orders", sql);
-        Assert.Contains("users.id = orders.user_id", sql);
-        Assert.Contains("users.name", sql);
-        Assert.Contains("orders.total", sql);
+        ContainsAll(
+            actual: sql,
+            expected: ["orders", "users.id = orders.user_id", "users.name", "orders.total"]
+        );
     }
 
     [Fact]
     public void PipelineProcessor_ConvertPipelineToSql_WithFilter_GeneratesSql()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("email")])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(
-            new FilterStep
-            {
-                Base = Id("users"),
-                Condition = WhereCondition.Comparison(
-                    left: ColumnInfo.Named("status"),
-                    @operator: ComparisonOperator.Eq,
-                    right: "'active'"
-                ),
-            }
+        var pipeline = BuildSelectFilterPipeline(
+            columns: [ColumnInfo.Named("name"), ColumnInfo.Named("email")],
+            filterColumn: "status",
+            @operator: ComparisonOperator.Eq,
+            right: "'active'"
         );
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
-
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("= 'active'", sql);
+        VerifyCompletionWorkflow1(
+            input0: ConvertPipeline,
+            input1: pipeline,
+            input2: AssertGeneratedSql,
+            value0: "SELECT",
+            value1: "name",
+            value2: "email",
+            value3: "WHERE",
+            value4: "= 'active'"
+        );
     }
 
     [Fact]
@@ -267,53 +215,25 @@ public sealed class SQLiteContextE2ETests : IDisposable
 
         var sql = context.GenerateSQL();
 
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("users", sql);
+        global::Nimblesite.DataProvider.Tests.LqlSqliteE2ETests.VerifyReusableWorkflow5(
+            input0: sql,
+            input1: ContainsAll,
+            value0: "SELECT",
+            value2: "name",
+            value3: "users"
+        );
     }
 
     [Fact]
     public void FullPipeline_ExecuteAgainstRealDb_ReturnsCorrectResults()
     {
-        var pipeline = WithIdentity("users");
-        pipeline.Steps.Add(
-            new SelectStep([ColumnInfo.Named("name"), ColumnInfo.Named("age")])
-            {
-                Base = Id("users"),
-            }
-        );
-        pipeline.Steps.Add(
-            new FilterStep
-            {
-                Base = Id("users"),
-                Condition = WhereCondition.Comparison(
-                    left: ColumnInfo.Named("age"),
-                    @operator: ComparisonOperator.GreaterThan,
-                    right: "25"
-                ),
-            }
-        );
-        pipeline.Steps.Add(new OrderByStep([("age", "ASC")]) { Base = Id("users") });
-        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = "3" });
+        var pipeline = BuildFilteredUserPipeline(value7: "age", value11: "3");
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
-
-        var queryResult = _connection.Query<(string, long)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetInt64(1))
+        var ok = VerifySharedChecks4(
+            input0: pipeline,
+            input1: _connection,
+            value2: "Expected Ok result from query execution"
         );
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result from query execution");
-            return;
-        }
 
         var rows = ok.Value;
         Assert.Equal(3, rows.Count);
@@ -331,22 +251,16 @@ public sealed class SQLiteContextE2ETests : IDisposable
             new SelectDistinctStep([ColumnInfo.Named("name")]) { Base = Id("products") }
         );
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
+        var sql = ConvertPipeline(pipeline);
         var queryResult = _connection.Query<string>(sql: sql, mapper: r => r.GetString(0));
 
-        if (
-            queryResult
-            is not Result<IReadOnlyList<string>, SqlError>.Ok<IReadOnlyList<string>, SqlError> ok
-        )
-        {
-            Assert.Fail("Expected Ok result from distinct query");
-            return;
-        }
-
-        Assert.Equal(2, ok.Value.Count);
-        Assert.Contains("Widget", ok.Value);
-        Assert.Contains("Gadget", ok.Value);
+        global::Nimblesite.DataProvider.Tests.SelectStatementLinqE2ETests.VerifyReusableWorkflow13(
+            input0: queryResult,
+            value0: "Expected Ok result from distinct query",
+            value1: 2,
+            value2: "Widget",
+            value3: "Gadget"
+        );
     }
 
     [Fact]
@@ -355,23 +269,11 @@ public sealed class SQLiteContextE2ETests : IDisposable
         var pipeline = CountByCountryPipeline();
         pipeline.Steps.Add(new OrderByStep([("cnt", "DESC")]) { Base = Id("users") });
 
-        var context = new SQLiteContext();
-        var sql = PipelineProcessor.ConvertPipelineToSql(pipeline: pipeline, context: context);
-        var queryResult = _connection.Query<(string, long)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetInt64(1))
+        var ok = VerifySharedChecks4(
+            input0: pipeline,
+            input1: _connection,
+            value2: "Expected Ok result from group by query"
         );
-        if (
-            queryResult
-            is not Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            Assert.Fail("Expected Ok result from group by query");
-            return;
-        }
 
         Assert.Equal(3, ok.Value.Count);
         Assert.Equal("US", ok.Value[0].Item1);
@@ -429,9 +331,110 @@ public sealed class SQLiteContextE2ETests : IDisposable
         var sql = SQLiteContext.ToSQLiteSql(statement);
 
         Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
-        Assert.Contains("FROM users", sql);
-        Assert.Contains("LIMIT 5", sql);
+        ContainsAll(actual: sql, expected: ["name", "email", "FROM users", "LIMIT 5"]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: shared two-stage SQL fragment checks
+    // used by every pipeline generation test.
+    private static void AssertGeneratedSql(
+        string sql,
+        string selectFragment,
+        string firstColumn,
+        string secondColumn,
+        string whereFragment,
+        string whereValue
+    )
+    {
+        global::Nimblesite.DataProvider.Tests.LqlSqliteE2ETests.VerifyReusableWorkflow5(
+            input0: sql,
+            input1: ContainsAll,
+            value0: selectFragment,
+            value2: firstColumn,
+            value3: secondColumn
+        );
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: sql,
+            value0: whereFragment,
+            value2: whereValue
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: shared select+filter pipeline skeleton.
+    private static Pipeline BuildSelectFilterPipeline(
+        IEnumerable<ColumnInfo> columns,
+        string filterColumn,
+        ComparisonOperator @operator,
+        string right
+    )
+    {
+        var pipeline = WithIdentity("users");
+        pipeline.Steps.Add(new SelectStep(columns) { Base = Id("users") });
+        pipeline.Steps.Add(
+            new FilterStep
+            {
+                Base = Id("users"),
+                Condition = WhereCondition.Comparison(
+                    left: ColumnInfo.Named(filterColumn),
+                    @operator: @operator,
+                    right: right
+                ),
+            }
+        );
+        return pipeline;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::Nimblesite.Lql.Core.Pipeline BuildFilteredUserPipeline(
+        string value7,
+        string value11
+    )
+    {
+        var pipeline = BuildSelectFilterPipeline(
+            columns: [ColumnInfo.Named("name"), ColumnInfo.Named("age")],
+            filterColumn: "age",
+            @operator: ComparisonOperator.GreaterThan,
+            right: "25"
+        );
+        pipeline.Steps.Add(new OrderByStep([(value7, "ASC")]) { Base = Id("users") });
+        pipeline.Steps.Add(new LimitStep { Base = Id("users"), Count = value11 });
+
+        return pipeline;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Result<IReadOnlyList<(string, long)>, global::Nimblesite.Sql.Model.SqlError>.Ok<
+        IReadOnlyList<(string, long)>,
+        global::Nimblesite.Sql.Model.SqlError
+    > VerifySharedChecks4(Pipeline input0, SqliteConnection input1, string value2)
+    {
+        var sql = ConvertPipeline(input0);
+
+        var queryResult = input1.Query<(string, long)>(
+            sql: sql,
+            mapper: r => (r.GetString(0), r.GetInt64(1))
+        );
+        var ok = global::Tests.Shared.ResultAssertions.Expected<Result<
+            IReadOnlyList<(string, long)>,
+            SqlError
+        >.Ok<IReadOnlyList<(string, long)>, SqlError>>(actual: queryResult, message: value2);
+
+        return ok;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyCompletionWorkflow1(
+        Func<Pipeline, string> input0,
+        Pipeline input1,
+        Action<string, string, string, string, string, string> input2,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        var sql = input0(arg: input1);
+
+        input2(arg1: sql, arg2: value0, arg3: value1, arg4: value2, arg5: value3, arg6: value4);
     }
 }

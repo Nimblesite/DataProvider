@@ -1,9 +1,12 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.RowAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
 /// Tests for schema types and their functionality
 /// </summary>
-public sealed class SchemaTypesTests
+public sealed partial class SchemaTypesTests
 {
     [Fact]
     public void DatabaseColumn_CanBeCreatedWithDefaults()
@@ -28,19 +31,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedWithAllProperties()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "CustomerName",
-            SqlType = "NVARCHAR(100)",
-            CSharpType = "string",
-            IsNullable = true,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-            MaxLength = 100,
-            Precision = null,
-            Scale = null,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedWithAllProperties_1();
 
         // Assert
         Assert.Equal("CustomerName", column.Name);
@@ -59,19 +50,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedForDecimalColumn()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "TotalAmount",
-            SqlType = "DECIMAL(10,2)",
-            CSharpType = "decimal",
-            IsNullable = false,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-            MaxLength = null,
-            Precision = 10,
-            Scale = 2,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedForDecimalColumn_1();
 
         // Assert
         Assert.Equal("TotalAmount", column.Name);
@@ -86,16 +65,7 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_CanBeCreatedForIdentityColumn()
     {
         // Arrange & Act
-        var column = new DatabaseColumn
-        {
-            Name = "Id",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-            IsNullable = false,
-            IsPrimaryKey = true,
-            IsIdentity = true,
-            IsComputed = false,
-        };
+        var column = Dataset_DatabaseColumn_CanBeCreatedForIdentityColumn_1();
 
         // Assert
         Assert.Equal("Id", column.Name);
@@ -121,25 +91,10 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_CanBeCreatedWithColumns()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-            },
-            new() { Name = "Name", CSharpType = "string" },
-            new() { Name = "Amount", CSharpType = "decimal" },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_CanBeCreatedWithColumns_1().AsReadOnly();
 
         // Act
-        var table = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
+        var table = Dataset_DatabaseTable_CanBeCreatedWithColumns_2(columns: columns);
 
         // Assert
         Assert.Equal("dbo", table.Schema);
@@ -147,135 +102,54 @@ public sealed class SchemaTypesTests
         Assert.Equal(3, table.Columns.Count);
     }
 
-    [Fact]
-    public void DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_ContextCasesData))]
+    public void DatabaseTable_PrimaryKeyColumns_ReturnsCorrectColumns_ContextCases(
+        string caseName,
+        Func<List<DatabaseColumn>> input1,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Core.DatabaseTable,
+            global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Core.DatabaseColumn>
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
     {
-        // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-            },
-            new() { Name = "SecondaryId", IsPrimaryKey = true },
-            new() { Name = "Name", IsPrimaryKey = false },
-            new() { Name = "Amount", IsPrimaryKey = false },
-        }.AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
-
-        // Act
-        var primaryKeyColumns = table.PrimaryKeyColumns;
-
-        // Assert
-        Assert.Equal(2, primaryKeyColumns.Count);
-        Assert.Contains(primaryKeyColumns, c => c.Name == "Id");
-        Assert.Contains(primaryKeyColumns, c => c.Name == "SecondaryId");
-        Assert.DoesNotContain(primaryKeyColumns, c => c.Name == "Name");
-        Assert.DoesNotContain(primaryKeyColumns, c => c.Name == "Amount");
-    }
-
-    [Fact]
-    public void DatabaseTable_InsertableColumns_ExcludesIdentityAndComputed()
-    {
-        // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsIdentity = true,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "ComputedField",
-                IsIdentity = false,
-                IsComputed = true,
-            },
-            new()
-            {
-                Name = "Name",
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Amount",
-                IsIdentity = false,
-                IsComputed = false,
-            },
-        }.AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
-
-        // Act
-        var insertableColumns = table.InsertableColumns;
-
-        // Assert
-        Assert.Equal(2, insertableColumns.Count);
-        Assert.Contains(insertableColumns, c => c.Name == "Name");
-        Assert.Contains(insertableColumns, c => c.Name == "Amount");
-        Assert.DoesNotContain(insertableColumns, c => c.Name == "Id");
-        Assert.DoesNotContain(insertableColumns, c => c.Name == "ComputedField");
+        NamedCase(caseName: caseName);
+        ExerciseProjectionCaseMatrix1(
+            input0: VerifyReusableWorkflow7,
+            input1: input1,
+            input2: VerifyReusableWorkflow14,
+            value0: value0,
+            value1: value1,
+            value2: value2,
+            value3: value3,
+            value4: value4
+        );
     }
 
     [Fact]
     public void DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                IsPrimaryKey = true,
-                IsIdentity = true,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "ComputedField",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = true,
-            },
-            new()
-            {
-                Name = "CategoryId",
-                IsPrimaryKey = true,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Name",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-            new()
-            {
-                Name = "Amount",
-                IsPrimaryKey = false,
-                IsIdentity = false,
-                IsComputed = false,
-            },
-        }.AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
+        var table = VerifyReusableWorkflow7(
+            input0: Dataset_DatabaseTable_UpdateableColumns_ExcludesPrimaryKeyIdentityAndComputed_1
+        );
 
         // Act
         var updateableColumns = table.UpdateableColumns;
 
         // Assert
-        Assert.Equal(2, updateableColumns.Count);
-        Assert.Contains(updateableColumns, c => c.Name == "Name");
-        Assert.Contains(updateableColumns, c => c.Name == "Amount");
-        Assert.DoesNotContain(updateableColumns, c => c.Name == "Id");
-        Assert.DoesNotContain(updateableColumns, c => c.Name == "CategoryId");
+        VerifyReusableWorkflow14(
+            input0: updateableColumns,
+            value1: "Name",
+            value2: "Amount",
+            value3: "Id",
+            value4: "CategoryId"
+        );
         Assert.DoesNotContain(updateableColumns, c => c.Name == "ComputedField");
     }
 
@@ -295,24 +169,9 @@ public sealed class SchemaTypesTests
     public void DatabaseColumn_RecordEquality_WorksCorrectly()
     {
         // Arrange
-        var column1 = new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        };
-        var column2 = new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        };
-        var column3 = new DatabaseColumn
-        {
-            Name = "Name",
-            CSharpType = "string",
-            IsPrimaryKey = false,
-        };
+        var column1 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_1();
+        var column2 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_2();
+        var column3 = Dataset_DatabaseColumn_RecordEquality_WorksCorrectly_3();
 
         // Act & Assert
         Assert.Equal(column1, column2);
@@ -323,29 +182,11 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_RecordEquality_WorksCorrectly()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new() { Name = "Id", CSharpType = "int" },
-        }.AsReadOnly();
+        var columns = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_1().AsReadOnly();
 
-        var table1 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
-        var table2 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "Invoice",
-            Columns = columns,
-        };
-        var table3 = new DatabaseTable
-        {
-            Schema = "dbo",
-            Name = "InvoiceLine",
-            Columns = columns,
-        };
+        var table1 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_2(columns: columns);
+        var table2 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_3(columns: columns);
+        var table3 = Dataset_DatabaseTable_RecordEquality_WorksCorrectly_4(columns: columns);
 
         // Act & Assert
         Assert.Equal(table1, table2);
@@ -356,13 +197,9 @@ public sealed class SchemaTypesTests
     public void DatabaseTable_ComputedProperties_AreReadOnly()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new() { Name = "Id", IsPrimaryKey = true },
-            new() { Name = "Name", IsPrimaryKey = false },
-        }.AsReadOnly();
-
-        var table = new DatabaseTable { Columns = columns };
+        var table = VerifyReusableWorkflow7(
+            input0: Dataset_DatabaseTable_ComputedProperties_AreReadOnly_1
+        );
 
         // Act
         var primaryKeys = table.PrimaryKeyColumns;
@@ -373,5 +210,55 @@ public sealed class SchemaTypesTests
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(primaryKeys);
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(insertable);
         Assert.IsAssignableFrom<IReadOnlyList<DatabaseColumn>>(updateable);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static DatabaseTable VerifyReusableWorkflow7(Func<List<DatabaseColumn>> input0)
+    { // Arrange
+        var columns = input0().AsReadOnly();
+
+        var table = new DatabaseTable { Columns = columns };
+
+        return table;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow14(
+        IReadOnlyList<DatabaseColumn> input0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        // Assert
+        Assert.Equal(2, input0.Count);
+        ContainsAll(rows: input0, projection: c => c.Name, expected: [value1, value2]);
+        Assert.DoesNotContain(input0, c => c.Name == value3);
+        Assert.DoesNotContain(input0, c => c.Name == value4);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix1(
+        Func<Func<List<DatabaseColumn>>, DatabaseTable> input0,
+        Func<List<DatabaseColumn>> input1,
+        Action<IReadOnlyList<DatabaseColumn>, string, string, string, string> input2,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Core.DatabaseTable,
+            global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Core.DatabaseColumn>
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    { // Arrange
+        var table = input0(arg: input1);
+
+        // Act
+        var primaryKeyColumns = value0(arg: table);
+
+        // Assert
+        input2(arg1: primaryKeyColumns, arg2: value1, arg3: value2, arg4: value3, arg5: value4);
     }
 }

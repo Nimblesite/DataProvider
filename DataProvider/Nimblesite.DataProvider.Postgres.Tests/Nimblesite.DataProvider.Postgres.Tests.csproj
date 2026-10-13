@@ -25,4 +25,7 @@
     <ProjectReference Include="../Nimblesite.DataProvider.Parsing.Tests/Nimblesite.DataProvider.Parsing.Tests.csproj" />
     <ProjectReference Include="../../Other/Nimblesite.Sql.Model/Nimblesite.Sql.Model.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+  </ItemGroup>
 </Project>

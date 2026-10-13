@@ -19,7 +19,7 @@ namespace Nimblesite.DataProvider.Parsing.Tests;
 /// factory and a handful of dialect hooks for the SQL snippets + rule
 /// names that differ.
 /// </summary>
-public abstract class SqlParserContractTests
+public abstract partial class SqlParserContractTests
 {
     /// <summary>Builds a fresh parser for a single test.</summary>
     protected abstract ISqlParser CreateParser();
@@ -133,15 +133,23 @@ public abstract class SqlParserContractTests
         Assert.Contains(stmt.Parameters, p => p.Name == "id");
     }
 
-    [Fact]
-    public void Parses_inner_join()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData6))]
+    public void Parses_inner_join_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1
+    )
     {
-        const string sql = "SELECT a.id, b.name FROM a JOIN b ON a.b_id = b.id";
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
+        string sql = scenario0;
         var stmt = AssertOk(CreateParser().ParseSql(sql));
         Assert.Empty(stmt.Parameters);
 
         var tree = ParseRawTree(sql);
-        Assert.True(ContainsTerminal(tree, "JOIN"));
+        Assert.True(ContainsTerminal(tree, scenario1));
     }
 
     [Fact]
@@ -230,17 +238,6 @@ public abstract class SqlParserContractTests
     }
 
     [Fact]
-    public void Parses_function_call_with_wildcard()
-    {
-        const string sql = "SELECT count(*) FROM users";
-        var stmt = AssertOk(CreateParser().ParseSql(sql));
-        Assert.Empty(stmt.Parameters);
-
-        var tree = ParseRawTree(sql);
-        Assert.True(ContainsTerminal(tree, "*"));
-    }
-
-    [Fact]
     public void Parses_group_by_having()
     {
         const string sql =
@@ -281,15 +278,24 @@ public abstract class SqlParserContractTests
         Assert.True(ContainsTerminal(tree, "id"));
     }
 
-    [Fact]
-    public void Parses_mixed_case_alias()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData7))]
+    public void Parses_mixed_case_alias_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2
+    )
     {
-        const string sql = "SELECT name AS UserName FROM users";
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
+        string sql = scenario0;
         AssertOk(CreateParser().ParseSql(sql));
 
         var tree = ParseRawTree(sql);
-        Assert.True(ContainsTerminal(tree, "AS"));
-        Assert.True(ContainsTerminal(tree, "UserName"));
+        Assert.True(ContainsTerminal(tree, scenario1));
+        Assert.True(ContainsTerminal(tree, scenario2));
     }
 
     [Fact]
@@ -314,18 +320,6 @@ public abstract class SqlParserContractTests
     }
 
     [Fact]
-    public void Parses_not_exists_subquery()
-    {
-        const string sql =
-            "SELECT id FROM users u WHERE NOT EXISTS (SELECT 1 FROM bans b WHERE b.user_id = u.id)";
-        AssertOk(CreateParser().ParseSql(sql));
-
-        var tree = ParseRawTree(sql);
-        Assert.True(ContainsTerminal(tree, "NOT"));
-        Assert.True(ContainsTerminal(tree, "EXISTS"));
-    }
-
-    [Fact]
     public void Malformed_sql_does_not_throw()
     {
         // The contract is that ParseSql catches thrown exceptions and
@@ -342,59 +336,58 @@ public abstract class SqlParserContractTests
     // Shared parameter-extraction tests.
     // ══════════════════════════════════════════════════════════════════
 
-    [Fact]
-    public void At_id_is_extracted()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(At_id_is_extracted_ContextCasesData))]
+    public void At_id_is_extracted_ContextCases(string caseName, string value0)
     {
-        var stmt = AssertOk(CreateParser().ParseSql("SELECT * FROM users WHERE id = @id"));
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix1(value0: value0);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(At_user_id_with_underscore_ContextCasesData))]
+    public void At_user_id_with_underscore_ContextCases(
+        string caseName,
+        string value0,
+        string value2
+    )
+    {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix2(value0: value0, value2: value2);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData8))]
+    public void Mixed_at_params_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2
+    )
+    {
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+
+        var stmt = AssertOk(CreateParser().ParseSql(scenario0));
+        Assert.Contains(stmt.Parameters, p => p.Name == scenario1);
+        Assert.Contains(stmt.Parameters, p => p.Name == scenario2);
+        Assert.Equal(2, stmt.Parameters.Count);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private void ExerciseOperationCaseMatrix1(string value0)
+    {
+        var stmt = AssertOk(CreateParser().ParseSql(value0));
         Assert.Single(stmt.Parameters);
         Assert.Equal("id", stmt.Parameters.Single().Name);
     }
 
-    [Fact]
-    public void At_user_id_with_underscore()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private void ExerciseOperationCaseMatrix2(string value0, string value2)
     {
-        var stmt = AssertOk(CreateParser().ParseSql("SELECT * FROM users WHERE id = @user_id"));
-        Assert.Contains(stmt.Parameters, p => p.Name == "user_id");
-    }
-
-    [Fact]
-    public void At_first_name_with_underscore()
-    {
-        var stmt = AssertOk(
-            CreateParser().ParseSql("SELECT * FROM users WHERE first_name = @first_name")
-        );
-        Assert.Contains(stmt.Parameters, p => p.Name == "first_name");
-    }
-
-    [Fact]
-    public void Mixed_at_params()
-    {
-        var stmt = AssertOk(
-            CreateParser().ParseSql("SELECT * FROM users WHERE a = @alpha AND b = @beta")
-        );
-        Assert.Contains(stmt.Parameters, p => p.Name == "alpha");
-        Assert.Contains(stmt.Parameters, p => p.Name == "beta");
-        Assert.Equal(2, stmt.Parameters.Count);
-    }
-
-    [Fact]
-    public void Repeated_params_are_deduped()
-    {
-        var stmt = AssertOk(
-            CreateParser().ParseSql("SELECT * FROM users WHERE id = @id OR parent_id = @id")
-        );
-        Assert.Single(stmt.Parameters);
-        Assert.Equal("id", stmt.Parameters.Single().Name);
-    }
-
-    [Fact]
-    public void Case_sensitive_params_are_distinct()
-    {
-        var stmt = AssertOk(
-            CreateParser().ParseSql("SELECT * FROM users WHERE id = @Id OR other = @id")
-        );
-        Assert.Contains(stmt.Parameters, p => p.Name == "Id");
-        Assert.Contains(stmt.Parameters, p => p.Name == "id");
-        Assert.Equal(2, stmt.Parameters.Count);
+        var stmt = AssertOk(CreateParser().ParseSql(value0));
+        Assert.Contains(stmt.Parameters, p => p.Name == value2);
     }
 }

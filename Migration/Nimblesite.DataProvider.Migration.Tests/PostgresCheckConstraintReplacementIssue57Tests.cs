@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -8,7 +9,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// because the diff matched on name only.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresContainerFixture fixture)
+public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -29,31 +32,29 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
                 ),
                 Logger
             );
-            Assert.True(LiveExpressionContains(connection, "input_tokens"));
-            Assert.False(LiveExpressionContains(connection, "llm_input_tokens"));
-
-            var upgrade = PostgresTestDb.Calculate(
-                PostgresTestDb.Inspect(connection, Logger),
-                SchemaWithKindCheck("usage_events_kind_check_v2"),
-                Logger
+            var upgrade = VerifyReusableWorkflow26(
+                input0: LiveExpressionContains,
+                input1: connection,
+                input2: Logger,
+                input3: SchemaWithKindCheck,
+                value0: "input_tokens",
+                value1: "llm_input_tokens"
             );
-            Assert.Contains(
+            SchemaDiffAssertions.AssertContainsOperation<DropCheckConstraintOperation>(
                 upgrade,
-                op =>
-                    op is DropCheckConstraintOperation drop
-                    && drop.ConstraintName == "usage_events_kind_check"
+                drop => drop.ConstraintName == "usage_events_kind_check"
             );
             Assert.Contains(upgrade, op => op is AddCheckConstraintOperation);
 
             PostgresTestDb.Apply(connection, upgrade, Logger);
 
-            Assert.True(LiveExpressionContains(connection, "llm_input_tokens"));
-            Assert.False(LiveExpressionContains(connection, "'input_tokens'"));
-
-            var replay = PostgresTestDb.Calculate(
-                PostgresTestDb.Inspect(connection, Logger),
-                SchemaWithKindCheck("usage_events_kind_check_v2"),
-                Logger
+            var replay = VerifyReusableWorkflow26(
+                input0: LiveExpressionContains,
+                input1: connection,
+                input2: Logger,
+                input3: SchemaWithKindCheck,
+                value0: "llm_input_tokens",
+                value1: "'input_tokens'"
             );
             Assert.DoesNotContain(replay, op => op is DropCheckConstraintOperation);
             Assert.DoesNotContain(replay, op => op is AddCheckConstraintOperation);
@@ -75,58 +76,39 @@ public sealed class PostgresCheckConstraintReplacementIssue57Tests(PostgresConta
                 "kind IN ('llm_request','llm_input_tokens','llm_output_tokens','machine_seconds')",
             _ => throw new ArgumentOutOfRangeException(nameof(version)),
         };
-        return new SchemaDefinition
-        {
-            Name = "issue57",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = SchemaName,
-                    Name = "usage_events",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "kind",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    CheckConstraints =
-                    [
-                        new CheckConstraintDefinition
-                        {
-                            Name = "usage_events_kind_check",
-                            Expression = expression,
-                        },
-                    ],
-                },
-            ],
-        };
+        return Fixture_SchemaWithKindCheck_1(expression: expression);
     }
 
     private static bool LiveExpressionContains(NpgsqlConnection connection, string needle)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT pg_get_constraintdef(c.oid)
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            WHERE n.nspname = 'public'
-              AND t.relname = 'usage_events'
-              AND c.contype = 'c'
-              AND c.conname = 'usage_events_kind_check'
-            """;
-        var def = command.ExecuteScalar() as string;
+        var def =
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command => command.CommandText = Data_LiveExpressionContains_1
+            ) as string;
+
         return def is not null && def.Contains(needle, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static IReadOnlyList<SchemaOperation> VerifyReusableWorkflow26(
+        Func<NpgsqlConnection, string, bool> input0,
+        NpgsqlConnection input1,
+        ILogger input2,
+        Func<string, SchemaDefinition> input3,
+        string value0,
+        string value1
+    )
+    {
+        Assert.True(input0(arg1: input1, arg2: value0));
+        Assert.False(input0(arg1: input1, arg2: value1));
+
+        var upgrade = PostgresTestDb.Calculate(
+            PostgresTestDb.Inspect(input1, input2),
+            input3(arg: "usage_events_kind_check_v2"),
+            input2
+        );
+
+        return upgrade;
     }
 }

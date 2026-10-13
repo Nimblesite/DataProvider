@@ -1,7 +1,8 @@
-using Microsoft.Data.Sqlite;
+// Implements [CI-TEST-SHARED-COMMAND].
+
 using Nimblesite.Lql.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.RowAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -9,7 +10,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: SQL model types (SelectStatementBuilder, WhereCondition, ColumnInfo,
 /// ComparisonOperator, JoinGraph, PredicateBuilder) -> ToSQLite -> execute -> verify.
 /// </summary>
-public sealed class SqlModelE2ETests : IDisposable
+public sealed partial class SqlModelE2ETests : IDisposable
 {
     private readonly SqliteTestDatabase _db = new("model_e2e");
     private SqliteConnection _connection => _db.Connection;
@@ -21,41 +22,12 @@ public sealed class SqlModelE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Employees (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Department TEXT NOT NULL,
-                Salary REAL NOT NULL,
-                YearsExp INTEGER NOT NULL
-            );
-            CREATE TABLE Departments (
-                Name TEXT PRIMARY KEY,
-                Budget REAL NOT NULL,
-                HeadCount INTEGER NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
-
-        using var seedCmd = _connection.CreateCommand();
-        seedCmd.CommandText = """
-            INSERT INTO Employees VALUES ('e1', 'Alice', 'Engineering', 95000, 5);
-            INSERT INTO Employees VALUES ('e2', 'Bob', 'Engineering', 105000, 8);
-            INSERT INTO Employees VALUES ('e3', 'Charlie', 'Sales', 75000, 3);
-            INSERT INTO Employees VALUES ('e4', 'Diana', 'Sales', 85000, 6);
-            INSERT INTO Employees VALUES ('e5', 'Eve', 'Marketing', 70000, 2);
-            INSERT INTO Employees VALUES ('e6', 'Frank', 'Engineering', 120000, 12);
-            INSERT INTO Employees VALUES ('e7', 'Grace', 'Marketing', 80000, 4);
-            INSERT INTO Employees VALUES ('e8', 'Hank', 'Sales', 90000, 7);
-            INSERT INTO Departments VALUES ('Engineering', 500000, 3);
-            INSERT INTO Departments VALUES ('Sales', 300000, 3);
-            INSERT INTO Departments VALUES ('Marketing', 200000, 2);
-            """;
-        seedCmd.ExecuteNonQuery();
-    }
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
+            connection: _connection,
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2
+        );
 
     [Fact]
     public void SelectStatementBuilder_ComplexWhereConditions_ExecuteCorrectly()
@@ -63,72 +35,51 @@ public sealed class SqlModelE2ETests : IDisposable
         // Build: SELECT Name, Salary FROM Employees
         //        WHERE (Department = 'Engineering' AND Salary > 100000)
         //           OR (Department = 'Sales' AND YearsExp > 5)
-        var builder = new SelectStatementBuilder();
-        builder.AddTable(name: "Employees");
+        var builder = NewEmployeeBuilder();
         builder.AddSelectColumn(name: "Name");
         builder.AddSelectColumn(name: "Salary");
         builder.AddSelectColumn(name: "Department");
-        builder.AddWhereCondition(WhereCondition.OpenParen());
-        builder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Department"),
-                @operator: ComparisonOperator.Eq,
-                right: "'Engineering'"
-            )
+        VerifySharedChecks2(
+            input0: builder,
+            value1: "'Engineering'",
+            value2: "Salary",
+            value3: "100000"
         );
-        builder.AddWhereCondition(WhereCondition.And());
-        builder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Salary"),
-                @operator: ComparisonOperator.GreaterThan,
-                right: "100000"
-            )
-        );
-        builder.AddWhereCondition(WhereCondition.CloseParen());
         builder.AddWhereCondition(WhereCondition.Or());
-        builder.AddWhereCondition(WhereCondition.OpenParen());
-        builder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Department"),
-                @operator: ComparisonOperator.Eq,
-                right: "'Sales'"
-            )
-        );
-        builder.AddWhereCondition(WhereCondition.And());
-        builder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "YearsExp"),
-                @operator: ComparisonOperator.GreaterThan,
-                right: "5"
-            )
-        );
-        builder.AddWhereCondition(WhereCondition.CloseParen());
+        VerifySharedChecks2(input0: builder, value1: "'Sales'", value2: "YearsExp", value3: "5");
         builder.AddOrderBy(column: "Name", direction: "ASC");
         var stmt = builder.Build();
 
-        var sqlOk = Assert.IsType<StringOk>(stmt.ToSQLite());
-        var sql = sqlOk.Value;
-        Assert.Contains("(", sql);
-        Assert.Contains(")", sql);
-        Assert.Contains("AND", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("OR", sql, StringComparison.OrdinalIgnoreCase);
+        var sql =
+            global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyConsolidatedPhase1(
+                input0: stmt
+            );
+        ContainsAll(actual: sql, expected: ["(", ")"]);
+        ContainsAll(
+            actual: sql,
+            expected: ["AND", "OR"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         var result = _connection.Query<(string, double, string)>(
             sql: sql,
             mapper: r => (r.GetString(0), r.GetDouble(1), r.GetString(2))
         );
-        var ok = Assert.IsType<Result<IReadOnlyList<(string, double, string)>, SqlError>.Ok<
-            IReadOnlyList<(string, double, string)>,
-            SqlError
-        >>(result);
+        var ok = global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
         var rows = ok.Value;
 
         // Bob (Eng, 105k), Frank (Eng, 120k), Diana (Sales, 6yr), Hank (Sales, 7yr)
         Assert.Equal(4, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Bob" && r.Item2 == 105000);
-        Assert.Contains(rows, r => r.Item1 == "Frank" && r.Item2 == 120000);
-        Assert.Contains(rows, r => r.Item1 == "Diana" && r.Item3 == "Sales");
-        Assert.Contains(rows, r => r.Item1 == "Hank" && r.Item3 == "Sales");
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Bob", 105000.0), ("Frank", 120000.0)]
+        );
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item3),
+            expected: [("Diana", "Sales"), ("Hank", "Sales")]
+        );
     }
 
     [Fact]
@@ -147,66 +98,27 @@ public sealed class SqlModelE2ETests : IDisposable
         Assert.Equal("IS NOT NULL", ComparisonOperator.IsNotNull.ToSql());
 
         // Test LessThan in a real query
-        var ltBuilder = new SelectStatementBuilder();
-        ltBuilder.AddTable(name: "Employees");
-        ltBuilder.AddSelectColumn(name: "Name");
-        ltBuilder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Salary"),
-                @operator: ComparisonOperator.LessThan,
-                right: "80000"
-            )
+        var ltRows = QueryEmployeeNames(
+            column: "Salary",
+            @operator: ComparisonOperator.LessThan,
+            right: "80000"
         );
-        var ltSqlOk = Assert.IsType<StringOk>(ltBuilder.Build().ToSQLite());
-        var ltSql = ltSqlOk.Value;
-        var ltResult = _connection.Query<string>(sql: ltSql, mapper: r => r.GetString(0));
-        var ltOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(ltResult);
-        var ltRows = ltOk.Value;
         Assert.Equal(2, ltRows.Count); // Charlie (75k), Eve (70k)
 
         // Test GreaterOrEq
-        var geBuilder = new SelectStatementBuilder();
-        geBuilder.AddTable(name: "Employees");
-        geBuilder.AddSelectColumn(name: "Name");
-        geBuilder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Salary"),
-                @operator: ComparisonOperator.GreaterOrEq,
-                right: "95000"
-            )
+        var geRows = QueryEmployeeNames(
+            column: "Salary",
+            @operator: ComparisonOperator.GreaterOrEq,
+            right: "95000"
         );
-        var geSqlOk = Assert.IsType<StringOk>(geBuilder.Build().ToSQLite());
-        var geSql = geSqlOk.Value;
-        var geResult = _connection.Query<string>(sql: geSql, mapper: r => r.GetString(0));
-        var geOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(geResult);
-        var geRows = geOk.Value;
         Assert.Equal(3, geRows.Count); // Alice (95k), Bob (105k), Frank (120k)
 
         // Test LIKE
-        var likeBuilder = new SelectStatementBuilder();
-        likeBuilder.AddTable(name: "Employees");
-        likeBuilder.AddSelectColumn(name: "Name");
-        likeBuilder.AddWhereCondition(
-            WhereCondition.Comparison(
-                left: ColumnInfo.Named(name: "Name"),
-                @operator: ComparisonOperator.Like,
-                right: "'%a%'"
-            )
+        var likeRows = QueryEmployeeNames(
+            column: "Name",
+            @operator: ComparisonOperator.Like,
+            right: "'%a%'"
         );
-        var likeSqlOk = Assert.IsType<StringOk>(likeBuilder.Build().ToSQLite());
-        var likeSql = likeSqlOk.Value;
-        var likeResult = _connection.Query<string>(sql: likeSql, mapper: r => r.GetString(0));
-        var likeOk = Assert.IsType<Result<IReadOnlyList<string>, SqlError>.Ok<
-            IReadOnlyList<string>,
-            SqlError
-        >>(likeResult);
-        var likeRows = likeOk.Value;
         // Grace, Diana, Frank, Charlie, Hank all contain 'a'
         Assert.True(likeRows.Count >= 3);
     }
@@ -238,8 +150,7 @@ public sealed class SqlModelE2ETests : IDisposable
         Assert.Equal("total_count", expr.Alias);
 
         // Use expression column in a real query
-        var builder = new SelectStatementBuilder();
-        builder.AddTable(name: "Employees");
+        var builder = NewEmployeeBuilder();
         builder.AddSelectColumn(ColumnInfo.Named(name: "Department"));
         builder.AddSelectColumn(
             ColumnInfo.FromExpression(expression: "COUNT(*)", alias: "emp_count")
@@ -247,22 +158,21 @@ public sealed class SqlModelE2ETests : IDisposable
         builder.AddGroupBy([ColumnInfo.Named(name: "Department")]);
         builder.AddOrderBy(column: "Department", direction: "ASC");
         var stmt = builder.Build();
-        var sqlOk = Assert.IsType<StringOk>(stmt.ToSQLite());
-        var sql = sqlOk.Value;
+        var sql =
+            global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyConsolidatedPhase1(
+                input0: stmt
+            );
 
-        var result = _connection.Query<(string, long)>(
+        var rows = QueryRows<(string, long)>(
             sql: sql,
             mapper: r => (r.GetString(0), r.GetInt64(1))
         );
-        var ok = Assert.IsType<Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-            IReadOnlyList<(string, long)>,
-            SqlError
-        >>(result);
-        var rows = ok.Value;
         Assert.Equal(3, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Engineering" && r.Item2 == 3);
-        Assert.Contains(rows, r => r.Item1 == "Sales" && r.Item2 == 3);
-        Assert.Contains(rows, r => r.Item1 == "Marketing" && r.Item2 == 2);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Engineering", 3L), ("Sales", 3L), ("Marketing", 2L)]
+        );
     }
 
     [Fact]
@@ -284,8 +194,7 @@ public sealed class SqlModelE2ETests : IDisposable
         Assert.Equal("INNER", relationships[0].JoinType);
 
         // Build a statement with the JoinGraph
-        var builder = new SelectStatementBuilder();
-        builder.AddTable(name: "Employees");
+        var builder = NewEmployeeBuilder();
         builder.AddTable(name: "Departments");
         builder.AddJoin(
             leftTable: "Employees",
@@ -300,23 +209,22 @@ public sealed class SqlModelE2ETests : IDisposable
         Assert.True(stmt.HasJoins);
         Assert.Equal(2, stmt.Tables.Count);
 
-        var joinSqlOk = Assert.IsType<StringOk>(stmt.ToSQLite());
-        var sql = joinSqlOk.Value;
+        var sql =
+            global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyConsolidatedPhase1(
+                input0: stmt
+            );
         Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
 
-        var result = _connection.Query<(string, double)>(
+        var rows = QueryRows<(string, double)>(
             sql: sql,
             mapper: r => (r.GetString(0), r.GetDouble(1))
         );
-        var joinOk = Assert.IsType<Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-            IReadOnlyList<(string, double)>,
-            SqlError
-        >>(result);
-        var rows = joinOk.Value;
         Assert.Equal(8, rows.Count); // All 8 employees with their department budget
-        Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 500000);
-        Assert.Contains(rows, r => r.Item1 == "Charlie" && r.Item2 == 300000);
-        Assert.Contains(rows, r => r.Item1 == "Eve" && r.Item2 == 200000);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Alice", 500000.0), ("Charlie", 300000.0), ("Eve", 200000.0)]
+        );
     }
 
     [Fact]
@@ -423,8 +331,7 @@ public sealed class SqlModelE2ETests : IDisposable
     [Fact]
     public void SelectStatementBuilder_HavingClause_ExecutesCorrectly()
     {
-        var builder = new SelectStatementBuilder();
-        builder.AddTable(name: "Employees");
+        var builder = NewEmployeeBuilder();
         builder.AddSelectColumn(ColumnInfo.Named(name: "Department"));
         builder.AddSelectColumn(
             ColumnInfo.FromExpression(expression: "AVG(Salary)", alias: "AvgSalary")
@@ -436,76 +343,37 @@ public sealed class SqlModelE2ETests : IDisposable
 
         Assert.Equal("AVG(Salary) > 80000", stmt.HavingCondition);
 
-        var havingSqlOk = Assert.IsType<StringOk>(stmt.ToSQLite());
-        var sql = havingSqlOk.Value;
-        Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("AVG(Salary) > 80000", sql);
-
-        var result = _connection.Query<(string, double)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
+        var sql =
+            global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyConsolidatedPhase1(
+                input0: stmt
+            );
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: sql,
+            value0: "HAVING",
+            value2: "AVG(Salary) > 80000"
         );
-        var havingOk = Assert.IsType<Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-            IReadOnlyList<(string, double)>,
-            SqlError
-        >>(result);
-        var rows = havingOk.Value;
+
+        var rows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () =>
+                _connection.Query<(string, double)>(
+                    sql: sql,
+                    mapper: r => (r.GetString(0), r.GetDouble(1))
+                ),
+            exactType: true
+        );
 
         // Engineering avg = (95k+105k+120k)/3 = 106.67k > 80k
         // Sales avg = (75k+85k+90k)/3 = 83.33k > 80k
         // Marketing avg = (70k+80k)/2 = 75k < 80k (excluded)
         Assert.Equal(2, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Engineering");
-        Assert.Contains(rows, r => r.Item1 == "Sales");
+        ContainsAll(rows: rows, projection: r => r.Item1, expected: ["Engineering", "Sales"]);
         Assert.DoesNotContain(rows, r => r.Item1 == "Marketing");
     }
 
     [Fact]
     public void DatabaseTableRecord_Properties_WorkCorrectly()
     {
-        var table = new DatabaseTable
-        {
-            Name = "TestTable",
-            Schema = "dbo",
-            Columns =
-            [
-                new DatabaseColumn
-                {
-                    Name = "Id",
-                    CSharpType = "Guid",
-                    SqlType = "TEXT",
-                    IsPrimaryKey = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "AutoId",
-                    CSharpType = "int",
-                    SqlType = "INTEGER",
-                    IsIdentity = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "Computed",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                    IsComputed = true,
-                },
-                new DatabaseColumn
-                {
-                    Name = "Name",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                },
-                new DatabaseColumn
-                {
-                    Name = "Email",
-                    CSharpType = "string",
-                    SqlType = "TEXT",
-                    IsNullable = true,
-                    MaxLength = 255,
-                },
-            ],
-        };
+        var table = Dataset_DatabaseTableRecord_Properties_WorkCorrectly_1();
 
         Assert.Equal("TestTable", table.Name);
         Assert.Equal("dbo", table.Schema);
@@ -522,7 +390,83 @@ public sealed class SqlModelE2ETests : IDisposable
 
         // UpdateableColumns (excludes PK, identity, computed)
         Assert.Equal(2, table.UpdateableColumns.Count);
-        Assert.Contains(table.UpdateableColumns, c => c.Name == "Name");
-        Assert.Contains(table.UpdateableColumns, c => c.Name == "Email");
+        ContainsAll(
+            rows: table.UpdateableColumns,
+            projection: c => c.Name,
+            expected: ["Name", "Email"]
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifySharedChecks2(
+        SelectStatementBuilder input0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        input0.AddWhereCondition(WhereCondition.OpenParen());
+        input0.AddWhereCondition(
+            WhereCondition.Comparison(
+                left: ColumnInfo.Named(name: "Department"),
+                @operator: ComparisonOperator.Eq,
+                right: value1
+            )
+        );
+        input0.AddWhereCondition(WhereCondition.And());
+        input0.AddWhereCondition(
+            WhereCondition.Comparison(
+                left: ColumnInfo.Named(name: value2),
+                @operator: ComparisonOperator.GreaterThan,
+                right: value3
+            )
+        );
+        input0.AddWhereCondition(WhereCondition.CloseParen());
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<T> QueryRows<T>(string sql, Func<System.Data.IDataReader, T> mapper) =>
+        global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: _connection.Query<T>(sql: sql, mapper: mapper))
+            .Value;
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SelectStatementBuilder NewEmployeeBuilder() =>
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow4(
+            value0: "Employees"
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<string> QueryEmployeeNames(
+        string column,
+        ComparisonOperator @operator,
+        string right
+    )
+    {
+        var builder = NewEmployeeBuilder();
+        builder.AddSelectColumn(name: "Name");
+        builder.AddWhereCondition(
+            WhereCondition.Comparison(
+                left: ColumnInfo.Named(name: column),
+                @operator: @operator,
+                right: right
+            )
+        );
+        return VerifySharedChecks5(input0: builder);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<string> VerifySharedChecks5(SelectStatementBuilder input0)
+    {
+        var ltSqlOk = global::Tests.Shared.ResultAssertions.ExactOk(
+            actual: input0.Build().ToSQLite()
+        );
+        var ltSql = ltSqlOk.Value;
+        var ltRows = global::Tests.Shared.ResultAssertions.Rows(
+            read: () => _connection.Query<string>(sql: ltSql, mapper: r => r.GetString(0)),
+            exactType: true
+        );
+
+        return ltRows;
     }
 }

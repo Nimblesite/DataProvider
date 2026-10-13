@@ -1,8 +1,7 @@
-use antlr_rust::common_token_stream::CommonTokenStream;
-use antlr_rust::int_stream::IntStream;
-use antlr_rust::token::Token;
-use antlr_rust::token_stream::TokenStream;
-use antlr_rust::InputStream;
+use antlr_rust::{
+    common_token_stream::CommonTokenStream, int_stream::IntStream, token::Token,
+    token_stream::TokenStream, InputStream,
+};
 
 use crate::LqlLexer;
 
@@ -85,6 +84,14 @@ pub fn lex_tokens(source: &str) -> Vec<LqlToken> {
     tokens
 }
 
+/// Collects references to every token whose type matches `token_type`.
+pub fn tokens_of_type(tokens: &[LqlToken], token_type: isize) -> Vec<&LqlToken> {
+    tokens
+        .iter()
+        .filter(|token| token.token_type == token_type)
+        .collect()
+}
+
 /// Get positions of all |> pipe tokens using the ANTLR lexer.
 /// More accurate than text scanning since it respects string literals and comments.
 pub fn lex_pipe_positions(source: &str) -> Vec<PipeTokenPosition> {
@@ -120,24 +127,29 @@ pub struct TokenStructure {
     pub comment_lines: Vec<usize>,
 }
 
+/// Appends every `|>` position found in `line` (0-based `line_idx`) to `positions`.
+fn collect_pipe_positions(line: &str, line_idx: usize, positions: &mut Vec<PipeTokenPosition>) {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'|' && bytes[i + 1] == b'>' {
+            positions.push(PipeTokenPosition {
+                line: line_idx as u32,
+                col: i as u32,
+            });
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+}
+
 /// Get positions of all |> (pipe) tokens by scanning source text.
 /// Returns 0-based line and column for each pipe operator.
 pub fn get_pipe_token_positions(source: &str) -> Vec<PipeTokenPosition> {
     let mut positions = Vec::new();
     for (line_idx, line) in source.lines().enumerate() {
-        let bytes = line.as_bytes();
-        let mut i = 0;
-        while i + 1 < bytes.len() {
-            if bytes[i] == b'|' && bytes[i + 1] == b'>' {
-                positions.push(PipeTokenPosition {
-                    line: line_idx as u32,
-                    col: i as u32,
-                });
-                i += 2;
-            } else {
-                i += 1;
-            }
-        }
+        collect_pipe_positions(line, line_idx, &mut positions);
     }
     positions
 }
@@ -160,19 +172,7 @@ pub fn get_token_structure(source: &str) -> TokenStructure {
         }
 
         // Pipe detection
-        let bytes = line.as_bytes();
-        let mut i = 0;
-        while i + 1 < bytes.len() {
-            if bytes[i] == b'|' && bytes[i + 1] == b'>' {
-                pipe_positions.push(PipeTokenPosition {
-                    line: line_idx as u32,
-                    col: i as u32,
-                });
-                i += 2;
-            } else {
-                i += 1;
-            }
-        }
+        collect_pipe_positions(line, line_idx, &mut pipe_positions);
 
         // Check if line ends with '(' (ignoring trailing whitespace/comments)
         let effective = if let Some(comment_pos) = trimmed.find("--") {
@@ -202,6 +202,14 @@ pub fn get_token_structure(source: &str) -> TokenStructure {
 mod tests {
     use super::*;
 
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Asserts two pipe positions land on the expected lines.
+    fn assert_pipe_lines(positions: &[PipeTokenPosition], first: u32, second: u32) {
+        assert_eq!(positions.len(), 2);
+        assert_eq!(positions[0].line, first);
+        assert_eq!(positions[1].line, second);
+    }
+
     // ── get_pipe_token_positions ──
 
     #[test]
@@ -230,10 +238,8 @@ mod tests {
     fn test_pipes_multiline() {
         let source = "users\n|> filter(x)\n|> select(y)";
         let positions = get_pipe_token_positions(source);
-        assert_eq!(positions.len(), 2);
-        assert_eq!(positions[0].line, 1);
+        assert_pipe_lines(&positions, 1, 2);
         assert_eq!(positions[0].col, 0);
-        assert_eq!(positions[1].line, 2);
         assert_eq!(positions[1].col, 0);
     }
 
@@ -348,10 +354,7 @@ mod tests {
     #[test]
     fn test_lex_tokens_finds_pipe() {
         let tokens = lex_tokens("a |> b");
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 1);
         assert_eq!(pipes[0].text, "|>");
     }
@@ -359,14 +362,8 @@ mod tests {
     #[test]
     fn test_lex_tokens_finds_parens() {
         let tokens = lex_tokens("select(x)");
-        let opens: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::OPEN_PAREN)
-            .collect();
-        let closes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::CLOSE_PAREN)
-            .collect();
+        let opens = tokens_of_type(&tokens, token_types::OPEN_PAREN);
+        let closes = tokens_of_type(&tokens, token_types::CLOSE_PAREN);
         assert_eq!(opens.len(), 1);
         assert_eq!(closes.len(), 1);
     }
@@ -387,16 +384,10 @@ mod tests {
         let tokens = lex_tokens("-- hello\nusers");
         // Comments are on a hidden channel. CommonTokenStream's `get()`
         // returns ALL buffered tokens including hidden channel.
-        let comments: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::COMMENT)
-            .collect();
+        let comments = tokens_of_type(&tokens, token_types::COMMENT);
         // Comments may or may not appear depending on antlr-rust channel filtering.
         // What matters is that the lexer doesn't crash and finds "users".
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert_eq!(idents.len(), 1);
         assert_eq!(idents[0].text, "users");
         // If comments are included, verify position
@@ -411,10 +402,7 @@ mod tests {
         // `get()` returns all buffered tokens including hidden channel.
         let tokens = lex_tokens("a b");
         // We should at least get the two IDENT tokens
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert_eq!(idents.len(), 2);
     }
 
@@ -422,10 +410,7 @@ mod tests {
     fn test_lex_tokens_complex_pipeline() {
         let source = "users\n|> filter(fn(r) => r.age > 18)\n|> select(users.id)";
         let tokens = lex_tokens(source);
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 2);
         assert_eq!(pipes[0].line, 1);
         assert_eq!(pipes[1].line, 2);
@@ -451,9 +436,7 @@ mod tests {
     fn test_lex_pipe_positions_multiline() {
         let source = "users\n|> a\n|> b";
         let positions = lex_pipe_positions(source);
-        assert_eq!(positions.len(), 2);
-        assert_eq!(positions[0].line, 1);
-        assert_eq!(positions[1].line, 2);
+        assert_pipe_lines(&positions, 1, 2);
     }
 
     #[test]

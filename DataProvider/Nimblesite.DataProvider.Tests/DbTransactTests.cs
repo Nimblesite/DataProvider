@@ -1,5 +1,4 @@
-using Microsoft.Data.Sqlite;
-
+using static global::Tests.Shared.ResultAssertions;
 #pragma warning disable CS1998 // This async method lacks 'await' operators and will run synchronously
 
 namespace Nimblesite.DataProvider.Tests;
@@ -7,17 +6,16 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests for DbTransact extension methods
 /// </summary>
-public sealed class DbTransactTests : IDisposable
+public sealed partial class DbTransactTests : IDisposable
 {
     private readonly string _dbPath;
-    private readonly string _connectionString;
     private readonly SqliteConnection _connection;
 
     public DbTransactTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"dbtransact_tests_{Guid.NewGuid()}.db");
-        _connectionString = $"Data Source={_dbPath}";
-        _connection = new SqliteConnection(_connectionString);
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.CreateClosed(
+            "dbtransact_tests"
+        );
     }
 
     [Fact]
@@ -42,11 +40,7 @@ public sealed class DbTransactTests : IDisposable
 
         // Assert
         using var selectCommand = new SqliteCommand("SELECT COUNT(*) FROM TestTable", _connection);
-        var count = Convert.ToInt32(
-            await selectCommand.ExecuteScalarAsync(),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        Assert.Equal(1, count);
+        await VerifySharedChecks3(input0: selectCommand, value0: 1);
     }
 
     [Fact]
@@ -62,13 +56,8 @@ public sealed class DbTransactTests : IDisposable
             await _connection
                 .Transact(async tx =>
                 {
-                    using var command1 = new SqliteCommand(
-                        "INSERT INTO TestTable (Id, Name) VALUES (@id, 'Test1')",
-                        _connection,
-                        tx as SqliteTransaction
-                    );
-                    command1.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
-                    await command1.ExecuteNonQueryAsync().ConfigureAwait(false);
+                    await InsertTestRow(tx: tx, id: Guid.NewGuid().ToString())
+                        .ConfigureAwait(false);
 
                     // This will fail because InvalidTable doesn't exist
                     using var command2 = new SqliteCommand(
@@ -83,11 +72,7 @@ public sealed class DbTransactTests : IDisposable
 
         // Assert - should be 0 because transaction was rolled back
         using var selectCommand = new SqliteCommand("SELECT COUNT(*) FROM TestTable", _connection);
-        var count = Convert.ToInt32(
-            await selectCommand.ExecuteScalarAsync(),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        Assert.Equal(0, count);
+        await VerifySharedChecks3(input0: selectCommand, value0: 0);
     }
 
     [Fact]
@@ -101,13 +86,7 @@ public sealed class DbTransactTests : IDisposable
         var testId = Guid.NewGuid().ToString();
         var result = await _connection.Transact(async tx =>
         {
-            using var command = new SqliteCommand(
-                "INSERT INTO TestTable (Id, Name) VALUES (@id, 'Test1')",
-                _connection,
-                tx as SqliteTransaction
-            );
-            command.Parameters.AddWithValue("@id", testId);
-            return await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            return await InsertTestRow(tx: tx, id: testId).ConfigureAwait(false);
         });
 
         // Assert - 1 row affected
@@ -127,13 +106,8 @@ public sealed class DbTransactTests : IDisposable
             await _connection
                 .Transact<int>(async tx =>
                 {
-                    using var command = new SqliteCommand(
-                        "INSERT INTO TestTable (Id, Name) VALUES (@id, 'Test1')",
-                        _connection,
-                        tx as SqliteTransaction
-                    );
-                    command.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
-                    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                    await InsertTestRow(tx: tx, id: Guid.NewGuid().ToString())
+                        .ConfigureAwait(false);
 
                     throw new InvalidOperationException("Test exception");
                 })
@@ -142,11 +116,7 @@ public sealed class DbTransactTests : IDisposable
 
         // Assert - should be 0 because transaction was rolled back
         using var selectCommand = new SqliteCommand("SELECT COUNT(*) FROM TestTable", _connection);
-        var count = Convert.ToInt32(
-            await selectCommand.ExecuteScalarAsync(),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        Assert.Equal(0, count);
+        await VerifySharedChecks3(input0: selectCommand, value0: 0);
     }
 
     [Fact]
@@ -159,22 +129,12 @@ public sealed class DbTransactTests : IDisposable
         await _connection.Transact(async tx =>
         {
             await CreateTestTable(tx as SqliteTransaction).ConfigureAwait(false);
-            using var command = new SqliteCommand(
-                "INSERT INTO TestTable (Id, Name) VALUES (@id, 'Test1')",
-                _connection,
-                tx as SqliteTransaction
-            );
-            command.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await InsertTestRow(tx: tx, id: Guid.NewGuid().ToString()).ConfigureAwait(false);
         });
 
         // Assert
         using var selectCommand = new SqliteCommand("SELECT COUNT(*) FROM TestTable", _connection);
-        var count = Convert.ToInt32(
-            await selectCommand.ExecuteScalarAsync(),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        Assert.Equal(1, count);
+        await VerifySharedChecks3(input0: selectCommand, value0: 1);
     }
 
     [Fact]
@@ -190,17 +150,13 @@ public sealed class DbTransactTests : IDisposable
         });
     }
 
-    [Fact]
-    public async Task Transact_SqliteConnection_ThrowsOnNullBody()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Transact_SqliteConnection_ThrowsOnNullBody_ContextCasesData))]
+    public Task Transact_SqliteConnection_ThrowsOnNullBody_ContextCases(string caseName)
     {
-        // Arrange
-        await _connection.OpenAsync();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-        {
-            await _connection.Transact(null!).ConfigureAwait(false);
-        });
+        NamedCase(caseName: caseName);
+        return ExerciseProjectionCaseMatrix2(input0: _connection);
     }
 
     [Fact]
@@ -216,30 +172,21 @@ public sealed class DbTransactTests : IDisposable
         });
     }
 
-    [Fact]
-    public async Task Transact_SqliteConnection_WithReturnValue_ThrowsOnNullBody()
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private async Task<int> InsertTestRow(System.Data.IDbTransaction tx, string id)
     {
-        // Arrange
-        await _connection.OpenAsync();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-        {
-            await _connection.Transact(null!).ConfigureAwait(false);
-        });
+        using var command = new SqliteCommand(
+            "INSERT INTO TestTable (Id, Name) VALUES (@id, 'Test1')",
+            _connection,
+            tx as SqliteTransaction
+        );
+        command.Parameters.AddWithValue("@id", id);
+        return await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     private async Task CreateTestTable(SqliteTransaction? transaction = null)
     {
-        using var command = new SqliteCommand(
-            @"
-            CREATE TABLE IF NOT EXISTS TestTable (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            )",
-            _connection,
-            transaction
-        );
+        using var command = new SqliteCommand(Data_CreateTestTable_1, _connection, transaction);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
@@ -263,5 +210,32 @@ public sealed class DbTransactTests : IDisposable
             }
 #pragma warning restore CA1031
         }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static async global::System.Threading.Tasks.Task VerifySharedChecks3(
+        SqliteCommand input0,
+        int value0
+    )
+    {
+        var count = Convert.ToInt32(
+            await input0.ExecuteScalarAsync().ConfigureAwait(false),
+            System.Globalization.CultureInfo.InvariantCulture
+        );
+        Assert.Equal(value0, count);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static async Task ExerciseProjectionCaseMatrix2(SqliteConnection input0)
+    { // Arrange
+        await (input0.OpenAsync()).ConfigureAwait(continueOnCapturedContext: true);
+
+        // Act & Assert
+        await (
+            Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            {
+                await input0.Transact(null!).ConfigureAwait(false);
+            })
+        ).ConfigureAwait(continueOnCapturedContext: true);
     }
 }

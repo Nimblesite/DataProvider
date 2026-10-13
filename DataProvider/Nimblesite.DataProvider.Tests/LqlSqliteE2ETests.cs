@@ -1,8 +1,9 @@
-using Microsoft.Data.Sqlite;
+// Implements [CI-TEST-SHARED-COMMAND].
+
 using Nimblesite.Lql.Core;
 using Nimblesite.Lql.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.RowAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -10,7 +11,7 @@ namespace Nimblesite.DataProvider.Tests;
 /// E2E tests: LQL parse -> SQLite SQL conversion -> execute against real DB -> verify results.
 /// Each test covers a full LQL workflow from string input to verified query results.
 /// </summary>
-public sealed class LqlSqliteE2ETests : IDisposable
+public sealed partial class LqlSqliteE2ETests : IDisposable
 {
     private readonly SqliteTestDatabase _db = new("lql_e2e");
     private SqliteConnection _connection => _db.Connection;
@@ -22,68 +23,38 @@ public sealed class LqlSqliteE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE users (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                age INTEGER NOT NULL,
-                country TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active'
-            );
-            CREATE TABLE orders (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                total REAL NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
-
-        // Seed users
-        using var userCmd = _connection.CreateCommand();
-        userCmd.CommandText = """
-            INSERT INTO users VALUES ('u1', 'Alice', 'alice@test.com', 30, 'US', 'active');
-            INSERT INTO users VALUES ('u2', 'Bob', 'bob@test.com', 25, 'UK', 'active');
-            INSERT INTO users VALUES ('u3', 'Charlie', 'charlie@test.com', 45, 'US', 'inactive');
-            INSERT INTO users VALUES ('u4', 'Diana', 'diana@test.com', 35, 'AU', 'active');
-            INSERT INTO users VALUES ('u5', 'Eve', 'eve@test.com', 22, 'US', 'active');
-            """;
-        userCmd.ExecuteNonQuery();
-
-        // Seed orders
-        using var orderCmd = _connection.CreateCommand();
-        orderCmd.CommandText = """
-            INSERT INTO orders VALUES ('o1', 'u1', 150.00, 'completed');
-            INSERT INTO orders VALUES ('o2', 'u1', 75.50, 'completed');
-            INSERT INTO orders VALUES ('o3', 'u2', 200.00, 'pending');
-            INSERT INTO orders VALUES ('o4', 'u3', 50.00, 'completed');
-            INSERT INTO orders VALUES ('o5', 'u4', 300.00, 'shipped');
-            INSERT INTO orders VALUES ('o6', 'u4', 125.00, 'completed');
-            INSERT INTO orders VALUES ('o7', 'u5', 45.00, 'pending');
-            """;
-        orderCmd.ExecuteNonQuery();
-    }
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
+            connection: _connection,
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2,
+            command => command.CommandText = Data_CreateSchemaAndSeed_3
+        );
 
     private static LqlStatement AssertParseOk(string lqlCode)
     {
         var parseResult = LqlStatementConverter.ToStatement(lqlCode);
-        var parseOk = Assert.IsType<Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError>>(
-            parseResult
-        );
+        var parseOk = global::Tests.Shared.ResultAssertions.ExactOk(actual: parseResult);
         return parseOk.Value;
     }
 
     private static string AssertSqliteOk(LqlStatement statement)
     {
         var sqlResult = statement.ToSQLite();
-        var sqlOk = Assert.IsType<StringOk>(sqlResult);
+        var sqlOk = global::Tests.Shared.ResultAssertions.ExactOk(actual: sqlResult);
         return sqlOk.Value;
     }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: parse an LQL string, convert it to
+    // SQLite SQL and assert the expected fragments in one step.
+    private static string AssertSql(string lqlCode, string fragment0, string fragment1) =>
+        VerifyReusableWorkflow8(
+            input0: AssertSqliteOk,
+            input1: AssertParseOk(lqlCode),
+            input2: ContainsAll,
+            value0: fragment0,
+            value1: fragment1
+        );
 
     [Fact]
     public void LqlSelectAllFromTable_ParseConvertExecute_ReturnsAllRows()
@@ -96,36 +67,27 @@ public sealed class LqlSqliteE2ETests : IDisposable
         Assert.Null(statement.ParseError);
 
         // Convert to SQLite
-        var sql = AssertSqliteOk(statement);
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
+        var sql = AssertSql(
+            lqlCode: "users |> select(users.id, users.name, users.email)",
+            fragment0: "SELECT",
+            fragment1: "users"
+        );
 
         // Execute against real DB
         var queryResult = _connection.Query<(string, string, string)>(
             sql: sql,
             mapper: r => (r.GetString(0), r.GetString(1), r.GetString(2))
         );
-        Assert.True(
-            queryResult
-                is Result<IReadOnlyList<(string, string, string)>, SqlError>.Ok<
-                    IReadOnlyList<(string, string, string)>,
-                    SqlError
-                >
+        global::Tests.Shared.ResultAssertions.VerifyOk(
+            actual: queryResult,
+            verify: ok =>
+            {
+                var rows = ok.Value;
+                Assert.Equal(5, rows.Count);
+                ContainsAll(rows: rows, projection: r => r.Item2, expected: ["Alice", "Bob"]);
+                ContainsAll(rows: rows, projection: r => r.Item3, expected: ["diana@test.com"]);
+            }
         );
-        if (
-            queryResult
-            is Result<IReadOnlyList<(string, string, string)>, SqlError>.Ok<
-                IReadOnlyList<(string, string, string)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
-            Assert.Equal(5, rows.Count);
-            Assert.Contains(rows, r => r.Item2 == "Alice");
-            Assert.Contains(rows, r => r.Item2 == "Bob");
-            Assert.Contains(rows, r => r.Item3 == "diana@test.com");
-        }
     }
 
     [Fact]
@@ -138,118 +100,56 @@ public sealed class LqlSqliteE2ETests : IDisposable
         var sql = AssertSqliteOk(statement);
         Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
 
-        var queryResult = _connection.Query<(string, long)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetInt64(1))
-        );
-        Assert.True(
-            queryResult
-                is Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                    IReadOnlyList<(string, long)>,
-                    SqlError
-                >
-        );
-        if (
-            queryResult
-            is Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
+        var queryResult = VerifyReusableWorkflow10(input0: sql);
+        var rows = global::Tests.Shared.ResultAssertions.Ok(actual: queryResult).Value;
 
-            // Alice (30), Charlie (45), Diana (35) are > 25
-            Assert.Equal(3, rows.Count);
-            Assert.All(rows, r => Assert.True(r.Item2 > 25));
-            Assert.Contains(rows, r => r.Item1 == "Alice");
-            Assert.Contains(rows, r => r.Item1 == "Charlie");
-            Assert.Contains(rows, r => r.Item1 == "Diana");
-        }
+        // Alice (30), Charlie (45), Diana (35) are > 25
+        Assert.Equal(3, rows.Count);
+        Assert.All(rows, r => Assert.True(r.Item2 > 25));
+        ContainsAll(rows: rows, projection: r => r.Item1, expected: ["Alice", "Charlie", "Diana"]);
     }
 
     [Fact]
     public void LqlWithOrderByAndLimit_ParseConvertExecute_ReturnsOrderedSubset()
     {
-        var lqlCode =
-            "users |> order_by(users.age asc) |> limit(3) |> select(users.name, users.age)";
-        var statement = AssertParseOk(lqlCode);
-
-        var sql = AssertSqliteOk(statement);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
-
-        var queryResult = _connection.Query<(string, long)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetInt64(1))
+        var sql = AssertSql(
+            lqlCode: "users |> order_by(users.age asc) |> limit(3) |> select(users.name, users.age)",
+            fragment0: "ORDER BY",
+            fragment1: "LIMIT"
         );
-        Assert.True(
-            queryResult
-                is Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                    IReadOnlyList<(string, long)>,
-                    SqlError
-                >
-        );
-        if (
-            queryResult
-            is Result<IReadOnlyList<(string, long)>, SqlError>.Ok<
-                IReadOnlyList<(string, long)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
 
-            Assert.Equal(3, rows.Count);
-            // Should be youngest 3: Eve (22), Bob (25), Alice (30)
-            Assert.Equal("Eve", rows[0].Item1);
-            Assert.Equal(22L, rows[0].Item2);
-            Assert.Equal("Bob", rows[1].Item1);
-            Assert.Equal(25L, rows[1].Item2);
-            Assert.Equal("Alice", rows[2].Item1);
-            Assert.Equal(30L, rows[2].Item2);
-        }
+        var queryResult = VerifyReusableWorkflow10(input0: sql);
+        var rows = global::Tests.Shared.ResultAssertions.Ok(actual: queryResult).Value;
+
+        Assert.Equal(3, rows.Count);
+        // Should be youngest 3: Eve (22), Bob (25), Alice (30)
+        Assert.Equal("Eve", rows[0].Item1);
+        Assert.Equal(22L, rows[0].Item2);
+        Assert.Equal("Bob", rows[1].Item1);
+        Assert.Equal(25L, rows[1].Item2);
+        Assert.Equal("Alice", rows[2].Item1);
+        Assert.Equal(30L, rows[2].Item2);
     }
 
     [Fact]
     public void LqlWithJoin_ParseConvertExecute_ReturnsJoinedData()
     {
-        var lqlCode =
-            "users |> join(orders, on = users.id = orders.user_id) |> select(users.name, orders.total)";
-        var statement = AssertParseOk(lqlCode);
-
-        var sql = AssertSqliteOk(statement);
-        Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("users.id = orders.user_id", sql, StringComparison.OrdinalIgnoreCase);
-
-        var queryResult = _connection.Query<(string, double)>(
-            sql: sql,
-            mapper: r => (r.GetString(0), r.GetDouble(1))
+        var sql = AssertSql(
+            lqlCode: "users |> join(orders, on = users.id = orders.user_id) |> select(users.name, orders.total)",
+            fragment0: "JOIN",
+            fragment1: "users.id = orders.user_id"
         );
-        Assert.True(
-            queryResult
-                is Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-                    IReadOnlyList<(string, double)>,
-                    SqlError
-                >
-        );
-        if (
-            queryResult
-            is Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-                IReadOnlyList<(string, double)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
 
-            // 7 orders across users with matching IDs
-            Assert.Equal(7, rows.Count);
-            Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 150.00);
-            Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 75.50);
-            Assert.Contains(rows, r => r.Item1 == "Bob" && r.Item2 == 200.00);
-            Assert.Contains(rows, r => r.Item1 == "Diana" && r.Item2 == 300.00);
-        }
+        var queryResult = VerifyReusableWorkflow11(input0: sql);
+        var rows = global::Tests.Shared.ResultAssertions.Ok(actual: queryResult).Value;
+
+        // 7 orders across users with matching IDs
+        Assert.Equal(7, rows.Count);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Alice", 150.00), ("Alice", 75.50), ("Bob", 200.00), ("Diana", 300.00)]
+        );
     }
 
     [Fact]
@@ -288,20 +188,15 @@ public sealed class LqlSqliteE2ETests : IDisposable
         var errorStatement = new LqlStatement { ParseError = SqlError.Create("Test parse error") };
 
         var sqlResult = errorStatement.ToSQLite();
-        Assert.True(sqlResult is StringError);
-        if (sqlResult is StringError errorResult)
-        {
-            var error = errorResult.Value;
-            Assert.Contains("Test parse error", error.Message, StringComparison.OrdinalIgnoreCase);
-        }
+        var error = global::Tests.Shared.ResultAssertions.Error(actual: sqlResult).Value;
+        Assert.Contains("Test parse error", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void LqlStatementToSQLite_WithNullAstNode_ReturnsError()
     {
         var emptyStatement = new LqlStatement { AstNode = null };
-        var sqlResult = emptyStatement.ToSQLite();
-        Assert.True(sqlResult is StringError);
+        global::Tests.Shared.ResultAssertions.Error(actual: emptyStatement.ToSQLite());
     }
 
     [Fact]
@@ -311,13 +206,18 @@ public sealed class LqlSqliteE2ETests : IDisposable
         var identifierStatement = new LqlStatement { AstNode = new Identifier("customers") };
 
         var sqlResult = identifierStatement.ToSQLite();
-        Assert.True(sqlResult is StringOk);
-        if (sqlResult is StringOk sqlOk)
-        {
-            var sql = sqlOk.Value;
-            Assert.Contains("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("customers", sql);
-        }
+        global::Tests.Shared.ResultAssertions.VerifyOk(
+            actual: sqlResult,
+            verify: sqlOk =>
+            {
+                var sql = sqlOk.Value;
+                global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+                    input0: sql,
+                    value0: "SELECT *",
+                    value2: "customers"
+                );
+            }
+        );
     }
 
     [Fact]
@@ -337,38 +237,34 @@ public sealed class LqlSqliteE2ETests : IDisposable
         context.AddOrderBy([(Column: "name", Direction: "ASC")]);
         context.SetLimit("10");
 
-        var sql = context.GenerateSQL();
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("name", sql);
-        Assert.Contains("email", sql);
-        Assert.Contains("WHERE", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
+        var sql = VerifyCompletionWorkflow3(
+            input0: context,
+            input1: VerifyReusableWorkflow5,
+            input2: ContainsAll,
+            value0: "SELECT",
+            value1: "name",
+            value2: "email"
+        );
+        ContainsAll(
+            actual: sql,
+            expected: ["WHERE", "ORDER BY", "LIMIT"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
 
         // Execute it
         var result = _connection.Query<(string, string)>(
             sql: sql,
             mapper: r => (r.GetString(0), r.GetString(1))
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<(string, string)>, SqlError>.Ok<
-                    IReadOnlyList<(string, string)>,
-                    SqlError
-                >
+        global::Tests.Shared.ResultAssertions.VerifyOk(
+            actual: result,
+            verify: ok =>
+            {
+                var rows = ok.Value;
+                Assert.Equal(4, rows.Count); // 4 active users
+                Assert.Equal("Alice", rows[0].Item1); // First alphabetically
+            }
         );
-        if (
-            result
-            is Result<IReadOnlyList<(string, string)>, SqlError>.Ok<
-                IReadOnlyList<(string, string)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
-            Assert.Equal(4, rows.Count); // 4 active users
-            Assert.Equal("Alice", rows[0].Item1); // First alphabetically
-        }
     }
 
     [Fact]
@@ -386,32 +282,98 @@ public sealed class LqlSqliteE2ETests : IDisposable
             ColumnInfo.Named(name: "total", tableAlias: "orders"),
         ]);
 
-        var sql = context.GenerateSQL();
-        Assert.Contains("INNER JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("orders", sql);
-        Assert.Contains("users.id = orders.user_id", sql);
+        var sql = VerifyCompletionWorkflow3(
+            input0: context,
+            input1: VerifyReusableWorkflow5,
+            input2: ContainsAll,
+            value0: "INNER JOIN",
+            value1: "orders",
+            value2: "users.id = orders.user_id"
+        );
 
-        var result = _connection.Query<(string, double)>(
-            sql: sql,
+        var result = VerifyReusableWorkflow11(input0: sql);
+        var rows = global::Tests.Shared.ResultAssertions.Ok(actual: result).Value;
+        Assert.Equal(7, rows.Count);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow5(
+        string input0,
+        Action<string?, System.Collections.Immutable.ImmutableArray<string>> input1,
+        string value0,
+        string value2,
+        string value3
+    )
+    {
+        Assert.Contains(value0, input0, StringComparison.OrdinalIgnoreCase);
+        input1(arg1: input0, arg2: [value2, value3]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyReusableWorkflow8(
+        Func<LqlStatement, string> input0,
+        LqlStatement input1,
+        Action<
+            string?,
+            System.Collections.Immutable.ImmutableArray<string>,
+            StringComparison
+        > input2,
+        string value0,
+        string value1
+    )
+    {
+        // Convert to SQLite
+        var sql = input0(arg: input1);
+        input2(arg1: sql, arg2: [value0, value1], arg3: StringComparison.OrdinalIgnoreCase);
+
+        return sql;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private Result<IReadOnlyList<(string, long)>, Sql.Model.SqlError> VerifyReusableWorkflow10(
+        string input0
+    )
+    {
+        var queryResult = _connection.Query<(string, long)>(
+            sql: input0,
+            mapper: r => (r.GetString(0), r.GetInt64(1))
+        );
+        _ = global::Tests.Shared.ResultAssertions.Ok(actual: queryResult);
+        return queryResult;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private Result<IReadOnlyList<(string, double)>, Sql.Model.SqlError> VerifyReusableWorkflow11(
+        string input0
+    )
+    {
+        var queryResult = _connection.Query<(string, double)>(
+            sql: input0,
             mapper: r => (r.GetString(0), r.GetDouble(1))
         );
-        Assert.True(
-            result
-                is Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-                    IReadOnlyList<(string, double)>,
-                    SqlError
-                >
-        );
-        if (
-            result
-            is Result<IReadOnlyList<(string, double)>, SqlError>.Ok<
-                IReadOnlyList<(string, double)>,
-                SqlError
-            > ok
-        )
-        {
-            var rows = ok.Value;
-            Assert.Equal(7, rows.Count);
-        }
+        _ = global::Tests.Shared.ResultAssertions.Ok(actual: queryResult);
+        return queryResult;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyCompletionWorkflow3(
+        SQLiteContext input0,
+        Action<
+            string,
+            Action<string?, System.Collections.Immutable.ImmutableArray<string>>,
+            string,
+            string,
+            string
+        > input1,
+        Action<string?, System.Collections.Immutable.ImmutableArray<string>> input2,
+        string value0,
+        string value1,
+        string value2
+    )
+    {
+        var sql = input0.GenerateSQL();
+        input1(arg1: sql, arg2: input2, arg3: value0, arg4: value1, arg5: value2);
+
+        return sql;
     }
 }

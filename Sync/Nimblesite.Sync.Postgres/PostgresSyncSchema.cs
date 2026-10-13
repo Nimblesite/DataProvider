@@ -11,12 +11,11 @@ public static class PostgresSyncSchema
     /// </summary>
     /// <param name="connection">PostgreSQL connection.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult CreateSchema(NpgsqlConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+    public static BoolSyncResult CreateSchema(NpgsqlConnection connection) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = """
                 -- Sync state (persistent)
                 CREATE TABLE IF NOT EXISTS _sync_state (
                     key TEXT PRIMARY KEY,
@@ -90,17 +89,10 @@ public static class PostgresSyncSchema
                 INSERT INTO _sync_state (key, value) VALUES ('origin_id', '') ON CONFLICT DO NOTHING;
                 INSERT INTO _sync_state (key, value) VALUES ('last_server_version', '0') ON CONFLICT DO NOTHING;
                 INSERT INTO _sync_state (key, value) VALUES ('last_push_version', '0') ON CONFLICT DO NOTHING;
-                """;
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to create schema: {ex.Message}")
-            );
-        }
-    }
+                """,
+            parameters: () => [],
+            failurePrefix: "Failed to create schema"
+        );
 
     /// <summary>
     /// Gets the origin ID from _sync_state.
@@ -109,19 +101,23 @@ public static class PostgresSyncSchema
     /// <returns>Origin ID or database error.</returns>
     public static StringSyncResult GetOriginId(NpgsqlConnection connection)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'";
-            var result = cmd.ExecuteScalar();
-            return new StringSyncOk(result?.ToString() ?? "");
-        }
-        catch (NpgsqlException ex)
-        {
-            return new StringSyncError(
-                new SyncErrorDatabase($"Failed to get origin ID: {ex.Message}")
-            );
-        }
+        return SyncCommandExecution.Read<NpgsqlException, StringSyncResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "SELECT value FROM _sync_state WHERE key = 'origin_id'",
+            parameters: () => [],
+            read: command =>
+            {
+                var result = command.ExecuteScalar();
+                return new StringSyncOk(result?.ToString() ?? "");
+            },
+            failure: ex =>
+            {
+                return new StringSyncError(
+                    new SyncErrorDatabase($"Failed to get origin ID: {ex.Message}")
+                );
+            }
+        );
     }
 
     /// <summary>
@@ -130,26 +126,18 @@ public static class PostgresSyncSchema
     /// <param name="connection">PostgreSQL connection.</param>
     /// <param name="originId">Origin ID to set.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult SetOriginId(NpgsqlConnection connection, string originId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                INSERT INTO _sync_state (key, value) VALUES ('origin_id', @originId)
-                ON CONFLICT (key) DO UPDATE SET value = @originId
-                """;
-            cmd.Parameters.AddWithValue("@originId", originId);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to set origin ID: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult SetOriginId(NpgsqlConnection connection, string originId) =>
+        SyncCommandExecution.Write<NpgsqlException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .Postgres
+                    .PostgresSyncLogRepository
+                    .SqlSpecification7,
+            parameters: () => [("@originId", originId)],
+            failurePrefix: "Failed to set origin ID"
+        );
 
     /// <summary>
     /// Initializes origin ID if not set.

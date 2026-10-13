@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
@@ -9,7 +10,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// case where a foreign key was declared in the same table.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
+    PostgresContainerFixture fixture
+)
 {
     private const string SchemaName = "public";
     private static readonly ILogger Logger = NullLogger.Instance;
@@ -29,15 +32,7 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
 
         try
         {
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    SchemaWithoutUnique(),
-                    Logger
-                ),
-                Logger
-            );
+            PostgresTestDb.ApplySchema(connection, SchemaWithoutUnique(), Logger);
 
             var live = PostgresTestDb.Inspect(connection, Logger);
             var agentConfigs = live.Tables.Single(t => t.Name == "agent_configs");
@@ -49,11 +44,10 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
                 Logger
             );
 
-            Assert.Contains(
+            SchemaDiffAssertions.AssertContainsOperation<AddUniqueConstraintOperation>(
                 upgrade,
-                op =>
-                    op is AddUniqueConstraintOperation add
-                    && add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
+                add =>
+                    add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
                     && add.UniqueConstraint.Columns.SequenceEqual(["tenant_id", "name"])
             );
 
@@ -89,69 +83,8 @@ public sealed class PostgresUniqueConstraintIssue55E2ETests(PostgresContainerFix
 
     private static SchemaDefinition Schema(bool includeUnique)
     {
-        var tenants = new TableDefinition
-        {
-            Schema = SchemaName,
-            Name = "tenants",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
-        var agentConfigs = new TableDefinition
-        {
-            Schema = SchemaName,
-            Name = "agent_configs",
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "tenant_id",
-                    Type = PortableTypes.Uuid,
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "name",
-                    Type = PortableTypes.Text,
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            ForeignKeys =
-            [
-                new ForeignKeyDefinition
-                {
-                    Columns = ["tenant_id"],
-                    ReferencedSchema = SchemaName,
-                    ReferencedTable = "tenants",
-                    ReferencedColumns = ["id"],
-                    OnDelete = ForeignKeyAction.Cascade,
-                },
-            ],
-            UniqueConstraints = includeUnique
-                ?
-                [
-                    new UniqueConstraintDefinition
-                    {
-                        Name = "uq_agent_configs_tenant_name",
-                        Columns = ["tenant_id", "name"],
-                    },
-                ]
-                : [],
-        };
-        return new SchemaDefinition { Name = "issue55", Tables = [tenants, agentConfigs] };
+        var tenants = Fixture_Schema_1();
+        var agentConfigs = Fixture_Schema_2(includeUnique: includeUnique);
+        return SchemaTestData.Schema(name: "issue55", tables: [tenants, agentConfigs]);
     }
 }

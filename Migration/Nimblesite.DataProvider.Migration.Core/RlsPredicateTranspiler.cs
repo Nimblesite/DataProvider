@@ -139,38 +139,53 @@ public static partial class RlsPredicateTranspiler
         // survives LQL transpilation, then transpile the pipeline, then
         // replace the sentinel with the platform-specific expression.
         var withSentinel = SubstituteCurrentUserIdWithSentinel(innerLql);
-        var withSettings = RlsCurrentSettingRewriter.ReplaceCallsForPipeline(
-            withSentinel,
-            platform,
-            policyName
+        return UnwrapCurrentSettingRewrite(
+            source: RlsCurrentSettingRewriter.ReplaceCallsForPipeline(
+                withSentinel,
+                platform,
+                policyName
+            ),
+            policyName: policyName,
+            onOk: settings =>
+                TranslateSentinelSubquery(
+                    settings: settings,
+                    platform: platform,
+                    policyName: policyName
+                )
         );
-        if (
-            withSettings
-            is Result<RlsCurrentSettingRewrite, MigrationError>.Error<
-                RlsCurrentSettingRewrite,
-                MigrationError
-            > settingsErr
-        )
+    }
+
+    // Implements [RLS-CURRENT-SETTING-REWRITE-ERRORS]: both predicate
+    // translation paths share the same current_setting() rewrite step and the
+    // same failure mapping, so unwrap it in one place.
+    private static Result<TOut, MigrationError> UnwrapCurrentSettingRewrite<TRewrite, TOut>(
+        Result<TRewrite, MigrationError> source,
+        string policyName,
+        Func<TRewrite, Result<TOut, MigrationError>> onOk
+    )
+    {
+        if (source is Result<TRewrite, MigrationError>.Ok<TRewrite, MigrationError> ok)
         {
-            return new Result<string, MigrationError>.Error<string, MigrationError>(
-                settingsErr.Value
-            );
+            return onOk(ok.Value);
         }
 
-        if (
-            withSettings
-            is not Result<RlsCurrentSettingRewrite, MigrationError>.Ok<
-                RlsCurrentSettingRewrite,
-                MigrationError
-            > settingsOk
-        )
+        if (source is Result<TRewrite, MigrationError>.Error<TRewrite, MigrationError> err)
         {
-            return new Result<string, MigrationError>.Error<string, MigrationError>(
-                MigrationError.RlsLqlParse(policyName, "unknown current_setting rewrite failure")
-            );
+            return new Result<TOut, MigrationError>.Error<TOut, MigrationError>(err.Value);
         }
 
-        var statementResult = LqlStatementConverter.ToStatement(settingsOk.Value.Text);
+        return new Result<TOut, MigrationError>.Error<TOut, MigrationError>(
+            MigrationError.RlsLqlParse(policyName, "unknown current_setting rewrite failure")
+        );
+    }
+
+    private static Result<string, MigrationError> TranslateSentinelSubquery(
+        RlsCurrentSettingRewrite settings,
+        RlsPlatform platform,
+        string policyName
+    )
+    {
+        var statementResult = LqlStatementConverter.ToStatement(settings.Text);
         if (statementResult is Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> sErr)
         {
             return new Result<string, MigrationError>.Error<string, MigrationError>(
@@ -208,7 +223,7 @@ public static partial class RlsPredicateTranspiler
         }
 
         var sql = ReplaceSentinelInSql(tOk.Value, platform);
-        sql = RlsCurrentSettingRewriter.RestoreSentinels(sql, settingsOk.Value.Replacements);
+        sql = RlsCurrentSettingRewriter.RestoreSentinels(sql, settings.Replacements);
         return new Result<string, MigrationError>.Ok<string, MigrationError>($"EXISTS ({sql})");
     }
 
@@ -216,46 +231,31 @@ public static partial class RlsPredicateTranspiler
         string predicate,
         RlsPlatform platform,
         string policyName
-    )
-    {
-        var withSettings = RlsCurrentSettingRewriter.ReplaceCallsForSimplePredicate(
-            predicate,
-            platform,
-            policyName
+    ) =>
+        UnwrapCurrentSettingRewrite(
+            source: RlsCurrentSettingRewriter.ReplaceCallsForSimplePredicate(
+                predicate,
+                platform,
+                policyName
+            ),
+            policyName: policyName,
+            onOk: settings =>
+            {
+                // Replace current_user_id() literal with platform expression after
+                // current_setting() LQL calls have been rewritten. The Postgres
+                // current_user_id() expansion itself uses current_setting(..., true).
+                var withSession = ReplaceCurrentUserIdLiteral(settings, platform);
+                var translated = platform switch
+                {
+                    RlsPlatform.Postgres => QuoteSimpleIdentifiers(withSession, '"', '"'),
+                    RlsPlatform.Sqlite => QuoteSimpleIdentifiers(withSession, '[', ']'),
+                    RlsPlatform.SqlServer => QuoteSimpleIdentifiers(withSession, '[', ']'),
+                    _ => withSession,
+                };
+
+                return new Result<string, MigrationError>.Ok<string, MigrationError>(translated);
+            }
         );
-
-        if (
-            withSettings is Result<string, MigrationError>.Error<string, MigrationError> settingsErr
-        )
-        {
-            return new Result<string, MigrationError>.Error<string, MigrationError>(
-                settingsErr.Value
-            );
-        }
-
-        if (
-            withSettings is not Result<string, MigrationError>.Ok<string, MigrationError> settingsOk
-        )
-        {
-            return new Result<string, MigrationError>.Error<string, MigrationError>(
-                MigrationError.RlsLqlParse(policyName, "unknown current_setting rewrite failure")
-            );
-        }
-
-        // Replace current_user_id() literal with platform expression after
-        // current_setting() LQL calls have been rewritten. The Postgres
-        // current_user_id() expansion itself uses current_setting(..., true).
-        var withSession = ReplaceCurrentUserIdLiteral(settingsOk.Value, platform);
-        var translated = platform switch
-        {
-            RlsPlatform.Postgres => QuoteSimpleIdentifiers(withSession, '"', '"'),
-            RlsPlatform.Sqlite => QuoteSimpleIdentifiers(withSession, '[', ']'),
-            RlsPlatform.SqlServer => QuoteSimpleIdentifiers(withSession, '[', ']'),
-            _ => withSession,
-        };
-
-        return new Result<string, MigrationError>.Ok<string, MigrationError>(translated);
-    }
 
     private static string SubstituteCurrentUserIdWithSentinel(string lql) =>
         ReplaceFunctionCall(lql, "current_user_id", $"'{CurrentUserIdSentinel}'");
@@ -280,25 +280,11 @@ public static partial class RlsPredicateTranspiler
             var c = source[i];
             if (c == '\'')
             {
-                // copy verbatim through closing quote (handles '' escape)
-                sb.Append(c);
-                i++;
-                while (i < source.Length)
-                {
-                    sb.Append(source[i]);
-                    if (source[i] == '\'')
-                    {
-                        if (i + 1 < source.Length && source[i + 1] == '\'')
-                        {
-                            sb.Append(source[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: source,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
             if (
@@ -307,10 +293,10 @@ public static partial class RlsPredicateTranspiler
             )
             {
                 var start = i;
-                while (i < source.Length && (char.IsLetterOrDigit(source[i]) || source[i] == '_'))
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: source,
+                    start: i
+                );
                 var word = source[start..i];
                 var savedI = i;
                 while (i < source.Length && char.IsWhiteSpace(source[i]))
@@ -349,69 +335,31 @@ public static partial class RlsPredicateTranspiler
         return sb.ToString();
     }
 
-    private static string QuoteSimpleIdentifiers(string predicate, char open, char close)
-    {
+    private static string QuoteSimpleIdentifiers(string predicate, char open, char close) =>
         // Conservative tokenizer: any bare identifier (letters/_/digits, not
         // starting with a digit) that is not a SQL keyword and not preceded
         // by `.` and not followed by `(` (function call) gets quoted with
         // open/close. Skips contents of string literals and already-quoted
-        // identifiers.
-        var sb = new StringBuilder(predicate.Length + 16);
-        var i = 0;
-        while (i < predicate.Length)
-        {
-            var c = predicate[i];
-            if (c == '\'')
+        // identifiers. Shared with PostgreSQL column-reference quoting.
+        SqlIdentifierRewriter.Rewrite(
+            source: predicate,
+            open: open,
+            close: close,
+            copySpecial: (index, sb) =>
+                predicate[index] == '\''
+                    ? global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                        source: predicate,
+                        sb: sb,
+                        i: index
+                    )
+                    : global::Nimblesite.Lql.Core.QualifierRewriter.CopyQuoted(
+                        source: predicate,
+                        start: index,
+                        sql: sb,
+                        close: close
+                    ),
+            shouldQuote: (word, start) =>
             {
-                sb.Append(c);
-                i++;
-                while (i < predicate.Length)
-                {
-                    sb.Append(predicate[i]);
-                    if (predicate[i] == '\'')
-                    {
-                        if (i + 1 < predicate.Length && predicate[i + 1] == '\'')
-                        {
-                            sb.Append(predicate[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-            if (c == open)
-            {
-                sb.Append(c);
-                i++;
-                while (i < predicate.Length)
-                {
-                    sb.Append(predicate[i]);
-                    if (predicate[i] == close)
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-            if (char.IsLetter(c) || c == '_')
-            {
-                var start = i;
-                i++;
-                while (
-                    i < predicate.Length
-                    && (char.IsLetterOrDigit(predicate[i]) || predicate[i] == '_')
-                )
-                {
-                    i++;
-                }
-                var word = predicate[start..i];
-
                 var prev = start - 1;
                 while (prev >= 0 && char.IsWhiteSpace(predicate[prev]))
                 {
@@ -421,28 +369,17 @@ public static partial class RlsPredicateTranspiler
                 // ::type cast — the word after `::` is a type name, do not quote.
                 var afterCast = prev >= 1 && predicate[prev] == ':' && predicate[prev - 1] == ':';
 
-                var nextIdx = i;
+                var nextIdx = start + word.Length;
                 while (nextIdx < predicate.Length && char.IsWhiteSpace(predicate[nextIdx]))
                 {
                     nextIdx++;
                 }
                 var isCall = nextIdx < predicate.Length && predicate[nextIdx] == '(';
-
-                if (qualified || afterCast || isCall || IsKeyword(word) || IsBuiltinExpr(word))
-                {
-                    sb.Append(word);
-                }
-                else
-                {
-                    sb.Append(open).Append(word).Append(close);
-                }
-                continue;
+                return !(
+                    qualified || afterCast || isCall || IsKeyword(word) || IsBuiltinExpr(word)
+                );
             }
-            sb.Append(c);
-            i++;
-        }
-        return sb.ToString();
-    }
+        );
 
     private static bool IsKeyword(string word)
     {

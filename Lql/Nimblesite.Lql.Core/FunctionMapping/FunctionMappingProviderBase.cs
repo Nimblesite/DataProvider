@@ -77,11 +77,7 @@ public abstract class FunctionMappingProviderBase : IFunctionMappingProvider
     /// <param name="count">The limit count</param>
     /// <returns>The formatted LIMIT clause</returns>
     public string FormatLimitClause(string count) =>
-        string.Format(
-            System.Globalization.CultureInfo.InvariantCulture,
-            _syntaxMapping.Value.LimitClause,
-            count
-        );
+        FormatClause(format: _syntaxMapping.Value.LimitClause, count: count);
 
     /// <summary>
     /// Formats an OFFSET clause for the target dialect
@@ -89,11 +85,7 @@ public abstract class FunctionMappingProviderBase : IFunctionMappingProvider
     /// <param name="count">The offset count</param>
     /// <returns>The formatted OFFSET clause</returns>
     public string FormatOffsetClause(string count) =>
-        string.Format(
-            System.Globalization.CultureInfo.InvariantCulture,
-            _syntaxMapping.Value.OffsetClause,
-            count
-        );
+        FormatClause(format: _syntaxMapping.Value.OffsetClause, count: count);
 
     /// <summary>
     /// Formats an identifier for the target dialect
@@ -102,4 +94,12 @@ public abstract class FunctionMappingProviderBase : IFunctionMappingProvider
     /// <returns>The formatted identifier</returns>
     public string FormatIdentifier(string identifier) =>
         $"{_syntaxMapping.Value.IdentifierQuoteChar}{identifier}{_syntaxMapping.Value.IdentifierQuoteChar}";
+
+    // Implements [LQL-FUNCTION-MAPPING-SHARED-CLAUSE-FORMAT].
+    private static string FormatClause(string format, string count) =>
+        string.Format(
+            provider: global::System.Globalization.CultureInfo.InvariantCulture,
+            format: format,
+            arg0: count
+        );
 }

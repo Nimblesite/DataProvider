@@ -47,48 +47,12 @@ global using StringSyncOk = Outcome.Result<string, Nimblesite.Sync.Core.SyncErro
     Nimblesite.Sync.Core.SyncError
 >;
 global using StringSyncResult = Outcome.Result<string, Nimblesite.Sync.Core.SyncError>;
-global using SyncClientError = Outcome.Result<
-    Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->.Error<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
-global using SyncClientListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncClientListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->;
 global using SyncClientListResult = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
     Nimblesite.Sync.Core.SyncError
 >;
-global using SyncClientOk = Outcome.Result<
-    Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
 global using SyncClientResult = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncLogListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncLogListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
     Nimblesite.Sync.Core.SyncError
 >;
 global using SyncLogListResult = Outcome.Result<

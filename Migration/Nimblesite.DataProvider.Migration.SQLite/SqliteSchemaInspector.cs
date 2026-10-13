@@ -3,7 +3,7 @@ namespace Nimblesite.DataProvider.Migration.SQLite;
 /// <summary>
 /// Inspects SQLite database schema and returns a SchemaDefinition.
 /// </summary>
-public static class SqliteSchemaInspector
+public static partial class SqliteSchemaInspector
 {
     /// <summary>
     /// Inspect all tables in a SQLite database.
@@ -19,13 +19,7 @@ public static class SqliteSchemaInspector
 
             // Get all user tables
             using var tablesCmd = connection.CreateCommand();
-            tablesCmd.CommandText = """
-                SELECT name FROM sqlite_master 
-                WHERE type = 'table' 
-                AND name NOT LIKE 'sqlite_%'
-                AND name <> '__rls_context'
-                ORDER BY name
-                """;
+            tablesCmd.CommandText = CatalogQuery_Inspect_1;
 
             var tableNames = new List<string>();
             using (var reader = tablesCmd.ExecuteReader())
@@ -36,24 +30,12 @@ public static class SqliteSchemaInspector
                 }
             }
 
-            foreach (var tableName in tableNames)
-            {
-                var tableResult = InspectTable(connection, tableName, logger);
-                if (tableResult is TableResult.Ok<TableDefinition, MigrationError> ok)
-                {
-                    tables.Add(ok.Value);
-                }
-                else if (
-                    tableResult is TableResult.Error<TableDefinition, MigrationError> tableError
-                )
-                {
-                    logger?.LogWarning(
-                        "Failed to inspect table {Table}: {Error}",
-                        tableName,
-                        tableError.Value
-                    );
-                }
-            }
+            SchemaInspectionSupport.CollectTables(
+                tableNames,
+                tableName => InspectTable(connection, tableName, logger),
+                tables,
+                logger
+            );
 
             return new SchemaResult.Ok<SchemaDefinition, MigrationError>(
                 new SchemaDefinition { Name = "sqlite", Tables = tables.AsReadOnly() }
@@ -183,10 +165,12 @@ public static class SqliteSchemaInspector
                 {
                     // Expression index - get the full definition from sqlite_master
                     using var sqlCmd = connection.CreateCommand();
-                    sqlCmd.CommandText = """
-                        SELECT sql FROM sqlite_master
-                        WHERE type = 'index' AND name = @name
-                        """;
+                    sqlCmd.CommandText = global::Nimblesite
+                        .DataProvider
+                        .Migration
+                        .SQLite
+                        .SqliteSchemaInspector
+                        .SqlSpecification1;
                     sqlCmd.Parameters.AddWithValue("@name", indexName);
                     var sql = sqlCmd.ExecuteScalar() as string;
 
@@ -237,19 +221,25 @@ public static class SqliteSchemaInspector
                             Columns = [fromCol],
                             ReferencedTable = refTable,
                             ReferencedColumns = [toCol],
-                            OnDelete = ParseForeignKeyAction(onDelete),
-                            OnUpdate = ParseForeignKeyAction(onUpdate),
+                            OnDelete = SchemaYamlScalars.ParseForeignKeyAction(onDelete),
+                            OnUpdate = SchemaYamlScalars.ParseForeignKeyAction(onUpdate),
                         }
                     );
                 }
             }
 
+            var checks = SqliteColumnChecks.Read(
+                connection: connection,
+                tableName: tableName,
+                columns: columns.AsReadOnly()
+            );
             return new TableResult.Ok<TableDefinition, MigrationError>(
                 new TableDefinition
                 {
                     Schema = "main",
                     Name = tableName,
-                    Columns = columns.AsReadOnly(),
+                    Columns = checks.Columns,
+                    CheckConstraints = checks.Checks,
                     Indexes = indexes.AsReadOnly(),
                     ForeignKeys = foreignKeys.AsReadOnly(),
                     PrimaryKey = primaryKey,
@@ -291,16 +281,6 @@ public static class SqliteSchemaInspector
             _ => new TextType(),
         };
     }
-
-    private static ForeignKeyAction ParseForeignKeyAction(string action) =>
-        action.ToUpperInvariant() switch
-        {
-            "CASCADE" => ForeignKeyAction.Cascade,
-            "SET NULL" => ForeignKeyAction.SetNull,
-            "SET DEFAULT" => ForeignKeyAction.SetDefault,
-            "RESTRICT" => ForeignKeyAction.Restrict,
-            _ => ForeignKeyAction.NoAction,
-        };
 
     /// <summary>
     /// Parse expressions from a SQLite index definition string.
@@ -355,43 +335,6 @@ public static class SqliteSchemaInspector
 
         var content = indexDef.Substring(parenStart + 1, parenEnd - parenStart - 1);
 
-        // Split by comma, but respect nested parentheses (for function calls)
-        var current = new StringBuilder();
-        depth = 0;
-
-        foreach (var ch in content)
-        {
-            switch (ch)
-            {
-                case '(':
-                    depth++;
-                    current.Append(ch);
-                    break;
-                case ')':
-                    depth--;
-                    current.Append(ch);
-                    break;
-                case ',' when depth == 0:
-                    var expr = current.ToString().Trim();
-                    if (!string.IsNullOrEmpty(expr))
-                    {
-                        expressions.Add(expr);
-                    }
-                    current.Clear();
-                    break;
-                default:
-                    current.Append(ch);
-                    break;
-            }
-        }
-
-        // Add the last expression
-        var lastExpr = current.ToString().Trim();
-        if (!string.IsNullOrEmpty(lastExpr))
-        {
-            expressions.Add(lastExpr);
-        }
-
-        return expressions;
+        return IndexExpressionSplitter.Split(content);
     }
 }

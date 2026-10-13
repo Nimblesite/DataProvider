@@ -17,6 +17,7 @@
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
     <ProjectReference Include="../Nimblesite.Sync.Postgres/Nimblesite.Sync.Postgres.csproj" />
+    <ProjectReference Include="../Nimblesite.Sync.SqlServer/Nimblesite.Sync.SqlServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

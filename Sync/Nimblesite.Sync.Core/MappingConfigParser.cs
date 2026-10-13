@@ -80,14 +80,11 @@ internal static class MappingConfigParser
             return null;
         }
 
-        var direction = dto.Direction switch
-        {
-            { } s when s.Equals("pull", StringComparison.OrdinalIgnoreCase) =>
-                MappingDirection.Pull,
-            { } s when s.Equals("both", StringComparison.OrdinalIgnoreCase) =>
-                MappingDirection.Both,
-            _ => MappingDirection.Push,
-        };
+        var direction = ParseEnum(
+            value: dto.Direction,
+            cases: [("pull", MappingDirection.Pull), ("both", MappingDirection.Both)],
+            fallback: MappingDirection.Push
+        );
 
         var pkMapping = dto.PkMapping is not null
             ? new PkMapping(dto.PkMapping.SourceColumn, dto.PkMapping.TargetColumn)
@@ -106,16 +103,16 @@ internal static class MappingConfigParser
             ? new SyncFilter(dto.Filter.Lql)
             : null;
 
-        var trackingStrategy = dto.SyncTracking?.Strategy switch
-        {
-            { } s when s.Equals("hash", StringComparison.OrdinalIgnoreCase) =>
-                SyncTrackingStrategy.Hash,
-            { } s when s.Equals("timestamp", StringComparison.OrdinalIgnoreCase) =>
-                SyncTrackingStrategy.Timestamp,
-            { } s when s.Equals("external", StringComparison.OrdinalIgnoreCase) =>
-                SyncTrackingStrategy.External,
-            _ => SyncTrackingStrategy.Version,
-        };
+        var trackingStrategy = ParseEnum(
+            value: dto.SyncTracking?.Strategy,
+            cases:
+            [
+                ("hash", SyncTrackingStrategy.Hash),
+                ("timestamp", SyncTrackingStrategy.Timestamp),
+                ("external", SyncTrackingStrategy.External),
+            ],
+            fallback: SyncTrackingStrategy.Version
+        );
 
         var syncTracking = new SyncTrackingConfig(
             Enabled: dto.SyncTracking?.Enabled ?? true,
@@ -146,6 +143,30 @@ internal static class MappingConfigParser
     }
 
     /// <summary>
+    /// Parses a case-insensitive enum value from its string representation.
+    /// </summary>
+    private static TEnum ParseEnum<TEnum>(
+        string? value,
+        (string Name, TEnum Value)[] cases,
+        TEnum fallback
+    )
+        where TEnum : struct, Enum
+    {
+        if (value is not null)
+        {
+            foreach (var (name, mapped) in cases)
+            {
+                if (value.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return mapped;
+                }
+            }
+        }
+
+        return fallback;
+    }
+
+    /// <summary>
     /// Converts column mapping DTO.
     /// </summary>
     private static ColumnMapping? ConvertColumnMapping(ColumnMappingDto dto)
@@ -155,13 +176,11 @@ internal static class MappingConfigParser
             return null;
         }
 
-        var transform = dto.Transform switch
-        {
-            { } s when s.Equals("constant", StringComparison.OrdinalIgnoreCase) =>
-                TransformType.Constant,
-            { } s when s.Equals("lql", StringComparison.OrdinalIgnoreCase) => TransformType.Lql,
-            _ => TransformType.None,
-        };
+        var transform = ParseEnum(
+            value: dto.Transform,
+            cases: [("constant", TransformType.Constant), ("lql", TransformType.Lql)],
+            fallback: TransformType.None
+        );
 
         return new ColumnMapping(
             Source: dto.Source,
@@ -218,6 +237,19 @@ internal static class MappingConfigParser
     }
 
     /// <summary>
+    /// Converts a column mapping domain model to its DTO.
+    /// </summary>
+    private static ColumnMappingDto ToColumnMappingDto(ColumnMapping c) =>
+        new()
+        {
+            Source = c.Source,
+            Target = c.Target,
+            Transform = c.Transform == TransformType.None ? null : ToLowerCase(c.Transform),
+            Value = c.Value,
+            Lql = c.Lql,
+        };
+
+    /// <summary>
     /// Converts domain model to DTO for serialization.
     /// </summary>
     private static TableMappingDto ToDto(TableMapping m) =>
@@ -236,17 +268,7 @@ internal static class MappingConfigParser
                     TargetColumn = m.PkMapping.TargetColumn,
                 }
                 : null,
-            ColumnMappings =
-            [
-                .. m.ColumnMappings.Select(c => new ColumnMappingDto
-                {
-                    Source = c.Source,
-                    Target = c.Target,
-                    Transform = c.Transform == TransformType.None ? null : ToLowerCase(c.Transform),
-                    Value = c.Value,
-                    Lql = c.Lql,
-                }),
-            ],
+            ColumnMappings = [.. m.ColumnMappings.Select(selector: ToColumnMappingDto)],
             ExcludedColumns = [.. m.ExcludedColumns],
             Filter = m.Filter is not null ? new FilterDto { Lql = m.Filter.Lql } : null,
             SyncTracking = new SyncTrackingDto
@@ -259,18 +281,7 @@ internal static class MappingConfigParser
                 .Targets?.Select(t => new TargetDto
                 {
                     Table = t.Table,
-                    ColumnMappings =
-                    [
-                        .. t.ColumnMappings.Select(c => new ColumnMappingDto
-                        {
-                            Source = c.Source,
-                            Target = c.Target,
-                            Transform =
-                                c.Transform == TransformType.None ? null : ToLowerCase(c.Transform),
-                            Value = c.Value,
-                            Lql = c.Lql,
-                        }),
-                    ],
+                    ColumnMappings = [.. t.ColumnMappings.Select(selector: ToColumnMappingDto)],
                 })
                 .ToList(),
         };

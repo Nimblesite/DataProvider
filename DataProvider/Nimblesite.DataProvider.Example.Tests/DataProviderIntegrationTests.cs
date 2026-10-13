@@ -1,7 +1,9 @@
+// Implements [DP-SQL-MODEL-TEST-FRAGMENTS].
 using Microsoft.Data.Sqlite;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Sql.Model;
-using Xunit;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.DataProvider.Example.MapFunctions;
 
 namespace Nimblesite.DataProvider.Example.Tests;
@@ -11,20 +13,16 @@ namespace Nimblesite.DataProvider.Example.Tests;
 /// <summary>
 /// Integration tests for DataProvider code generation
 /// </summary>
-public sealed class DataProviderIntegrationTests : IDisposable
+public sealed partial class DataProviderIntegrationTests : IDisposable
 {
     private readonly string _dbPath;
-    private readonly string _connectionString;
     private readonly SqliteConnection _connection;
 
     public DataProviderIntegrationTests()
     {
-        _dbPath = Path.Combine(
-            Path.GetTempPath(),
-            $"dataprovider_integration_tests_{Guid.NewGuid()}.db"
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.CreateClosed(
+            "dataprovider_integration_tests"
         );
-        _connectionString = $"Data Source={_dbPath}";
-        _connection = new SqliteConnection(_connectionString);
     }
 
     [Fact]
@@ -39,36 +37,13 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Assert
         if (result is InvoiceListError failure)
         {
-            throw new InvalidOperationException(
-                $"GetInvoicesAsync failed: {failure.Value.Message}"
-            );
+            throw Dataset_GetInvoicesAsync_WithValidData_ReturnsCorrectTypes_1(failure: failure);
         }
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (InvoiceListOk)result;
-        var invoices = success.Value;
+        var invoices = Success(result);
 
         Assert.NotEmpty(invoices);
-        var invoice = invoices[0];
-        var line = invoice.InvoiceLines[0];
-
-        // Verify Invoice type and properties
-        Assert.IsType<Invoice>(invoice);
-        Assert.IsType<string>(invoice.Id);
-        Assert.IsType<string>(invoice.InvoiceNumber);
-        Assert.IsType<string>(invoice.InvoiceDate);
-        Assert.IsType<string>(invoice.CustomerName);
-        Assert.IsType<double>(invoice.TotalAmount);
-        Assert.IsAssignableFrom<IReadOnlyList<InvoiceLine>>(invoice.InvoiceLines);
-
-        // Verify InvoiceLine type and properties
-        Assert.IsType<InvoiceLine>(line);
-        Assert.IsType<string>(line.LineId);
-        Assert.IsType<string>(line.InvoiceId);
-        Assert.IsType<string>(line.Description);
-        Assert.IsType<double>(line.Quantity);
-        Assert.IsType<double>(line.UnitPrice);
-        Assert.IsType<double>(line.Amount);
+        AssertInvoiceTypes(invoice: invoices[0], line: invoices[0].InvoiceLines[0]);
     }
 
     [Fact]
@@ -89,80 +64,26 @@ public sealed class DataProviderIntegrationTests : IDisposable
                 $"Full exception: {failure.Value.Exception?.ToString() ?? "No exception details"}"
             );
         }
-        Assert.True(
-            result is CustomerListOk,
-            $"Expected Success but got {result.GetType()}, Error: {(result as CustomerListError)?.Value.Message ?? "No error message"}"
-        );
 
-        var success = (CustomerListOk)result;
+        var success = Ok(
+            actual: result,
+            message: $"Expected Success but got {result.GetType()}, Error: {(result as CustomerListError)?.Value.Message ?? "No error message"}"
+        );
         var customers = success.Value;
 
         Assert.NotEmpty(customers);
-        var customer = customers[0];
-        var address = customer.Addresss[0];
-
-        // Verify Customer type and properties
-        Assert.IsType<Customer>(customer);
-        Assert.IsType<string>(customer.Id);
-        Assert.IsType<string>(customer.CustomerName);
-        Assert.IsType<string>(customer.Email);
-        // Phone property not available in generated Customer type
-        Assert.IsType<string>(customer.CreatedDate);
-        Assert.IsAssignableFrom<IReadOnlyList<Address>>(customer.Addresss);
-
-        // Verify Address type and properties
-        Assert.IsType<Address>(address);
-        Assert.IsType<string>(address.AddressId);
-        Assert.IsType<string>(address.CustomerId);
-        Assert.IsType<string>(address.Street);
-        Assert.IsType<string>(address.City);
-        Assert.IsType<string>(address.State);
-        Assert.IsType<string>(address.ZipCode);
-        // Country property not available in generated Address type
+        AssertCustomerTypes(customer: customers[0], address: customers[0].Addresss[0]);
     }
 
     [Fact]
     public async Task GetOrdersAsync_WithValidData_ReturnsCorrectTypes()
     {
         // Arrange
-        await SetupTestDatabase();
-
-        // Act
-        var result = await _connection.GetOrdersAsync(
-            "cust-1",
-            "Completed",
-            "2024-01-01",
-            "2024-12-31"
-        );
-
-        // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (OrderListOk)result;
-        var orders = success.Value;
+        var orders = await VerifyReusableWorkflow1(input0: SetupTestDatabase, input1: _connection)
+            .ConfigureAwait(false);
 
         Assert.NotEmpty(orders);
-        var order = orders[0];
-        var item = order.OrderItems[0];
-
-        // Verify Order type and properties
-        Assert.IsType<Order>(order);
-        Assert.IsType<string>(order.Id);
-        Assert.IsType<string>(order.OrderNumber);
-        // OrderDate property not available in generated Order type
-        Assert.IsType<string>(order.CustomerId);
-        Assert.IsType<double>(order.TotalAmount);
-        Assert.IsType<string>(order.Status);
-        Assert.IsAssignableFrom<IReadOnlyList<OrderItem>>(order.OrderItems);
-
-        // Verify OrderItem type and properties
-        Assert.IsType<OrderItem>(item);
-        Assert.IsType<string>(item.ItemId);
-        Assert.IsType<string>(item.OrderId);
-        Assert.IsType<string>(item.ProductName);
-        Assert.IsType<double>(item.Quantity);
-        Assert.IsType<double>(item.Price);
-        Assert.IsType<double>(item.Subtotal);
+        AssertOrderTypes(order: orders[0], item: orders[0].OrderItems[0]);
     }
 
     [Fact]
@@ -191,9 +112,9 @@ public sealed class DataProviderIntegrationTests : IDisposable
         );
 
         // Verify different table names were used (not hard-coded)
-        _ = ((InvoiceListOk)invoiceResult).Value;
-        _ = ((CustomerListOk)customerResult).Value;
-        _ = ((OrderListOk)orderResult).Value;
+        _ = (Ok(actual: invoiceResult)).Value;
+        _ = (Ok(actual: customerResult)).Value;
+        _ = (Ok(actual: orderResult)).Value;
 
         //TODO: Assert these!!!
 
@@ -211,54 +132,24 @@ public sealed class DataProviderIntegrationTests : IDisposable
     public async Task GetInvoicesAsync_WithMultipleRecords_GroupsCorrectly()
     {
         // Arrange
-        await SetupTestDatabase();
-
-        // Act
-        var result = await _connection.GetInvoicesAsync("Acme Corp", "2024-01-01", "2024-12-31");
-
-        // Assert
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (InvoiceListOk)result;
-        var invoices = success.Value;
-
-        Assert.Equal(3, invoices.Count);
+        var invoices = await VerifyReusableWorkflow6(input0: SetupTestDatabase, input1: _connection)
+            .ConfigureAwait(false);
 
         // Verify grouping is working correctly
-        var firstInvoice = invoices[0];
-        Assert.Equal(2, firstInvoice.InvoiceLines.Count);
-
-        var secondInvoice = invoices[1];
-        Assert.Equal(2, secondInvoice.InvoiceLines.Count);
-
-        var thirdInvoice = invoices[2];
-        Assert.Equal(2, thirdInvoice.InvoiceLines.Count);
+        AssertGroupCounts(invoices, invoice => invoice.InvoiceLines, [2, 2, 2]);
     }
 
     [Fact]
     public async Task GetCustomersLqlAsync_WithMultipleAddresses_GroupsCorrectly()
     {
         // Arrange
-        await SetupTestDatabase();
+        var customers = await VerifyReusableWorkflow7(
+                input0: SetupTestDatabase,
+                input1: _connection
+            )
+            .ConfigureAwait(false);
 
-        // Act
-        var result = await _connection.GetCustomersLqlAsync(null);
-
-        // Assert
-        Assert.True(result is CustomerListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (CustomerListOk)result;
-        var customers = success.Value;
-
-        Assert.Equal(2, customers.Count);
-
-        // First customer should have 2 addresses
-        var firstCustomer = customers[0];
-        Assert.Equal(2, firstCustomer.Addresss.Count);
-
-        // Second customer should have 1 address
-        var secondCustomer = customers[1];
-        Assert.Single(secondCustomer.Addresss);
+        AssertGroupCounts(customers, customer => customer.Addresss, [2, 1]);
     }
 
     [Fact]
@@ -271,10 +162,8 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var result = await _connection.GetOrdersAsync(null, null, "2024-01-01", "2024-12-31");
 
         // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
 
-        var success = (OrderListOk)result;
-        var orders = success.Value;
+        var orders = Success(result);
 
         Assert.Equal(2, orders.Count);
 
@@ -287,78 +176,24 @@ public sealed class DataProviderIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task GetInvoicesAsync_WithEmptyDatabase_ReturnsEmpty()
-    {
-        // Arrange
-        await SetupEmptyDatabase();
-
-        // Act
-        var result = await _connection.GetInvoicesAsync("Acme Corp", "2024-01-01", "2024-12-31");
-
-        // Assert
-        Assert.True(result is InvoiceListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (InvoiceListOk)result;
-        var invoices = success.Value;
-
-        Assert.Empty(invoices);
-    }
+    public async Task GetInvoicesAsync_WithEmptyDatabase_ReturnsEmpty() =>
+        await AssertWorkflowEmpty<Invoice>(workflow: VerifyReusableWorkflow6).ConfigureAwait(false);
 
     [Fact]
-    public async Task GetCustomersLqlAsync_WithEmptyDatabase_ReturnsEmpty()
-    {
-        // Arrange
-        await SetupEmptyDatabase();
-
-        // Act
-        var result = await _connection.GetCustomersLqlAsync(null);
-
-        // Assert
-        Assert.True(result is CustomerListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (CustomerListOk)result;
-        var customers = success.Value;
-
-        Assert.Empty(customers);
-    }
+    public async Task GetCustomersLqlAsync_WithEmptyDatabase_ReturnsEmpty() =>
+        await AssertWorkflowEmpty<Customer>(workflow: VerifyReusableWorkflow7)
+            .ConfigureAwait(false);
 
     [Fact]
-    public async Task GetOrdersAsync_WithEmptyDatabase_ReturnsEmpty()
-    {
-        // Arrange
-        await SetupEmptyDatabase();
-
-        // Act
-        var result = await _connection.GetOrdersAsync(
-            "cust-1",
-            "Completed",
-            "2024-01-01",
-            "2024-12-31"
-        );
-
-        // Assert
-        Assert.True(result is OrderListOk, $"Expected Success but got {result.GetType()}");
-
-        var success = (OrderListOk)result;
-        var orders = success.Value;
-
-        Assert.Empty(orders);
-    }
+    public async Task GetOrdersAsync_WithEmptyDatabase_ReturnsEmpty() =>
+        await AssertWorkflowEmpty<Order>(workflow: VerifyReusableWorkflow1).ConfigureAwait(false);
 
     [Fact]
     public void FluentQueryBuilder_InnerJoin_GeneratesCorrectSQL()
     {
         // Arrange & Act
-        var query = "Orders"
-            .From("o")
-            .InnerJoin("Customer", "CustomerId", "Id", "o", "c")
-            .Select(
-                ("o", "OrderNumber"),
-                ("o", "TotalAmount"),
-                ("o", "Status"),
-                ("c", "CustomerName"),
-                ("c", "Email")
-            )
+        var query = DataProviderIntegrationTests
+            .BuildOrdersWithCustomer()
             .Where("o.TotalAmount", ComparisonOperator.GreaterThan, "400.00")
             .OrderByDescending("o.TotalAmount")
             .Take(5)
@@ -367,30 +202,25 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(
-            sqlResult is StringSqlOk,
-            $"SQL generation should succeed, got: {(sqlResult as StringSqlError)?.Value.Message}"
-        );
-
-        var sql = ((StringSqlOk)sqlResult).Value;
-
         // Verify JOIN is included
-        Assert.Contains("INNER JOIN", sql);
-        Assert.Contains("Customer", sql);
-        Assert.Contains("ON o.CustomerId = c.Id", sql);
-
         // Verify table aliases are included
-        Assert.Contains("FROM Orders o", sql);
-        Assert.Contains("Customer c", sql);
-
         // Verify full expected SQL structure
-        Assert.Contains(
-            "SELECT o.OrderNumber, o.TotalAmount, o.Status, c.CustomerName, c.Email",
-            sql
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "INNER JOIN",
+                "Customer",
+                "ON o.CustomerId = c.Id",
+                "FROM Orders o",
+                "Customer c",
+                "SELECT o.OrderNumber, o.TotalAmount, o.Status, c.CustomerName, c.Email",
+                "WHERE o.TotalAmount > '400.00'",
+                "ORDER BY o.TotalAmount DESC",
+                "LIMIT 5",
+            ],
+            message: $"SQL generation should succeed, got: {(sqlResult as StringSqlError)?.Value.Message}"
         );
-        Assert.Contains("WHERE o.TotalAmount > '400.00'", sql);
-        Assert.Contains("ORDER BY o.TotalAmount DESC", sql);
-        Assert.Contains("LIMIT 5", sql);
     }
 
     [Fact]
@@ -403,16 +233,13 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .Select(("ord", "OrderNumber"), ("cust", "CustomerName"))
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("LEFT JOIN", sql);
-        Assert.Contains("Customer cust", sql);
-        Assert.Contains("FROM Orders ord", sql);
-        Assert.Contains("ON ord.CustomerId = cust.Id", sql);
+        VerifyReusableWorkflow2(
+            input0: query,
+            value0: "LEFT JOIN",
+            value1: "Customer cust",
+            value2: "FROM Orders ord",
+            value3: "ON ord.CustomerId = cust.Id"
+        );
     }
 
     [Fact]
@@ -426,17 +253,13 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .Select(("o", "OrderNumber"), ("c", "CustomerName"), ("a", "City"))
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        // Verify both JOINs are present
-        Assert.Contains("INNER JOIN Customer c", sql);
-        Assert.Contains("LEFT JOIN Address a", sql);
-        Assert.Contains("ON o.CustomerId = c.Id", sql);
-        Assert.Contains("ON c.Id = a.CustomerId", sql);
+        VerifyReusableWorkflow2(
+            input0: query,
+            value0: "INNER JOIN Customer c",
+            value1: "LEFT JOIN Address a",
+            value2: "ON o.CustomerId = c.Id",
+            value3: "ON c.Id = a.CustomerId"
+        );
     }
 
     [Fact]
@@ -452,138 +275,77 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .Take(10)
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
+        // Assert
         // Test that all parts of the fluent API are preserved in the generated SQL
-        Assert.Contains(
-            "SELECT o.OrderNumber, c.CustomerName, o.TotalAmount",
-            sql,
-            StringComparison.Ordinal
+        SqlFragments(
+            read: () => query.ToSQLite(),
+            expected:
+            [
+                "SELECT o.OrderNumber, c.CustomerName, o.TotalAmount",
+                "FROM Orders o",
+                "INNER JOIN Customer c",
+                "ON o.CustomerId = c.Id",
+                "WHERE o.Status = 'Completed'",
+                "ORDER BY c.CustomerName ASC",
+                "LIMIT 10",
+            ],
+            comparison: StringComparison.Ordinal
         );
-        Assert.Contains("FROM Orders o", sql, StringComparison.Ordinal);
-        Assert.Contains("INNER JOIN Customer c", sql, StringComparison.Ordinal);
-        Assert.Contains("ON o.CustomerId = c.Id", sql, StringComparison.Ordinal);
-        Assert.Contains("WHERE o.Status = 'Completed'", sql, StringComparison.Ordinal);
-        Assert.Contains("ORDER BY c.CustomerName ASC", sql, StringComparison.Ordinal);
-        Assert.Contains("LIMIT 10", sql, StringComparison.Ordinal);
     }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: one record projection shared by
+    // every entity query, keeping the original ToSQLite conversion.
+    private IReadOnlyList<T> Query<T>(
+        IQueryable<T> query,
+        Func<global::System.Data.IDataReader, T> mapper
+    ) =>
+        Ok(actual: _connection.GetRecords(query.ToSqlStatement(), s => s.ToSQLite(), mapper)).Value;
+
+    private IReadOnlyList<Customer> QueryCustomers(IQueryable<Customer> query) =>
+        Query(query: query, mapper: MapCustomer);
+
+    private IReadOnlyList<Order> QueryOrders(IQueryable<Order> query) =>
+        Query(query: query, mapper: MapOrder);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: ordered projections shared by the
+    // predicate-builder E2E assertions.
+    private IReadOnlyList<Customer> QueryCustomersOrdered(
+        System.Linq.Expressions.Expression<Func<Customer, bool>> predicate
+    ) =>
+        QueryCustomers(
+            SelectStatement.From<Customer>("Customer").Where(predicate).OrderBy(c => c.CustomerName)
+        );
+
+    private IReadOnlyList<Order> QueryOrdersOrdered(
+        System.Linq.Expressions.Expression<Func<Order, bool>> predicate
+    ) => QueryOrders(SelectStatement.From<Order>("Orders").Where(predicate).OrderBy(o => o.Id));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: asserts each parent has the expected
+    // number of children, preserving the per-position count assertions.
+    private static void AssertGroupCounts<TParent, TChild>(
+        IReadOnlyList<TParent> parents,
+        Func<TParent, IReadOnlyList<TChild>> children,
+        int[] expectedCounts
+    )
+    {
+        Assert.Equal(expectedCounts.Length, parents.Count);
+        for (var i = 0; i < expectedCounts.Length; i++)
+        {
+            Assert.Equal(expectedCounts[i], children(parents[i]).Count);
+        }
+    }
+
+    // Implements [CI-TEST-SHARED-RESULT].
+    private static TEntity Success<TEntity>(Outcome.Result<TEntity, SqlError> result) =>
+        Ok(actual: result, message: $"Expected Success but got {result.GetType()}").Value;
 
     private async Task SetupTestDatabase()
     {
-        await _connection.OpenAsync().ConfigureAwait(false);
-        using (var pragmaCommand = new SqliteCommand("PRAGMA foreign_keys = OFF", _connection))
-        {
-            await pragmaCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-
-        // I don't know why this is here. We're supposed to use Migrations to create the schema and
-        // inserts/updates are supposed to be extension methods.
-
-        // Create all tables
-        var createTablesScript = """
-            CREATE TABLE IF NOT EXISTS Invoice (
-                Id TEXT PRIMARY KEY,
-                InvoiceNumber TEXT NOT NULL,
-                InvoiceDate TEXT NOT NULL,
-                CustomerName TEXT NOT NULL,
-                CustomerEmail TEXT NULL,
-                TotalAmount REAL NOT NULL,
-                DiscountAmount REAL NULL,
-                Notes TEXT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS InvoiceLine (
-                Id TEXT PRIMARY KEY,
-                InvoiceId TEXT NOT NULL,
-                Description TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                UnitPrice REAL NOT NULL,
-                Amount REAL NOT NULL,
-                DiscountPercentage REAL NULL,
-                Notes TEXT NULL,
-                FOREIGN KEY (InvoiceId) REFERENCES Invoice (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Customer (
-                Id TEXT PRIMARY KEY,
-                CustomerName TEXT NOT NULL,
-                Email TEXT NULL,
-                Phone TEXT NULL,
-                CreatedDate TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS Address (
-                Id TEXT PRIMARY KEY,
-                CustomerId TEXT NOT NULL,
-                Street TEXT NOT NULL,
-                City TEXT NOT NULL,
-                State TEXT NOT NULL,
-                ZipCode TEXT NOT NULL,
-                Country TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Orders (
-                Id TEXT PRIMARY KEY,
-                OrderNumber TEXT NOT NULL,
-                OrderDate TEXT NOT NULL,
-                CustomerId TEXT NOT NULL,
-                TotalAmount REAL NOT NULL,
-                Status TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS OrderItem (
-                Id TEXT PRIMARY KEY,
-                OrderId TEXT NOT NULL,
-                ProductName TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                Price REAL NOT NULL,
-                Subtotal REAL NOT NULL,
-                FOREIGN KEY (OrderId) REFERENCES Orders (Id)
-            );
-            """;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await VerifySharedPhase2(input0: _connection).ConfigureAwait(false);
 
         // Insert comprehensive test data
-        var insertScript = """
-            INSERT INTO Invoice (Id, InvoiceNumber, InvoiceDate, CustomerName, CustomerEmail, TotalAmount, DiscountAmount, Notes) VALUES
-            ('inv-1', 'INV-001', '2024-01-15', 'Acme Corp', 'accounting@acme.com', 1250.00, NULL, 'Test invoice'),
-            ('inv-2', 'INV-002', '2024-01-16', 'Acme Corp', 'accounting@acme.com', 850.75, 25.00, NULL),
-            ('inv-3', 'INV-003', '2024-01-17', 'Acme Corp', 'accounting@acme.com', 2100.25, 100.00, 'Large order discount');
-
-            INSERT INTO InvoiceLine (Id, InvoiceId, Description, Quantity, UnitPrice, Amount, DiscountPercentage, Notes) VALUES
-            ('line-1', 'inv-1', 'Software License', 1.0, 1000.00, 1000.00, NULL, NULL),
-            ('line-2', 'inv-1', 'Support Package', 1.0, 250.00, 250.00, 10.0, 'First year support'),
-            ('line-3', 'inv-2', 'Consulting Hours', 5.0, 150.00, 750.00, NULL, NULL),
-            ('line-4', 'inv-2', 'Travel Expenses', 1.0, 100.75, 100.75, NULL, 'Reimbursement'),
-            ('line-5', 'inv-3', 'Hardware Components', 10.0, 125.50, 1255.00, 5.0, 'Bulk discount'),
-            ('line-6', 'inv-3', 'Installation Service', 3.0, 281.75, 845.25, NULL, NULL);
-
-            INSERT INTO Customer (Id, CustomerName, Email, Phone, CreatedDate) VALUES
-            ('cust-1', 'Acme Corp', 'contact@acme.com', '555-0100', '2024-01-01'),
-            ('cust-2', 'Tech Solutions', 'info@techsolutions.com', '555-0200', '2024-01-02');
-
-            INSERT INTO Address (Id, CustomerId, Street, City, State, ZipCode, Country) VALUES
-            ('addr-1', 'cust-1', '123 Business Ave', 'New York', 'NY', '10001', 'USA'),
-            ('addr-2', 'cust-1', '456 Main St', 'Albany', 'NY', '12201', 'USA'),
-            ('addr-3', 'cust-2', '789 Tech Blvd', 'San Francisco', 'CA', '94105', 'USA');
-
-            INSERT INTO Orders (Id, OrderNumber, OrderDate, CustomerId, TotalAmount, Status) VALUES
-            ('ord-1', 'ORD-001', '2024-01-10', 'cust-1', 500.00, 'Completed'),
-            ('ord-2', 'ORD-002', '2024-01-11', 'cust-2', 750.00, 'Processing');
-
-            INSERT INTO OrderItem (Id, OrderId, ProductName, Quantity, Price, Subtotal) VALUES
-            ('item-1', 'ord-1', 'Widget A', 2.0, 100.00, 200.00),
-            ('item-2', 'ord-1', 'Widget B', 3.0, 100.00, 300.00),
-            ('item-3', 'ord-2', 'Service Package', 1.0, 750.00, 750.00);
-            """;
+        var insertScript = Data_SetupTestDatabase_1;
 
         using var insertCommand = new SqliteCommand(insertScript, _connection);
         await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -594,72 +356,26 @@ public sealed class DataProviderIntegrationTests : IDisposable
         await _connection.OpenAsync().ConfigureAwait(false);
 
         // Create tables but don't insert any data - same script as above but without inserts
-        var createTablesScript = """
-            CREATE TABLE IF NOT EXISTS Invoice (
-                Id TEXT PRIMARY KEY,
-                InvoiceNumber TEXT NOT NULL,
-                InvoiceDate TEXT NOT NULL,
-                CustomerName TEXT NOT NULL,
-                CustomerEmail TEXT NULL,
-                TotalAmount REAL NOT NULL,
-                DiscountAmount REAL NULL,
-                Notes TEXT NULL
-            );
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow101(
+                configure: command => command.CommandText = Data_SetupEmptyDatabase_1,
+                input1: _connection
+            )
+            .ConfigureAwait(false);
+    }
 
-            CREATE TABLE IF NOT EXISTS InvoiceLine (
-                Id TEXT PRIMARY KEY,
-                InvoiceId TEXT NOT NULL,
-                Description TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                UnitPrice REAL NOT NULL,
-                Amount REAL NOT NULL,
-                DiscountPercentage REAL NULL,
-                Notes TEXT NULL,
-                FOREIGN KEY (InvoiceId) REFERENCES Invoice (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Customer (
-                Id TEXT PRIMARY KEY,
-                CustomerName TEXT NOT NULL,
-                Email TEXT NULL,
-                Phone TEXT NULL,
-                CreatedDate TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS Address (
-                Id TEXT PRIMARY KEY,
-                CustomerId TEXT NOT NULL,
-                Street TEXT NOT NULL,
-                City TEXT NOT NULL,
-                State TEXT NOT NULL,
-                ZipCode TEXT NOT NULL,
-                Country TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS Orders (
-                Id TEXT PRIMARY KEY,
-                OrderNumber TEXT NOT NULL,
-                OrderDate TEXT NOT NULL,
-                CustomerId TEXT NOT NULL,
-                TotalAmount REAL NOT NULL,
-                Status TEXT NOT NULL,
-                FOREIGN KEY (CustomerId) REFERENCES Customer (Id)
-            );
-
-            CREATE TABLE IF NOT EXISTS OrderItem (
-                Id TEXT PRIMARY KEY,
-                OrderId TEXT NOT NULL,
-                ProductName TEXT NOT NULL,
-                Quantity REAL NOT NULL,
-                Price REAL NOT NULL,
-                Subtotal REAL NOT NULL,
-                FOREIGN KEY (OrderId) REFERENCES Orders (Id)
-            );
-            """;
-
-        using var command = new SqliteCommand(createTablesScript, _connection);
-        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private async Task AssertWorkflowEmpty<TEntity>(
+        Func<
+            Func<Task>,
+            SqliteConnection,
+            Task<System.Collections.Immutable.ImmutableList<TEntity>>
+        > workflow
+    )
+    {
+        var items = await workflow(arg1: SetupEmptyDatabase, arg2: _connection)
+            .ConfigureAwait(false);
+        Assert.Empty(items);
     }
 
     #region PredicateBuilder E2E Tests
@@ -673,15 +389,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange
         await SetupTestDatabase();
         var predicate = PredicateBuilder.True<Customer>();
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-
-        // Act
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = VerifySharedContinuation1(input0: predicate);
         Assert.Equal(2, customers.Count);
     }
 
@@ -694,15 +402,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange
         await SetupTestDatabase();
         var predicate = PredicateBuilder.False<Customer>();
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-
-        // Act
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = VerifySharedContinuation1(input0: predicate);
         Assert.Empty(customers);
     }
 
@@ -717,18 +417,9 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var predicate = PredicateBuilder.False<Customer>();
         predicate = predicate.Or(c => c.CustomerName == "Acme Corp");
         predicate = predicate.Or(c => c.CustomerName == "Tech Solutions");
-        var query = SelectStatement
-            .From<Customer>("Customer")
-            .Where(predicate)
-            .OrderBy(c => c.CustomerName);
 
         // Act
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = QueryCustomersOrdered(predicate: predicate);
         Assert.Equal(2, customers.Count);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
         Assert.Equal("Tech Solutions", customers[1].CustomerName);
@@ -745,17 +436,11 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var predicate = PredicateBuilder.True<Customer>();
         predicate = predicate.And(c => c.CustomerName == "Acme Corp");
         predicate = predicate.And(c => c.Email != null);
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-
-        // Act
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
-        Assert.Single(customers);
-        Assert.Equal("Acme Corp", customers[0].CustomerName);
+        VerifyReusableWorkflow4(
+            input0: VerifySharedContinuation1,
+            input1: predicate,
+            value0: "Acme Corp"
+        );
     }
 
     /// <summary>
@@ -769,17 +454,11 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var predicate = PredicateBuilder.True<Customer>();
         predicate = predicate.And(c => c.CustomerName == "Acme Corp");
         predicate = predicate.Not();
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-
-        // Act
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
-        Assert.Single(customers);
-        Assert.Equal("Tech Solutions", customers[0].CustomerName);
+        VerifyReusableWorkflow4(
+            input0: VerifySharedContinuation1,
+            input1: predicate,
+            value0: "Tech Solutions"
+        );
     }
 
     /// <summary>
@@ -800,15 +479,11 @@ public sealed class DataProviderIntegrationTests : IDisposable
             predicate = predicate.Or(c => c.CustomerName == tempName);
         }
 
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
-        Assert.Single(customers); // Only customer "Acme Corp" exists
-        Assert.Equal("Acme Corp", customers[0].CustomerName);
+        VerifyReusableWorkflow4(
+            input0: VerifySharedContinuation1,
+            input1: predicate,
+            value0: "Acme Corp"
+        );
     }
 
     /// <summary>
@@ -826,16 +501,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         predicate = predicate.And(c => c.Email != null);
         predicate = predicate.And(c => c.CustomerName != null);
 
-        var query = SelectStatement
-            .From<Customer>("Customer")
-            .Where(predicate)
-            .OrderBy(c => c.CustomerName);
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
+        var customers = QueryCustomersOrdered(predicate: predicate);
         Assert.Equal(2, customers.Count); // Both customers have email and are in range
     }
 
@@ -860,15 +526,11 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Combine with email filter using AND
         var finalPredicate = namePredicate.And(c => c.Email != null);
 
-        var query = SelectStatement.From<Customer>("Customer").Where(finalPredicate);
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
-        Assert.Single(customers); // Only "Acme Corp" exists and has email
-        Assert.Equal("Acme Corp", customers[0].CustomerName);
+        VerifyReusableWorkflow4(
+            input0: VerifySharedContinuation1,
+            input1: finalPredicate,
+            value0: "Acme Corp"
+        );
     }
 
     /// <summary>
@@ -895,15 +557,11 @@ public sealed class DataProviderIntegrationTests : IDisposable
             predicate = predicate.And(c => c.Email != null);
         }
 
-        var query = SelectStatement.From<Customer>("Customer").Where(predicate);
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapCustomer);
-
-        // Assert
-        Assert.True(result is CustomerReadOnlyListOk);
-        var customers = ((CustomerReadOnlyListOk)result).Value;
-        Assert.Single(customers);
-        Assert.Equal("Tech Solutions", customers[0].CustomerName);
+        VerifyReusableWorkflow4(
+            input0: VerifySharedContinuation1,
+            input1: predicate,
+            value0: "Tech Solutions"
+        );
     }
 
     /// <summary>
@@ -927,13 +585,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Add minimum amount filter with AND
         predicate = predicate.And(o => o.TotalAmount > 0);
 
-        var query = SelectStatement.From<Order>("Orders").Where(predicate).OrderBy(o => o.Id);
-        var statement = query.ToSqlStatement();
-        var result = _connection.GetRecords(statement, s => s.ToSQLite(), MapOrder);
-
-        // Assert
-        Assert.True(result is OrderReadOnlyListOk);
-        var orders = ((OrderReadOnlyListOk)result).Value;
+        var orders = QueryOrdersOrdered(predicate: predicate);
         Assert.Equal(2, orders.Count); // Both orders match the criteria
         Assert.Equal("Completed", orders[0].Status);
         Assert.Equal("Processing", orders[1].Status);
@@ -954,14 +606,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .And("o.TotalAmount", "500.00")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("AND o.TotalAmount = '500.00'", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["WHERE o.Status = 'Completed'", "AND o.TotalAmount = '500.00'"]
+        );
     }
 
     [Fact]
@@ -975,14 +623,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .Or("o.Status", "Processing")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("OR o.Status = 'Processing'", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["WHERE o.Status = 'Completed'", "OR o.Status = 'Processing'"]
+        );
     }
 
     [Fact]
@@ -991,13 +635,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange & Act
         var query = "Orders".From("o").Select(("o", "Status")).Distinct().ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("SELECT DISTINCT", sql);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["SELECT DISTINCT"]);
     }
 
     [Fact]
@@ -1006,14 +644,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange & Act
         var query = "Orders".From("o").SelectAll().Skip(10).Take(5).ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("OFFSET 10", sql);
-        Assert.Contains("LIMIT 5", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["OFFSET 10", "LIMIT 5"]
+        );
     }
 
     [Fact]
@@ -1022,13 +656,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange & Act
         var query = "Orders".From("o").SelectAll("o").ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("SELECT o.*", sql);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["SELECT o.*"]);
     }
 
     [Fact]
@@ -1037,13 +665,7 @@ public sealed class DataProviderIntegrationTests : IDisposable
         // Arrange & Act
         var query = "Orders".From("o").Select(("o", "Status")).GroupBy("o.Status").ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("GROUP BY o.Status", sql);
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: ["GROUP BY o.Status"]);
     }
 
     [Fact]
@@ -1056,13 +678,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .Where("o.TotalAmount", ComparisonOperator.GreaterOrEq, "100.00")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.TotalAmount >= '100.00'", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["WHERE o.TotalAmount >= '100.00'"]
+        );
     }
 
     [Fact]
@@ -1075,13 +694,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .GroupBy("o.Status", "o.CustomerId")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("GROUP BY o.Status, o.CustomerId", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["GROUP BY o.Status, o.CustomerId"]
+        );
     }
 
     [Fact]
@@ -1099,27 +715,29 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var sqlResult = query.ToSQLite();
 
         // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.Status = 'Completed'", sql);
-        Assert.Contains("AND o.TotalAmount = '500.00'", sql);
-        Assert.Contains("OR o.Status = 'VIP'", sql);
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments:
+            [
+                "WHERE o.Status = 'Completed'",
+                "AND o.TotalAmount = '500.00'",
+                "OR o.Status = 'VIP'",
+            ]
+        );
     }
 
-    [Fact]
-    public void FluentQueryBuilder_WhereWithBoolValue_GeneratesCorrectSQL()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(FluentQueryBuilder_WhereWithBoolValue_GeneratesCorrectSQL_ContextCasesData))]
+    public void FluentQueryBuilder_WhereWithBoolValue_GeneratesCorrectSQL_ContextCases(
+        string caseName,
+        global::System.String value2,
+        global::System.Object value3,
+        global::System.String value4
+    )
     {
-        // Arrange & Act - tests FormatValue with bool
-        var query = "Orders".From("o").SelectAll().Where("o.IsActive", true).ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.IsActive = 1", sql);
+        NamedCase(caseName: caseName);
+        ExerciseContextualCaseMatrix1(value2: value2, value3: value3, value4: value4);
     }
 
     [Fact]
@@ -1129,47 +747,10 @@ public sealed class DataProviderIntegrationTests : IDisposable
         var testDate = new DateTime(2024, 6, 15, 10, 30, 0, DateTimeKind.Utc);
         var query = "Orders".From("o").SelectAll().Where("o.OrderDate", testDate).ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.OrderDate = '2024-06-15 10:30:00'", sql);
-    }
-
-    [Fact]
-    public void FluentQueryBuilder_WhereWithIntValue_GeneratesCorrectSQL()
-    {
-        // Arrange & Act - tests FormatValue with numeric
-        var query = "Orders".From("o").SelectAll().Where("o.CustomerId", 42).ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.CustomerId = 42", sql);
-    }
-
-    [Fact]
-    public void FluentQueryBuilder_WhereWithStringContainingQuote_EscapesCorrectly()
-    {
-        // Arrange & Act - tests FormatValue with string containing single quote
-        var query = "Orders"
-            .From("o")
-            .SelectAll()
-            .Where("o.CustomerName", "O'Brien")
-            .ToSqlStatement();
-
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("WHERE o.CustomerName = 'O''Brien'", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["WHERE o.OrderDate = '2024-06-15 10:30:00'"]
+        );
     }
 
     [Fact]
@@ -1182,49 +763,26 @@ public sealed class DataProviderIntegrationTests : IDisposable
             .OrderByDescending("o.OrderDate")
             .ToSqlStatement();
 
-        var sqlResult = query.ToSQLite();
-
-        // Assert
-        Assert.True(sqlResult is StringSqlOk);
-        var sql = ((StringSqlOk)sqlResult).Value;
-
-        Assert.Contains("ORDER BY o.OrderDate DESC", sql);
+        var sql = SqlResultAssertions.ContainsQuery(
+            query: query,
+            fragments: ["ORDER BY o.OrderDate DESC"]
+        );
     }
 
     [Fact]
     public void FluentQueryBuilder_AllComparisonOperators_GenerateCorrectSQL()
     {
         // Test Less Than
-        var ltQuery = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Id", ComparisonOperator.LessThan, 10)
-            .ToSqlStatement();
-        Assert.Contains("Id < ", ((StringSqlOk)ltQuery.ToSQLite()).Value);
+        Assert.Contains("Id < ", ComparisonOperatorSql(op: ComparisonOperator.LessThan));
 
         // Test Less Than or Equal
-        var leQuery = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Id", ComparisonOperator.LessOrEq, 10)
-            .ToSqlStatement();
-        Assert.Contains("Id <= ", ((StringSqlOk)leQuery.ToSQLite()).Value);
+        Assert.Contains("Id <= ", ComparisonOperatorSql(op: ComparisonOperator.LessOrEq));
 
         // Test Greater Than
-        var gtQuery = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Id", ComparisonOperator.GreaterThan, 10)
-            .ToSqlStatement();
-        Assert.Contains("Id > ", ((StringSqlOk)gtQuery.ToSQLite()).Value);
+        Assert.Contains("Id > ", ComparisonOperatorSql(op: ComparisonOperator.GreaterThan));
 
         // Test Not Equal
-        var neQuery = "Orders"
-            .From()
-            .Select(("", "Id"))
-            .Where("Id", ComparisonOperator.NotEq, 10)
-            .ToSqlStatement();
-        var neSql = ((StringSqlOk)neQuery.ToSQLite()).Value;
+        var neSql = ComparisonOperatorSql(op: ComparisonOperator.NotEq);
         Assert.True(neSql.Contains("Id <> ") || neSql.Contains("Id != "));
     }
 
@@ -1232,4 +790,222 @@ public sealed class DataProviderIntegrationTests : IDisposable
 
     public void Dispose() =>
         CoreCoverageTests.DisposeSqliteFixture(connection: _connection, dbPath: _dbPath);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string ComparisonOperatorSql(ComparisonOperator op)
+    {
+        var query = "Orders".From().Select(("", "Id")).Where("Id", op, 10).ToSqlStatement();
+        return Ok(actual: query.ToSQLite()).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertInvoiceTypes(Invoice invoice, InvoiceLine line)
+    {
+        // Verify Invoice type and properties
+        Assert.IsType<Invoice>(invoice);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values: [invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.CustomerName]
+        );
+        Assert.IsType<double>(invoice.TotalAmount);
+        Assert.IsAssignableFrom<IReadOnlyList<InvoiceLine>>(invoice.InvoiceLines);
+
+        // Verify InvoiceLine type and properties
+        Assert.IsType<InvoiceLine>(line);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values: [line.LineId, line.InvoiceId, line.Description]
+        );
+        global::Tests.Shared.ResultAssertions.Types<double>(
+            values: [line.Quantity, line.UnitPrice, line.Amount]
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertCustomerTypes(Customer customer, Address address)
+    {
+        // Verify Customer type and properties
+        Assert.IsType<Customer>(customer);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values: [customer.Id, customer.CustomerName, customer.Email, customer.CreatedDate]
+        );
+        Assert.IsAssignableFrom<IReadOnlyList<Address>>(customer.Addresss);
+
+        // Verify Address type and properties
+        Assert.IsType<Address>(address);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values:
+            [
+                address.AddressId,
+                address.CustomerId,
+                address.Street,
+                address.City,
+                address.State,
+                address.ZipCode,
+            ]
+        );
+        // Country property not available in generated Address type
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertOrderTypes(Order order, OrderItem item)
+    {
+        // Verify Order type and properties
+        Assert.IsType<Order>(order);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values: [order.Id, order.OrderNumber, order.CustomerId]
+        );
+        Assert.IsType<double>(order.TotalAmount);
+        Assert.IsType<string>(order.Status);
+        Assert.IsAssignableFrom<IReadOnlyList<OrderItem>>(order.OrderItems);
+
+        // Verify OrderItem type and properties
+        Assert.IsType<OrderItem>(item);
+        global::Tests.Shared.ResultAssertions.Types<string>(
+            values: [item.ItemId, item.OrderId, item.ProductName]
+        );
+        global::Tests.Shared.ResultAssertions.Types<double>(
+            values: [item.Quantity, item.Price, item.Subtotal]
+        );
+    }
+
+    // Implements [DP-TEST-SHARED-QUERY-CONSTRUCTION].
+    internal static global::Nimblesite.Sql.Model.SelectStatementBuilder BuildOrdersWithCustomer() =>
+        "Orders"
+            .From("o")
+            .InnerJoin("Customer", "CustomerId", "Id", "o", "c")
+            .Select(
+                ("o", "OrderNumber"),
+                ("o", "TotalAmount"),
+                ("o", "Status"),
+                ("c", "CustomerName"),
+                ("c", "Email")
+            );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private IReadOnlyList<Customer> VerifySharedContinuation1(
+        System.Linq.Expressions.Expression<Func<Customer, bool>> input0
+    )
+    {
+        var query = SelectStatement.From<Customer>("Customer").Where(input0);
+
+        // Act
+        var customers = QueryCustomers(query);
+
+        return customers;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static async global::System.Threading.Tasks.Task VerifySharedPhase2(
+        SqliteConnection input0
+    )
+    {
+        await global::Nimblesite
+            .DataProvider.Example.Tests.GeneratedOperationsCoverageTests.VerifyUnifiedWorkflow102(
+                input0: input0
+            )
+            .ConfigureAwait(false);
+
+        // I don't know why this is here. We're supposed to use Migrations to create the schema and
+        // inserts/updates are supposed to be extension methods.
+
+        // Create all tables
+        // Implements [EXAMPLE-SCHEMA-SHARED].
+        await DatabaseManager.CreateSchemaAsync(connection: input0).ConfigureAwait(false);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseContextualCaseMatrix1(
+        global::System.String value2,
+        global::System.Object value3,
+        global::System.String value4
+    )
+    { // Arrange & Act - tests FormatValue with bool
+        var query = "Orders".From("o").SelectAll().Where(value2, value3).ToSqlStatement();
+
+        var sql = SqlResultAssertions.ContainsQuery(query: query, fragments: [value4]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static async global::System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableList<Order>> VerifyReusableWorkflow1(
+        Func<Task> input0,
+        SqliteConnection input1
+    )
+    { // Arrange
+        await (input0()).ConfigureAwait(continueOnCapturedContext: true);
+        // Act
+        var result = await (
+            input1.GetOrdersAsync("cust-1", "Completed", "2024-01-01", "2024-12-31")
+        ).ConfigureAwait(continueOnCapturedContext: true);
+        // Assert
+        var orders = Success(result);
+        return orders;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow2(
+        SelectStatement input0,
+        string value0,
+        string value1,
+        string value2,
+        string value3
+    )
+    {
+        var sqlResult = input0.ToSQLite();
+
+        // Assert
+        var sql = SqlResultAssertions.Contains(
+            result: sqlResult,
+            fragments: [value0, value1, value2, value3]
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow4(
+        Func<
+            System.Linq.Expressions.Expression<Func<Customer, bool>>,
+            IReadOnlyList<Customer>
+        > input0,
+        System.Linq.Expressions.Expression<Func<Customer, bool>> input1,
+        string value0
+    )
+    {
+        var customers = input0(arg: input1);
+        Assert.Single(customers);
+        Assert.Equal(value0, customers[0].CustomerName);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static async global::System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableList<Invoice>> VerifyReusableWorkflow6(
+        Func<Task> input0,
+        SqliteConnection input1
+    )
+    { // Arrange
+        await (input0()).ConfigureAwait(continueOnCapturedContext: true);
+        // Act
+        var result = await (
+            input1.GetInvoicesAsync("Acme Corp", "2024-01-01", "2024-12-31")
+        ).ConfigureAwait(continueOnCapturedContext: true);
+        // Assert
+        var invoices = Success(result);
+        return invoices;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static async global::System.Threading.Tasks.Task<System.Collections.Immutable.ImmutableList<Customer>> VerifyReusableWorkflow7(
+        Func<Task> input0,
+        SqliteConnection input1
+    )
+    { // Arrange
+        await (input0()).ConfigureAwait(continueOnCapturedContext: true);
+        // Act
+        var result = await (input1.GetCustomersLqlAsync(null)).ConfigureAwait(
+            continueOnCapturedContext: true
+        );
+        // Assert
+        var customers = Success(result);
+        return customers;
+    }
 }

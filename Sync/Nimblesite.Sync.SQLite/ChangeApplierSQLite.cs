@@ -170,7 +170,7 @@ public static class ChangeApplierSQLite
     }
 
     /// <summary>
-    /// Writes row data via INSERT OR REPLACE upsert.
+    /// Writes row data via conflict-update upsert, preserving update triggers.
     /// Shared by the insert and update application paths.
     /// </summary>
     [SuppressMessage(
@@ -188,8 +188,17 @@ public static class ChangeApplierSQLite
         var parameters = string.Join(", ", data.Keys.Select(k => $"@{k}"));
 
         using var cmd = connection.CreateCommand();
+        if (ParsePkValue(entry.PkValue) is not (string pkColumn, _))
+            return new BoolSyncError(new SyncErrorDatabase("Invalid pk_value JSON"));
+        var assignments = string.Join(
+            ", ",
+            data.Keys.Where(column => column != pkColumn)
+                .Select(column => $"{column} = excluded.{column}")
+        );
+        var conflictAction =
+            assignments.Length == 0 ? "DO NOTHING" : $"DO UPDATE SET {assignments}";
         cmd.CommandText =
-            $"INSERT OR REPLACE INTO {entry.TableName} ({columns}) VALUES ({parameters})";
+            $"INSERT INTO {entry.TableName} ({columns}) VALUES ({parameters}) ON CONFLICT ({pkColumn}) {conflictAction}";
 
         foreach (var kvp in data)
         {

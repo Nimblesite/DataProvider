@@ -3,15 +3,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
-using LqlStatementOk = Outcome.Result<
-    Nimblesite.Lql.Core.LqlStatement,
-    Nimblesite.Sql.Model.SqlError
->.Ok<Nimblesite.Lql.Core.LqlStatement, Nimblesite.Sql.Model.SqlError>;
-using SqlTextOk = Outcome.Result<string, Nimblesite.Sql.Model.SqlError>.Ok<
-    string,
-    Nimblesite.Sql.Model.SqlError
->;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -59,10 +51,12 @@ public partial class LqlFileBasedTests
 
         // Act
         var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
+        var statement = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statementResult)
+            .Value;
 
         var sqlResult = ToDialectSql(statement, dialect);
-        var actualSql = Assert.IsType<SqlTextOk>(sqlResult).Value;
+        var actualSql = global::Tests.Shared.ResultAssertions.ExactOk(actual: sqlResult).Value;
 
         Assert.False(
             string.IsNullOrWhiteSpace(actualSql),
@@ -118,100 +112,47 @@ public partial class LqlFileBasedTests
         );
 
         // Act
-        var lqlFiles = Directory
-            .GetFiles(lqlDirectory, "*.lql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
+        var (lqlFiles, postgreSqlFiles) = VerifyReusableWorkflow1(
+            input0: lqlDirectory,
+            input1: postgreSqlDirectory,
+            value0: "*.lql"
+        );
 
-        var postgreSqlFiles = Directory
-            .GetFiles(postgreSqlDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
-
-        var sqlServerFiles = Directory
-            .GetFiles(sqlServerDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
-
-        var sqliteFiles = Directory
-            .GetFiles(sqliteDirectory, "*.sql")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
-            .ToHashSet();
+        var (sqlServerFiles, sqliteFiles) = VerifyReusableWorkflow1(
+            input0: sqlServerDirectory,
+            input1: sqliteDirectory,
+            value0: "*.sql"
+        );
 
         // Assert — exact fixture set equality for every dialect.
-        Assert.True(
-            lqlFiles.SetEquals(postgreSqlFiles),
-            $"Every LQL test file should have a corresponding PostgreSQL expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(postgreSqlFiles))}; PostgreSQL-only: {string.Join(", ", postgreSqlFiles.Except(lqlFiles))}"
-        );
-
-        Assert.True(
-            lqlFiles.SetEquals(sqlServerFiles),
-            $"Every LQL test file should have a corresponding SQL Server expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqlServerFiles))}; SQL Server-only: {string.Join(", ", sqlServerFiles.Except(lqlFiles))}"
-        );
-
-        Assert.True(
-            lqlFiles.SetEquals(sqliteFiles),
-            $"Every LQL test file should have a corresponding SQLite expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqliteFiles))}; SQLite-only: {string.Join(", ", sqliteFiles.Except(lqlFiles))}"
-        );
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: postgreSqlFiles, dialect: "PostgreSQL");
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: sqlServerFiles, dialect: "SQL Server");
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: sqliteFiles, dialect: "SQLite");
 
         Assert.Equal(27, lqlFiles.Count);
     }
 
     [Theory]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
-    [InlineData("SQLite")]
+    [MemberData(nameof(LargeQuery_TranspilesCompleteShapeForEveryDialectInlineCases))]
     public void LargeQuery_TranspilesCompleteShapeForEveryDialect(string dialect)
     {
         // Arrange
-        const string largeLqlCode = """
-            -- Complex query with multiple operations
-            let base_users =
-                users
-                |> join(user_profiles, on = users.id = user_profiles.user_id)
-                |> join(user_settings, on = users.id = user_settings.user_id)
-                |> filter(fn(row) => row.users.status = 'active' and row.user_profiles.verified = true)
+        const string largeLqlCode = Data_LargeQuery_TranspilesCompleteShapeForEveryDialect_1;
 
-            let user_orders =
-                base_users
-                |> join(orders, on = users.id = orders.user_id)
-                |> join(order_items, on = orders.id = order_items.order_id)
-                |> join(products, on = order_items.product_id = products.id)
-                |> join(categories, on = products.category_id = categories.id)
-
-            let aggregated_data =
-                user_orders
-                |> group_by(users.id, users.name, categories.name)
-                |> select(
-                    users.id,
-                    users.name,
-                    categories.name as category_name,
-                    count(distinct orders.id) as order_count,
-                    sum(order_items.quantity * products.price) as total_spent,
-                    avg(products.rating) as avg_product_rating
-                )
-                |> having(fn(group) => count(distinct orders.id) > 5)
-
-            aggregated_data
-            |> filter(fn(row) => row.total_spent > 1000)
-            |> order_by(total_spent desc, order_count desc)
-            |> limit(100)
-            """;
-
-        var statementResult = LqlStatementConverter.ToStatement(largeLqlCode);
-        var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
-        var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
-        Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
-        Assert.Contains("SELECT", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
+        var sql = VerifyReusableWorkflow3(
+            input0: largeLqlCode,
+            input1: ToDialectSql,
+            input2: dialect
+        );
+        ContainsAll(
+            actual: sql,
+            expected: ["SELECT", "JOIN", "GROUP BY", "ORDER BY"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Theory]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
-    [InlineData("SQLite")]
+    [MemberData(nameof(RepeatedQueries_GenerateStableSqlForEveryDialectInlineCases))]
     public void RepeatedQueries_GenerateStableSqlForEveryDialect(string dialect)
     {
         // Arrange
@@ -222,12 +163,16 @@ public partial class LqlFileBasedTests
         string? baseline = null;
         for (int i = 0; i < 1000; i++)
         {
-            var statementResult = LqlStatementConverter.ToStatement(lqlCode);
-            var statement = Assert.IsType<LqlStatementOk>(statementResult).Value;
-            var sql = Assert.IsType<SqlTextOk>(ToDialectSql(statement, dialect)).Value;
-            Assert.False(string.IsNullOrWhiteSpace(sql), dialect);
-            Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
+            var sql = VerifyReusableWorkflow3(
+                input0: lqlCode,
+                input1: ToDialectSql,
+                input2: dialect
+            );
+            ContainsAll(
+                actual: sql,
+                expected: ["users", "orders"],
+                comparison: StringComparison.OrdinalIgnoreCase
+            );
             if (baseline is string original)
             {
                 Assert.Equal(original, sql);
@@ -238,5 +183,58 @@ public partial class LqlFileBasedTests
             }
         }
         Assert.NotNull(baseline);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static (HashSet<string>, HashSet<string>) VerifyReusableWorkflow1(
+        string input0,
+        string input1,
+        string value0
+    )
+    {
+        // Act
+        var lqlFiles = Directory
+            .GetFiles(input0, value0)
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToHashSet();
+
+        var postgreSqlFiles = Directory
+            .GetFiles(input1, "*.sql")
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToHashSet();
+
+        return (lqlFiles, postgreSqlFiles);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static string VerifyReusableWorkflow3(
+        string input0,
+        Func<LqlStatement, string, Result<string, SqlError>> input1,
+        string input2
+    )
+    {
+        var statementResult = LqlStatementConverter.ToStatement(input0);
+        var statement = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: statementResult)
+            .Value;
+        var sql = global::Tests
+            .Shared.ResultAssertions.ExactOk(actual: input1(arg1: statement, arg2: input2))
+            .Value;
+        Assert.False(string.IsNullOrWhiteSpace(sql), input2);
+
+        return sql;
+    }
+
+    // Implements [LQL-FILE-FIXTURE-SHARED-SET-ASSERTION].
+    private static void VerifyFixtureSet(
+        HashSet<string> lqlFiles,
+        HashSet<string> dialectFiles,
+        string dialect
+    )
+    {
+        Assert.True(
+            lqlFiles.SetEquals(dialectFiles),
+            $"Every LQL test file should have a corresponding {dialect} expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(dialectFiles))}; {dialect}-only: {string.Join(", ", dialectFiles.Except(lqlFiles))}"
+        );
     }
 }

@@ -1,6 +1,8 @@
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
+
 namespace Nimblesite.Sync.Tests;
 
-public sealed class HashVerifierTests
+public sealed partial class HashVerifierTests
 {
     [Fact]
     public void ComputeBatchHash_EmptyBatch_ReturnsConsistentHash()
@@ -17,60 +19,19 @@ public sealed class HashVerifierTests
     {
         var entries = new[]
         {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-            new SyncLogEntry(
-                2,
-                "Person",
-                "{\"Id\":\"2\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"2\",\"Name\":\"Bob\"}",
-                "origin-1",
-                "2025-01-01T00:00:01.000Z"
-            ),
+            Fixture_ComputeBatchHash_SameEntries_SameHash_1(),
+            Fixture_ComputeBatchHash_SameEntries_SameHash_2(),
         };
 
-        var hash1 = HashVerifier.ComputeBatchHash(entries);
-        var hash2 = HashVerifier.ComputeBatchHash(entries);
-
-        Assert.Equal(hash1, hash2);
+        AssertBatchHashStable(entries);
     }
 
     [Fact]
     public void ComputeBatchHash_DifferentEntries_DifferentHash()
     {
-        var entries1 = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries1 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_1() };
 
-        var entries2 = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"1\",\"Name\":\"Bob\"}",
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries2 = new[] { Fixture_ComputeBatchHash_DifferentEntries_DifferentHash_2() };
 
         var hash1 = HashVerifier.ComputeBatchHash(entries1);
         var hash2 = HashVerifier.ComputeBatchHash(entries2);
@@ -81,18 +42,7 @@ public sealed class HashVerifierTests
     [Fact]
     public void ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly()
     {
-        var entries = new[]
-        {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"1\"}",
-                SyncOperation.Delete,
-                null,
-                "origin-1",
-                "2025-01-01T00:00:00.000Z"
-            ),
-        };
+        var entries = new[] { Fixture_ComputeBatchHash_DeleteWithNullPayload_HandlesCorrectly_1() };
 
         var hash = HashVerifier.ComputeBatchHash(entries);
 
@@ -103,12 +53,7 @@ public sealed class HashVerifierTests
     [Fact]
     public void ToCanonicalJson_SortsKeysAlphabetically()
     {
-        var data = new Dictionary<string, object?>
-        {
-            ["Zebra"] = "last",
-            ["Apple"] = "first",
-            ["Mango"] = "middle",
-        };
+        var data = Dataset_ToCanonicalJson_SortsKeysAlphabetically_1();
 
         var json = HashVerifier.ToCanonicalJson(data);
 
@@ -143,7 +88,7 @@ public sealed class HashVerifierTests
     {
         var result = HashVerifier.VerifyHash("abc123", "ABC123");
 
-        Assert.IsType<BoolSyncOk>(result);
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
     }
 
     [Fact]
@@ -151,8 +96,7 @@ public sealed class HashVerifierTests
     {
         var result = HashVerifier.VerifyHash("abc123", "xyz789");
 
-        Assert.IsType<BoolSyncError>(result);
-        var failure = (BoolSyncError)result;
+        var failure = Assert.IsType<BoolSyncError>(result);
         Assert.IsType<SyncErrorHashMismatch>(failure.Value);
     }
 
@@ -185,11 +129,7 @@ public sealed class HashVerifierTests
     public void ComputeDatabaseHash_SameTables_SameHash()
     {
         var tables = new[] { "Person", "Order" };
-        var rows = new Dictionary<string, List<Dictionary<string, object?>>>
-        {
-            ["Order"] = [new() { ["Id"] = "1", ["Total"] = 100 }],
-            ["Person"] = [new() { ["Id"] = "1", ["Name"] = "Alice" }],
-        };
+        var rows = Dataset_ComputeDatabaseHash_SameTables_SameHash_1();
 
         var hash1 = HashVerifier.ComputeDatabaseHash(tables, t => rows[t]);
         var hash2 = HashVerifier.ComputeDatabaseHash(tables, t => rows[t]);
@@ -201,11 +141,7 @@ public sealed class HashVerifierTests
     public void ComputeDatabaseHash_TablesProcessedAlphabetically()
     {
         // Even if passed in different order, same hash due to alphabetical sorting
-        var rows = new Dictionary<string, List<Dictionary<string, object?>>>
-        {
-            ["Zebra"] = [new() { ["Id"] = "z1" }],
-            ["Apple"] = [new() { ["Id"] = "a1" }],
-        };
+        var rows = Dataset_ComputeDatabaseHash_TablesProcessedAlphabetically_1();
 
         var hash1 = HashVerifier.ComputeDatabaseHash(["Zebra", "Apple"], t => rows[t]);
         var hash2 = HashVerifier.ComputeDatabaseHash(["Apple", "Zebra"], t => rows[t]);

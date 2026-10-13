@@ -1,7 +1,7 @@
 using System.Collections.Frozen;
 using Nimblesite.DataProvider.SQLite;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 #pragma warning disable CA1307 // Specify StringComparison for clarity
 
@@ -10,41 +10,10 @@ namespace Nimblesite.DataProvider.Tests;
 /// <summary>
 /// Tests demonstrating custom code generation with completely different output styles
 /// </summary>
-public class CustomCodeGenerationTests
+public partial class CustomCodeGenerationTests
 {
     private static readonly List<DatabaseColumn> TestColumns =
-    [
-        new DatabaseColumn
-        {
-            Name = "Id",
-            CSharpType = "int",
-            SqlType = "INTEGER",
-            IsNullable = false,
-            IsPrimaryKey = true,
-            IsIdentity = true,
-            IsComputed = false,
-        },
-        new DatabaseColumn
-        {
-            Name = "Name",
-            CSharpType = "string",
-            SqlType = "TEXT",
-            IsNullable = false,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-        },
-        new DatabaseColumn
-        {
-            Name = "Email",
-            CSharpType = "string?",
-            SqlType = "TEXT",
-            IsNullable = true,
-            IsPrimaryKey = false,
-            IsIdentity = false,
-            IsComputed = false,
-        },
-    ];
+        CodeGenerationColumnSets.RepositoryTestColumns;
 
     private static readonly SelectStatement TestStatement = new()
     {
@@ -55,13 +24,7 @@ public class CustomCodeGenerationTests
         string connectionString,
         string sql,
         IEnumerable<ParameterInfo> parameters
-    ) =>
-        Task.FromResult<Result<IReadOnlyList<DatabaseColumn>, SqlError>>(
-            new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(TestColumns)
-        );
+    ) => CodeGenerationTestDoubles.ColumnMetadata(columns: TestColumns);
 
     [Fact]
     public void CustomModelGenerator_GeneratesClassesInsteadOfRecords()
@@ -96,97 +59,12 @@ public class {typeName}Data
             TargetNamespace = "CustomGenerated",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomModelGenerator_GeneratesClassesInsteadOfRecords_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            @"using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Outcome;
-using Nimblesite.Sql.Model;
-
-namespace CustomGenerated;
-
-/// <summary>
-/// Extension methods for 'User'.
-/// </summary>
-public static partial class UserExtensions
-{
-    /// <summary>
-    /// Executes 'User.sql' and maps results.
-    /// </summary>
-    /// <param name=""connection"">Open SqliteConnection connection.</param>
-    /// <param name=""userId"">Query parameter.</param>
-    /// <returns>Result of records or SQL error.</returns>
-    public static async Task<Result<ImmutableList<User>, SqlError>> UserAsync(this SqliteConnection connection, object userId)
-    {
-        const string sql = @""SELECT Id, Name, Email FROM Users WHERE Id = @userId"";
-
-        try
-        {
-            var results = ImmutableList.CreateBuilder<User>();
-
-            using (var command = new SqliteCommand(sql, connection))
-            {
-                command.Parameters.AddWithValue(""@userId"", userId ?? (object)DBNull.Value);
-
-                using (var reader = await command.ExecuteReaderAsync().ConfigureAwait(false))
-                {
-                    while (await reader.ReadAsync().ConfigureAwait(false))
-                    {
-                        var item = new User(
-                            reader.IsDBNull(0) ? default(int) : reader.GetFieldValue<int>(0),
-                            reader.IsDBNull(1) ? default(string) : reader.GetFieldValue<string>(1),
-                            reader.IsDBNull(2) ? null : reader.GetFieldValue<string?>(2)
-                        );
-                        results.Add(item);
-                    }
-                }
-            }
-
-            return new Result<ImmutableList<User>, SqlError>.Ok<ImmutableList<User>, SqlError>(results.ToImmutable());
-        }
-        catch (Exception ex)
-        {
-            return new Result<ImmutableList<User>, SqlError>.Error<ImmutableList<User>, SqlError>(new SqlError(""Database error"", ex));
-        }
-    }
-}
-
-/// <summary>
-/// Mutable data class for User (Custom Style)
-/// </summary>
-public class UserData
-{
-    public int Id { get; set; }
-    public string Name { get; set; }
-    public string? Email { get; set; }
-
-    public UserData() { }
-    
-    public UserData Clone() => new UserData
-    {
-        Id = this.Id,
-        Name = this.Name,
-        Email = this.Email
-    };
-}";
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -259,76 +137,12 @@ public class {methodName}Query
             TargetNamespace = "FluentGenerated",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomDataAccessGenerator_GeneratesFluentAPI_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            @"using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Outcome;
-using Nimblesite.Sql.Model;
-
-namespace FluentGenerated;
-
-/// <summary>
-/// Fluent query builder for User (Custom Style)
-/// </summary>
-public static class UserQueryBuilder
-{
-    public static UserQuery Create() => new UserQuery();
-}
-
-public class UserQuery
-{
-    private readonly Dictionary<string, object> _parameters = new();
-    
-    public UserQuery WithUserId(integer userId)
-    {
-        _parameters[""userId""] = userId;
-        return this;
-    }
-
-    public async Task<List<UserData>> ExecuteAsync(SqliteConnection connection)
-    {
-        const string sql = @""SELECT Id, Name, Email FROM Users WHERE Id = @userId"";
-        var results = new List<UserData>();
-        
-        using var command = new SqliteCommand(sql, connection);
-        foreach (var param in _parameters)
-            command.Parameters.AddWithValue($""@{param.Key}"", param.Value);
-            
-        using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            results.Add(new UserData
-            {
-                Id = reader.IsDBNull(0) ? default(int) : (int)reader.GetValue(0),
-                Name = reader.IsDBNull(1) ? default(string) : (string)reader.GetValue(1),
-                Email = reader.IsDBNull(2) ? null : (string?)reader.GetValue(2)
-            });
-        }
-        
-        return results;
-    }
-}
-
-// Model for User would be here";
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -341,30 +155,11 @@ public class UserQuery
             string dataAccessCode
         )
         {
-            var code =
-                $@"// <auto-generated />
-#nullable enable
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.Sqlite;
-
-namespace {namespaceName}.Controllers;
-
-[ApiController]
-[Route(""api/[controller]"")]
-public class DataController : ControllerBase
-{{
-    private readonly string _connectionString;
-    
-    public DataController(IConfiguration config)
-    {{
-        _connectionString = config.GetConnectionString(""Default"") ?? throw new InvalidOperationException();
-    }}
-    
-{dataAccessCode}
-}}
-
-// Data Transfer Objects
-{modelCode}";
+            var code = SqlData_CustomSourceFileGenerator_GeneratesModernMinimalAPI_1(
+                namespaceName: namespaceName,
+                dataAccessCode: dataAccessCode,
+                modelCode: modelCode
+            );
             return new StringOk(code);
         }
 
@@ -430,76 +225,12 @@ public record Create{typeName}Request(
             TargetNamespace = "MyAPI",
         };
 
-        var result = SqliteCodeGenerator.GenerateCodeWithMetadata(
-            "User",
-            "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
-            TestStatement,
-            "test.db",
-            TestColumns,
-            false,
-            null,
-            config
+        GenerateMetadataAndAssertExpectedCode(
+            input0: TestStatement,
+            input1: TestColumns,
+            input2: config,
+            input3: Data_CustomSourceFileGenerator_GeneratesModernMinimalAPI_1
         );
-
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
-
-        var expectedCode =
-            @"// <auto-generated />
-#nullable enable
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.Sqlite;
-
-namespace MyAPI.Controllers;
-
-[ApiController]
-[Route(""api/[controller]"")]
-public class DataController : ControllerBase
-{
-    private readonly string _connectionString;
-    
-    public DataController(IConfiguration config)
-    {
-        _connectionString = config.GetConnectionString(""Default"") ?? throw new InvalidOperationException();
-    }
-    
-    [HttpGet(""user"")]
-    public async Task<ActionResult<List<UserDto>>> GetUser([FromQuery] integer userId)
-    {
-        const string sql = @""SELECT Id, Name, Email FROM Users WHERE Id = @userId"";
-        var results = new List<UserDto>();
-        
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-        
-        using var command = new SqliteCommand(sql, connection);
-        command.Parameters.AddWithValue(""@userId"", userId);
-        
-        using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            results.Add(new UserDto(
-                reader.IsDBNull(0) ? default(int) : (int)reader.GetValue(0),
-                reader.IsDBNull(1) ? default(string) : (string)reader.GetValue(1),
-                reader.IsDBNull(2) ? default(string?) : (string?)reader.GetValue(2)
-            ));
-        }
-        
-        return Ok(results);
-    }
-}
-
-// Data Transfer Objects
-public record UserDto(
-    int Id,
-    string Name,
-    string? Email);
-
-public record CreateUserRequest(
-    string Name,
-    string? Email);";
-
-        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
     [Fact]
@@ -511,107 +242,37 @@ public record CreateUserRequest(
 
         var config = new TableConfig { GenerateInsert = true, GenerateUpdate = true };
 
-        var result = customTableGenerator.GenerateTableOperations(table, config);
+        var generatedCode = Ok(read: () =>
+            customTableGenerator.GenerateTableOperations(table, config)
+        ).Value;
 
-        Assert.True(result is StringOk);
-        var generatedCode = (result as StringOk)!.Value;
+        var expectedCode = Data_CustomTableOperationGenerator_GeneratesRepositoryPattern_1;
 
-        var expectedCode =
-            @"using Microsoft.Data.Sqlite;
-
-namespace Generated.Repositories;
-
-public interface IUsersRepository
-{
-    Task<UserEntity> CreateAsync(UserEntity entity);
-    Task<UserEntity> UpdateAsync(UserEntity entity);
-    Task<UserEntity?> GetByIdAsync(int id);
-    Task<List<UserEntity>> GetAllAsync();
-}
-
-public class UsersRepository : IUsersRepository
-{
-    private readonly string _connectionString;
-    
-    public UsersRepository(string connectionString)
-    {
-        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
 
-    public async Task<UserEntity> CreateAsync(UserEntity entity)
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void GenerateMetadataAndAssertExpectedCode(
+        SelectStatement input0,
+        List<DatabaseColumn> input1,
+        CodeGenerationConfig input2,
+        string input3
+    )
     {
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
+        var generatedCode = Ok(read: () =>
+            SqliteCodeGenerator.GenerateCodeWithMetadata(
+                "User",
+                "SELECT Id, Name, Email FROM Users WHERE Id = @userId",
+                input0,
+                "test.db",
+                input1,
+                false,
+                null,
+                input2
+            )
+        ).Value;
 
-        var sql = ""INSERT INTO Users (Name, Email) VALUES (@Name, @Email)"";
-        using var command = new SqliteCommand(sql, connection);
-        command.Parameters.AddWithValue(""@Name"", entity.Name);
-        command.Parameters.AddWithValue(""@Email"", entity.Email);
-
-        await command.ExecuteNonQueryAsync();
-        return entity;
-    }
-    public async Task<UserEntity> UpdateAsync(UserEntity entity)
-    {
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-        
-        var sql = ""UPDATE Users SET Name = @Name, Email = @Email WHERE Id = @Id"";
-        using var command = new SqliteCommand(sql, connection);
-        command.Parameters.AddWithValue(""@Id"", entity.Id);
-        command.Parameters.AddWithValue(""@Name"", entity.Name);
-        command.Parameters.AddWithValue(""@Email"", entity.Email);
-        
-        await command.ExecuteNonQueryAsync();
-        return entity;
-    }
-
-    public async Task<UserEntity?> GetByIdAsync(int id)
-    {
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-        
-        var sql = ""SELECT Id, Name, Email FROM Users WHERE Id = @id"";
-        using var command = new SqliteCommand(sql, connection);
-        command.Parameters.AddWithValue(""@id"", id);
-        
-        using var reader = await command.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        
-        return new UserEntity(
-            reader.IsDBNull(0) ? default(int) : (int)reader.GetValue(0),
-            reader.IsDBNull(1) ? default(string) : (string)reader.GetValue(1),
-            reader.IsDBNull(2) ? null : (string?)reader.GetValue(2)
-        );
-    }
-    
-    public async Task<List<UserEntity>> GetAllAsync()
-    {
-        var results = new List<UserEntity>();
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-        
-        var sql = ""SELECT Id, Name, Email FROM Users"";
-        using var command = new SqliteCommand(sql, connection);
-        
-        using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            results.Add(new UserEntity(
-                reader.IsDBNull(0) ? default(int) : (int)reader.GetValue(0),
-                reader.IsDBNull(1) ? default(string) : (string)reader.GetValue(1),
-                reader.IsDBNull(2) ? null : (string?)reader.GetValue(2)
-            ));
-        }
-        
-        return results;
-    }
-}
-
-public record UserEntity(
-    int Id,
-    string Name,
-    string? Email);";
+        var expectedCode = input3;
 
         Assert.Equal(expectedCode, generatedCode, ignoreLineEndingDifferences: true);
     }
@@ -633,6 +294,18 @@ internal sealed class RepositoryPatternTableOperationGenerator : ITableOperation
         var entityName = $"{table.Name.TrimEnd('s')}Entity";
         var repositoryInterface = $"I{table.Name}Repository";
         var repositoryClass = $"{table.Name}Repository";
+
+        // Implements [CI-TEST-SHARED-SCENARIOS]: one reader projection shared by
+        // the GetById and GetAll templates; the indent keeps the emitted
+        // whitespace byte-identical per call site.
+        static string ReadProjection(IReadOnlyList<DatabaseColumn> columns, string indent) =>
+            string.Join(
+                ",\n",
+                columns.Select(
+                    (c, i) =>
+                        $"{indent}reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"
+                )
+            );
 
         var code =
             $@"using Microsoft.Data.Sqlite;
@@ -672,7 +345,7 @@ public class {repositoryClass} : {repositoryInterface}
         if (!await reader.ReadAsync()) return null;
         
         return new {entityName}(
-{string.Join(",\n", table.Columns.Select((c, i) => $"            reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"))}
+{ReadProjection(table.Columns, "            ")}
         );
     }}
     
@@ -689,7 +362,7 @@ public class {repositoryClass} : {repositoryInterface}
         while (await reader.ReadAsync())
         {{
             results.Add(new {entityName}(
-{string.Join(",\n", table.Columns.Select((c, i) => $"                reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"))}
+{ReadProjection(table.Columns, "                ")}
             ));
         }}
         
@@ -715,18 +388,13 @@ public record {entityName}(
         var columnNames = string.Join(", ", insertableColumns.Select(c => c.Name));
         var parameterNames = string.Join(", ", insertableColumns.Select(c => $"@{c.Name}"));
 
-        return $@"    public async Task<{entityName}> CreateAsync({entityName} entity)
-    {{
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-
-        var sql = ""INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})"";
-        using var command = new SqliteCommand(sql, connection);
-{string.Join("\n", insertableColumns.Select(c => $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"))}
-
-        await command.ExecuteNonQueryAsync();
-        return entity;
-    }}";
+        return GenerateRepositoryMethod(
+            entityName: entityName,
+            methodName: "CreateAsync",
+            sqlExpression: $"\"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\"",
+            bindColumns: insertableColumns,
+            gap: ""
+        );
     }
 
     private static string GenerateRepositoryUpdateMethod(DatabaseTable table, string entityName)
@@ -739,15 +407,39 @@ public record {entityName}(
             primaryKeyColumns.Select(c => $"{c.Name} = @{c.Name}")
         );
 
-        return $@"    public async Task<{entityName}> UpdateAsync({entityName} entity)
+        return GenerateRepositoryMethod(
+            entityName: entityName,
+            methodName: "UpdateAsync",
+            sqlExpression: $"\"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\"",
+            bindColumns: table.Columns,
+            gap: "        "
+        );
+    }
+
+    private static string GenerateRepositoryMethod(
+        string entityName,
+        string methodName,
+        string sqlExpression,
+        IReadOnlyList<DatabaseColumn> bindColumns,
+        string gap
+    )
+    {
+        var bindings = string.Join(
+            "\n",
+            bindColumns.Select(c =>
+                $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"
+            )
+        );
+
+        return $@"    public async Task<{entityName}> {methodName}({entityName} entity)
     {{
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        
-        var sql = ""UPDATE {table.Name} SET {setClause} WHERE {whereClause}"";
+{gap}
+        var sql = {sqlExpression};
         using var command = new SqliteCommand(sql, connection);
-{string.Join("\n", table.Columns.Select(c => $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"))}
-        
+{bindings}
+{gap}
         await command.ExecuteNonQueryAsync();
         return entity;
     }}";
@@ -766,147 +458,58 @@ internal static class StringExtensions
 /// <summary>
 /// Tests for non-query (UPDATE/DELETE/INSERT) SQL statement code generation.
 /// </summary>
-public class NonQueryCodeGenerationTests
+public partial class NonQueryCodeGenerationTests
 {
-    [Fact]
-    public void GenerateNonQueryMethod_UpdateStatement_GeneratesCorrectExtension()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: all four original non-query fact
+    // names are retained as named cases; fragment checks and the no-parameter
+    // guard are preserved in a single shared workflow.
+    [Theory]
+    [MemberData(nameof(GenerateNonQueryMethod_CasesData))]
+    public void GenerateNonQueryMethod_GeneratesCorrectExtension(
+        string caseName,
+        string className,
+        string methodName,
+        string sql,
+        List<ParameterInfo> parameters,
+        string[] expected,
+        bool assertNoAddWithValue
+    )
     {
-        var sql = "UPDATE gk_session SET is_revoked = 1 WHERE id = @jti";
-        var parameters = new List<ParameterInfo> { new("jti", "TEXT") };
+        NamedCase(caseName: caseName);
 
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "RevokeSessionExtensions",
-            "RevokeSession",
-            sql,
-            parameters,
-            "SqliteConnection"
+        var code = SqlFragments(
+            read: () =>
+                DataAccessGenerator.GenerateNonQueryMethod(
+                    className,
+                    methodName,
+                    sql,
+                    parameters,
+                    "SqliteConnection"
+                ),
+            expected: [.. expected]
         );
 
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
-
-        // Verify key parts of generated code
-        Assert.Contains("public static partial class RevokeSessionExtensions", code);
-        Assert.Contains("public static async Task<Result<int, SqlError>> RevokeSessionAsync", code);
-        Assert.Contains("this SqliteConnection connection", code);
-        Assert.Contains("object jti", code);
-        Assert.Contains("ExecuteNonQueryAsync", code);
-        Assert.Contains("UPDATE gk_session SET is_revoked = 1 WHERE id = @jti", code);
+        if (assertNoAddWithValue)
+            Assert.DoesNotContain("AddWithValue", code);
     }
 
-    [Fact]
-    public void GenerateNonQueryMethod_DeleteStatement_GeneratesCorrectExtension()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(GenerateNonQueryMethod_EmptyClassName_ReturnsError_CasesInlineCases))]
+    public void GenerateNonQueryMethod_EmptyClassName_ReturnsError_Cases(
+        string caseValue0,
+        string caseValue1,
+        string caseValue2
+    )
     {
-        var sql = "DELETE FROM sync_log WHERE created_at < @cutoff";
-        var parameters = new List<ParameterInfo> { new("cutoff", "TEXT") };
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "PurgeSyncLogExtensions",
-            "PurgeSyncLog",
-            sql,
-            parameters,
-            "SqliteConnection"
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: DataAccessGenerator.GenerateNonQueryMethod(
+                caseValue0,
+                caseValue1,
+                caseValue2,
+                new List<ParameterInfo>(),
+                "SqliteConnection"
+            )
         );
-
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
-
-        Assert.Contains("PurgeSyncLogAsync", code);
-        Assert.Contains("DELETE FROM sync_log", code);
-        Assert.Contains("@cutoff", code);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_MultipleParameters_GeneratesAllParameters()
-    {
-        var sql = "UPDATE users SET name = @name, email = @email WHERE id = @id";
-        var parameters = new List<ParameterInfo>
-        {
-            new("name", "TEXT"),
-            new("email", "TEXT"),
-            new("id", "INTEGER"),
-        };
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "UpdateUserExtensions",
-            "UpdateUser",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
-
-        Assert.Contains("object name", code);
-        Assert.Contains("object email", code);
-        Assert.Contains("object id", code);
-        Assert.Contains("AddWithValue(\"@name\"", code);
-        Assert.Contains("AddWithValue(\"@email\"", code);
-        Assert.Contains("AddWithValue(\"@id\"", code);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_NoParameters_GeneratesMethodWithoutParams()
-    {
-        var sql = "DELETE FROM temp_data";
-        var parameters = new List<ParameterInfo>();
-
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "ClearTempDataExtensions",
-            "ClearTempData",
-            sql,
-            parameters,
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringOk);
-        var code = (result as StringOk)!.Value;
-
-        // Should have connection param only
-        Assert.Contains("ClearTempDataAsync(this SqliteConnection connection)", code);
-        Assert.DoesNotContain("AddWithValue", code);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_EmptyClassName_ReturnsError()
-    {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "",
-            "Test",
-            "UPDATE x SET y = 1",
-            new List<ParameterInfo>(),
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringError);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_EmptyMethodName_ReturnsError()
-    {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "TestExtensions",
-            "",
-            "UPDATE x SET y = 1",
-            new List<ParameterInfo>(),
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringError);
-    }
-
-    [Fact]
-    public void GenerateNonQueryMethod_EmptySql_ReturnsError()
-    {
-        var result = DataAccessGenerator.GenerateNonQueryMethod(
-            "TestExtensions",
-            "Test",
-            "",
-            new List<ParameterInfo>(),
-            "SqliteConnection"
-        );
-
-        Assert.True(result is StringError);
     }
 }

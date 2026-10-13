@@ -14,10 +14,6 @@ global using BoolSyncOk = Outcome.Result<bool, Nimblesite.Sync.Core.SyncError>.O
     bool,
     Nimblesite.Sync.Core.SyncError
 >;
-global using StringSyncOk = Outcome.Result<string, Nimblesite.Sync.Core.SyncError>.Ok<
-    string,
-    Nimblesite.Sync.Core.SyncError
->;
 global using SyncLogListOk = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
     Nimblesite.Sync.Core.SyncError

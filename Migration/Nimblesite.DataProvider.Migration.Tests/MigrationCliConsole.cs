@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-CLI-COMMANDS]: every in-process CLI invocation shares the
@@ -26,6 +24,13 @@ internal static class MigrationCliConsole
                 )
             )
         );
+
+    internal static string WriteTempSchemaFile(string prefix, string contents)
+    {
+        var schemaPath = Path.Combine(Path.GetTempPath(), $"{prefix}-{Guid.NewGuid():N}.yaml");
+        File.WriteAllText(path: schemaPath, contents: contents);
+        return schemaPath;
+    }
 
     private static string[] Arguments(
         string schemaPath,

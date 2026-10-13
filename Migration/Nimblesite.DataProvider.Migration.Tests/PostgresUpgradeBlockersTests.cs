@@ -1,17 +1,13 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using System.Collections.Immutable;
-using SchemaIntegrityOk = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
+// Implements [MIG-TEST-DIFF-SHARED].
+
 // Implements [MIG-EXISTING-DATABASE-UPGRADE] and [RLS-DIFF].
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixture)
+public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixture fixture)
 {
     [Fact]
     public void AdditiveUpgrade_RelaxesNotNullOnExistingTableAndRerunsCleanly()
@@ -35,11 +31,7 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         Migrate(connection, ForeignKeySchema(hasReferenceColumn: false));
         var desired = ForeignKeySchema(hasReferenceColumn: true);
 
-        Migrate(connection, desired);
-
-        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertForeignKeyConverged(connection, desired);
     }
 
     [Fact]
@@ -49,15 +41,13 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         Migrate(connection, ForeignKeySchema(hasReferenceColumn: false));
         var desired = ForeignKeySchema(hasReferenceColumn: true);
         var addedColumn = Assert.Single(
-            Diff(Inspect(connection), desired).OfType<AddColumnOperation>()
+            SchemaDiffAssertions
+                .Diff(current: Inspect(connection), desired: desired)
+                .OfType<AddColumnOperation>()
         );
         Apply(connection, [addedColumn]);
 
-        Migrate(connection, desired);
-
-        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertForeignKeyConverged(connection, desired);
     }
 
     [Fact]
@@ -66,7 +56,7 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         using var connection = fixture.CreateDatabase("policy_upgrade");
         Migrate(connection, PolicySchema("IS NOT NULL"));
         var desired = PolicySchema("IS NULL");
-        var upgrade = Diff(Inspect(connection), desired);
+        var upgrade = SchemaDiffAssertions.Diff(current: Inspect(connection), desired: desired);
 
         Assert.NotEmpty(upgrade);
         Assert.Contains(VerifyMismatches(connection, desired), m => m.Contains("policy"));
@@ -75,8 +65,7 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         var policy = Inspect(connection).Tables.Single().RowLevelSecurity?.Policies.Single();
         Assert.Contains("IS NULL", policy?.UsingSql);
         Assert.Contains("IS NULL", policy?.WithCheckSql);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertConverged(connection, desired);
     }
 
     [Fact]
@@ -85,7 +74,11 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         using var connection = fixture.CreateDatabase("foreign_key_cleanup");
         Migrate(connection, CleanupSchema(includeObsolete: true));
         var desired = CleanupSchema(includeObsolete: false);
-        var cleanup = Diff(Inspect(connection), desired, destructive: true);
+        var cleanup = SchemaDiffAssertions.Diff(
+            current: Inspect(connection),
+            desired: desired,
+            destructive: true
+        );
 
         var drop = Assert.Single(cleanup.OfType<DropForeignKeyOperation>());
         Assert.Equal("FK_children_obsolete_id", drop.ConstraintName);
@@ -95,77 +88,8 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         Assert.Equal(2, foreignKeys.Count);
         Assert.Contains(foreignKeys, fk => fk.Columns.Single() == "kept_a_id");
         Assert.Contains(foreignKeys, fk => fk.Columns.Single() == "kept_b_id");
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired, destructive: true));
+        AssertConverged(connection, desired, destructive: true);
     }
-
-    private static SchemaDefinition NullableSchema(bool nullable) =>
-        new()
-        {
-            Name = "nullable_upgrade",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns =
-                    [
-                        Id(),
-                        new ColumnDefinition
-                        {
-                            Name = "notes",
-                            Type = PortableTypes.Text,
-                            IsNullable = nullable,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
-
-    private static SchemaDefinition ForeignKeySchema(bool hasReferenceColumn) =>
-        new()
-        {
-            Name = "foreign_key_upgrade",
-            Tables =
-            [
-                Parent("parents"),
-                new TableDefinition
-                {
-                    Name = "children",
-                    Columns = hasReferenceColumn ? [Id(), UuidColumn("parent_id")] : [Id()],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    ForeignKeys = hasReferenceColumn ? [ForeignKey("parent_id", "parents")] : [],
-                },
-            ],
-        };
-
-    private static SchemaDefinition PolicySchema(string predicate) =>
-        new()
-        {
-            Name = "policy_upgrade",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns = [Id(), UuidColumn("owner_id")],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_policy",
-                                UsingSql = $"owner_id {predicate}",
-                                WithCheckSql = $"owner_id {predicate}",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
 
     private static SchemaDefinition CleanupSchema(bool includeObsolete)
     {
@@ -186,73 +110,39 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
                 )
                 .ToArray()
             : kept;
-        return new SchemaDefinition
-        {
-            Name = "foreign_key_cleanup",
-            Tables =
+        return SchemaTestData.Schema(
+            name: "foreign_key_cleanup",
+            tables:
             [
                 Parent("kept_a"),
                 Parent("kept_b"),
                 Parent("obsolete"),
-                new TableDefinition
-                {
-                    Name = "children",
-                    Columns =
+                SchemaTestData.Table(
+                    name: "children",
+                    columns:
                     [
                         Id(),
                         UuidColumn("kept_a_id"),
                         UuidColumn("kept_b_id"),
                         UuidColumn("obsolete_id"),
                     ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    ForeignKeys = foreignKeys,
-                },
-            ],
-        };
+                    primaryKey: new PrimaryKeyDefinition { Columns = ["id"] },
+                    foreignKeys: foreignKeys
+                ),
+            ]
+        );
     }
 
-    private static TableDefinition Parent(string name) =>
-        new()
-        {
-            Name = name,
-            Columns = [Id()],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-        };
-
     private static ColumnDefinition Id() =>
-        new()
-        {
-            Name = "id",
-            Type = PortableTypes.Uuid,
-            IsNullable = false,
-        };
+        SchemaTestData.Column(name: "id", type: PortableTypes.Uuid, isNullable: false);
 
     private static ColumnDefinition UuidColumn(string name) =>
-        new() { Name = name, Type = PortableTypes.Uuid };
-
-    private static ForeignKeyDefinition ForeignKey(string column, string table) =>
-        new()
-        {
-            Columns = [column],
-            ReferencedTable = table,
-            ReferencedColumns = ["id"],
-        };
+        SchemaTestData.Column(name: name, type: PortableTypes.Uuid);
 
     private static SchemaDefinition Inspect(NpgsqlConnection connection) =>
-        Assert
-            .IsType<SchemaResultOk>(
-                PostgresSchemaInspector.Inspect(connection, "public", NullLogger.Instance)
-            )
-            .Value;
-
-    private static IReadOnlyList<SchemaOperation> Diff(
-        SchemaDefinition current,
-        SchemaDefinition desired,
-        bool destructive = false
-    ) =>
-        Assert
-            .IsType<OperationsResultOk>(
-                SchemaDiff.Calculate(current, desired, allowDestructive: destructive)
+        global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: PostgresSchemaInspector.Inspect(connection, "public", NullLogger.Instance)
             )
             .Value;
 
@@ -262,7 +152,11 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
         bool destructive = false
     )
     {
-        var operations = Diff(Inspect(connection), desired, destructive);
+        var operations = SchemaDiffAssertions.Diff(
+            current: Inspect(connection),
+            desired: desired,
+            destructive: destructive
+        );
         Apply(connection, operations, destructive);
         return operations;
     }
@@ -279,8 +173,27 @@ public sealed class PostgresUpgradeBlockersTests(PostgresContainerFixture fixtur
             PostgresDdlGenerator.Generate,
             destructive ? MigrationOptions.Destructive : MigrationOptions.Default
         );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
+        SqliteTestDb.AssertApplyOk(result: result);
+    }
+
+    private static void AssertForeignKeyConverged(
+        NpgsqlConnection connection,
+        SchemaDefinition desired
+    )
+    {
+        Migrate(connection, desired);
+        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
+        AssertConverged(connection, desired);
+    }
+
+    private static void AssertConverged(
+        NpgsqlConnection connection,
+        SchemaDefinition desired,
+        bool destructive = false
+    )
+    {
+        AssertNoDrift(connection, desired);
+        Assert.Empty(Migrate(connection, desired, destructive));
     }
 
     private static ImmutableArray<string> VerifyMismatches(

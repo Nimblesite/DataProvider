@@ -1,5 +1,4 @@
 using SqlParser;
-using SqlParser.Ast;
 using SqlParser.Dialects;
 using PredicateOk = Outcome.Result<
     string,
@@ -20,7 +19,7 @@ namespace Nimblesite.DataProvider.Migration.Postgres;
 /// Temporary views are dropped in the same session and never alter application schema.
 /// Implements [RLS-DIFF].
 /// </summary>
-public static class PostgresPolicyCatalogNormalizer
+public static partial class PostgresPolicyCatalogNormalizer
 {
     /// <summary>
     /// Inspect the live schema with policy predicates in the same view context
@@ -173,10 +172,12 @@ public static class PostgresPolicyCatalogNormalizer
     private static string? ReadViewPredicate(NpgsqlConnection connection, string view)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT definition FROM pg_views
-            WHERE schemaname = pg_my_temp_schema()::regnamespace::text AND viewname = @view
-            """;
+        command.CommandText = global::Nimblesite
+            .DataProvider
+            .Migration
+            .Postgres
+            .PostgresPolicyCatalogNormalizer
+            .SqlSpecification1;
         command.Parameters.AddWithValue("view", view);
         if (command.ExecuteScalar() is not string definition)
         {
@@ -190,21 +191,8 @@ public static class PostgresPolicyCatalogNormalizer
             );
     }
 
-    private static string? ParseSelection(string definition)
-    {
-        try
-        {
-            var statements = new Parser().ParseSql(definition, new PostgreSqlDialect());
-            return
-                statements.Count == 1
-                && statements[0] is Statement.Select select
-                && select.Query.Body is SetExpression.SelectExpression body
-                ? body.Select.Selection?.ToSql()
-                : null;
-        }
-        catch (ParserException)
-        {
-            return null;
-        }
-    }
+    private static string? ParseSelection(string definition) =>
+        SqlSelectionExtractor
+            .ParseSingleSelectSelection(definition, new PostgreSqlDialect())
+            ?.ToSql();
 }

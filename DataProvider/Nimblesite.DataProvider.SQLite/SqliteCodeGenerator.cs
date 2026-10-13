@@ -113,6 +113,29 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
             .ConfigureAwait(false);
     }
 
+    // Implements [DP-SQLITE-SHARED-TABLE-COLUMN].
+    internal static DatabaseColumn ReadTableColumn(global::System.Data.Common.DbDataReader reader)
+    {
+        var columnName = reader.GetString(1); // name column
+        var sqliteType = reader.GetString(2); // type column
+        var notNull = reader.GetInt32(3) == 1; // notnull column
+        var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
+
+        var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(sqliteType, !notNull);
+
+        return new DatabaseColumn
+        {
+            Name = columnName,
+            SqlType = sqliteType,
+            CSharpType = csharpType,
+            IsNullable = !notNull,
+            IsPrimaryKey = isPrimaryKey,
+            IsIdentity =
+                isPrimaryKey && sqliteType.Contains("INTEGER", StringComparison.OrdinalIgnoreCase),
+            IsComputed = false,
+        };
+    }
+
     /// <summary>
     /// Gets table metadata using SQLite's native PRAGMA table_info command
     /// </summary>
@@ -135,32 +158,10 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
 
                 while (reader.Read())
                 {
-                    var columnName = reader.GetString(1); // name column
-                    var sqliteType = reader.GetString(2); // type column
-                    var notNull = reader.GetInt32(3) == 1; // notnull column
-                    var isPrimaryKey = reader.GetInt32(5) > 0; // pk column
-
-                    var csharpType = SqliteTypeMapper.MapSqliteTypeToCSharpType(
-                        sqliteType,
-                        !notNull
-                    );
-
                     columns.Add(
-                        new DatabaseColumn
-                        {
-                            Name = columnName,
-                            SqlType = sqliteType,
-                            CSharpType = csharpType,
-                            IsNullable = !notNull,
-                            IsPrimaryKey = isPrimaryKey,
-                            IsIdentity =
-                                isPrimaryKey
-                                && sqliteType.Contains(
-                                    "INTEGER",
-                                    StringComparison.OrdinalIgnoreCase
-                                ),
-                            IsComputed = false,
-                        }
+                        item: global::Nimblesite.DataProvider.SQLite.SqliteCodeGenerator.ReadTableColumn(
+                            reader: reader
+                        )
                     );
                 }
             }
@@ -266,19 +267,15 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                 }
                 catch (JsonException ex)
                 {
-                    var diag = Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "DataProvider002",
-                            "Configuration parsing failed",
-                            "Failed to parse Nimblesite.DataProvider.Core.json: {0}",
-                            "DataProvider",
-                            DiagnosticSeverity.Error,
-                            true
-                        ),
-                        Location.None,
-                        ex.Message
+                    Report(
+                        context,
+                        category: "DataProvider",
+                        id: "DataProvider002",
+                        title: "Configuration parsing failed",
+                        messageFormat: "Failed to parse Nimblesite.DataProvider.Core.json: {0}",
+                        severity: DiagnosticSeverity.Error,
+                        args: [ex.Message]
                     );
-                    context.ReportDiagnostic(diag);
                     return;
                 }
             }
@@ -286,18 +283,14 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
 
         if (config == null || string.IsNullOrWhiteSpace(config.ConnectionString))
         {
-            var diag = Diagnostic.Create(
-                new DiagnosticDescriptor(
-                    "DataProvider003",
-                    "Configuration missing",
-                    "Nimblesite.DataProvider.Core.json with ConnectionString is required for code generation",
-                    "DataProvider",
-                    DiagnosticSeverity.Error,
-                    true
-                ),
-                Location.None
+            Report(
+                context,
+                category: "DataProvider",
+                id: "DataProvider003",
+                title: "Configuration missing",
+                messageFormat: "Nimblesite.DataProvider.Core.json with ConnectionString is required for code generation",
+                severity: DiagnosticSeverity.Error
             );
-            context.ReportDiagnostic(diag);
             return;
         }
 
@@ -415,18 +408,14 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                         nonQueryResult is Result<string, SqlError>.Error<string, SqlError> nqFailure
                     )
                     {
-                        var nqDiag = Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "DP0003",
-                                "Non-query generation failed",
-                                $"Failed to generate non-query for '{baseName}': {nqFailure.Value.Message}",
-                                "Nimblesite.DataProvider.SQLite",
-                                DiagnosticSeverity.Error,
-                                true
-                            ),
-                            Location.None
+                        Report(
+                            context,
+                            category: "Nimblesite.DataProvider.SQLite",
+                            id: "DP0003",
+                            title: "Non-query generation failed",
+                            messageFormat: $"Failed to generate non-query for '{baseName}': {nqFailure.Value.Message}",
+                            severity: DiagnosticSeverity.Error
                         );
-                        context.ReportDiagnostic(nqDiag);
                     }
                     continue;
                 }
@@ -438,18 +427,13 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                     is Result<SelectStatement, string>.Error<SelectStatement, string> parseFailure
                 )
                 {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "DP0002",
-                                "SQL Parse Error",
-                                $"Failed to parse SQL file '{baseName}': {parseFailure.Value}",
-                                "Nimblesite.DataProvider.SQLite",
-                                DiagnosticSeverity.Error,
-                                true
-                            ),
-                            Location.None
-                        )
+                    Report(
+                        context,
+                        category: "Nimblesite.DataProvider.SQLite",
+                        id: "DP0002",
+                        title: "SQL Parse Error",
+                        messageFormat: $"Failed to parse SQL file '{baseName}': {parseFailure.Value}",
+                        severity: DiagnosticSeverity.Error
                     );
                     continue;
                 }
@@ -488,20 +472,17 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                         ?? SourceText.From(sqlText, Encoding.UTF8);
                     var location = CreateSqlFileLocation(sqlFile, text);
 
-                    var diagCol = Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "DL0002",
-                            "Database metadata error",
-                            "Failed to get column metadata for {0}: {1}",
-                            "DataProvider",
-                            DiagnosticSeverity.Error,
-                            true
-                        ),
-                        location,
+                    Report(
+                        context,
+                        category: "DataProvider",
+                        id: "DL0002",
+                        title: "Database metadata error",
+                        messageFormat: "Failed to get column metadata for {0}: {1}",
+                        severity: DiagnosticSeverity.Error,
+                        location: location,
                         baseName,
                         err.DetailedMessage
                     );
-                    context.ReportDiagnostic(diagCol);
                     continue;
                 }
 
@@ -521,20 +502,15 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                         }
                         catch (JsonException ex)
                         {
-                            var diagGrp = Diagnostic.Create(
-                                new DiagnosticDescriptor(
-                                    "DataProvider004",
-                                    "Grouping parsing failed",
-                                    "Failed to parse {0}.grouping.json: {1}",
-                                    "DataProvider",
-                                    DiagnosticSeverity.Error,
-                                    true
-                                ),
-                                Location.None,
-                                baseName,
-                                ex.Message
+                            Report(
+                                context,
+                                category: "DataProvider",
+                                id: "DataProvider004",
+                                title: "Grouping parsing failed",
+                                messageFormat: "Failed to parse {0}.grouping.json: {1}",
+                                severity: DiagnosticSeverity.Error,
+                                args: [baseName, ex.Message]
                             );
-                            context.ReportDiagnostic(diagGrp);
                         }
                     }
                 }
@@ -564,20 +540,17 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                         ?? SourceText.From(sqlText, Encoding.UTF8);
                     var location = CreateSqlFileLocation(sqlFile, text);
 
-                    var diagGen = Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "DataProvider005",
-                            "Code generation failed",
-                            "Failed to generate code for {0}: {1}",
-                            "DataProvider",
-                            DiagnosticSeverity.Error,
-                            true
-                        ),
-                        location,
+                    Report(
+                        context,
+                        category: "DataProvider",
+                        id: "DataProvider005",
+                        title: "Code generation failed",
+                        messageFormat: "Failed to generate code for {0}: {1}",
+                        severity: DiagnosticSeverity.Error,
+                        location: location,
                         baseName,
                         failure.Value.DetailedMessage
                     );
-                    context.ReportDiagnostic(diagGen);
                 }
             }
             catch (Exception ex)
@@ -588,37 +561,30 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                     ?? SourceText.From(string.Empty, Encoding.UTF8);
                 var location = CreateSqlFileLocation(sqlFile, text);
 
-                var diag = Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "DataProvider006",
-                        "Unexpected error",
-                        "Unexpected error while generating for file '{0}': {1}",
-                        "DataProvider",
-                        DiagnosticSeverity.Error,
-                        true
-                    ),
-                    location,
+                Report(
+                    context,
+                    category: "DataProvider",
+                    id: "DataProvider006",
+                    title: "Unexpected error",
+                    messageFormat: "Unexpected error while generating for file '{0}': {1}",
+                    severity: DiagnosticSeverity.Error,
+                    location: location,
                     sqlFile.Path,
                     ex.Message
                 );
-                context.ReportDiagnostic(diag);
             }
         }
 
         // Generate table operations if configured
-        var debugDiag = Diagnostic.Create(
-            new DiagnosticDescriptor(
-                "DataProvider010",
-                "Debug info",
-                "Processing {0} table configurations",
-                "DataProvider",
-                DiagnosticSeverity.Info,
-                true
-            ),
-            Location.None,
-            config.Tables.Count
+        Report(
+            context,
+            category: "DataProvider",
+            id: "DataProvider010",
+            title: "Debug info",
+            messageFormat: "Processing {0} table configurations",
+            severity: DiagnosticSeverity.Info,
+            args: [config.Tables.Count]
         );
-        context.ReportDiagnostic(debugDiag);
 
         if (config.Tables.Count > 0)
         {
@@ -642,20 +608,15 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                             tableMetadataResult
                             as Result<DatabaseTable, SqlError>.Error<DatabaseTable, SqlError>
                         )!.Value;
-                        var tableDiag = Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "DataProvider007",
-                                "Table metadata error",
-                                "Failed to get metadata for table {0}: {1}",
-                                "DataProvider",
-                                DiagnosticSeverity.Warning,
-                                true
-                            ),
-                            Location.None,
-                            tableConfigItem.Name,
-                            err.Message
+                        Report(
+                            context,
+                            category: "DataProvider",
+                            id: "DataProvider007",
+                            title: "Table metadata error",
+                            messageFormat: "Failed to get metadata for table {0}: {1}",
+                            severity: DiagnosticSeverity.Warning,
+                            args: [tableConfigItem.Name, err.Message]
                         );
-                        context.ReportDiagnostic(tableDiag);
                         continue;
                     }
 
@@ -691,42 +652,56 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                         is Result<string, SqlError>.Error<string, SqlError> operationsFailure
                     )
                     {
-                        var opsDiag = Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "DataProvider008",
-                                "Table operations generation failed",
-                                "Failed to generate table operations for {0}: {1}",
-                                "DataProvider",
-                                DiagnosticSeverity.Error,
-                                true
-                            ),
-                            Location.None,
-                            tableConfigItem.Name,
-                            operationsFailure.Value.Message
+                        Report(
+                            context,
+                            category: "DataProvider",
+                            id: "DataProvider008",
+                            title: "Table operations generation failed",
+                            messageFormat: "Failed to generate table operations for {0}: {1}",
+                            severity: DiagnosticSeverity.Error,
+                            args: [tableConfigItem.Name, operationsFailure.Value.Message]
                         );
-                        context.ReportDiagnostic(opsDiag);
                     }
                 }
                 catch (Exception ex)
                 {
-                    var exceptionDiag = Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "DataProvider009",
-                            "Table operations error",
-                            "Error generating table operations for {0}: {1}",
-                            "DataProvider",
-                            DiagnosticSeverity.Error,
-                            true
-                        ),
-                        Location.None,
+                    Report(
+                        context,
+                        category: "DataProvider",
+                        id: "DataProvider009",
+                        title: "Table operations error",
+                        messageFormat: "Error generating table operations for {0}: {1}",
+                        severity: DiagnosticSeverity.Error,
+                        location: Location.None,
                         tableConfigItem.Name,
                         ex.Message
                     );
-                    context.ReportDiagnostic(exceptionDiag);
                 }
             }
         }
     }
+
+    /// <summary>
+    /// Reports a DataProvider diagnostic, collapsing the descriptor construction
+    /// into a single call site shared by every branch in this generator.
+    /// </summary>
+    private static void Report(
+        SourceProductionContext context,
+        string category,
+        string id,
+        string title,
+        string messageFormat,
+        DiagnosticSeverity severity,
+        Location? location = null,
+        params object?[] args
+    ) =>
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                new DiagnosticDescriptor(id, title, messageFormat, category, severity, true),
+                location ?? Location.None,
+                args
+            )
+        );
 
     /// <summary>
     /// Builds a diagnostic <see cref="Location"/> pointing at the start of a .sql additional file.

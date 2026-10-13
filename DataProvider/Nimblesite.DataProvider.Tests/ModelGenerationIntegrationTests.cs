@@ -1,80 +1,50 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
 /// Integration tests for ModelGenerator functionality
 /// </summary>
-public sealed class ModelGenerationIntegrationTests
+public sealed partial class ModelGenerationIntegrationTests
 {
     [Fact]
     public void GenerateRecordType_WithSimpleColumns_GeneratesValidCode()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Email",
-                CSharpType = "string?",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Age",
-                CSharpType = "int?",
-                SqlType = "INTEGER",
-            },
-        };
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GenerateRecordType_WithSimpleColumns_GeneratesValidCode_1,
+            value0: "UserRecord"
+        );
 
-        // Act
-        var result = ModelGenerator.GenerateRecordType("UserRecord", columns);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
-        var code = success.Value;
-
-        Assert.Contains("public record UserRecord", code);
-        Assert.Contains("public int Id { get; init; }", code);
-        Assert.Contains("public string Name { get; init; }", code);
-        Assert.Contains("public string? Email { get; init; }", code);
-        Assert.Contains("public int? Age { get; init; }", code);
-        Assert.Contains("public UserRecord(", code);
-        Assert.Contains("this.Id = Id;", code);
-        Assert.Contains("this.Name = Name;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record UserRecord",
+                "public int Id { get; init; }",
+                "public string Name { get; init; }",
+                "public string? Email { get; init; }",
+                "public int? Age { get; init; }",
+                "public UserRecord(",
+                "this.Id = Id;",
+                "this.Name = Name;",
+            ]
+        );
     }
 
     [Fact]
     public void GenerateRecordType_WithNullTypeName_ReturnsFailure()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-        };
+        var columns = Dataset_GenerateRecordType_WithNullTypeName_ReturnsFailure_1();
 
         // Act
         var result = ModelGenerator.GenerateRecordType(null!, columns);
 
         // Assert
-        Assert.True(result is StringError);
-        var failure = (StringError)result;
+
+        var failure = Expected<StringError>(actual: result);
         Assert.Contains("typeName cannot be null or empty", failure.Value.Message);
     }
 
@@ -85,8 +55,8 @@ public sealed class ModelGenerationIntegrationTests
         var result = ModelGenerator.GenerateRecordType("TestRecord", []);
 
         // Assert
-        Assert.True(result is StringError);
-        var failure = (StringError)result;
+
+        var failure = Expected<StringError>(actual: result);
         Assert.Contains("columns cannot be null or empty", failure.Value.Message);
     }
 
@@ -96,164 +66,84 @@ public sealed class ModelGenerationIntegrationTests
         // Arrange
         var parentColumns = new List<string> { "Id", "Name", "Email" };
         var childColumns = new List<string> { "OrderId", "Amount", "Status" };
-        var allColumns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "Email",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "OrderId",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Amount",
-                CSharpType = "decimal",
-                SqlType = "DECIMAL",
-            },
-            new()
-            {
-                Name = "Status",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-        };
+        var allColumns =
+            Dataset_GenerateGroupedRecordTypes_WithValidInputs_GeneratesParentAndChild_1();
 
         // Act
-        var result = ModelGenerator.GenerateGroupedRecordTypes(
-            "Customer",
-            "Order",
-            parentColumns,
-            childColumns,
-            allColumns
-        );
-
+        // Act
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+        var success = Ok(read: () =>
+            ModelGenerator.GenerateGroupedRecordTypes(
+                "Customer",
+                "Order",
+                parentColumns,
+                childColumns,
+                allColumns
+            )
+        );
         var code = success.Value;
 
         // Check parent record
-        Assert.Contains("public record Customer", code);
-        Assert.Contains("public int Id { get; init; }", code);
-        Assert.Contains("public string Name { get; init; }", code);
-        Assert.Contains("public IReadOnlyList<Order> Orders { get; init; }", code);
-
-        // Check child record
-        Assert.Contains("public record Order", code);
-        Assert.Contains("public int OrderId { get; init; }", code);
-        Assert.Contains("public decimal Amount { get; init; }", code);
-        Assert.Contains("public string Status { get; init; }", code);
-
-        // Check constructors
-        Assert.Contains("public Customer(", code);
-        Assert.Contains("public Order(", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record Customer",
+                "public int Id { get; init; }",
+                "public string Name { get; init; }",
+                "public IReadOnlyList<Order> Orders { get; init; }",
+                "public record Order",
+                "public int OrderId { get; init; }",
+                "public decimal Amount { get; init; }",
+                "public string Status { get; init; }",
+                "public Customer(",
+                "public Order(",
+            ]
+        );
     }
 
     [Fact]
     public void GenerateRawRecordType_WithColumns_GeneratesInternalRecord()
     {
         // Arrange
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "UserId",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "UserName",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "OrderCount",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-        };
+        var columns = Dataset_GenerateRawRecordType_WithColumns_GeneratesInternalRecord_1();
 
         // Act
-        var result = ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns);
-
+        // Act
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
-        var code = success.Value;
-
-        Assert.Contains("internal record UserOrderRaw(", code);
-        Assert.Contains("int UserId,", code);
-        Assert.Contains("string UserName,", code);
-        Assert.Contains("int OrderCount", code); // No comma on last parameter
-        Assert.Contains(");", code);
+        var success = Ok(read: () => ModelGenerator.GenerateRawRecordType("UserOrderRaw", columns));
+        global::Nimblesite.DataProvider.Tests.CodeGenerationExtendedE2ETests.VerifyReusableWorkflow6(
+            input0: success,
+            input1: ContainsAll,
+            value0: "internal record UserOrderRaw(",
+            value1: "int UserId,",
+            value2: "string UserName,",
+            value3: "int OrderCount",
+            value4: ");"
+        );
     }
 
     [Fact]
     public void GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly()
     {
         // Arrange - Testing edge cases with column names
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "user_id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "first_name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "is_active",
-                CSharpType = "bool",
-                SqlType = "BOOLEAN",
-            },
-            new()
-            {
-                Name = "created_at",
-                CSharpType = "DateTime",
-                SqlType = "DATETIME",
-            },
-        };
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GenerateRecordType_WithSpecialCharactersInColumnNames_HandlesCorrectly_1,
+            value0: "UserProfile"
+        );
 
-        // Act
-        var result = ModelGenerator.GenerateRecordType("UserProfile", columns);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
-        var code = success.Value;
-
-        Assert.Contains("public int user_id { get; init; }", code);
-        Assert.Contains("public string first_name { get; init; }", code);
-        Assert.Contains("public bool is_active { get; init; }", code);
-        Assert.Contains("public DateTime created_at { get; init; }", code);
-        Assert.Contains("this.user_id = user_id;", code);
-        Assert.Contains("this.first_name = first_name;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public int user_id { get; init; }",
+                "public string first_name { get; init; }",
+                "public bool is_active { get; init; }",
+                "public DateTime created_at { get; init; }",
+                "this.user_id = user_id;",
+                "this.first_name = first_name;",
+            ]
+        );
     }
 
     [Fact]
@@ -264,30 +154,27 @@ public sealed class ModelGenerationIntegrationTests
         for (int i = 1; i <= 20; i++)
         {
             columns.Add(
-                new DatabaseColumn
-                {
-                    Name = $"Column{i}",
-                    CSharpType = i % 2 == 0 ? "string" : "int",
-                    SqlType = i % 2 == 0 ? "TEXT" : "INTEGER",
-                }
+                Dataset_GenerateRecordType_WithLargeNumberOfColumns_GeneratesCorrectly_1(i: i)
             );
         }
 
         // Act
-        var result = ModelGenerator.GenerateRecordType("LargeRecord", columns);
-
+        // Act
         // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
+        var success = Ok(read: () => ModelGenerator.GenerateRecordType("LargeRecord", columns));
         var code = success.Value;
 
-        Assert.Contains("public record LargeRecord", code);
-        Assert.Contains("public string Column2 { get; init; }", code);
-        Assert.Contains("public int Column19 { get; init; }", code);
-        Assert.Contains("public string Column20 { get; init; }", code);
-
-        // Verify constructor has all parameters
-        Assert.Contains("public LargeRecord(", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public record LargeRecord",
+                "public string Column2 { get; init; }",
+                "public int Column19 { get; init; }",
+                "public string Column20 { get; init; }",
+                "public LargeRecord(",
+            ]
+        );
         for (int i = 1; i <= 20; i++)
         {
             var expectedType = i % 2 == 0 ? "string" : "int";
@@ -307,121 +194,115 @@ public sealed class ModelGenerationIntegrationTests
     {
         // Arrange
         var validColumns = new List<string> { "Id", "Name" };
-        var allColumns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-        };
+        var allColumns =
+            Dataset_GenerateGroupedRecordTypes_WithNullInputs_ReturnsAppropriateFailures_1();
 
         // Act & Assert - Null parent name
-        var result1 = ModelGenerator.GenerateGroupedRecordTypes(
-            null!,
-            "Child",
-            validColumns,
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                null!,
+                "Child",
+                validColumns,
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result1 is StringError);
 
         // Act & Assert - Null child name
-        var result2 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            null!,
-            validColumns,
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                null!,
+                validColumns,
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result2 is StringError);
 
         // Act & Assert - Empty parent columns
-        var result3 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            [],
-            validColumns,
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                [],
+                validColumns,
+                allColumns
+            )
         );
-        Assert.True(result3 is StringError);
 
         // Act & Assert - Empty child columns
-        var result4 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            validColumns,
-            [],
-            allColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                validColumns,
+                [],
+                allColumns
+            )
         );
-        Assert.True(result4 is StringError);
 
         // Act & Assert - Empty all columns
-        var result5 = ModelGenerator.GenerateGroupedRecordTypes(
-            "Parent",
-            "Child",
-            validColumns,
-            validColumns,
-            []
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ModelGenerator.GenerateGroupedRecordTypes(
+                "Parent",
+                "Child",
+                validColumns,
+                validColumns,
+                []
+            )
         );
-        Assert.True(result5 is StringError);
     }
 
     [Fact]
     public void GeneratedCode_CompileabilityTest_ValidCSharp()
     {
         // Arrange - Generate code and verify it contains proper C# syntax
-        var columns = new List<DatabaseColumn>
-        {
-            new()
-            {
-                Name = "Id",
-                CSharpType = "int",
-                SqlType = "INTEGER",
-            },
-            new()
-            {
-                Name = "Name",
-                CSharpType = "string",
-                SqlType = "TEXT",
-            },
-            new()
-            {
-                Name = "CreatedAt",
-                CSharpType = "DateTime?",
-                SqlType = "DATETIME",
-            },
-        };
-
-        // Act
-        var result = ModelGenerator.GenerateRecordType("TestEntity", columns);
-
-        // Assert
-        Assert.True(result is StringOk);
-        var success = (StringOk)result;
-        var code = success.Value;
+        var code = VerifySharedContinuation3(
+            input0: Dataset_GeneratedCode_CompileabilityTest_ValidCSharp_1,
+            value0: "TestEntity"
+        );
 
         // Verify proper C# syntax elements
-        Assert.Contains("/// <summary>", code);
-        Assert.Contains("/// Result row for 'TestEntity' query.", code);
-        Assert.Contains("/// </summary>", code);
-        Assert.Contains("public record TestEntity", code);
-        Assert.Contains("get; init;", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "/// <summary>",
+                "/// Result row for 'TestEntity' query.",
+                "/// </summary>",
+                "public record TestEntity",
+                "get; init;",
+            ]
+        );
         // Records don't have constructor parameters in doc comments, so remove this assertion
         Assert.DoesNotContain(",,", code); // No double commas
         Assert.DoesNotContain(";;", code); // No double semicolons
-        Assert.Contains("}", code); // Proper closing braces
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "}",
+                "/// <summary>Column 'Id'.</summary>",
+                "/// <summary>Column 'Name'.</summary>",
+                "/// <summary>Column 'CreatedAt'.</summary>",
+            ]
+        );
+    }
 
-        // Verify XML documentation is properly formatted
-        Assert.Contains("/// <summary>Column 'Id'.</summary>", code);
-        Assert.Contains("/// <summary>Column 'Name'.</summary>", code);
-        Assert.Contains("/// <summary>Column 'CreatedAt'.</summary>", code);
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifySharedContinuation3(
+        Func<List<DatabaseColumn>> input0,
+        string value0
+    )
+    { // Arrange
+        var columns = input0();
+
+        // Act
+        // Act
+        // Assert
+        var success = Ok(read: () => ModelGenerator.GenerateRecordType(value0, columns));
+        var code = success.Value;
+
+        return code;
     }
 }

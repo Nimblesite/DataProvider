@@ -2,43 +2,43 @@
   "default_threshold": 90,
   "projects": {
     "DataProvider/Nimblesite.DataProvider.Core": {
-      "threshold": 90,
+      "threshold": 93,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.Sql.Model]*,[Nimblesite.Lql.SQLite]*"
     },
     "DataProvider/Nimblesite.DataProvider.Example": {
-      "threshold": 37,
+      "threshold": 40,
       "include": "[Nimblesite.DataProvider.Core]*,[Nimblesite.DataProvider.Example]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Lql/Nimblesite.Lql.Core": {
-      "threshold": 74,
+      "threshold": 75,
       "include": "[Nimblesite.Lql.Core]*,[Nimblesite.Lql.Postgres]*,[Nimblesite.Lql.SqlServer]*,[Nimblesite.Lql.SQLite]*"
     },
     "Lql/Nimblesite.Lql.TypeProvider.FSharp": {
-      "threshold": 47,
+      "threshold": 49,
       "include": "[Nimblesite.Lql.TypeProvider.FSharp]*,[Nimblesite.Lql.Core]*,[Nimblesite.Lql.SQLite]*,[Nimblesite.Sql.Model]*"
     },
     "Migration/Nimblesite.DataProvider.Migration.Core": {
-      "threshold": 87,
+      "threshold": 89,
       "include": "[Nimblesite.DataProvider.Migration.Core]*,[Nimblesite.DataProvider.Migration.SQLite]*,[Nimblesite.DataProvider.Migration.Postgres]*"
     },
     "Sync/Nimblesite.Sync.Core": {
-      "threshold": 65,
+      "threshold": 88,
       "include": "[Nimblesite.Sync.Core]*"
     },
     "Sync/Nimblesite.Sync.SQLite": {
-      "threshold": 40,
+      "threshold": 46,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Postgres": {
-      "threshold": 26,
+      "threshold": 29,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.SQLite]*"
     },
     "Sync/Nimblesite.Sync.Integration": {
-      "threshold": 10,
+      "threshold": 13,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Sync/Nimblesite.Sync.Http": {
-      "threshold": 36,
+      "threshold": 44,
       "include": "[Nimblesite.Sync.Core]*,[Nimblesite.Sync.SQLite]*,[Nimblesite.Sync.Postgres]*,[Nimblesite.Sync.Http]*"
     },
     "Reporting/Nimblesite.Reporting": {

@@ -1,5 +1,7 @@
-using Microsoft.Data.Sqlite;
-using Xunit;
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
+
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -8,7 +10,7 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests applying sync changes (insert, update, delete) to SQLite database.
 /// NO MOCKS - real file-based SQLite databases only! NO :memory:!
 /// </summary>
-public sealed class ChangeApplierIntegrationTests : IDisposable
+public sealed partial class ChangeApplierIntegrationTests : IDisposable
 {
     private readonly SqliteConnection _db;
     private readonly string _dbPath;
@@ -21,22 +23,13 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public ChangeApplierIntegrationTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"change_applier_{Guid.NewGuid():N}.db");
-        _db = new SqliteConnection($"Data Source={_dbPath}");
-        _db.Open();
-        SyncSchema.CreateSchema(_db);
-        SyncSchema.SetOriginId(_db, _originId);
+        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
 
         // Create test table
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Age INTEGER,
-                Email TEXT
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command => command.CommandText = Data_Shared_1
+        );
     }
 
     #region Insert Operations
@@ -45,108 +38,52 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_CreatesNewRecord()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30,\"Email\":\"alice@example.com\"}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        var result = VerifySharedContinuation1(
+            input0: Fixture_ApplyChange_Insert_CreatesNewRecord_1,
+            input1: _db
         );
+        Assert.True((Ok(actual: result)).Value);
 
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-        Assert.True(((BoolSyncOk)result).Value);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal("Alice", reader.GetString(0));
-        Assert.Equal(30, reader.GetInt64(1));
-        Assert.Equal("alice@example.com", reader.GetString(2));
+        VerifyReusableWorkflow15(
+            configure0: command =>
+                command.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'",
+            input0: _db,
+            value0: "Alice",
+            value2: 30,
+            value4: "alice@example.com"
+        );
     }
 
-    [Fact]
-    public void ApplyChange_Insert_WithNullPayload_ReturnsError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(ApplyChange_Insert_WithNullPayload_ReturnsError_CasesData))]
+    public void ApplyChange_Insert_WithNullPayload_ReturnsError_Cases(
+        string caseName,
+        Func<SyncLogEntry> input0
+    )
     {
-        // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: null,
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
-    }
-
-    [Fact]
-    public void ApplyChange_Insert_WithEmptyPayload_ReturnsError()
-    {
-        // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
+        NamedCase(caseName: caseName);
+        ExerciseCaseMatrix1(input0: input0, input1: _db);
     }
 
     [Fact]
     public void ApplyChange_Insert_DuplicateKey_ReplacesExisting()
     {
         // Arrange - Insert first record
-        var entry1 = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
+        var entry1 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_1();
         ChangeApplierSQLite.ApplyChange(_db, entry1);
 
         // Act - Insert with same PK (should replace)
-        var entry2 = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice Updated\",\"Age\":31}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        var entry2 = Fixture_ApplyChange_Insert_DuplicateKey_ReplacesExisting_2();
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: ChangeApplierSQLite.ApplyChange(_db, entry2)
         );
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry2);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
 
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
+        using var reader = DatabaseCommands.ReadFirstRow(
+            cmd,
+            command => command.CommandText = "SELECT Name, Age FROM Person WHERE Id = 'p1'"
+        );
         Assert.Equal("Alice Updated", reader.GetString(0));
         Assert.Equal(31, reader.GetInt64(1));
     }
@@ -161,54 +98,41 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange - Insert first
         InsertPerson("p1", "Alice", 30);
 
-        var entry = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice Updated\",\"Age\":31,\"Email\":\"alice.new@example.com\"}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        VerifyReusableWorkflow9(
+            input0: Fixture_ApplyChange_Update_ModifiesExistingRecord_1,
+            input1: ApplyChangeAndAssertSuccess
         );
 
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'";
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal("Alice Updated", reader.GetString(0));
-        Assert.Equal(31, reader.GetInt64(1));
-        Assert.Equal("alice.new@example.com", reader.GetString(2));
+        VerifyReusableWorkflow15(
+            configure0: command =>
+                command.CommandText = "SELECT Name, Age, Email FROM Person WHERE Id = 'p1'",
+            input0: _db,
+            value0: "Alice Updated",
+            value2: 31,
+            value4: "alice.new@example.com"
+        );
     }
 
-    [Fact]
-    public void ApplyChange_Update_NonExistingRecord_InsertsAsUpsert()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData11))]
+    public void ApplyChange_Update_NonExistingRecord_InsertsAsUpsert_ScenarioCases(
+        string scenarioName,
+        global::System.Func<global::Nimblesite.Sync.Core.SyncLogEntry> scenario0,
+        System.String scenario1,
+        System.Int64 scenario2
+    )
     {
+        NamedCase(caseName: scenarioName);
+
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Update,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":30}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        VerifyReusableWorkflow12(
+            configure0: command => command.CommandText = scenario1,
+            input0: scenario0,
+            input1: VerifyDatabaseWorkflow1,
+            input2: _db,
+            input3: scenario2
         );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
     }
 
     #endregion
@@ -221,232 +145,102 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange
         InsertPerson("p1", "Alice", 30);
 
-        var entry = new SyncLogEntry(
-            Version: 2,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
+        var entry = Fixture_ApplyChange_Delete_RemovesExistingRecord_1();
 
         // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        VerifyDatabaseWorkflow1(
+            configure0: command =>
+                command.CommandText = "SELECT COUNT(*) FROM Person WHERE Id = 'p1'",
+            input0: entry,
+            input1: _db,
+            value0: 0L
+        );
     }
 
-    [Fact]
-    public void ApplyChange_Delete_NonExistingRecord_StillSucceeds()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData12))]
+    public void ApplyChange_Delete_NonExistingRecord_StillSucceeds_ScenarioCases(
+        string scenarioName,
+        global::System.Func<global::Nimblesite.Sync.Core.SyncLogEntry> scenario0
+    )
     {
+        NamedCase(caseName: scenarioName);
+
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"nonexistent\"}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-    }
-
-    [Fact]
-    public void ApplyChange_Delete_InvalidPkValue_ReturnsError()
-    {
-        // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{}",
-            Operation: SyncOperation.Delete,
-            Payload: null,
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncError);
+        VerifyReusableWorkflow9(input0: scenario0, input1: ApplyChangeAndAssertSuccess);
     }
 
     #endregion
 
     #region JSON Type Handling
 
-    [Fact]
-    public void ApplyChange_Insert_HandlesStringValues()
-    {
-        // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Email\":\"alice@example.com\"}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-    }
-
-    [Fact]
-    public void ApplyChange_Insert_HandlesIntegerValues()
-    {
-        // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Age\":25}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
-        );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Age FROM Person WHERE Id = 'p1'";
-        Assert.Equal(25L, cmd.ExecuteScalar());
-    }
 
     [Fact]
     public void ApplyChange_Insert_HandlesNullValues()
     {
         // Arrange
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: "{\"Id\":\"p1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"p1\",\"Name\":\"Alice\",\"Email\":null}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        VerifyReusableWorkflow9(
+            input0: Fixture_ApplyChange_Insert_HandlesNullValues_1,
+            input1: ApplyChangeAndAssertSuccess
         );
 
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Email FROM Person WHERE Id = 'p1'";
-        Assert.True(cmd.ExecuteScalar() is DBNull);
+        Assert.True(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command =>
+                    command.CommandText = "SELECT Email FROM Person WHERE Id = 'p1'"
+            ) is DBNull
+        );
     }
 
-    [Fact]
-    public void ApplyChange_Insert_HandlesBooleanValues()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentCommentScenarioData3))]
+    public void ApplyChange_Insert_HandlesBooleanValues_CommentScenarioCases(
+        string scenarioName,
+        global::System.Func<global::Nimblesite.Sync.Core.SyncLogEntry> scenario1,
+        System.Int64 scenario3
+    )
     {
-        // Arrange - Create table with boolean-like column
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)";
-        createCmd.ExecuteNonQuery();
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Settings",
-            PkValue: "{\"Id\":\"s1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"s1\",\"Enabled\":true}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        NamedCase(caseName: scenarioName); // Arrange - Create table with boolean-like column
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)"
         );
 
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
-    }
-
-    [Fact]
-    public void ApplyChange_Insert_HandlesFalseBooleanValues()
-    {
-        // Arrange
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Settings (Id TEXT PRIMARY KEY, Enabled INTEGER)";
-        createCmd.ExecuteNonQuery();
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Settings",
-            PkValue: "{\"Id\":\"s1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"s1\",\"Enabled\":false}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        VerifyReusableWorkflow12(
+            configure0: command =>
+                command.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'",
+            input0: scenario1,
+            input1: VerifyDatabaseWorkflow1,
+            input2: _db,
+            input3: scenario3
         );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Enabled FROM Settings WHERE Id = 's1'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
     }
 
     [Fact]
     public void ApplyChange_Insert_HandlesDoubleValues()
     {
         // Arrange
-        using var createCmd = _db.CreateCommand();
-        createCmd.CommandText = "CREATE TABLE Product (Id TEXT PRIMARY KEY, Price REAL)";
-        createCmd.ExecuteNonQuery();
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Product",
-            PkValue: "{\"Id\":\"prod1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"prod1\",\"Price\":99.99}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "CREATE TABLE Product (Id TEXT PRIMARY KEY, Price REAL)"
         );
 
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT Price FROM Product WHERE Id = 'prod1'";
-        var price = Convert.ToDouble(
-            cmd.ExecuteScalar(),
-            System.Globalization.CultureInfo.InvariantCulture
+        VerifyReusableWorkflow9(
+            input0: Fixture_ApplyChange_Insert_HandlesDoubleValues_1,
+            input1: ApplyChangeAndAssertSuccess
         );
+
+        var price = global::Tests.Shared.DatabaseCommands.ScalarDouble(
+            connection: _db,
+            configure: command =>
+                command.CommandText = "SELECT Price FROM Product WHERE Id = 'prod1'"
+        );
+
         Assert.Equal(99.99, price, precision: 2);
     }
 
@@ -458,69 +252,29 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
     public void ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse()
     {
         // Arrange - Create FK relationship
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-            CREATE TABLE Employee (
-                Id TEXT PRIMARY KEY,
-                Name TEXT,
-                DeptId TEXT REFERENCES Department(Id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Employee",
-            PkValue: "{\"Id\":\"e1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"e1\",\"Name\":\"John\",\"DeptId\":\"nonexistent\"}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        var result = VerifyReusableWorkflow13(
+            configure0: command =>
+                command.CommandText =
+                    Data_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1,
+            input0: _db,
+            input1: VerifySharedContinuation1,
+            input2: Fixture_ApplyChange_Insert_WithForeignKeyViolation_ReturnsFalse_1
         );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert - FK violation returns false (for deferred retry)
-        Assert.True(result is BoolSyncOk);
-        Assert.False(((BoolSyncOk)result).Value);
+        Assert.False((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void ApplyChange_Insert_WithValidForeignKey_Succeeds()
     {
         // Arrange - Create FK relationship and parent record
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = """
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE Department (Id TEXT PRIMARY KEY, Name TEXT);
-            INSERT INTO Department (Id, Name) VALUES ('d1', 'Engineering');
-            CREATE TABLE Employee (
-                Id TEXT PRIMARY KEY,
-                Name TEXT,
-                DeptId TEXT REFERENCES Department(Id)
-            );
-            """;
-        cmd.ExecuteNonQuery();
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Employee",
-            PkValue: "{\"Id\":\"e1\"}",
-            Operation: SyncOperation.Insert,
-            Payload: "{\"Id\":\"e1\",\"Name\":\"John\",\"DeptId\":\"d1\"}",
-            Origin: "remote-origin",
-            Timestamp: Timestamp
+        var result = VerifyReusableWorkflow13(
+            configure0: command =>
+                command.CommandText = Data_ApplyChange_Insert_WithValidForeignKey_Succeeds_1,
+            input0: _db,
+            input1: VerifySharedContinuation1,
+            input2: Fixture_ApplyChange_Insert_WithValidForeignKey_Succeeds_1
         );
-
-        // Act
-        var result = ChangeApplierSQLite.ApplyChange(_db, entry);
-
-        // Assert
-        Assert.True(result is BoolSyncOk);
-        Assert.True(((BoolSyncOk)result).Value);
+        Assert.True((Ok(actual: result)).Value);
     }
 
     #endregion
@@ -533,33 +287,9 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
         // Arrange
         var entries = new[]
         {
-            new SyncLogEntry(
-                1,
-                "Person",
-                "{\"Id\":\"p1\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-                "origin",
-                Timestamp
-            ),
-            new SyncLogEntry(
-                2,
-                "Person",
-                "{\"Id\":\"p2\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p2\",\"Name\":\"Bob\"}",
-                "origin",
-                Timestamp
-            ),
-            new SyncLogEntry(
-                3,
-                "Person",
-                "{\"Id\":\"p3\"}",
-                SyncOperation.Insert,
-                "{\"Id\":\"p3\",\"Name\":\"Charlie\"}",
-                "origin",
-                Timestamp
-            ),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_1(),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_2(),
+            Fixture_ApplyChange_MultipleBatches_AllSucceed_3(),
         };
 
         // Act
@@ -570,14 +300,18 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
             results,
             r =>
             {
-                Assert.True(r is BoolSyncOk);
-                Assert.True(((BoolSyncOk)r).Value);
+                _ = global::Tests.Shared.ResultAssertions.Expected<BoolSyncOk>(actual: r);
+                Assert.True((Ok(actual: r)).Value);
             }
         );
 
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM Person";
-        Assert.Equal(3L, cmd.ExecuteScalar());
+        Assert.Equal(
+            3L,
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db,
+                configure: command => command.CommandText = "SELECT COUNT(*) FROM Person"
+            )
+        );
     }
 
     #endregion
@@ -586,30 +320,136 @@ public sealed class ChangeApplierIntegrationTests : IDisposable
 
     private void InsertPerson(string id, string name, int age)
     {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES (@id, @name, @age)";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@age", age);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db,
+            configure: cmd =>
+                cmd.CommandText = "INSERT INTO Person (Id, Name, Age) VALUES (@id, @name, @age)",
+            parameters: () => [("@id", id), ("@name", name), ("@age", age)]
+        );
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
         _db.Close();
-        _db.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            { /* File may be locked */
-            }
-        }
+        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
+            input0: _db,
+            input1: _dbPath
+        );
     }
 
     #endregion
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ApplyChangeAndAssertSuccess(global::Nimblesite.Sync.Core.SyncLogEntry input0)
+    {
+        // Act
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: ChangeApplierSQLite.ApplyChange(_db, input0)
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseCaseMatrix1(Func<SyncLogEntry> input0, SqliteConnection input1)
+    { // Arrange
+        var entry = input0();
+
+        // Act
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: ChangeApplierSQLite.ApplyChange(input1, entry)
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyDatabaseWorkflow1(
+        SyncLogEntry input0,
+        SqliteConnection input1,
+        long value0,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        // Act
+        ApplyChangeAndAssertSuccess(input0: input0);
+
+        Assert.Equal(
+            value0,
+            global::Tests.Shared.DatabaseCommands.Scalar(connection: input1, configure: configure0)
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Outcome.Result<bool, SyncError> VerifySharedContinuation1(
+        Func<SyncLogEntry> input0,
+        SqliteConnection input1
+    )
+    { // Arrange
+        var entry = input0();
+
+        // Act
+        var result = ChangeApplierSQLite.ApplyChange(input1, entry);
+
+        // Assert
+        _ = global::Tests.Shared.ResultAssertions.Expected<BoolSyncOk>(actual: result);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow9(
+        Func<SyncLogEntry> input0,
+        Action<SyncLogEntry> input1
+    )
+    {
+        var entry = input0();
+        // Act
+        input1(obj: entry);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow12(
+        Func<SyncLogEntry> input0,
+        Action<SyncLogEntry, SqliteConnection, long, Action<System.Data.Common.DbCommand>> input1,
+        SqliteConnection input2,
+        long input3,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        // Arrange
+        var entry = input0();
+        // Act
+        input1(arg4: configure0, arg1: entry, arg2: input2, arg3: input3);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Outcome.Result<bool, SyncError> VerifyReusableWorkflow13(
+        SqliteConnection input0,
+        Func<Func<SyncLogEntry>, SqliteConnection, Outcome.Result<bool, SyncError>> input1,
+        Func<SyncLogEntry> input2,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    { // Arrange - Create FK relationship
+        DatabaseCommands.Execute(connection: input0, configure: configure0);
+
+        var result = input1(arg1: input2, arg2: input0);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow15(
+        SqliteConnection input0,
+        string value0,
+        int value2,
+        string value4,
+        global::System.Action<global::System.Data.Common.DbCommand> configure0
+    )
+    {
+        using var cmd = input0.CreateCommand();
+        using var reader = DatabaseCommands.ReadFirstRow(cmd, configure0);
+        Assert.Equal(value0, reader.GetString(0));
+        Assert.Equal(value2, reader.GetInt64(1));
+        Assert.Equal(value4, reader.GetString(2));
+    }
 }

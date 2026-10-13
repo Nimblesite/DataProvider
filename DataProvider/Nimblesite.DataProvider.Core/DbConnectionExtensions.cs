@@ -244,7 +244,7 @@ public static class DbConnectionExtensions
     /// <summary>
     /// Create a command with SQL text and optional parameters
     /// </summary>
-    private static IDbCommand CreateCommand(
+    internal static IDbCommand CreateCommand(
         IDbConnection connection,
         string sql,
         IEnumerable<IDataParameter>? parameters

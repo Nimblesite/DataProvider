@@ -38,6 +38,11 @@ function listVsixContents(vsixPath: string): string[] {
   return output.split("\n").map((line) => line.trim());
 }
 
+/** True when any line of the VSIX listing contains the given text. */
+function containsLine(contents: readonly string[], needle: string): boolean {
+  return contents.some((line) => line.includes(needle));
+}
+
 suite("VSIX Packaging", () => {
   let vsixPath: string;
   let contents: string[];
@@ -48,9 +53,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains compiled extension entry point", () => {
-    const hasEntryPoint = contents.some((line) =>
-      line.includes("extension/out/extension.js"),
-    );
+    const hasEntryPoint = containsLine(contents, "extension/out/extension.js");
     assert.strictEqual(
       hasEntryPoint,
       true,
@@ -59,9 +62,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains vscode-languageclient", () => {
-    const hasLangClient = contents.some((line) =>
-      line.includes("node_modules/vscode-languageclient/"),
-    );
+    const hasLangClient = containsLine(contents, "node_modules/vscode-languageclient/");
     assert.strictEqual(
       hasLangClient,
       true,
@@ -71,9 +72,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains vscode-languageserver-protocol", () => {
-    const hasPkg = contents.some((line) =>
-      line.includes("node_modules/vscode-languageserver-protocol/"),
-    );
+    const hasPkg = containsLine(contents, "node_modules/vscode-languageserver-protocol/");
     assert.strictEqual(
       hasPkg,
       true,
@@ -82,9 +81,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains vscode-jsonrpc", () => {
-    const hasPkg = contents.some((line) =>
-      line.includes("node_modules/vscode-jsonrpc/"),
-    );
+    const hasPkg = containsLine(contents, "node_modules/vscode-jsonrpc/");
     assert.strictEqual(
       hasPkg,
       true,
@@ -106,9 +103,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains language-configuration.json", () => {
-    const hasLangConfig = contents.some((line) =>
-      line.includes("extension/language-configuration.json"),
-    );
+    const hasLangConfig = containsLine(contents, "extension/language-configuration.json");
     assert.strictEqual(
       hasLangConfig,
       true,
@@ -117,9 +112,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX contains TextMate grammar", () => {
-    const hasGrammar = contents.some((line) =>
-      line.includes("extension/syntaxes/lql.tmLanguage.json"),
-    );
+    const hasGrammar = containsLine(contents, "extension/syntaxes/lql.tmLanguage.json");
     assert.strictEqual(
       hasGrammar,
       true,
@@ -140,9 +133,7 @@ suite("VSIX Packaging", () => {
   });
 
   test("VSIX does NOT contain LSP binary in bin/", () => {
-    const hasBin = contents.some((line) =>
-      line.includes("extension/bin/lql-lsp"),
-    );
+    const hasBin = containsLine(contents, "extension/bin/lql-lsp");
     assert.strictEqual(
       hasBin,
       false,

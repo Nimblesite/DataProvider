@@ -89,7 +89,11 @@ internal static class RlsCurrentSettingRewriter
         {
             if (source[i] == '\'')
             {
-                CopyStringLiteral(source, sb, ref i);
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: source,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
 
@@ -298,28 +302,6 @@ internal static class RlsCurrentSettingRewriter
     {
         while (i < source.Length && char.IsWhiteSpace(source[i]))
         {
-            i++;
-        }
-    }
-
-    private static void CopyStringLiteral(string source, StringBuilder sb, ref int i)
-    {
-        sb.Append(source[i]);
-        i++;
-        while (i < source.Length)
-        {
-            sb.Append(source[i]);
-            if (source[i] == '\'')
-            {
-                if (i + 1 < source.Length && source[i + 1] == '\'')
-                {
-                    sb.Append(source[i + 1]);
-                    i += 2;
-                    continue;
-                }
-                i++;
-                break;
-            }
             i++;
         }
     }

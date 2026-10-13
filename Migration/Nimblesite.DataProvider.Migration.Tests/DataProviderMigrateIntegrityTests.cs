@@ -1,4 +1,4 @@
-using System.Globalization;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture fixture)
+public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerFixture fixture)
     : IAsyncLifetime
 {
     private NpgsqlConnection _connection = null!;
@@ -46,16 +46,7 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
 
         try
         {
-            var result = RunMigrate(schemaPath: schemaPath);
-
-            Assert.Equal(expected: 1, actual: result.ExitCode);
-            Assert.True(
-                condition: result.Output.Contains(
-                    value: "SCHEMA INTEGRITY CHECK FAILED",
-                    comparisonType: StringComparison.Ordinal
-                ),
-                userMessage: result.Output
-            );
+            var result = VerifySharedChecks5(input0: schemaPath);
             Assert.True(
                 condition: result.Output.Contains(
                     value: "public.agent_configs.name: nullability expected NOT NULL but found NULL",
@@ -82,54 +73,17 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
     [Fact]
     public void Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate()
     {
-        var baseline = Schema
-            .Define(name: "nap")
-            .Table(
-                schema: "public",
-                name: "settings",
-                configure: t =>
-                    t.Column(name: "id", type: PortableTypes.Uuid, configure: c => c.PrimaryKey())
-                        .Column(
-                            name: "tier",
-                            type: PortableTypes.Text,
-                            configure: c => c.NotNull().Default(defaultValue: "'free'")
-                        )
-            )
-            .Build();
+        var baseline =
+            Fixture_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1();
         ApplySchema(schema: baseline);
 
         var schemaPath = WriteTempSchemaFile(
-            contents: """
-            name: nap
-            tables:
-              - name: settings
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tier
-                    type: Text
-                    isNullable: false
-                    defaultValue: "'pro'"
-                primaryKey:
-                  columns:
-                    - id
-            """
+            contents: Data_Migrate_WhenDiffIsCleanButIntegrityFails_DoesNotClaimSchemaUpToDate_1
         );
 
         try
         {
-            var result = RunMigrate(schemaPath: schemaPath);
-
-            Assert.Equal(expected: 1, actual: result.ExitCode);
-            Assert.True(
-                condition: result.Output.Contains(
-                    value: "SCHEMA INTEGRITY CHECK FAILED",
-                    comparisonType: StringComparison.Ordinal
-                ),
-                userMessage: result.Output
-            );
+            var result = VerifySharedChecks5(input0: schemaPath);
             Assert.False(
                 condition: result.Output.Contains(
                     value: "Schema is up to date",
@@ -158,22 +112,16 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
         {
             var first = RunMigrate(schemaPath: schemaPath);
 
-            Assert.Equal(expected: 0, actual: first.ExitCode);
-            Assert.Contains(
-                expectedSubstring: "AddUniqueConstraintOperation",
-                actualString: first.Output,
-                comparisonType: StringComparison.Ordinal
+            VerifyReusableWorkflow15(
+                input0: first,
+                value0: 0,
+                value1: "AddUniqueConstraintOperation"
             );
             AssertUniqueConstraintExists();
 
             var second = RunMigrate(schemaPath: schemaPath);
 
-            Assert.Equal(expected: 0, actual: second.ExitCode);
-            Assert.Contains(
-                expectedSubstring: "Schema is up to date",
-                actualString: second.Output,
-                comparisonType: StringComparison.Ordinal
-            );
+            VerifyReusableWorkflow15(input0: second, value0: 0, value1: "Schema is up to date");
         }
         finally
         {
@@ -208,52 +156,10 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
             )
             .Build();
 
-    private static string DesiredAgentConfigsYaml() =>
-        """
-            name: nap
-            tables:
-              - name: agent_configs
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tenant_id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-            """;
+    private static string DesiredAgentConfigsYaml() => Data_DesiredAgentConfigsYaml_1;
 
     private static string DesiredAgentConfigsWithUniqueYaml() =>
-        """
-            name: nap
-            tables:
-              - name: agent_configs
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: tenant_id
-                    type: Uuid
-                    isNullable: false
-                  - name: name
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-                uniqueConstraints:
-                  - name: uq_agent_configs_tenant_name
-                    columns:
-                      - tenant_id
-                      - name
-            """;
+        Data_DesiredAgentConfigsWithUniqueYaml_1;
 
     private static void ConfigureNameColumn(ColumnBuilder builder, bool nameIsNullable)
     {
@@ -265,22 +171,19 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
 
     private void ApplySchema(SchemaDefinition schema)
     {
-        var current = ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection)).Value;
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(current: current, desired: schema)
-        ).Value;
-        var result = MigrationRunner.Apply(
+        var operations = SqliteTestDb.CalculateChanges(
+            inspect: () => (Ok(actual: PostgresSchemaInspector.Inspect(_connection))).Value,
+            desired: schema,
+            allowDestructive: false,
+            logger: null
+        );
+        var result = PostgresTestDb.TryApply(
             connection: _connection,
             operations: operations,
-            generateDdl: PostgresDdlGenerator.Generate,
-            options: MigrationOptions.Default,
             logger: _logger
         );
 
-        Assert.True(
-            condition: result is MigrationApplyResultOk,
-            userMessage: $"Baseline migration failed: {(result as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
     }
 
     private (int ExitCode, string Output) RunMigrate(string schemaPath) =>
@@ -290,22 +193,15 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
             output: _connectionString
         );
 
-    private static string WriteTempSchemaFile(string contents)
-    {
-        var schemaPath = Path.Combine(
-            Path.GetTempPath(),
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"dataprovider-integrity-{Guid.NewGuid():N}.yaml"
-            )
+    private static string WriteTempSchemaFile(string contents) =>
+        MigrationCliConsole.WriteTempSchemaFile(
+            prefix: "dataprovider-integrity",
+            contents: contents
         );
-        File.WriteAllText(path: schemaPath, contents: contents);
-        return schemaPath;
-    }
 
     private void AssertUniqueConstraintExists()
     {
-        var schema = ((SchemaResultOk)PostgresSchemaInspector.Inspect(_connection)).Value;
+        var schema = (Ok(actual: PostgresSchemaInspector.Inspect(_connection))).Value;
         var table = Assert.Single(schema.Tables, t => t.Name == "agent_configs");
         var unique = Assert.Single(
             table.UniqueConstraints,
@@ -313,5 +209,37 @@ public sealed class DataProviderMigrateIntegrityTests(PostgresContainerFixture f
         );
 
         Assert.Equal(expected: ["tenant_id", "name"], actual: unique.Columns);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private (int ExitCode, string Output) VerifySharedChecks5(string input0)
+    {
+        var result = RunMigrate(schemaPath: input0);
+
+        Assert.Equal(expected: 1, actual: result.ExitCode);
+        Assert.True(
+            condition: result.Output.Contains(
+                value: "SCHEMA INTEGRITY CHECK FAILED",
+                comparisonType: StringComparison.Ordinal
+            ),
+            userMessage: result.Output
+        );
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow15(
+        (int ExitCode, string Output) input0,
+        int value0,
+        string value1
+    )
+    {
+        Assert.Equal(expected: value0, actual: input0.ExitCode);
+        Assert.Contains(
+            expectedSubstring: value1,
+            actualString: input0.Output,
+            comparisonType: StringComparison.Ordinal
+        );
     }
 }

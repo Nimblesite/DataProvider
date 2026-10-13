@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TRIGGER-SQLITE] and [MIG-TRIGGER-DIFF] from
@@ -8,7 +10,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// declares a last-owner guard on TenantMembers: demoting or deleting the
 /// only 'owner' row of a tenant must fail with the declared error message.
 /// </summary>
-public sealed class SqliteDeclarativeTriggerTests
+public sealed partial class SqliteDeclarativeTriggerTests
 {
     private static readonly ILogger Logger = NullLogger.Instance;
     private static readonly string OwnerA = Guid.NewGuid().ToString();
@@ -17,139 +19,76 @@ public sealed class SqliteDeclarativeTriggerTests
     private static readonly string Tenant1 = Guid.NewGuid().ToString();
     private static readonly string Tenant2 = Guid.NewGuid().ToString();
 
-    private const string GuardYaml = """
-        name: tenant_app
-        tables:
-          - name: TenantMembers
-            schema: main
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: TenantId
-                type: Text
-                isNullable: false
-              - name: Role
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-            triggers:
-              - name: assert_not_last_owner
-                timing: Before
-                events: [Update, Delete]
-                forEachRow: true
-                raiseWhen: |
-                  old.Role = 'owner' and not exists(
-                    TenantMembers
-                    |> filter(fn(m) => m.TenantId = old.TenantId and m.Role = 'owner' and m.Id <> old.Id)
-                  )
-                errorMessage: cannot remove the last owner of a tenant
-        """;
+    private const string GuardYaml = Data_Shared_1;
 
-    private const string PlainYaml = """
-        name: tenant_app
-        tables:
-          - name: TenantMembers
-            schema: main
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: TenantId
-                type: Text
-                isNullable: false
-              - name: Role
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-        """;
+    private const string PlainYaml = Data_Shared_2;
 
     [Fact]
     public void Sqlite_TriggerGuard_BlocksDeleteOfLastOwner()
     {
         SqliteTestDb.WithDb(connection =>
         {
-            ApplyGuardSchema(connection);
-            InsertMember(connection, OwnerA, Tenant1, "owner");
-            InsertMember(connection, MemberC, Tenant1, "member");
-
-            var ex = Assert.Throws<SqliteException>(() => DeleteMember(connection, OwnerA));
-
-            Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
+            ArrangeOwnerAndTrigger(
+                connection: connection,
+                action: DeleteMember,
+                actionId: OwnerA,
+                insertedId: MemberC,
+                insertedTenant: Tenant1,
+                expectedRole: "member"
+            );
             Assert.Equal(2, SqliteTestDb.CountRows(connection, "TenantMembers"));
         });
     }
 
-    [Fact]
-    public void Sqlite_TriggerGuard_AllowsDeleteWhenAnotherOwnerExists()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Sqlite_TriggerGuard_AllowsDeleteWhenAnotherOwnerExists_ContextCasesData))]
+    public void Sqlite_TriggerGuard_AllowsDeleteWhenAnotherOwnerExists_ContextCases(
+        string caseName,
+        Action<SqliteConnection, string> input5,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::System.String,
+            global::System.Int32
+        > value4,
+        string value5
+    )
     {
-        SqliteTestDb.WithDb(connection =>
-        {
-            ApplyGuardSchema(connection);
-            InsertMember(connection, OwnerA, Tenant1, "owner");
-            InsertMember(connection, OwnerB, Tenant1, "owner");
-
-            DeleteMember(connection, OwnerA);
-
-            Assert.Equal(1, SqliteTestDb.CountRows(connection, "TenantMembers"));
-        });
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix1(
+            input0: ApplyGuardSchema,
+            input1: InsertMember,
+            input2: OwnerA,
+            input3: Tenant1,
+            input4: OwnerB,
+            input5: input5,
+            value4: value4,
+            value5: value5
+        );
     }
 
-    [Fact]
-    public void Sqlite_TriggerGuard_BlocksDemoteOfLastOwner()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Sqlite_TriggerGuard_BlocksLastOwnerAction_ContextCasesData))]
+    public void Sqlite_TriggerGuard_BlocksLastOwnerAction_ContextCases(
+        string caseName,
+        Action<SqliteConnection, string> action,
+        string insertedId,
+        string insertedTenant,
+        string expectedRole
+    )
     {
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
         SqliteTestDb.WithDb(connection =>
-        {
-            ApplyGuardSchema(connection);
-            InsertMember(connection, OwnerA, Tenant1, "owner");
-            InsertMember(connection, MemberC, Tenant1, "member");
-
-            var ex = Assert.Throws<SqliteException>(() => DemoteMember(connection, OwnerA));
-
-            Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
-        });
-    }
-
-    [Fact]
-    public void Sqlite_TriggerGuard_AllowsDemoteWhenAnotherOwnerExists()
-    {
-        SqliteTestDb.WithDb(connection =>
-        {
-            ApplyGuardSchema(connection);
-            InsertMember(connection, OwnerA, Tenant1, "owner");
-            InsertMember(connection, OwnerB, Tenant1, "owner");
-
-            DemoteMember(connection, OwnerA);
-
-            Assert.Equal(
-                1,
-                SqliteTestDb.Count(
-                    connection,
-                    "SELECT COUNT(*) FROM [TenantMembers] WHERE [Role]='owner'"
-                )
-            );
-        });
-    }
-
-    [Fact]
-    public void Sqlite_TriggerGuard_IsScopedToTenant()
-    {
-        SqliteTestDb.WithDb(connection =>
-        {
-            ApplyGuardSchema(connection);
-            InsertMember(connection, OwnerA, Tenant1, "owner");
-            InsertMember(connection, OwnerB, Tenant2, "owner");
-
-            // OwnerB owns a different tenant, so OwnerA is still the last
-            // owner of Tenant1 and must not be deletable.
-            var ex = Assert.Throws<SqliteException>(() => DeleteMember(connection, OwnerA));
-
-            Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
-        });
+            ArrangeOwnerAndTrigger(
+                connection: connection,
+                action: action,
+                actionId: OwnerA,
+                insertedId: insertedId,
+                insertedTenant: insertedTenant,
+                expectedRole: expectedRole
+            )
+        );
     }
 
     [Fact]
@@ -161,12 +100,13 @@ public sealed class SqliteDeclarativeTriggerTests
 
             var current = SqliteTestDb.Inspect(connection);
             var ops = (
-                (OperationsResultOk)
-                    SchemaDiff.Calculate(
+                Ok(
+                    actual: SchemaDiff.Calculate(
                         current,
                         SchemaYamlSerializer.FromYaml(GuardYaml),
                         logger: Logger
                     )
+                )
             ).Value;
 
             Assert.Empty(ops);
@@ -207,22 +147,25 @@ public sealed class SqliteDeclarativeTriggerTests
         });
     }
 
-    [Fact]
-    public void Sqlite_TriggerGuard_OldReferenceOnInsertEvent_FailsLoudly()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentCommentScenarioData5))]
+    public void Sqlite_TriggerGuard_OldReferenceOnInsertEvent_FailsLoudly_CommentScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2
+    )
     {
-        // Implements [MIG-TRIGGER-GUARD-LQL]: old. does not exist on INSERT.
+        Assert.False(string.IsNullOrEmpty(scenarioName)); // Implements [MIG-TRIGGER-GUARD-LQL]: old. does not exist on INSERT.
         // Without validation SQLite fails at DML time while Postgres silently
         // never fires the guard.
         SqliteTestDb.WithDb(connection =>
         {
-            var result = TryApplyGuardVariant(
-                connection,
-                events: "[Insert]",
-                raiseWhen: "old.Role = 'owner'"
-            );
+            var result = TryApplyGuardVariant(connection, events: scenario0, raiseWhen: scenario1);
 
             var error = Assert.IsType<MigrationApplyResultError>(result);
-            Assert.Contains("fires on Insert", error.Value.Message, StringComparison.Ordinal);
+            Assert.Contains(scenario2, error.Value.Message, StringComparison.Ordinal);
         });
     }
 
@@ -245,24 +188,6 @@ public sealed class SqliteDeclarativeTriggerTests
         });
     }
 
-    [Fact]
-    public void Sqlite_TriggerGuard_ReservedTokenInPredicate_FailsLoudly()
-    {
-        // Implements [MIG-TRIGGER-GUARD-LQL]: __TRG_ is reserved for internal
-        // sentinels; user literals containing it would be silently rewritten.
-        SqliteTestDb.WithDb(connection =>
-        {
-            var result = TryApplyGuardVariant(
-                connection,
-                events: "[Delete]",
-                raiseWhen: "old.Role = '__TRG_OLD_Role__'"
-            );
-
-            var error = Assert.IsType<MigrationApplyResultError>(result);
-            Assert.Contains("reserved token", error.Value.Message, StringComparison.Ordinal);
-        });
-    }
-
     private static MigrationApplyResult TryApplyGuardVariant(
         SqliteConnection connection,
         string events,
@@ -271,34 +196,39 @@ public sealed class SqliteDeclarativeTriggerTests
     )
     {
         var extra = extraTriggerYaml is null ? string.Empty : $"\n        {extraTriggerYaml}";
-        var yaml = $"""
-            name: tenant_app
-            tables:
-              - name: TenantMembers
-                schema: main
-                columns:
-                  - name: Id
-                    type: Text
-                    isNullable: false
-                  - name: TenantId
-                    type: Text
-                    isNullable: false
-                  - name: Role
-                    type: Text
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - Id
-                triggers:
-                  - name: guard_variant
-                    events: {events}
-                    raiseWhen: "{raiseWhen}"{extra}
-            """;
+        var yaml = SqlData_TryApplyGuardVariant_1(
+            events: events,
+            raiseWhen: raiseWhen,
+            extra: extra
+        );
         return SqliteTestDb.TryApplySchema(connection, SchemaYamlSerializer.FromYaml(yaml));
     }
 
     private static void ApplyGuardSchema(SqliteConnection connection) =>
         SqliteTestDb.ApplySchema(connection, SchemaYamlSerializer.FromYaml(GuardYaml));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void ArrangeOwnerAndTrigger(
+        SqliteConnection connection,
+        Action<SqliteConnection, string> action,
+        string actionId,
+        string insertedId,
+        string insertedTenant,
+        string expectedRole
+    )
+    {
+        ApplyGuardSchema(connection: connection);
+        InsertMember(connection: connection, id: OwnerA, tenantId: Tenant1, role: "owner");
+        VerifyReusableWorkflow14(
+            input0: InsertMember,
+            input1: connection,
+            input2: insertedId,
+            input3: insertedTenant,
+            input4: action,
+            input5: actionId,
+            value0: expectedRole
+        );
+    }
 
     private static void InsertMember(
         SqliteConnection connection,
@@ -319,4 +249,50 @@ public sealed class SqliteDeclarativeTriggerTests
             connection,
             $"UPDATE [TenantMembers] SET [Role]='member' WHERE [Id]='{id}'"
         );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow14(
+        Action<SqliteConnection, string, string, string> input0,
+        SqliteConnection input1,
+        string input2,
+        string input3,
+        Action<SqliteConnection, string> input4,
+        string input5,
+        string value0
+    )
+    {
+        input0(arg1: input1, arg2: input2, arg3: input3, arg4: value0);
+
+        var ex = Assert.Throws<SqliteException>(() => input4(arg1: input1, arg2: input5));
+
+        Assert.Contains("last owner", ex.Message, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix1(
+        Action<SqliteConnection> input0,
+        Action<SqliteConnection, string, string, string> input1,
+        string input2,
+        string input3,
+        string input4,
+        Action<SqliteConnection, string> input5,
+        global::System.Func<
+            global::Microsoft.Data.Sqlite.SqliteConnection,
+            global::System.String,
+            global::System.Int32
+        > value4,
+        string value5
+    )
+    {
+        SqliteTestDb.WithDb(connection =>
+        {
+            input0(obj: connection);
+            input1(arg1: connection, arg2: input2, arg3: input3, arg4: "owner");
+            input1(arg1: connection, arg2: input4, arg3: input3, arg4: "owner");
+
+            input5(arg1: connection, arg2: input2);
+
+            Assert.Equal(1, value4(arg1: connection, arg2: value5));
+        });
+    }
 }

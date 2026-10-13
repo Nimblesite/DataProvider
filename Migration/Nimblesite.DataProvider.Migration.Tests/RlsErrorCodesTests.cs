@@ -6,7 +6,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// Smoke tests for RLS error code messages so external systems can rely on
 /// the codes being present and machine-grep'able.
 /// </summary>
-public sealed class RlsErrorCodesTests
+public sealed partial class RlsErrorCodesTests
 {
     [Fact]
     public void RlsMssqlUnsupported_HasCanonicalCode()
@@ -15,28 +15,46 @@ public sealed class RlsErrorCodesTests
         Assert.StartsWith("MIG-E-RLS-MSSQL-UNSUPPORTED", err.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void RlsEmptyPredicate_IncludesPolicyName()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(RlsEmptyPredicate_IncludesPolicyName_ContextCasesData))]
+    public void RlsEmptyPredicate_IncludesPolicyName_ContextCases(
+        string caseName,
+        global::System.Func<
+            global::System.String,
+            global::Nimblesite.DataProvider.Migration.Core.MigrationError
+        > value0,
+        string value2
+    )
     {
-        var err = MigrationError.RlsEmptyPredicate("documents_member");
-        Assert.Contains("MIG-E-RLS-EMPTY-PREDICATE", err.Message, StringComparison.Ordinal);
-        Assert.Contains("documents_member", err.Message, StringComparison.Ordinal);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix3(value0: value0, value2: value2);
     }
 
-    [Fact]
-    public void RlsEmptyCheck_IncludesPolicyName()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(RlsLqlParse_IncludesDetail_ContextCasesData))]
+    public void RlsLqlParse_IncludesDetail_ContextCases(
+        string caseName,
+        global::System.Func<
+            global::System.String,
+            global::System.String,
+            global::Nimblesite.DataProvider.Migration.Core.MigrationError
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
     {
-        var err = MigrationError.RlsEmptyCheck("documents_member");
-        Assert.Contains("MIG-E-RLS-EMPTY-CHECK", err.Message, StringComparison.Ordinal);
-        Assert.Contains("documents_member", err.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void RlsLqlParse_IncludesDetail()
-    {
-        var err = MigrationError.RlsLqlParse("p", "syntax at line 1");
-        Assert.Contains("MIG-E-RLS-LQL-PARSE", err.Message, StringComparison.Ordinal);
-        Assert.Contains("syntax at line 1", err.Message, StringComparison.Ordinal);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix4(
+            value0: value0,
+            value1: value1,
+            value2: value2,
+            value3: value3,
+            value4: value4
+        );
     }
 
     [Fact]
@@ -50,24 +68,49 @@ public sealed class RlsErrorCodesTests
     public void RlsRawSqlUnsupportedOnPlatform_NamesPlatformAndPolicy()
     {
         var err = MigrationError.RlsRawSqlUnsupportedOnPlatform("Sqlite", "members_self");
-        Assert.Contains(
-            "MIG-E-RLS-RAW-SQL-UNSUPPORTED-ON-PLATFORM",
-            err.Message,
-            StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsPredicateTranspilerTests.VerifyCrossClassChecks3(
+            input0: err,
+            value0: "MIG-E-RLS-RAW-SQL-UNSUPPORTED-ON-PLATFORM",
+            value2: "Sqlite"
         );
-        Assert.Contains("Sqlite", err.Message, StringComparison.Ordinal);
         Assert.Contains("members_self", err.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void RlsForceUnsupportedOnPlatform_NamesPlatformAndTable()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix3(
+        global::System.Func<
+            global::System.String,
+            global::Nimblesite.DataProvider.Migration.Core.MigrationError
+        > value0,
+        string value2
+    )
     {
-        var err = MigrationError.RlsForceUnsupportedOnPlatform("Sqlite", "documents");
-        Assert.Contains(
-            "MIG-E-RLS-FORCE-UNSUPPORTED-ON-PLATFORM",
-            err.Message,
-            StringComparison.Ordinal
+        var err = value0(arg: "documents_member");
+        global::Nimblesite.DataProvider.Migration.Tests.RlsPredicateTranspilerTests.VerifyCrossClassChecks3(
+            input0: err,
+            value0: value2,
+            value2: "documents_member"
         );
-        Assert.Contains("documents", err.Message, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix4(
+        global::System.Func<
+            global::System.String,
+            global::System.String,
+            global::Nimblesite.DataProvider.Migration.Core.MigrationError
+        > value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        var err = value0(arg1: value1, arg2: value2);
+        global::Nimblesite.DataProvider.Migration.Tests.RlsPredicateTranspilerTests.VerifyCrossClassChecks3(
+            input0: err,
+            value0: value3,
+            value2: value4
+        );
     }
 }

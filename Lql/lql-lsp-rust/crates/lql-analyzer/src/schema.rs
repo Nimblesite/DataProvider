@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Instant;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 /// Cached database schema — tables, columns, and types.
 /// Thread-safe and designed for concurrent read access.
@@ -128,15 +126,7 @@ impl ColumnInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
-    }
+    use crate::test_support::make_col;
 
     fn make_table(name: &str, schema: &str, cols: Vec<ColumnInfo>) -> TableInfo {
         TableInfo {
@@ -147,42 +137,17 @@ mod tests {
     }
 
     fn sample_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![
-            make_table(
-                "users",
-                "public",
-                vec![
-                    make_col("id", "uuid", false, true),
-                    make_col("name", "text", false, false),
-                    make_col("email", "text", true, false),
-                ],
-            ),
-            make_table(
-                "orders",
-                "public",
-                vec![
-                    make_col("id", "uuid", false, true),
-                    make_col("user_id", "uuid", false, false),
-                    make_col("total", "numeric", true, false),
-                ],
-            ),
-        ])
+        independent_expanded_schema_data_1()
     }
 
     #[test]
     fn test_default_is_empty() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_empty());
-        assert_eq!(cache.table_count(), 0);
-        assert!(cache.table_names().is_empty());
-        assert!(cache.age().is_none());
+        crate::test_support::verify_cache_default_is_empty();
     }
 
     #[test]
     fn test_from_tables() {
-        let cache = sample_schema();
-        assert!(!cache.is_empty());
-        assert_eq!(cache.table_count(), 2);
+        crate::test_support::verify_cache_from_tables(&sample_schema());
     }
 
     #[test]
@@ -197,10 +162,9 @@ mod tests {
     #[test]
     fn test_get_table_case_insensitive() {
         let cache = sample_schema();
-        assert!(cache.get_table("users").is_some());
-        assert!(cache.get_table("Users").is_some());
-        assert!(cache.get_table("USERS").is_some());
-        assert!(cache.get_table("nonexistent").is_none());
+        crate::test_support::verify_case_insensitive(&["users", "Users", "USERS"], |v| {
+            cache.get_table(v).is_some()
+        });
     }
 
     #[test]
@@ -216,36 +180,30 @@ mod tests {
 
     #[test]
     fn test_get_columns_nonexistent_table() {
-        let cache = sample_schema();
-        let cols = cache.get_columns("nonexistent");
-        assert!(cols.is_empty());
+        crate::test_support::verify_cache_columns_empty(&sample_schema());
     }
 
     #[test]
     fn test_age_is_some_after_creation() {
-        let cache = sample_schema();
-        assert!(cache.age().is_some());
+        crate::test_support::verify_cache_age_some(&sample_schema());
     }
 
     #[test]
     fn test_is_stale_default_always_stale() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_stale(std::time::Duration::from_secs(3600)));
+        crate::test_support::verify_staleness(&SchemaCache::default(), 3600, true);
     }
 
     #[test]
     fn test_is_stale_freshly_created() {
-        let cache = sample_schema();
-        assert!(!cache.is_stale(std::time::Duration::from_secs(3600)));
+        crate::test_support::verify_staleness(&sample_schema(), 3600, false);
     }
 
     #[test]
     fn test_table_get_column_case_insensitive() {
         let table = make_table("users", "public", vec![make_col("Id", "uuid", false, true)]);
-        assert!(table.get_column("id").is_some());
-        assert!(table.get_column("ID").is_some());
-        assert!(table.get_column("Id").is_some());
-        assert!(table.get_column("nonexistent").is_none());
+        crate::test_support::verify_case_insensitive(&["id", "ID", "Id"], |v| {
+            table.get_column(v).is_some()
+        });
     }
 
     #[test]
@@ -275,26 +233,34 @@ mod tests {
 
     #[test]
     fn test_type_description_pk_not_null() {
-        let col = make_col("id", "uuid", false, true);
-        assert_eq!(col.type_description(), "uuid (PK) NOT NULL");
+        verify_expanded_test_type_description_pk_not_null(
+            "id",
+            "uuid",
+            false,
+            true,
+            "uuid (PK) NOT NULL",
+        );
     }
 
     #[test]
     fn test_type_description_nullable() {
-        let col = make_col("email", "text", true, false);
-        assert_eq!(col.type_description(), "text");
+        verify_expanded_test_type_description_pk_not_null("email", "text", true, false, "text");
     }
 
     #[test]
     fn test_type_description_not_null_no_pk() {
-        let col = make_col("name", "text", false, false);
-        assert_eq!(col.type_description(), "text NOT NULL");
+        verify_expanded_test_type_description_pk_not_null(
+            "name",
+            "text",
+            false,
+            false,
+            "text NOT NULL",
+        );
     }
 
     #[test]
     fn test_type_description_pk_nullable() {
-        let col = make_col("id", "uuid", true, true);
-        assert_eq!(col.type_description(), "uuid (PK)");
+        verify_expanded_test_type_description_pk_not_null("id", "uuid", true, true, "uuid (PK)");
     }
 
     #[test]
@@ -303,4 +269,17 @@ mod tests {
         let cloned = cache.clone();
         assert_eq!(cloned.table_count(), cache.table_count());
     }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn verify_expanded_test_type_description_pk_not_null(
+        input0: &str,
+        input1: &str,
+        input2: bool,
+        input3: bool,
+        input4: &str,
+    ) {
+        crate::test_support::verify_type_description(input0, input1, input2, input3, input4);
+    }
+
+    include!("schema_expanded_schema_data_0.fixtures.rs");
 }

@@ -7,12 +7,11 @@ namespace Nimblesite.Lql.Postgres;
 /// <summary>
 /// Context for building PostgreSQL queries with proper table aliases and structure
 /// </summary>
-public sealed class PostgreSqlContext : ISqlContext
+public sealed class PostgreSqlContext : SelectContextBase
 {
 #pragma warning disable IDE0052 // Remove unread private members
     private readonly IFunctionMappingProvider _functionMappingProvider;
 #pragma warning restore IDE0052 // Remove unread private members
-    private readonly SelectStatementBuilder _builder = new();
     private readonly HashSet<string> _usedAliases = new(StringComparer.Ordinal);
     private string? _baseTable;
     private string? _baseAlias;
@@ -28,19 +27,14 @@ public sealed class PostgreSqlContext : ISqlContext
     }
 
     /// <summary>
-    /// Gets a value indicating whether this query has joins
-    /// </summary>
-    public bool HasJoins => _builder.Build().HasJoins;
-
-    /// <summary>
     /// Sets the base table for the query
     /// </summary>
     /// <param name="tableName">The base table name</param>
-    public void SetBaseTable(string tableName)
+    public override void SetBaseTable(string tableName)
     {
         _baseTable = tableName;
         _baseAlias = GenerateTableAlias(tableName);
-        _builder.AddTable(tableName, _baseAlias);
+        Builder.AddTable(tableName, _baseAlias);
     }
 
     /// <summary>
@@ -49,7 +43,7 @@ public sealed class PostgreSqlContext : ISqlContext
     /// <param name="joinType">The type of join (INNER JOIN, LEFT JOIN, etc.)</param>
     /// <param name="tableName">The table to join</param>
     /// <param name="condition">The join condition</param>
-    public void AddJoin(string joinType, string tableName, string? condition)
+    public override void AddJoin(string joinType, string tableName, string? condition)
     {
         string alias;
 
@@ -68,10 +62,10 @@ public sealed class PostgreSqlContext : ISqlContext
             alias = GenerateTableAlias(tableName);
         }
 
-        _builder.AddTable(tableName, alias);
+        Builder.AddTable(tableName, alias);
         if (!string.IsNullOrEmpty(condition))
         {
-            _builder.AddJoin(_baseTable ?? "", tableName, condition, joinType);
+            Builder.AddJoin(_baseTable ?? "", tableName, condition, joinType);
         }
     }
 
@@ -105,70 +99,12 @@ public sealed class PostgreSqlContext : ISqlContext
     }
 
     /// <summary>
-    /// Sets the SELECT columns for the query
-    /// </summary>
-    /// <param name="columns">The columns to select</param>
-    /// <param name="distinct">Whether to use DISTINCT</param>
-    public void SetSelectColumns(IEnumerable<ColumnInfo> columns, bool distinct = false) =>
-        _builder.WithSelectColumns(columns, distinct);
-
-    /// <summary>
-    /// Adds a WHERE condition
-    /// </summary>
-    /// <param name="condition">The condition to add</param>
-    public void AddWhereCondition(WhereCondition condition) =>
-        _builder.AddWhereCondition(condition);
-
-    /// <summary>
-    /// Adds GROUP BY columns
-    /// </summary>
-    /// <param name="columns">The columns to group by</param>
-    public void AddGroupBy(IEnumerable<ColumnInfo> columns) => _builder.AddGroupBy(columns);
-
-    /// <summary>
-    /// Adds ORDER BY items
-    /// </summary>
-    /// <param name="orderItems">The order items (column, direction)</param>
-    public void AddOrderBy(IEnumerable<(string Column, string Direction)> orderItems)
-    {
-        foreach (var (column, direction) in orderItems)
-        {
-            _builder.AddOrderBy(column, direction);
-        }
-    }
-
-    /// <summary>
-    /// Adds a HAVING condition
-    /// </summary>
-    /// <param name="condition">The having condition</param>
-    public void AddHaving(string condition) => _builder.WithHaving(condition);
-
-    /// <summary>
-    /// Sets the LIMIT
-    /// </summary>
-    /// <param name="count">The limit count</param>
-    public void SetLimit(string count) => _builder.WithLimit(count);
-
-    /// <summary>
-    /// Sets the OFFSET
-    /// </summary>
-    /// <param name="count">The offset count</param>
-    public void SetOffset(string count) => _builder.WithOffset(count);
-
-    /// <summary>
-    /// Adds a UNION or UNION ALL
-    /// </summary>
-    /// <param name="query">The query to union with</param>
-    /// <param name="isUnionAll">Whether this is UNION ALL</param>
-    public void AddUnion(string query, bool isUnionAll) => _builder.AddUnion(query, isUnionAll);
-
-    /// <summary>
     /// Generates the final SQL query
     /// </summary>
     /// <returns>The SQL query string</returns>
-    public string GenerateSQL()
+    public override string GenerateSQL()
     {
-        var statement = _builder.Build();
+        var statement = Builder.Build();
 
         return GenerateStatementSQL(statement);
     }
@@ -300,24 +236,11 @@ public sealed class PostgreSqlContext : ISqlContext
             // Skip string literals.
             if (c == '\'')
             {
-                sb.Append(c);
-                i++;
-                while (i < sql.Length)
-                {
-                    sb.Append(sql[i]);
-                    if (sql[i] == '\'')
-                    {
-                        if (i + 1 < sql.Length && sql[i + 1] == '\'')
-                        {
-                            sb.Append(sql[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopyStringLiteral(
+                    source: sql,
+                    sb: sb,
+                    i: i
+                );
                 continue;
             }
 
@@ -353,10 +276,10 @@ public sealed class PostgreSqlContext : ISqlContext
             {
                 var start = i;
                 i++;
-                while (i < sql.Length && (char.IsLetterOrDigit(sql[i]) || sql[i] == '_'))
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: sql,
+                    start: i
+                );
                 var ident = sql[start..i];
 
                 // Skip if this identifier is the FROM/JOIN declaration of
@@ -511,14 +434,10 @@ public sealed class PostgreSqlContext : ISqlContext
     /// <param name="condition">The WHERE condition</param>
     /// <returns>The SQL string for the condition</returns>
     private static string GenerateWhereConditionSql(WhereCondition condition) =>
-        condition switch
-        {
-            ComparisonCondition c => $"{GenerateColumnSql(c.Left)} {c.Operator.ToSql()} {c.Right}",
-            LogicalOperator lo => lo.ToSql(),
-            Parenthesis p => p.IsOpening ? "(" : ")",
-            ExpressionCondition e => e.Expression,
-            _ => "/*UNKNOWN_WHERE*/",
-        };
+        StatementBuilderOperations.FormatWhereCondition(
+            condition: condition,
+            formatColumn: GenerateColumnSql
+        );
 
     /// <summary>
     /// Generates SQL for a ColumnInfo. Bare column names get double-quoted
@@ -738,43 +657,13 @@ public sealed class PostgreSqlContext : ISqlContext
         {
             var c = expression[i];
 
-            if (c == '\'')
+            if (expression[i] is '\'' or '"')
             {
-                sb.Append(c);
-                i++;
-                while (i < expression.Length)
-                {
-                    sb.Append(expression[i]);
-                    if (expression[i] == '\'')
-                    {
-                        if (i + 1 < expression.Length && expression[i + 1] == '\'')
-                        {
-                            sb.Append(expression[i + 1]);
-                            i += 2;
-                            continue;
-                        }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-
-            if (c == '"')
-            {
-                sb.Append(c);
-                i++;
-                while (i < expression.Length)
-                {
-                    sb.Append(expression[i]);
-                    if (expression[i] == '"')
-                    {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
+                    source: expression,
+                    start: i,
+                    sql: sb
+                );
                 continue;
             }
 
@@ -782,13 +671,10 @@ public sealed class PostgreSqlContext : ISqlContext
             {
                 var start = i;
                 i++;
-                while (
-                    i < expression.Length
-                    && (char.IsLetterOrDigit(expression[i]) || expression[i] == '_')
-                )
-                {
-                    i++;
-                }
+                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                    source: expression,
+                    start: i
+                );
                 var firstIdent = expression[start..i];
 
                 if (i < expression.Length && expression[i] == '.')
@@ -800,16 +686,10 @@ public sealed class PostgreSqlContext : ISqlContext
                     )
                     {
                         var tailEnd = tailStart + 1;
-                        while (
-                            tailEnd < expression.Length
-                            && (
-                                char.IsLetterOrDigit(expression[tailEnd])
-                                || expression[tailEnd] == '_'
-                            )
-                        )
-                        {
-                            tailEnd++;
-                        }
+                        tailEnd = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
+                            source: expression,
+                            start: tailEnd
+                        );
                         var tailIdent = expression[tailStart..tailEnd];
 
                         // Bug #24: also quote the prefix when it needs
@@ -818,23 +698,10 @@ public sealed class PostgreSqlContext : ISqlContext
                         // table-name qualifier to lower case otherwise
                         // and the lookup against a quoted FROM table
                         // ("MixedTable") fails.
-                        if (NeedsQuoting(firstIdent))
-                        {
-                            sb.Append('"').Append(firstIdent).Append('"');
-                        }
-                        else
-                        {
-                            sb.Append(firstIdent);
-                        }
+                        // Implements [LQL-POSTGRES-SHARED-BARE-QUOTING].
+                        sb.Append(QuoteBareIdentifier(firstIdent));
                         sb.Append('.');
-                        if (NeedsQuoting(tailIdent))
-                        {
-                            sb.Append('"').Append(tailIdent).Append('"');
-                        }
-                        else
-                        {
-                            sb.Append(tailIdent);
-                        }
+                        sb.Append(QuoteBareIdentifier(tailIdent));
                         i = tailEnd;
                         continue;
                     }

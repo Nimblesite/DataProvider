@@ -58,16 +58,7 @@ public static class SchemaYamlSerializer
     {
         foreach (var function in schema.Functions)
         {
-            if (
-                !string.IsNullOrWhiteSpace(function.Body)
-                && !string.IsNullOrWhiteSpace(function.BodyLql)
-            )
-            {
-                throw new InvalidOperationException(
-                    "PostgreSQL function body and bodyLql are mutually exclusive: "
-                        + $"{function.Schema}.{function.Name}"
-                );
-            }
+            FunctionBodyValidation.EnsureMutuallyExclusive(function);
         }
     }
 }

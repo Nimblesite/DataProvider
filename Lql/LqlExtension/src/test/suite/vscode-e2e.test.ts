@@ -50,6 +50,54 @@ function extractHoverText(c: unknown): string {
   return "";
 }
 
+/** Extract the label text from a VS Code completion item. */
+function labelOf(item: vscode.CompletionItem): string {
+  return typeof item.label === "string" ? item.label : item.label.label;
+}
+
+/** Open in-memory LQL content in an editor. */
+async function openLqlContent(content: string): Promise<vscode.TextDocument> {
+  const doc = await vscode.workspace.openTextDocument({ content, language: "lql" });
+  await vscode.window.showTextDocument(doc);
+  return doc;
+}
+
+/** Require the current active editor. */
+function requireActiveEditor(): vscode.TextEditor {
+  const editor = vscode.window.activeTextEditor;
+  if (editor === undefined) {
+    assert.fail("Active editor must exist");
+  }
+  return editor;
+}
+
+/** Error-severity diagnostics for a document. */
+function errorDiagnostics(doc: vscode.TextDocument): readonly vscode.Diagnostic[] {
+  return vscode.languages
+    .getDiagnostics(doc.uri)
+    .filter((diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error);
+}
+
+/** Request completion items from the VS Code completion provider. */
+async function requestCompletions(
+  doc: vscode.TextDocument,
+  pos: vscode.Position,
+  message: string,
+): Promise<vscode.CompletionItem[]> {
+  const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
+    "vscode.executeCompletionItemProvider",
+    doc.uri,
+    pos,
+  );
+  assert.notStrictEqual(completions, undefined, message);
+  return completions.items;
+}
+
+/** Join the contents of a hover into a single searchable string. */
+function hoverText(hovers: vscode.Hover[]): string {
+  return hovers[0].contents.map(extractHoverText).join(" ");
+}
+
 /** Wait for the LQL language server to be ready */
 async function waitForLanguageServer(): Promise<void> {
   // Give the LSP client time to start and connect
@@ -78,11 +126,12 @@ suite("VS Code Extension E2E Tests", function () {
 
   test("Extension should be activated for .lql files", async function () {
     const doc = await openFixture("simple_select.lql");
+    const text = doc.getText();
 
     assert.strictEqual(doc.languageId, "lql", "Language ID must be 'lql'");
-    assert.ok(doc.getText().includes("users"), "Document content must be loaded");
-    assert.ok(doc.getText().includes("|>"), "Document must contain pipe operator");
-    assert.ok(doc.getText().includes("select"), "Document must contain select");
+    assert.ok(text.includes("users"), "Document content must be loaded");
+    assert.ok(text.includes("|>"), "Document must contain pipe operator");
+    assert.ok(text.includes("select"), "Document must contain select");
   });
 
   test("Extension commands should be registered", async function () {
@@ -113,10 +162,7 @@ suite("VS Code Extension E2E Tests", function () {
     assert.strictEqual(doc.languageId, "lql");
 
     // The TextMate grammar should be loaded for .lql files
-    const editor = vscode.window.activeTextEditor;
-    if (editor === undefined) {
-      assert.fail("Active editor must exist");
-    }
+    const editor = requireActiveEditor();
     assert.strictEqual(
       editor.document.uri.fsPath,
       doc.uri.fsPath,
@@ -130,10 +176,7 @@ suite("VS Code Extension E2E Tests", function () {
 
   test("Should provide IntelliSense completions after pipe", async function () {
     const doc = await openFixture("completion_test.lql");
-    const editor = vscode.window.activeTextEditor;
-    if (editor === undefined) {
-      assert.fail("Active editor must exist");
-    }
+    const editor = requireActiveEditor();
 
     // Position cursor after |>
     const pos = new vscode.Position(0, doc.getText().length);
@@ -142,43 +185,21 @@ suite("VS Code Extension E2E Tests", function () {
     await new Promise((r) => setTimeout(r, 1000));
 
     // Trigger completion
-    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
-      "vscode.executeCompletionItemProvider",
-      doc.uri,
-      pos,
-    );
+    const completions = await requestCompletions(doc, pos, "Completions must not be null");
+    assert.ok(completions.length > 0, "Must return completion items");
 
-    assert.notStrictEqual(completions, undefined, "Completions must not be null");
-    assert.ok(completions.items.length > 0, "Must return completion items");
-
-    const labels = completions.items.map((i) => i.label);
-    const labelStrings = labels.map((l) =>
-      typeof l === "string" ? l : l.label,
-    );
+    const labelStrings = completions.map(labelOf);
 
     // Pipeline operations must appear
-    assert.ok(
-      labelStrings.some((l) => l === "select"),
-      "Must suggest 'select' after pipe",
-    );
-    assert.ok(
-      labelStrings.some((l) => l === "filter"),
-      "Must suggest 'filter' after pipe",
-    );
-    assert.ok(
-      labelStrings.some((l) => l === "join"),
-      "Must suggest 'join' after pipe",
-    );
-    assert.ok(
-      labelStrings.some((l) => l === "group_by"),
-      "Must suggest 'group_by' after pipe",
-    );
+    for (const op of ["select", "filter", "join", "group_by"]) {
+      assert.ok(
+        labelStrings.some((l) => l === op),
+        `Must suggest '${op}' after pipe`,
+      );
+    }
 
     // Verify completions have documentation
-    const selectCompletion = completions.items.find((i) => {
-      const label = typeof i.label === "string" ? i.label : i.label.label;
-      return label === "select";
-    });
+    const selectCompletion = completions.find((i) => labelOf(i) === "select");
     if (selectCompletion !== undefined) {
       assert.ok(
         (selectCompletion.detail ?? "") !== "" || selectCompletion.documentation !== undefined,
@@ -189,25 +210,12 @@ suite("VS Code Extension E2E Tests", function () {
 
   test("Should provide function completions inside select", async function () {
     const content = "orders |> select(cou";
-    const doc = await vscode.workspace.openTextDocument({
-      content,
-      language: "lql",
-    });
-    await vscode.window.showTextDocument(doc);
+    const doc = await openLqlContent(content);
 
     await new Promise((r) => setTimeout(r, 1000));
 
     const pos = new vscode.Position(0, content.length);
-    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
-      "vscode.executeCompletionItemProvider",
-      doc.uri,
-      pos,
-    );
-
-    assert.notStrictEqual(completions, undefined, "Must return completions");
-    const labels = completions.items.map((i) =>
-      typeof i.label === "string" ? i.label : i.label.label,
-    );
+    const labels = (await requestCompletions(doc, pos, "Must return completions")).map(labelOf);
 
     assert.ok(
       labels.some((l) => l === "count"),
@@ -235,9 +243,7 @@ suite("VS Code Extension E2E Tests", function () {
     assert.notStrictEqual(hovers, undefined, "Hover result must not be null");
     assert.ok(hovers.length > 0, "Must return at least one hover");
 
-    const hoverContent = hovers[0].contents
-      .map(extractHoverText)
-      .join(" ");
+    const hoverContent = hoverText(hovers);
 
     assert.ok(
       hoverContent.toLowerCase().includes("filter"),
@@ -278,9 +284,7 @@ suite("VS Code Extension E2E Tests", function () {
 
     assert.notStrictEqual(hovers, undefined, "Must have hover result for 'select'");
     assert.ok(hovers.length > 0, "Must have hover for 'select'");
-    const content = hovers[0].contents
-      .map(extractHoverText)
-      .join(" ");
+    const content = hoverText(hovers);
     assert.ok(
       content.toLowerCase().includes("select"),
       "Hover must reference select",
@@ -323,74 +327,39 @@ suite("VS Code Extension E2E Tests", function () {
     );
   });
 
-  test("Should show no parse errors for valid files", async function () {
-    const doc = await openFixture("simple_select.lql");
+  // Implements [LQL-VSCODE-SHARED-DIAGNOSTIC-SCENARIOS].
+  async function assertCleanFixture(fixtureName: string, describe: (errors: readonly vscode.Diagnostic[]) => string): Promise<void> {
+    const doc = await openFixture(fixtureName);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const errors = errorDiagnostics(doc);
+    assert.strictEqual(errors.length, 0, describe(errors));
+  }
 
-    // Wait a bit for diagnostics to settle
-    await new Promise((r) => setTimeout(r, 3000));
+  interface CleanFixtureCase {
+    readonly name: string;
+    readonly fixture: string;
+    readonly describe: (errors: readonly vscode.Diagnostic[]) => string;
+  }
 
-    const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-    const errors = diagnostics.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
-    assert.strictEqual(
-      errors.length,
-      0,
-      `Valid file should have no error diagnostics, got: ${errors.map((e) => e.message).join(", ")}`,
-    );
-  });
+  const cleanFixtureCases: readonly CleanFixtureCase[] = [
+    {
+      name: "Should show no parse errors for valid files",
+      fixture: "simple_select.lql",
+      describe: (errors) => `Valid file should have no error diagnostics, got: ${errors.map((e) => e.message).join(", ")}`,
+    },
+    {
+      name: "Should show no parse errors for complex pipeline",
+      fixture: "complex_pipeline.lql",
+      describe: (errors) => `Complex pipeline should parse cleanly, errors: ${errors.map((e) => e.message).join(", ")}`,
+    },
+    { name: "Should show no parse errors for window functions", fixture: "window_functions.lql", describe: () => "Window functions should parse cleanly" },
+    { name: "Should show no parse errors for case expressions", fixture: "case_expression.lql", describe: () => "Case expressions should parse cleanly" },
+    { name: "Should show no parse errors for exists subqueries", fixture: "subquery_exists.lql", describe: () => "Exists subqueries should parse cleanly" },
+  ];
 
-  test("Should show no parse errors for complex pipeline", async function () {
-    const doc = await openFixture("complex_pipeline.lql");
-
-    await new Promise((r) => setTimeout(r, 3000));
-
-    const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-    const errors = diagnostics.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
-    assert.strictEqual(
-      errors.length,
-      0,
-      `Complex pipeline should parse cleanly, errors: ${errors.map((e) => e.message).join(", ")}`,
-    );
-  });
-
-  test("Should show no parse errors for window functions", async function () {
-    const doc = await openFixture("window_functions.lql");
-
-    await new Promise((r) => setTimeout(r, 3000));
-
-    const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-    const errors = diagnostics.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
-    assert.strictEqual(errors.length, 0, "Window functions should parse cleanly");
-  });
-
-  test("Should show no parse errors for case expressions", async function () {
-    const doc = await openFixture("case_expression.lql");
-
-    await new Promise((r) => setTimeout(r, 3000));
-
-    const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-    const errors = diagnostics.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
-    assert.strictEqual(errors.length, 0, "Case expressions should parse cleanly");
-  });
-
-  test("Should show no parse errors for exists subqueries", async function () {
-    const doc = await openFixture("subquery_exists.lql");
-
-    await new Promise((r) => setTimeout(r, 3000));
-
-    const diagnostics = vscode.languages.getDiagnostics(doc.uri);
-    const errors = diagnostics.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
-    assert.strictEqual(errors.length, 0, "Exists subqueries should parse cleanly");
-  });
+  for (const cleanCase of cleanFixtureCases) {
+    test(cleanCase.name, async function () { await assertCleanFixture(cleanCase.fixture, cleanCase.describe); });
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // DOCUMENT SYMBOLS
@@ -430,11 +399,7 @@ suite("VS Code Extension E2E Tests", function () {
 
   test("Should format LQL documents via command", async function () {
     const content = "  users   |>   select(  users.id  )  ";
-    const doc = await vscode.workspace.openTextDocument({
-      content,
-      language: "lql",
-    });
-    await vscode.window.showTextDocument(doc);
+    const doc = await openLqlContent(content);
 
     await new Promise((r) => setTimeout(r, 1000));
 
@@ -477,19 +442,13 @@ suite("VS Code Extension E2E Tests", function () {
 
   test("Should handle typical edit-save-check workflow", async function () {
     // Create a new LQL document
-    const doc = await vscode.workspace.openTextDocument({
-      content: "users |> select(users.id)",
-      language: "lql",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
+    const doc = await openLqlContent("users |> select(users.id)");
+    const editor = requireActiveEditor();
 
     await new Promise((r) => setTimeout(r, 1000));
 
     // Verify initial state is clean
-    const initialDiags = vscode.languages.getDiagnostics(doc.uri);
-    const initialErrors = initialDiags.filter(
-      (d) => d.severity === vscode.DiagnosticSeverity.Error,
-    );
+    const initialErrors = errorDiagnostics(doc);
     assert.strictEqual(
       initialErrors.length,
       0,
@@ -506,17 +465,9 @@ suite("VS Code Extension E2E Tests", function () {
 
     // The incomplete pipeline should trigger some diagnostics or completions
     const pos = new vscode.Position(0, doc.getText().length);
-    const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
-      "vscode.executeCompletionItemProvider",
-      doc.uri,
-      pos,
-    );
-
-    assert.notStrictEqual(completions, undefined, "Should offer completions after typing |>");
-    if (completions.items.length > 0) {
-      const labels = completions.items.map((i) =>
-        typeof i.label === "string" ? i.label : i.label.label,
-      );
+    const completions = await requestCompletions(doc, pos, "Should offer completions after typing |>");
+    if (completions.length > 0) {
+      const labels = completions.map(labelOf);
       assert.ok(
         labels.some(
           (l) =>
@@ -541,41 +492,23 @@ suite("VS Code Extension E2E Tests", function () {
   // the no-editor / non-LQL-editor branch.
   // ═══════════════════════════════════════════════════════════════
 
-  test("lql.formatDocument command body runs with active LQL editor", async function () {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "users |> select(users.id)",
-      language: "lql",
+  const commandBodies = ["lql.formatDocument", "lql.validateDocument"] as const;
+
+  for (const command of commandBodies) {
+    test(`${command} command body runs with active LQL editor`, async function () {
+      await openLqlContent("users |> select(users.id)");
+      await new Promise((r) => setTimeout(r, 500));
+
+      await vscode.commands.executeCommand(command);
     });
-    await vscode.window.showTextDocument(doc);
-    await new Promise((r) => setTimeout(r, 500));
 
-    await vscode.commands.executeCommand("lql.formatDocument");
-  });
+    test(`${command} command body runs with no active editor`, async function () {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      await new Promise((r) => setTimeout(r, 200));
 
-  test("lql.formatDocument command body runs with no active editor", async function () {
-    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    await new Promise((r) => setTimeout(r, 200));
-
-    await vscode.commands.executeCommand("lql.formatDocument");
-  });
-
-  test("lql.validateDocument command body runs with active LQL editor", async function () {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "users |> select(users.id)",
-      language: "lql",
+      await vscode.commands.executeCommand(command);
     });
-    await vscode.window.showTextDocument(doc);
-    await new Promise((r) => setTimeout(r, 500));
-
-    await vscode.commands.executeCommand("lql.validateDocument");
-  });
-
-  test("lql.validateDocument command body runs with no active editor", async function () {
-    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    await new Promise((r) => setTimeout(r, 200));
-
-    await vscode.commands.executeCommand("lql.validateDocument");
-  });
+  }
 
   test("lql.showCompiledSql command body runs", async function () {
     await vscode.commands.executeCommand("lql.showCompiledSql");

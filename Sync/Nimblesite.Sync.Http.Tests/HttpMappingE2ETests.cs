@@ -1,4 +1,7 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Text.Json;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Sync.Http.Tests;
 
@@ -18,7 +21,9 @@ namespace Nimblesite.Sync.Http.Tests;
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class HttpMappingE2ETests(PostgresContainerFixture fixture)
+    : IAsyncLifetime,
+        IDisposable
 {
     private string _postgresConnectionString = null!;
     private string _sqliteDbPath = null!;
@@ -33,9 +38,9 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             .ConfigureAwait(false);
 
         // Create SQLite database
-        _sqliteDbPath = Path.Combine(Path.GetTempPath(), $"mapping_test_{Guid.NewGuid()}.db");
-        _sqliteConn = new SqliteConnection($"Data Source={_sqliteDbPath}");
-        _sqliteConn.Open();
+        (_sqliteDbPath, _sqliteConn) = global::Tests.Shared.TempSqliteDatabase.Create(
+            "mapping_test"
+        );
 
         // Create Postgres connection
         _postgresConn = new NpgsqlConnection(_postgresConnectionString);
@@ -43,6 +48,12 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     }
 
     public Task DisposeAsync()
+    {
+        Dispose();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
     {
         _sqliteConn.Close();
         _sqliteConn.Dispose();
@@ -54,7 +65,7 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             File.Delete(_sqliteDbPath);
         }
 
-        return Task.CompletedTask;
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -62,21 +73,11 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     /// </summary>
     private void SetupSqliteSource(string originId)
     {
-        SyncSchema.CreateSchema(_sqliteConn);
-        SyncSchema.SetOriginId(_sqliteConn, originId);
-
-        using var cmd = _sqliteConn.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE User (
-                Id TEXT PRIMARY KEY,
-                FullName TEXT NOT NULL,
-                EmailAddress TEXT NOT NULL,
-                PasswordHash TEXT,
-                SecurityStamp TEXT,
-                CreatedAt TEXT NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow1(
+            configure0: command => command.CommandText = Data_SetupSqliteSource_1,
+            input0: _sqliteConn,
+            input1: originId
+        );
 
         TriggerGenerator.CreateTriggers(_sqliteConn, "User", _logger);
     }
@@ -93,66 +94,13 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         Assert.True(originResult is BoolSyncOk, $"Origin ID failed: {originResult}");
 
         using var cmd = _postgresConn.CreateCommand();
-        cmd.CommandText = """
-            DROP TABLE IF EXISTS customer CASCADE;
-            CREATE TABLE customer (
-                customer_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                name_upper TEXT,
-                source TEXT,
-                registered_date TEXT
-            );
-            """;
+        cmd.CommandText = Data_SetupPostgresTarget_1;
         cmd.ExecuteNonQuery();
     }
 
     /// <summary>
     /// Creates mapping config for User -> Customer transformation.
     /// </summary>
-    private static SyncMappingConfig CreateUserToCustomerMapping() =>
-        new(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "user-to-customer",
-                    SourceTable: "User",
-                    TargetTable: "customer",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: new PkMapping("Id", "customer_id"),
-                    ColumnMappings:
-                    [
-                        new ColumnMapping("FullName", "name"),
-                        new ColumnMapping("EmailAddress", "email"),
-                        new ColumnMapping(
-                            Source: "FullName",
-                            Target: "name_upper",
-                            Transform: TransformType.Lql,
-                            Lql: "upper(FullName)"
-                        ),
-                        new ColumnMapping(
-                            Source: null,
-                            Target: "source",
-                            Transform: TransformType.Constant,
-                            Value: "mobile-app"
-                        ),
-                        new ColumnMapping(
-                            Source: "CreatedAt",
-                            Target: "registered_date",
-                            Transform: TransformType.Lql,
-                            Lql: "CreatedAt |> dateFormat('yyyy-MM-dd')"
-                        ),
-                    ],
-                    ExcludedColumns: ["PasswordHash", "SecurityStamp"],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
-
     /// <summary>
     /// Seeds SQLite source + Postgres target with fresh origins and returns the User->Customer mapping.
     /// </summary>
@@ -229,75 +177,78 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     ) => MappingConfig(mappingId, "Source", "target", mappings);
 
     /// <summary>Single-table Push mapping with explicit table names.</summary>
-    private static SyncMappingConfig MappingConfig(
-        string mappingId,
-        string sourceTable,
-        string targetTable,
-        params ColumnMapping[] mappings
-    ) =>
-        new(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: mappingId,
-                    SourceTable: sourceTable,
-                    TargetTable: targetTable,
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings: mappings,
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
-
     /// <summary>Shared LQL transform column mapping.</summary>
     private static ColumnMapping LqlColumn(string target, string lql) =>
         new(Source: null, Target: target, Transform: TransformType.Lql, Lql: lql);
 
-    /// <summary>Shared insert entry on the Source table (pass a different tableName to override).</summary>
-    private static SyncLogEntry SourceEntry(string payload, string tableName = "Source") =>
-        new(
-            Version: 1,
-            TableName: tableName,
-            PkValue: """{"Id":"1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: payload,
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+    /// <summary>Applies a mapping and asserts a single successful entry.</summary>
+    private MappedEntry MapSingle(SyncLogEntry entry, SyncMappingConfig config) =>
+        MapSuccessSingle(entry, config).Entries[0];
+
+    /// <summary>Applies a mapping and asserts a single success with exactly one entry.</summary>
+    private MappingSuccess MapSuccessSingle(SyncLogEntry entry, SyncMappingConfig config)
+    {
+        var success = Assert.IsType<MappingSuccess>(ApplyMapping(entry, config));
+        Assert.Single(success.Entries);
+        return success;
+    }
+
+    /// <summary>Applies a raw payload mapping and asserts a single successful entry.</summary>
+    private MappedEntry MapPayloadSingle(SyncMappingConfig config, string payload) =>
+        MapSingle(SourceEntry(payload), config);
+
+    /// <summary>Applies a payload mapping and verifies the resulting mapped payload.</summary>
+    private void ApplyAndVerifyPayload(
+        SyncMappingConfig config,
+        string payload,
+        Action<JsonElement> verify
+    ) =>
+        global::Tests.Shared.MappingAssertions.Payload(
+            result: ApplyConfiguredPayloadMapping(input0: config, value0: payload),
+            verify: verify
         );
 
+    /// <summary>Asserts that applying the payload is skipped.</summary>
+    private MappingSkipped ApplyExpectSkipped(SyncMappingConfig config, string payload) =>
+        Assert.IsType<MappingSkipped>(
+            ApplyConfiguredPayloadMapping(input0: config, value0: payload)
+        );
+
+    /// <summary>Applies mapped entries to Postgres with suppression, asserting each apply succeeds.</summary>
+    private void ApplyMappedEntriesToPostgres(
+        IEnumerable<MappedEntry> entries,
+        Func<MappedEntry, string, SyncLogEntry> buildTargetEntry
+    )
+    {
+        PostgresSyncSession.EnableSuppression(_postgresConn);
+        foreach (var entry in entries)
+        {
+            var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
+            var targetEntry = buildTargetEntry(entry, mergedPayload);
+            var applyResult = PostgresChangeApplier.ApplyChange(
+                _postgresConn,
+                targetEntry,
+                _logger
+            );
+            Assert.True(applyResult is BoolSyncOk, $"Apply failed: {applyResult}");
+        }
+        PostgresSyncSession.DisableSuppression(_postgresConn);
+    }
+
+    /// <summary>Shared insert entry on the Source table (pass a different tableName to override).</summary>
     [Fact]
     public void MappingEngine_TransformsUserToCustomer_WithLql()
     {
         // Arrange - create a User sync log entry
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "User",
-            PkValue: """{"Id":"u123"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"u123","FullName":"Alice Smith","EmailAddress":"alice@example.com","PasswordHash":"secret","SecurityStamp":"xyz","CreatedAt":"2024-06-15T10:30:00Z"}""",
-            Origin: "source-origin",
-            Timestamp: "2024-06-15T10:30:00Z"
-        );
+        var entry = Fixture_MappingEngine_TransformsUserToCustomer_WithLql_1();
 
         var config = CreateUserToCustomerMapping();
 
-        // Act - apply mapping
-        var result = ApplyMapping(entry, config);
+        // Act
+        var mapped = MapSingle(entry, config);
 
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        Assert.Single(success.Entries);
-
-        var mapped = success.Entries[0];
-        Assert.Equal("customer", mapped.TargetTable);
-        Assert.Contains("customer_id", mapped.TargetPkValue);
-        Assert.Contains("u123", mapped.TargetPkValue);
+        global::Tests.Shared.MappingAssertions.Customer(mapped: mapped, pkSubstring: "u123");
 
         // Parse the payload to verify transforms
         Assert.NotNull(mapped.MappedPayload);
@@ -322,94 +273,59 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         Assert.False(root.TryGetProperty("SecurityStamp", out _));
     }
 
-    [Fact]
-    public void MappingEngine_WithConcatTransform_CombinesColumns()
+    // Implements [SYNC-TEST-STRING-TRANSFORMS].
+    [Theory]
+    // MappingEngine_WithConcatTransform_CombinesColumns
+    [MemberData(nameof(LqlExpression_StringTransform_ReturnsExpectedPayloadInlineCases))]
+    // MappingEngine_WithCoalesceTransform_ReturnsFirstNonNull
+
+    // MappingEngine_WithSubstringTransform_ExtractsText
+
+    // LqlExpression_WithEmptyString_ReturnsEmpty
+
+    // LqlExpression_ReplaceFunction_WorksCorrectly
+
+    // LqlExpression_LeftFunction_ExtractsPrefix
+
+    // LqlExpression_RightFunction_ExtractsSuffix
+
+    // LqlExpression_TrimFunction_RemovesWhitespace
+
+    // LqlExpression_NestedConcat_BuildsComplexString
+
+    // LqlExpression_DateFormatWithDifferentTimezones_PreservesUtc
+
+    // LqlExpression_PipelineWithMultipleSteps_TransformsCorrectly
+
+    public void LqlExpression_StringTransform_ReturnsExpectedPayload(
+        string mappingId,
+        string sourceTable,
+        string targetTable,
+        string pkValue,
+        string column,
+        string expression,
+        string payload,
+        string expected
+    )
     {
-        // Arrange - mapping with concat
         var config = MappingConfig(
-            mappingId: "name-concat",
-            sourceTable: "Person",
-            targetTable: "person",
-            LqlColumn("full_name", "concat(FirstName, ' ', LastName)")
+            mappingId: mappingId,
+            sourceTable: sourceTable,
+            targetTable: targetTable,
+            mappings: [LqlColumn(target: column, lql: expression)]
         );
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Person",
-            PkValue: """{"Id":"p1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"p1","FirstName":"John","LastName":"Doe"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        var result = ApplyMapping(
+            entry: SourceEntry(payload: payload, tableName: sourceTable, pkValue: pkValue),
+            config: config
         );
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("John Doe", doc.RootElement.GetProperty("full_name").GetString());
-    }
-
-    [Fact]
-    public void MappingEngine_WithCoalesceTransform_ReturnsFirstNonNull()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "coalesce-test",
-            sourceTable: "Contact",
-            targetTable: "contact",
-            LqlColumn("phone", "coalesce(Mobile, Home, Office)")
+        var success = Assert.IsType<MappingSuccess>(@object: result);
+        using var document = JsonDocument.Parse(
+            json: Assert.IsType<string>(@object: success.Entries[0].MappedPayload)
         );
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Contact",
-            PkValue: """{"Id":"c1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"c1","Mobile":"","Home":"555-1234","Office":"555-5678"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
+        Assert.Equal(
+            expected: expected,
+            actual: document.RootElement.GetProperty(propertyName: column).GetString()
         );
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("555-1234", doc.RootElement.GetProperty("phone").GetString());
-    }
-
-    [Fact]
-    public void MappingEngine_WithSubstringTransform_ExtractsText()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "substring-test",
-            sourceTable: "Product",
-            targetTable: "product",
-            LqlColumn("sku_prefix", "substring(SKU, 1, 3)")
-        );
-
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "Product",
-            PkValue: """{"Id":"p1"}""",
-            Operation: SyncOperation.Insert,
-            Payload: """{"Id":"p1","SKU":"ABC-12345"}""",
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("ABC", doc.RootElement.GetProperty("sku_prefix").GetString());
     }
 
     [Fact]
@@ -419,51 +335,32 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         var config = SetupUserToCustomerScenario();
 
         // Act - insert User in SQLite source
-        using (var cmd = _sqliteConn.CreateCommand())
-        {
-            cmd.CommandText = """
-                INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp, CreatedAt)
-                VALUES ('u456', 'Bob Jones', 'bob@example.com', 'hash123', 'stamp456', '2024-07-20T14:00:00Z')
-                """;
-            cmd.ExecuteNonQuery();
-        }
+        CrossDatabaseSyncTests.ExecuteSql(
+            _sqliteConn,
+            """
+            INSERT INTO User (Id, FullName, EmailAddress, PasswordHash, SecurityStamp, CreatedAt)
+            VALUES ('u456', 'Bob Jones', 'bob@example.com', 'hash123', 'stamp456', '2024-07-20T14:00:00Z')
+            """
+        );
 
-        // Fetch changes from SQLite
-        var changes = SyncLogRepository.FetchChanges(_sqliteConn, 0, 100);
-        Assert.True(changes is SyncLogListOk, $"Fetch failed: {changes}");
-        var changesList = ((SyncLogListOk)changes).Value;
-        Assert.Single(changesList);
+        var changes = SyncLogRepository.FetchChanges(
+            connection: _sqliteConn,
+            fromVersion: 0,
+            batchSize: 100
+        );
+        var changesList = CrossDatabaseSyncTests.SingleChange(changes, $"Fetch failed: {changes}");
 
-        // Apply mapping to transform the entry
-        var mappingResult = ApplyMapping(changesList[0], config);
-        var mappedEntry = Assert.IsType<MappingSuccess>(mappingResult);
-
-        // Apply mapped changes to Postgres with suppression
-        PostgresSyncSession.EnableSuppression(_postgresConn);
-        foreach (var entry in mappedEntry.Entries)
-        {
-            // Merge PK into payload - PostgresChangeApplier expects PK in payload for inserts
-            var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
-
-            // Create a new SyncLogEntry with the mapped data
-            var targetEntry = new SyncLogEntry(
-                Version: changesList[0].Version,
-                TableName: entry.TargetTable,
-                PkValue: entry.TargetPkValue,
-                Operation: changesList[0].Operation,
-                Payload: mergedPayload,
-                Origin: changesList[0].Origin,
-                Timestamp: changesList[0].Timestamp
-            );
-
-            var applyResult = PostgresChangeApplier.ApplyChange(
-                _postgresConn,
-                targetEntry,
-                _logger
-            );
-            Assert.True(applyResult is BoolSyncOk, $"Apply failed: {applyResult}");
-        }
-        PostgresSyncSession.DisableSuppression(_postgresConn);
+        // Apply mapping to transform the entry and apply mapped changes with suppression
+        var mappedEntry = MapSuccessSingle(changesList[0], config);
+        ApplyMappedEntriesToPostgres(
+            mappedEntry.Entries,
+            (entry, mergedPayload) =>
+                Dataset_E2E_SyncWithMapping_TransformsData_AcrossDatabases_1(
+                    changesList: changesList,
+                    entry: entry,
+                    mergedPayload: mergedPayload
+                )
+        );
 
         // Assert - verify in Postgres with TRANSFORMED schema
         using var verifyCmd = _postgresConn.CreateCommand();
@@ -505,44 +402,30 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         }
 
         // Fetch and transform all changes
-        var changes = SyncLogRepository.FetchChanges(_sqliteConn, 0, 100);
-        var changesList = ((SyncLogListOk)changes).Value;
+        var changesList = CrossDatabaseSyncTests.FetchAllChanges(_sqliteConn);
         Assert.Equal(3, changesList.Count);
 
         // Apply all with mapping
-        PostgresSyncSession.EnableSuppression(_postgresConn);
         foreach (var change in changesList)
         {
-            var mappingResult = ApplyMapping(change, config);
-            var mapped = Assert.IsType<MappingSuccess>(mappingResult);
-
-            foreach (var entry in mapped.Entries)
-            {
-                // Merge PK into payload - PostgresChangeApplier expects PK in payload for inserts
-                var mergedPayload = MergePkIntoPayload(entry.TargetPkValue, entry.MappedPayload);
-
-                var targetEntry = new SyncLogEntry(
-                    change.Version,
-                    entry.TargetTable,
-                    entry.TargetPkValue,
-                    change.Operation,
-                    mergedPayload,
-                    change.Origin,
-                    change.Timestamp
-                );
-                PostgresChangeApplier.ApplyChange(_postgresConn, targetEntry, _logger);
-            }
+            var mapped = MapSuccessSingle(change, config);
+            ApplyMappedEntriesToPostgres(
+                mapped.Entries,
+                (entry, mergedPayload) =>
+                    Dataset_E2E_MultipleRecords_AllTransformedCorrectly_1(
+                        change: change,
+                        entry: entry,
+                        mergedPayload: mergedPayload
+                    )
+            );
         }
-        PostgresSyncSession.DisableSuppression(_postgresConn);
 
         // Verify all records transformed
-        using var countCmd = _postgresConn.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM customer";
-        var count = Convert.ToInt32(
-            countCmd.ExecuteScalar(),
-            System.Globalization.CultureInfo.InvariantCulture
+        global::Nimblesite.Sync.Http.Tests.CrossDatabaseSyncTests.VerifyReusableWorkflow6(
+            configure0: command => command.CommandText = "SELECT COUNT(*) FROM customer",
+            input0: _postgresConn,
+            value0: 3
         );
-        Assert.Equal(3, count);
 
         // Verify uppercase names
         using var upperCmd = _postgresConn.CreateCommand();
@@ -563,26 +446,13 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         // Arrange
         var config = CreateUserToCustomerMapping();
 
-        var entry = new SyncLogEntry(
-            Version: 1,
-            TableName: "User",
-            PkValue: """{"Id":"u999"}""",
-            Operation: SyncOperation.Delete,
-            Payload: null, // Deletes have no payload
-            Origin: "test",
-            Timestamp: "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_MappingEngine_DeleteOperation_TransformsTableAndPk_1();
 
         // Act
-        var result = ApplyMapping(entry, config);
+        var mapped = MapSingle(entry, config);
 
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        var mapped = success.Entries[0];
-
-        Assert.Equal("customer", mapped.TargetTable);
-        Assert.Contains("customer_id", mapped.TargetPkValue);
-        Assert.Contains("u999", mapped.TargetPkValue);
+        global::Tests.Shared.MappingAssertions.Customer(mapped: mapped, pkSubstring: "u999");
         Assert.Null(mapped.MappedPayload); // Delete has no payload
     }
 
@@ -592,27 +462,23 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         // Arrange
         var config = CreateUserToCustomerMapping();
 
-        var entry = new SyncLogEntry(
-            Version: 2,
-            TableName: "User",
-            PkValue: """{"Id":"u888"}""",
-            Operation: SyncOperation.Update,
-            Payload: """{"Id":"u888","FullName":"Updated Name","EmailAddress":"new@example.com","PasswordHash":"newhash","SecurityStamp":"newstamp","CreatedAt":"2024-01-01T00:00:00Z"}""",
-            Origin: "test",
-            Timestamp: "2024-01-02T00:00:00Z"
-        );
+        var entry = Fixture_MappingEngine_UpdateOperation_TransformsPayload_1();
 
         // Act
         var result = ApplyMapping(entry, config);
 
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        var root = doc.RootElement;
+        global::Tests.Shared.MappingAssertions.Payload(
+            result: result,
+            verify: element =>
+            {
+                var root = element;
 
-        Assert.Equal("Updated Name", root.GetProperty("name").GetString());
-        Assert.Equal("UPDATED NAME", root.GetProperty("name_upper").GetString());
-        Assert.Equal("new@example.com", root.GetProperty("email").GetString());
+                Assert.Equal("Updated Name", root.GetProperty("name").GetString());
+                Assert.Equal("UPDATED NAME", root.GetProperty("name_upper").GetString());
+                Assert.Equal("new@example.com", root.GetProperty("email").GetString());
+            }
+        );
     }
 
     // ========== CORNER CASE TESTS ==========
@@ -623,105 +489,10 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
         // Arrange - payload with null field
         var config = MappingConfig(mappingId: "null-test", LqlColumn("upper_name", "upper(Name)"));
 
-        var entry = SourceEntry("""{"Id":"1","Name":null}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var mapped = MapPayloadSingle(config, """{"Id":"1","Name":null}""");
 
         // Assert - should handle null gracefully
-        var success = Assert.IsType<MappingSuccess>(result);
-        Assert.NotNull(success.Entries[0].MappedPayload);
-    }
-
-    [Fact]
-    public void LqlExpression_WithEmptyString_ReturnsEmpty()
-    {
-        // Arrange
-        var config = MappingConfig(mappingId: "empty-test", LqlColumn("upper_name", "upper(Name)"));
-
-        var entry = SourceEntry("""{"Id":"1","Name":""}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("", doc.RootElement.GetProperty("upper_name").GetString());
-    }
-
-    [Fact]
-    public void LqlExpression_ReplaceFunction_WorksCorrectly()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "replace-test",
-            LqlColumn("clean_phone", "replace(Phone, '-', '')")
-        );
-
-        var entry = SourceEntry("""{"Id":"1","Phone":"555-123-4567"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("5551234567", doc.RootElement.GetProperty("clean_phone").GetString());
-    }
-
-    [Fact]
-    public void LqlExpression_LeftFunction_ExtractsPrefix()
-    {
-        // Arrange
-        var config = MappingConfig(mappingId: "left-test", LqlColumn("initials", "left(Name, 2)"));
-
-        var entry = SourceEntry("""{"Id":"1","Name":"Alexander"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("Al", doc.RootElement.GetProperty("initials").GetString());
-    }
-
-    [Fact]
-    public void LqlExpression_RightFunction_ExtractsSuffix()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "right-test",
-            LqlColumn("last_four", "right(CardNumber, 4)")
-        );
-
-        var entry = SourceEntry("""{"Id":"1","CardNumber":"1234567890123456"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("3456", doc.RootElement.GetProperty("last_four").GetString());
-    }
-
-    [Fact]
-    public void LqlExpression_TrimFunction_RemovesWhitespace()
-    {
-        // Arrange
-        var config = MappingConfig(mappingId: "trim-test", LqlColumn("clean_name", "trim(Name)"));
-
-        var entry = SourceEntry("""{"Id":"1","Name":"  Hello World  "}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("Hello World", doc.RootElement.GetProperty("clean_name").GetString());
+        Assert.NotNull(mapped.MappedPayload);
     }
 
     [Fact]
@@ -733,42 +504,14 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             LqlColumn("name_length", "length(Name)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Name":"Hello"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal(5, doc.RootElement.GetProperty("name_length").GetInt32());
-    }
-
-    [Fact]
-    public void LqlExpression_NestedConcat_BuildsComplexString()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "nested-test",
-            LqlColumn(
-                "display",
-                "concat(Title, ': ', FirstName, ' ', LastName, ' (', Department, ')')"
-            )
-        );
-
-        var entry = SourceEntry(
-            """{"Id":"1","Title":"Dr","FirstName":"John","LastName":"Smith","Department":"Engineering"}"""
-        );
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal(
-            "Dr: John Smith (Engineering)",
-            doc.RootElement.GetProperty("display").GetString()
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","Name":"Hello"}""",
+            verify: element =>
+            {
+                Assert.Equal(5, element.GetProperty("name_length").GetInt32());
+            }
         );
     }
 
@@ -781,118 +524,61 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             LqlColumn("phone", "coalesce(Mobile, Home, Work)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Mobile":"","Home":"","Work":""}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert - coalesce returns null/empty when all values are empty
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        // Either null or missing is acceptable
-        var hasPhone = doc.RootElement.TryGetProperty("phone", out var phone);
-        if (hasPhone)
-        {
-            Assert.True(
-                phone.ValueKind == JsonValueKind.Null || string.IsNullOrEmpty(phone.GetString()),
-                "Expected null or empty"
-            );
-        }
-    }
-
-    [Fact]
-    public void LqlExpression_DateFormatWithDifferentTimezones_PreservesUtc()
-    {
-        // Arrange
-        var config = MappingConfig(
-            mappingId: "tz-test",
-            LqlColumn("date_only", "CreatedAt |> dateFormat('yyyy-MM-dd')")
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","Mobile":"","Home":"","Work":""}""",
+            verify: element =>
+            { // Either null or missing is acceptable
+                var hasPhone = element.TryGetProperty("phone", out var phone);
+                if (hasPhone)
+                {
+                    Assert.True(
+                        phone.ValueKind == JsonValueKind.Null
+                            || string.IsNullOrEmpty(phone.GetString()),
+                        "Expected null or empty"
+                    );
+                }
+            }
         );
-
-        // Test with explicit timezone offset
-        var entry = SourceEntry("""{"Id":"1","CreatedAt":"2024-12-25T23:30:00+00:00"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert - should preserve UTC date
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("2024-12-25", doc.RootElement.GetProperty("date_only").GetString());
     }
 
     [Fact]
     public void MappingEngine_UnmappedTable_WithPassthrough_ReturnsIdentity()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Passthrough,
-            Mappings: [] // No mappings defined
-        );
+        var config = Dataset_MappingEngine_UnmappedTable_WithPassthrough_ReturnsIdentity_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 
         // Act
-        var result = ApplyMapping(entry, config);
+        var mapped = MapSingle(entry, config);
 
         // Assert - passthrough returns identity mapping
-        var success = Assert.IsType<MappingSuccess>(result);
-        Assert.Single(success.Entries);
-        Assert.Equal("UnknownTable", success.Entries[0].TargetTable);
-        Assert.Equal("""{"Id":"1"}""", success.Entries[0].TargetPkValue);
+        Assert.Equal("UnknownTable", mapped.TargetTable);
+        Assert.Equal("""{"Id":"1"}""", mapped.TargetPkValue);
     }
 
     [Fact]
     public void MappingEngine_UnmappedTable_WithStrict_ReturnsSkipped()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings: [] // No mappings defined
-        );
+        var config = Dataset_MappingEngine_UnmappedTable_WithStrict_ReturnsSkipped_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""", tableName: "UnknownTable");
 
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert - strict mode skips unmapped tables
-        Assert.IsType<MappingSkipped>(result);
+        // Act / Assert - strict mode skips unmapped tables
+        Assert.IsType<MappingSkipped>(ApplyMapping(entry, config));
     }
 
     [Fact]
     public void MappingEngine_DisabledMapping_ReturnsSkipped()
     {
         // Arrange
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "disabled-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: false, // DISABLED
-                    PkMapping: null,
-                    ColumnMappings: [],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
-
-        var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var config = Fixture_MappingEngine_DisabledMapping_ReturnsSkipped_1();
 
         // Assert
-        var skipped = Assert.IsType<MappingSkipped>(result);
+        var skipped = ApplyExpectSkipped(config, """{"Id":"1","Data":"test"}""");
         Assert.Contains("DISABLED", skipped.Reason.ToUpperInvariant());
     }
 
@@ -900,58 +586,19 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     public void MappingEngine_WrongDirection_ReturnsSkipped()
     {
         // Arrange - mapping only for Pull direction
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "pull-only",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Pull, // Pull only
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings: [],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = Fixture_MappingEngine_WrongDirection_ReturnsSkipped_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
-        // Act - try to use for Push direction
-        var result = ApplyMapping(entry, config);
-
-        // Assert - should be skipped because direction doesn't match
-        Assert.IsType<MappingSkipped>(result);
+        // Act / Assert - should be skipped because direction doesn't match
+        Assert.IsType<MappingSkipped>(ApplyMapping(entry, config));
     }
 
     [Fact]
     public void MappingEngine_BothDirection_WorksForPushAndPull()
     {
         // Arrange - mapping for Both directions
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "both-dir",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Both,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings: [new ColumnMapping("Data", "data")],
-                    ExcludedColumns: [],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
+        var config = Fixture_MappingEngine_BothDirection_WorksForPushAndPull_1();
 
         var entry = SourceEntry("""{"Id":"1","Data":"test"}""");
 
@@ -967,26 +614,6 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
     // ========== ADDITIONAL CORNER CASE TESTS ==========
 
     [Fact]
-    public void LqlExpression_PipelineWithMultipleSteps_TransformsCorrectly()
-    {
-        // Arrange - use pipe operator to chain transforms
-        var config = MappingConfig(
-            mappingId: "pipeline-test",
-            LqlColumn("clean_name", "Name |> trim() |> upper()")
-        );
-
-        var entry = SourceEntry("""{"Id":"1","Name":"  hello world  "}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert - should trim then uppercase
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("HELLO WORLD", doc.RootElement.GetProperty("clean_name").GetString());
-    }
-
-    [Fact]
     public void LqlExpression_NumericValue_PreservesType()
     {
         // Arrange - test numeric field handling
@@ -996,16 +623,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             new ColumnMapping("Count", "count")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Amount":123.45,"Count":42}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert - numeric values preserved
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal(123.45, doc.RootElement.GetProperty("amount").GetDouble());
-        Assert.Equal(42, doc.RootElement.GetProperty("count").GetInt32());
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","Amount":123.45,"Count":42}""",
+            verify: element =>
+            {
+                Assert.Equal(123.45, element.GetProperty("amount").GetDouble());
+                Assert.Equal(42, element.GetProperty("count").GetInt32());
+            }
+        );
     }
 
     [Fact]
@@ -1018,16 +645,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             new ColumnMapping("IsVerified", "is_verified")
         );
 
-        var entry = SourceEntry("""{"Id":"1","IsActive":true,"IsVerified":false}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.True(doc.RootElement.GetProperty("is_active").GetBoolean());
-        Assert.False(doc.RootElement.GetProperty("is_verified").GetBoolean());
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","IsActive":true,"IsVerified":false}""",
+            verify: element =>
+            {
+                Assert.True(element.GetProperty("is_active").GetBoolean());
+                Assert.False(element.GetProperty("is_verified").GetBoolean());
+            }
+        );
     }
 
     [Fact]
@@ -1039,18 +666,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             new ColumnMapping("Description", "description")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert - special chars preserved
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        var desc = doc.RootElement.GetProperty("description").GetString();
-        Assert.Contains("\n", desc);
-        Assert.Contains("\t", desc);
-        Assert.Contains("\"quoted\"", desc);
+        VerifyReusableWorkflow5(
+            input0: ApplyConfiguredPayloadMapping,
+            input1: config,
+            input2: ContainsAll,
+            value0: """{"Id":"1","Description":"Line1\nLine2\tTabbed \"quoted\""}""",
+            value1: "description",
+            value2: "\n",
+            value3: "\t",
+            value4: "\"quoted\""
+        );
     }
 
     [Fact]
@@ -1066,14 +691,15 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
 
         var entry = SourceEntry($$$"""{"Id":"1","Data":"{{{longString}}}"}""");
 
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal(longString, doc.RootElement.GetProperty("data").GetString());
-        Assert.Equal(10000, doc.RootElement.GetProperty("data_length").GetInt32());
+        global::Tests.Shared.MappingAssertions.Payload(
+            result: ApplyMapping(entry, config),
+            verify: element =>
+            {
+                Assert.Equal(longString, element.GetProperty("data").GetString());
+                Assert.Equal(10000, element.GetProperty("data_length").GetInt32());
+            }
+        );
     }
 
     [Fact]
@@ -1086,18 +712,16 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             LqlColumn("name_upper", "upper(Name)")
         );
 
-        var entry = SourceEntry("""{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}""");
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
-        // Assert - Unicode preserved
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        var name = doc.RootElement.GetProperty("name").GetString();
-        Assert.Contains("日本語", name);
-        Assert.Contains("中文", name);
-        Assert.Contains("🎉", name);
+        VerifyReusableWorkflow5(
+            input0: ApplyConfiguredPayloadMapping,
+            input1: config,
+            input2: ContainsAll,
+            value0: """{"Id":"1","Name":"日本語テスト 中文测试 émojis: 🎉🚀"}""",
+            value1: "name",
+            value2: "日本語",
+            value3: "中文",
+            value4: "🎉"
+        );
     }
 
     [Fact]
@@ -1111,73 +735,85 @@ public sealed class HttpMappingE2ETests(PostgresContainerFixture fixture) : IAsy
             new ColumnMapping("Col3", "col_3"),
             new ColumnMapping("Col4", "col_4"),
             new ColumnMapping("Col5", "col_5"),
-            new ColumnMapping(
-                Source: null,
-                Target: "constant",
-                Transform: TransformType.Constant,
-                Value: "fixed"
-            ),
+            Fixture_MappingEngine_MultipleColumnMappings_AllApplied_1(),
             LqlColumn("computed", "concat(Col1, '-', Col2)")
         );
 
-        var entry = SourceEntry(
-            """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}"""
-        );
-
-        // Act
-        var result = ApplyMapping(entry, config);
-
         // Assert - all mappings applied
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.Equal("A", doc.RootElement.GetProperty("col_1").GetString());
-        Assert.Equal("B", doc.RootElement.GetProperty("col_2").GetString());
-        Assert.Equal("C", doc.RootElement.GetProperty("col_3").GetString());
-        Assert.Equal("D", doc.RootElement.GetProperty("col_4").GetString());
-        Assert.Equal("E", doc.RootElement.GetProperty("col_5").GetString());
-        Assert.Equal("fixed", doc.RootElement.GetProperty("constant").GetString());
-        Assert.Equal("A-B", doc.RootElement.GetProperty("computed").GetString());
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","Col1":"A","Col2":"B","Col3":"C","Col4":"D","Col5":"E"}""",
+            verify: element =>
+            {
+                Assert.Equal("A", element.GetProperty("col_1").GetString());
+                Assert.Equal("B", element.GetProperty("col_2").GetString());
+                Assert.Equal("C", element.GetProperty("col_3").GetString());
+                Assert.Equal("D", element.GetProperty("col_4").GetString());
+                Assert.Equal("E", element.GetProperty("col_5").GetString());
+                Assert.Equal("fixed", element.GetProperty("constant").GetString());
+                Assert.Equal("A-B", element.GetProperty("computed").GetString());
+            }
+        );
     }
 
     [Fact]
     public void MappingEngine_ExcludeMultipleColumns_AllExcluded()
     {
         // Arrange - exclude many columns
-        var config = new SyncMappingConfig(
-            Version: "1.0",
-            UnmappedTableBehavior: UnmappedTableBehavior.Strict,
-            Mappings:
-            [
-                new TableMapping(
-                    Id: "exclude-test",
-                    SourceTable: "Source",
-                    TargetTable: "target",
-                    Direction: MappingDirection.Push,
-                    Enabled: true,
-                    PkMapping: null,
-                    ColumnMappings: [new ColumnMapping("Name", "name")],
-                    ExcludedColumns: ["Password", "Salt", "Token", "Secret", "PrivateKey"],
-                    Filter: null,
-                    SyncTracking: new SyncTrackingConfig()
-                ),
-            ]
-        );
-
-        var entry = SourceEntry(
-            """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}"""
-        );
-
-        // Act
-        var result = ApplyMapping(entry, config);
+        var config = Fixture_MappingEngine_ExcludeMultipleColumns_AllExcluded_1();
 
         // Assert - excluded columns not in output
-        var success = Assert.IsType<MappingSuccess>(result);
-        using var doc = JsonDocument.Parse(success.Entries[0].MappedPayload!);
-        Assert.True(doc.RootElement.TryGetProperty("name", out _));
-        Assert.False(doc.RootElement.TryGetProperty("Password", out _));
-        Assert.False(doc.RootElement.TryGetProperty("Salt", out _));
-        Assert.False(doc.RootElement.TryGetProperty("Token", out _));
-        Assert.False(doc.RootElement.TryGetProperty("Secret", out _));
-        Assert.False(doc.RootElement.TryGetProperty("PrivateKey", out _));
+        ApplyAndVerifyPayload(
+            config: config,
+            payload: """{"Id":"1","Name":"User","Password":"hash","Salt":"xyz","Token":"abc","Secret":"123","PrivateKey":"key"}""",
+            verify: element =>
+            {
+                Assert.True(element.TryGetProperty("name", out _));
+                Assert.False(element.TryGetProperty("Password", out _));
+                Assert.False(element.TryGetProperty("Salt", out _));
+                Assert.False(element.TryGetProperty("Token", out _));
+                Assert.False(element.TryGetProperty("Secret", out _));
+                Assert.False(element.TryGetProperty("PrivateKey", out _));
+            }
+        );
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private global::Nimblesite.Sync.Core.MappingResult ApplyConfiguredPayloadMapping(
+        global::Nimblesite.Sync.Core.SyncMappingConfig input0,
+        string value0
+    )
+    {
+        var entry = SourceEntry(value0);
+
+        // Act
+        var result = ApplyMapping(entry, input0);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void VerifyReusableWorkflow5(
+        Func<SyncMappingConfig, string, MappingResult> input0,
+        SyncMappingConfig input1,
+        Action<string?, System.Collections.Immutable.ImmutableArray<string>> input2,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        var result = input0(arg1: input1, arg2: value0);
+
+        // Assert - special chars preserved
+        global::Tests.Shared.MappingAssertions.Payload(
+            result: result,
+            verify: element =>
+            {
+                var desc = element.GetProperty(value1).GetString();
+                input2(arg1: desc, arg2: [value2, value3, value4]);
+            }
+        );
     }
 }

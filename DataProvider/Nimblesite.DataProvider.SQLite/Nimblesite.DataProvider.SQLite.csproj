@@ -27,6 +27,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.3" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Nimblesite.DataProvider.Migration.SQLite" />
+  </ItemGroup>
   <!-- Copy dependencies to output directory for source generator -->
   <Target Name="CopyDependenciesToOutputDirectory" BeforeTargets="Build">
     <ItemGroup>

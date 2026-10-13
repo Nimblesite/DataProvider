@@ -1,17 +1,18 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
 using Outcome;
+using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Tests;
 
 /// <summary>
 /// File-based SQLite database for integration testing.
 /// </summary>
-public sealed class TestDb : IDisposable
+public sealed partial class TestDb : IDisposable
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"testdb_{Guid.NewGuid()}.db"
-    );
+    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor("testdb");
 
     public SqliteConnection Connection { get; }
 
@@ -24,52 +25,10 @@ public sealed class TestDb : IDisposable
 
     private void InitializeSyncSchema()
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            -- Sync state (persistent)
-            CREATE TABLE _sync_state (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-
-            -- Sync session (ephemeral flag)
-            CREATE TABLE _sync_session (
-                sync_active INTEGER DEFAULT 0
-            );
-            INSERT INTO _sync_session VALUES (0);
-
-            -- Change log
-            CREATE TABLE _sync_log (
-                version     INTEGER PRIMARY KEY AUTOINCREMENT,
-                table_name  TEXT NOT NULL,
-                pk_value    TEXT NOT NULL,
-                operation   TEXT NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
-                payload     TEXT,
-                origin      TEXT NOT NULL,
-                timestamp   TEXT NOT NULL
-            );
-
-            CREATE INDEX idx_sync_log_version ON _sync_log(version);
-            CREATE INDEX idx_sync_log_table ON _sync_log(table_name, version);
-
-            -- Initialize state
-            INSERT INTO _sync_state VALUES ('origin_id', 'test-origin-001');
-            INSERT INTO _sync_state VALUES ('last_server_version', '0');
-            INSERT INTO _sync_state VALUES ('last_push_version', '0');
-
-            -- Test table with FK for testing defer/retry
-            CREATE TABLE Parent (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-
-            CREATE TABLE Child (
-                Id TEXT PRIMARY KEY,
-                ParentId TEXT NOT NULL REFERENCES Parent(Id),
-                Name TEXT NOT NULL
-            );
-            """;
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: Connection,
+            configure: command => command.CommandText = Data_InitializeSyncSchema_1
+        );
     }
 
     public void InsertSyncLogEntry(
@@ -81,31 +40,38 @@ public sealed class TestDb : IDisposable
         string timestamp
     )
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ($tableName, $pkValue, $operation, $payload, $origin, $timestamp)
-            """;
-        cmd.Parameters.AddWithValue("$tableName", tableName);
-        cmd.Parameters.AddWithValue("$pkValue", pkValue);
-        cmd.Parameters.AddWithValue("$operation", operation);
-        cmd.Parameters.AddWithValue("$payload", payload ?? (object)DBNull.Value);
-        cmd.Parameters.AddWithValue("$origin", origin);
-        cmd.Parameters.AddWithValue("$timestamp", timestamp);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: Connection,
+            configure: cmd =>
+                cmd.CommandText = """
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES ($tableName, $pkValue, $operation, $payload, $origin, $timestamp)
+                """,
+            parameters: () =>
+                [
+                    ("$tableName", tableName),
+                    ("$pkValue", pkValue),
+                    ("$operation", operation),
+                    ("$payload", payload ?? (object)DBNull.Value),
+                    ("$origin", origin),
+                    ("$timestamp", timestamp),
+                ]
+        );
     }
 
-    public IReadOnlyList<SyncLogEntry> FetchChanges(long fromVersion, int limit)
+    public IReadOnlyList<SyncLogEntry> FetchChanges(long fromVersion, int limit) =>
+        FetchChanges(db: Connection, fromVersion: fromVersion, limit: limit);
+
+    // Implements [SYNC-TEST-LOG-READER].
+    internal static IReadOnlyList<SyncLogEntry> FetchChanges(
+        SqliteConnection db,
+        long fromVersion,
+        int limit
+    )
     {
         var entries = new List<SyncLogEntry>();
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT version, table_name, pk_value, operation, payload, origin, timestamp
-            FROM _sync_log
-            WHERE version > $fromVersion
-            ORDER BY version ASC
-            LIMIT $limit
-            """;
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = Data_FetchChanges_1;
         cmd.Parameters.AddWithValue("$fromVersion", fromVersion);
         cmd.Parameters.AddWithValue("$limit", limit);
 
@@ -139,23 +105,13 @@ public sealed class TestDb : IDisposable
 
     internal static T AssertSuccess<T>(Result<T, SyncError> result)
     {
-        Assert.IsType<Result<T, SyncError>.Ok<T, SyncError>>(result);
-        return ((Result<T, SyncError>.Ok<T, SyncError>)result).Value;
+        global::Tests.Shared.ResultAssertions.ExactOk(actual: result);
+        return (Ok(actual: result)).Value;
     }
 
     public void Dispose()
     {
         Connection.Dispose();
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                File.Delete(_dbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
+        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _dbPath);
     }
 }

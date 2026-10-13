@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
@@ -8,36 +7,10 @@ namespace Nimblesite.DataProvider.Tests;
 // SqlAntlrCodeGenerator: validation branches, the standard-version
 // failure-propagation paths, and the entire grouped-version pipeline
 // (raw record / grouped method / grouped models, plus their failure arms).
-public sealed class SqlAntlrCodeGeneratorTests
+public sealed partial class SqlAntlrCodeGeneratorTests
 {
     private static readonly IReadOnlyList<DatabaseColumn> GroupColumns =
-    [
-        new DatabaseColumn
-        {
-            Name = "OrderId",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-            IsPrimaryKey = true,
-        },
-        new DatabaseColumn
-        {
-            Name = "OrderDate",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new DatabaseColumn
-        {
-            Name = "LineId",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-        new DatabaseColumn
-        {
-            Name = "LineQty",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-    ];
+        CodeGenerationColumnSets.GroupColumns;
 
     private static SelectStatement MakeStatement(params string[] paramNames) =>
         new() { Parameters = paramNames.Select(n => new ParameterInfo(n)).ToFrozenSet() };
@@ -74,78 +47,100 @@ public sealed class SqlAntlrCodeGeneratorTests
             )
         );
 
-    [Fact]
-    public void Rejects_empty_file_name()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData4))]
+    public void Rejects_empty_file_name_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1
+    )
     {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            MakeConfig()
-        );
-        Assert.True(result is StringError);
-    }
+        NamedCase(caseName: scenarioName);
 
-    [Fact]
-    public void Rejects_empty_sql()
-    {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "Order",
-            "",
-            MakeStatement(),
-            GroupColumns,
-            MakeConfig()
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
+                scenario0,
+                scenario1,
+                MakeStatement(),
+                GroupColumns,
+                MakeConfig()
+            )
         );
-        Assert.True(result is StringError);
     }
 
     [Fact]
     public void Rejects_null_statement()
     {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "Order",
-            "SELECT 1",
-            null!,
-            GroupColumns,
-            MakeConfig()
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
+                "Order",
+                "SELECT 1",
+                null!,
+                GroupColumns,
+                MakeConfig()
+            )
         );
-        Assert.True(result is StringError);
     }
 
     [Fact]
     public void Rejects_null_column_metadata()
     {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "Order",
-            "SELECT 1",
-            MakeStatement(),
-            null!,
-            MakeConfig()
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
+                "Order",
+                "SELECT 1",
+                MakeStatement(),
+                null!,
+                MakeConfig()
+            )
         );
-        Assert.True(result is StringError);
     }
 
     [Fact]
     public void Rejects_null_config()
     {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "Order",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            null!
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
+                "Order",
+                "SELECT 1",
+                MakeStatement(),
+                GroupColumns,
+                null!
+            )
         );
-        Assert.True(result is StringError);
     }
 
     [Fact]
-    public void Propagates_model_failure()
+    public void Propagates_model_failure() =>
+        AssertGenerateCodeFailure(
+            configure: config =>
+                config with
+                {
+                    GenerateModelType = (_, _) => new StringError(new SqlError("model boom")),
+                },
+            expectedMessage: "model boom"
+        );
+
+    [Fact]
+    public void Propagates_data_access_failure() =>
+        AssertGenerateCodeFailure(
+            configure: config =>
+                config with
+                {
+                    GenerateDataAccessMethod = (_, _, _, _, _, _) =>
+                        new StringError(new SqlError("access boom")),
+                },
+            expectedMessage: "access boom"
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void AssertGenerateCodeFailure(
+        Func<CodeGenerationConfig, CodeGenerationConfig> configure,
+        string expectedMessage
+    )
     {
-        var config = MakeConfig() with
-        {
-            GenerateModelType = (_, _) => new StringError(new SqlError("model boom")),
-        };
+        var config = configure(MakeConfig());
         var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
             "Order",
             "SELECT 1",
@@ -153,45 +148,24 @@ public sealed class SqlAntlrCodeGeneratorTests
             GroupColumns,
             config
         );
-        Assert.True(result is StringError);
-        var err = (StringError)result;
-        Assert.Contains("model boom", err.Value.Message, StringComparison.Ordinal);
-    }
 
-    [Fact]
-    public void Propagates_data_access_failure()
-    {
-        var config = MakeConfig() with
-        {
-            GenerateDataAccessMethod = (_, _, _, _, _, _) =>
-                new StringError(new SqlError("access boom")),
-        };
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "Order",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            config
-        );
-        Assert.True(result is StringError);
-        var err = (StringError)result;
-        Assert.Contains("access boom", err.Value.Message, StringComparison.Ordinal);
+        var err = Expected<StringError>(actual: result);
+        Assert.Contains(expectedMessage, err.Value.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Grouped_version_produces_source()
     {
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "OrderWithLines",
-            "SELECT OrderId, OrderDate, LineId, LineQty FROM Orders",
-            MakeStatement(),
-            GroupColumns,
-            MakeConfig(),
-            MakeGrouping()
+        var ok = Ok(read: () =>
+            SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
+                "OrderWithLines",
+                "SELECT OrderId, OrderDate, LineId, LineQty FROM Orders",
+                MakeStatement(),
+                GroupColumns,
+                MakeConfig(),
+                MakeGrouping()
+            )
         );
-
-        Assert.True(result is StringOk);
-        var ok = (StringOk)result;
         Assert.Contains("Generated", ok.Value, StringComparison.Ordinal);
     }
 
@@ -203,16 +177,7 @@ public sealed class SqlAntlrCodeGeneratorTests
             GenerateRawRecordType = (_, _) => new StringError(new SqlError("raw boom")),
         };
 
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "OrderWithLines",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            config,
-            MakeGrouping()
-        );
-        Assert.True(result is StringError);
-        Assert.Contains("raw boom", ((StringError)result).Value.Message, StringComparison.Ordinal);
+        GenerateAndAssertMetadataCode(input0: config, value2: "raw boom");
     }
 
     [Fact]
@@ -224,20 +189,7 @@ public sealed class SqlAntlrCodeGeneratorTests
                 new StringError(new SqlError("method boom")),
         };
 
-        var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
-            "OrderWithLines",
-            "SELECT 1",
-            MakeStatement(),
-            GroupColumns,
-            config,
-            MakeGrouping()
-        );
-        Assert.True(result is StringError);
-        Assert.Contains(
-            "method boom",
-            ((StringError)result).Value.Message,
-            StringComparison.Ordinal
-        );
+        GenerateAndAssertMetadataCode(input0: config, value2: "method boom");
     }
 
     [Fact]
@@ -248,19 +200,24 @@ public sealed class SqlAntlrCodeGeneratorTests
             GenerateGroupedModels = (_, _, _, _, _) => new StringError(new SqlError("models boom")),
         };
 
+        GenerateAndAssertMetadataCode(input0: config, value2: "models boom");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void GenerateAndAssertMetadataCode(
+        global::Nimblesite.DataProvider.Core.CodeGeneration.CodeGenerationConfig input0,
+        string value2
+    )
+    {
         var result = SqlAntlrCodeGenerator.GenerateCodeWithMetadata(
             "OrderWithLines",
             "SELECT 1",
             MakeStatement(),
             GroupColumns,
-            config,
+            input0,
             MakeGrouping()
         );
         Assert.True(result is StringError);
-        Assert.Contains(
-            "models boom",
-            ((StringError)result).Value.Message,
-            StringComparison.Ordinal
-        );
+        Assert.Contains(value2, (Error(actual: result)).Value.Message, StringComparison.Ordinal);
     }
 }

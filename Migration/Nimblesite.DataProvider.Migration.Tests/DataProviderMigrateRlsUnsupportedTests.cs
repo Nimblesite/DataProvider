@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Tests [RLS-MSSQL] fail-closed guard until native SQL Server RLS is implemented.
@@ -7,7 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// CLI tests for unsupported SQL Server RLS migration attempts.
 /// </summary>
-public sealed class DataProviderMigrateRlsUnsupportedTests
+public sealed partial class DataProviderMigrateRlsUnsupportedTests
 {
     [Fact]
     public void Migrate_SqlServerProviderWithRlsSchema_ReturnsCanonicalUnsupportedError()
@@ -18,11 +16,10 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
         {
             var result = RunMigrate(schemaPath: schemaPath);
 
-            Assert.Equal(expected: 1, actual: result.ExitCode);
-            Assert.Contains(
-                expectedSubstring: "MIG-E-RLS-MSSQL-UNSUPPORTED",
-                actualString: result.Output,
-                comparisonType: StringComparison.Ordinal
+            global::Nimblesite.DataProvider.Migration.Tests.DataProviderMigrateIntegrityTests.VerifyReusableWorkflow15(
+                input0: result,
+                value0: 1,
+                value1: "MIG-E-RLS-MSSQL-UNSUPPORTED"
             );
             Assert.Contains(
                 expectedSubstring: "Native SQL Server RLS migrations are not yet supported",
@@ -48,40 +45,11 @@ public sealed class DataProviderMigrateRlsUnsupportedTests
             output: "unused"
         );
 
-    private static string WriteTempSchemaFile(string contents)
-    {
-        var schemaPath = Path.Combine(
-            Path.GetTempPath(),
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"dataprovider-rls-unsupported-{Guid.NewGuid():N}.yaml"
-            )
+    private static string WriteTempSchemaFile(string contents) =>
+        MigrationCliConsole.WriteTempSchemaFile(
+            prefix: "dataprovider-rls-unsupported",
+            contents: contents
         );
-        File.WriteAllText(path: schemaPath, contents: contents);
-        return schemaPath;
-    }
 
-    private static string RlsSchemaYaml() =>
-        """
-            name: sqlserver_rls_guard
-            tables:
-              - name: documents
-                schema: public
-                columns:
-                  - name: id
-                    type: Uuid
-                    isNullable: false
-                  - name: owner_id
-                    type: Uuid
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - id
-                rowLevelSecurity:
-                  policies:
-                    - name: owner_isolation
-                      operations:
-                        - Select
-                      using: owner_id = current_user_id()
-            """;
+    private static string RlsSchemaYaml() => Data_RlsSchemaYaml_1;
 }

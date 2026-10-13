@@ -630,6 +630,13 @@ public static partial class SchemaDiff
     private static string NormalizeWhitespace(string value) =>
         new(value.Where(c => !char.IsWhiteSpace(c)).ToArray());
 
+    // Implements [MIG-VERIFY-SHARED-OBJECT-MATCHING]: the platform-independent
+    // unique-constraint names a table's constraints resolve to.
+    private static HashSet<string> UniqueConstraintNames(TableDefinition table) =>
+        table
+            .UniqueConstraints.Select(uc => UniqueConstraintName(table.Name, uc))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     private static IEnumerable<SchemaOperation> CalculateUniqueConstraintDiff(
         TableDefinition current,
         TableDefinition desired,
@@ -637,9 +644,7 @@ public static partial class SchemaDiff
         ILogger? logger
     )
     {
-        var currentNames = current
-            .UniqueConstraints.Select(uc => UniqueConstraintName(current.Name, uc))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var currentNames = UniqueConstraintNames(table: current);
 
         foreach (var desiredUnique in desired.UniqueConstraints)
         {
@@ -668,9 +673,7 @@ public static partial class SchemaDiff
             yield break;
         }
 
-        var desiredNames = desired
-            .UniqueConstraints.Select(uc => UniqueConstraintName(desired.Name, uc))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var desiredNames = UniqueConstraintNames(table: desired);
 
         foreach (var currentUnique in current.UniqueConstraints)
         {

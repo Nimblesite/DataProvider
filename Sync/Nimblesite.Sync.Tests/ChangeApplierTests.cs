@@ -1,9 +1,10 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging.Abstractions;
+using Tests.Shared;
 
 namespace Nimblesite.Sync.Tests;
 
-public sealed class ChangeApplierTests : IDisposable
+public sealed partial class ChangeApplierTests : IDisposable
 {
     private static readonly NullLogger Logger = NullLogger.Instance;
     private readonly TestDb _db = new();
@@ -12,31 +13,7 @@ public sealed class ChangeApplierTests : IDisposable
     public void ApplyBatch_SkipsOwnOriginChanges()
     {
         var myOrigin = "my-origin";
-        var batch = new SyncBatch(
-            [
-                new SyncLogEntry(
-                    1,
-                    "Person",
-                    "{\"Id\":\"1\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"1\",\"Name\":\"Alice\"}",
-                    myOrigin,
-                    "2025-01-01T00:00:00.000Z"
-                ),
-                new SyncLogEntry(
-                    2,
-                    "Person",
-                    "{\"Id\":\"2\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"2\",\"Name\":\"Bob\"}",
-                    "other-origin",
-                    "2025-01-01T00:00:01.000Z"
-                ),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_SkipsOwnOriginChanges_1(myOrigin: myOrigin);
 
         var appliedEntries = new List<SyncLogEntry>();
 
@@ -62,31 +39,7 @@ public sealed class ChangeApplierTests : IDisposable
     public void ApplyBatch_DefersAndRetriesFkViolations()
     {
         // Simulate: Child insert comes before Parent insert (FK violation on first try)
-        var batch = new SyncBatch(
-            [
-                new SyncLogEntry(
-                    1,
-                    "Child",
-                    "{\"Id\":\"c1\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"c1\",\"ParentId\":\"p1\",\"Name\":\"Child1\"}",
-                    "other",
-                    "2025-01-01T00:00:00.000Z"
-                ),
-                new SyncLogEntry(
-                    2,
-                    "Parent",
-                    "{\"Id\":\"p1\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"p1\",\"Name\":\"Parent1\"}",
-                    "other",
-                    "2025-01-01T00:00:01.000Z"
-                ),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_DefersAndRetriesFkViolations_1();
 
         var attemptCounts = new Dictionary<long, int>();
 
@@ -119,22 +72,7 @@ public sealed class ChangeApplierTests : IDisposable
     [Fact]
     public void ApplyBatch_FailsAfterMaxRetries()
     {
-        var batch = new SyncBatch(
-            [
-                new SyncLogEntry(
-                    1,
-                    "Child",
-                    "{\"Id\":\"c1\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"c1\",\"ParentId\":\"missing\"}",
-                    "other",
-                    "2025-01-01T00:00:00.000Z"
-                ),
-            ],
-            0,
-            1,
-            false
-        );
+        var batch = new SyncBatch([Fixture_ApplyBatch_FailsAfterMaxRetries_1()], 0, 1, false);
 
         var result = ChangeApplier.ApplyBatch(
             batch,
@@ -144,8 +82,7 @@ public sealed class ChangeApplierTests : IDisposable
             Logger
         ); // Always FK violation
 
-        Assert.IsType<BatchApplyResultError>(result);
-        var failure = (BatchApplyResultError)result;
+        var failure = Assert.IsType<BatchApplyResultError>(result);
         Assert.IsType<SyncErrorDeferredChangeFailed>(failure.Value);
     }
 
@@ -155,31 +92,7 @@ public sealed class ChangeApplierTests : IDisposable
         // Insert Parent first
         InsertParent("p1", "Parent1");
 
-        var batch = new SyncBatch(
-            [
-                new SyncLogEntry(
-                    1,
-                    "Child",
-                    "{\"Id\":\"c1\"}",
-                    SyncOperation.Insert,
-                    "{\"Id\":\"c1\",\"ParentId\":\"p1\",\"Name\":\"Child1\"}",
-                    "other",
-                    "2025-01-01T00:00:00.000Z"
-                ),
-                new SyncLogEntry(
-                    2,
-                    "Child",
-                    "{\"Id\":\"c1\"}",
-                    SyncOperation.Update,
-                    "{\"Id\":\"c1\",\"ParentId\":\"p1\",\"Name\":\"UpdatedChild\"}",
-                    "other",
-                    "2025-01-01T00:00:01.000Z"
-                ),
-            ],
-            0,
-            2,
-            false
-        );
+        var batch = Dataset_ApplyBatch_WithRealSqlite_HandlesInsertUpdateDelete_1();
 
         var result = ChangeApplier.ApplyBatch(batch, "my-origin", 3, ApplyToDb, Logger);
 
@@ -202,19 +115,20 @@ public sealed class ChangeApplierTests : IDisposable
 
     private void InsertParent(string id, string name)
     {
-        using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: _db.Connection,
+            configure: cmd => cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)",
+            parameters: () => [("$id", id), ("$name", name)]
+        );
     }
 
     private string? GetChildName(string id)
     {
-        using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Child WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
+        return global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: _db.Connection,
+                configure: command => command.CommandText = "SELECT Name FROM Child WHERE Id = $id",
+                parameters: () => [("$id", id)]
+            ) as string;
     }
 
     private BoolSyncResult ApplyToDb(SyncLogEntry entry)

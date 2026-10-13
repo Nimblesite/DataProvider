@@ -1,3 +1,4 @@
+using System.CommandLine;
 using Nimblesite.Lql.Core;
 using Nimblesite.Sql.Model;
 using LqlStatementError = Outcome.Result<
@@ -27,6 +28,62 @@ namespace Lql;
 /// </summary>
 internal static class TranspileRunner
 {
+    // Implements [LQL-CLI-SHARED-COMMAND].
+    internal static Command BuildCommand(
+        string name,
+        string platformLabel,
+        Func<LqlStatement, Outcome.Result<string, SqlError>> transpile
+    )
+    {
+        var inputOption = new Option<FileInfo?>(
+            name: "--input",
+            description: "Input LQL file to transpile"
+        )
+        {
+            IsRequired = true,
+        };
+        inputOption.AddAlias(alias: "-i");
+        var outputOption = new Option<FileInfo?>(
+            name: "--output",
+            description: $"Output {platformLabel} SQL file (optional - prints to console if not specified)"
+        )
+        {
+            IsRequired = false,
+        };
+        outputOption.AddAlias(alias: "-o");
+        var validateOption = new Option<bool>(
+            name: "--validate",
+            description: "Validate the LQL syntax without generating output",
+            getDefaultValue: () => false
+        );
+        validateOption.AddAlias(alias: "-v");
+        var command = new Command(name: name, description: $"LQL to {platformLabel} SQL transpiler")
+        {
+            inputOption,
+            outputOption,
+            validateOption,
+        };
+        command.SetHandler(
+            async (inputFile, outputFile, validate) =>
+            {
+                Environment.ExitCode = inputFile is null
+                    ? 1
+                    : await RunAsync(
+                            platformLabel: platformLabel,
+                            inputFile: inputFile,
+                            outputFile: outputFile,
+                            validate: validate,
+                            transpile: transpile
+                        )
+                        .ConfigureAwait(false);
+            },
+            inputOption,
+            outputOption,
+            validateOption
+        );
+        return command;
+    }
+
     /// <summary>
     /// Reads the input file, parses the LQL, and either validates it
     /// or runs the supplied <paramref name="transpile"/> function and

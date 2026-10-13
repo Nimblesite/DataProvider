@@ -1,38 +1,14 @@
-using TranspileError = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Error<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
-using TranspileOk = Outcome.Result<
-    string,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<string, Nimblesite.DataProvider.Migration.Core.MigrationError>;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class RlsCurrentSettingLqlTests
+public sealed partial class RlsCurrentSettingLqlTests
 {
     [Theory]
-    [InlineData("tenant_id = current_setting('app.tenant_id')::uuid", "'app.tenant_id'")]
-    [InlineData("user_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("workspace_id = current_setting('app.workspace_id')::uuid", "'app.workspace_id'")]
-    [InlineData("api_key_id = current_setting('app.api_key_id')::uuid", "'app.api_key_id'")]
-    [InlineData("role = current_setting('app.role')", "'app.role'")]
-    [InlineData(
-        "tenant_id = current_setting('request.jwt.claims.tenant_id')::uuid",
-        "'request.jwt.claims.tenant_id'"
-    )]
-    [InlineData("created_by = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("updated_by = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("owner_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData("actor_id = current_setting('app.user_id')::uuid", "'app.user_id'")]
-    [InlineData(
-        "tenant_id = current_setting('app.tenant_id')::uuid and is_member(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "'app.tenant_id'"
-    )]
-    [InlineData(
-        "user_id = current_setting('app.user_id')::uuid or is_owner(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "'app.user_id'"
-    )]
+    [MemberData(nameof(Translate_CurrentSetting_NapPolicyShapes_EmitsMissingOkArgumentInlineCases))]
     public void Translate_CurrentSetting_NapPolicyShapes_EmitsMissingOkArgument(
         string lql,
         string keyLiteral
@@ -49,13 +25,12 @@ public sealed class RlsCurrentSettingLqlTests
     {
         var sql = Pg("tenant_id = current_setting('app.tenant_id')::uuid");
 
-        Assert.Contains("\"tenant_id\"", sql, StringComparison.Ordinal);
-        Assert.Contains(
-            "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+        VerifyCrossClassChecks2(
+            input0: sql,
+            value0: "\"tenant_id\"",
+            value1: "current_setting('app.tenant_id', true)::uuid",
+            value3: "\"uuid\""
         );
-        Assert.DoesNotContain("\"uuid\"", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -65,70 +40,48 @@ public sealed class RlsCurrentSettingLqlTests
             "tenant_id = current_setting('app.tenant_id')::uuid and user_id = current_setting('app.user_id')::uuid"
         );
 
-        Assert.Contains(
-            "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+        ContainsAll(
+            actual: sql,
+            expected:
+            [
+                "current_setting('app.tenant_id', true)::uuid",
+                "current_setting('app.user_id', true)::uuid",
+            ],
+            comparison: StringComparison.Ordinal
         );
     }
 
-    [Fact]
-    public void Translate_CurrentSetting_InsideStringLiteral_IsNotRewritten()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(IndependentScenarioData16))]
+    public void Translate_CurrentSetting_InsideStringLiteral_IsNotRewritten_ScenarioCases(
+        string scenarioName,
+        System.String scenario0,
+        System.String scenario1,
+        System.String scenario2
+    )
     {
-        var sql = Pg("note = 'current_setting(''app.tenant_id'')'");
+        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
 
-        Assert.Contains("'current_setting(''app.tenant_id'')'", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain(", true", sql, StringComparison.Ordinal);
+        var sql = Pg(scenario0);
+
+        Assert.Contains(scenario1, sql, StringComparison.Ordinal);
+        Assert.DoesNotContain(scenario2, sql, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Translate_CurrentSetting_ExistsPipeline_RewritesSettingsAfterLqlTranspile()
     {
         var sql = Pg(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.tenant_id = current_setting('app.tenant_id')::uuid and m.user_id = current_setting('app.user_id')::uuid)
-            )
-            """
+            Data_Translate_CurrentSetting_ExistsPipeline_RewritesSettingsAfterLqlTranspile_1
         );
 
-        Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", sql, StringComparison.Ordinal);
-        Assert.Contains(
+        MigrationAssertions.AssertSqlContains(
+            sql,
+            "EXISTS (",
+            "FROM tenant_members",
             "current_setting('app.tenant_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            "current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
-        );
-        Assert.DoesNotContain("__RLS_CURRENT_SETTING_", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Translate_CurrentSetting_ExistsPipeline_FnCallArg_RewritesSetting()
-    {
-        var sql = Pg(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => is_member(current_setting('app.user_id')::uuid, m.tenant_id))
-            )
-            """
-        );
-
-        Assert.Contains(
-            "is_member(current_setting('app.user_id', true)::uuid",
-            sql,
-            StringComparison.Ordinal
+            "current_setting('app.user_id', true)::uuid"
         );
         Assert.DoesNotContain("__RLS_CURRENT_SETTING_", sql, StringComparison.Ordinal);
     }
@@ -137,17 +90,7 @@ public sealed class RlsCurrentSettingLqlTests
     public void Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateRlsPolicyOperation(
-                "public",
-                "agent_configs",
-                new RlsPolicyDefinition
-                {
-                    Name = "tenant_member",
-                    Roles = ["app_user"],
-                    UsingLql = "tenant_id = current_setting('app.tenant_id')::uuid",
-                    WithCheckLql = "tenant_id = current_setting('app.tenant_id')::uuid",
-                }
-            )
+            Dataset_Generate_RlsPolicy_CurrentSetting_UsesPostgresMissingOkArgument_1()
         );
 
         Assert.Contains(
@@ -158,32 +101,22 @@ public sealed class RlsCurrentSettingLqlTests
         Assert.DoesNotContain("current_setting('app.tenant_id')", ddl, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError_ContextCasesData))]
+    public void Translate_CurrentSetting_Sqlite_ReturnsUnsupportedError_ContextCases(
+        string caseName,
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value3
+    )
     {
-        var result = RlsPredicateTranspiler.Translate(
-            "tenant_id = current_setting('app.tenant_id')::uuid",
-            RlsPlatform.Sqlite,
-            "tenant"
-        );
-
-        Assert.True(result is TranspileError);
-        Assert.Contains("supported only for PostgreSQL", ((TranspileError)result).Value.Message);
-    }
-
-    [Fact]
-    public void Translate_CurrentSetting_NonLiteralArgument_ReturnsParseError()
-    {
-        var result = RlsPredicateTranspiler.Translate(
-            "tenant_id = current_setting(app.tenant_id)::uuid",
-            RlsPlatform.Postgres,
-            "tenant"
-        );
-
-        Assert.True(result is TranspileError);
-        Assert.Contains(
-            "requires exactly one string-literal argument",
-            ((TranspileError)result).Value.Message
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseProjectionCaseMatrix3(
+            input0: VerifyReusableWorkflow11,
+            value0: value0,
+            value1: value1,
+            value3: value3
         );
     }
 
@@ -194,6 +127,48 @@ public sealed class RlsCurrentSettingLqlTests
             result is TranspileOk,
             result is TranspileError e ? e.Value.Message : "expected Ok"
         );
-        return ((TranspileOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyCrossClassChecks2(
+        string input0,
+        string value0,
+        string value1,
+        string value3
+    )
+    {
+        ContainsAll(
+            actual: input0,
+            expected: [value0, value1],
+            comparison: StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(value3, input0, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static Outcome.Result<string, MigrationError> VerifyReusableWorkflow11(
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value2
+    )
+    {
+        var result = RlsPredicateTranspiler.Translate(value0, value1, value2);
+
+        Assert.True(result is TranspileError);
+
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseProjectionCaseMatrix3(
+        Func<string, RlsPlatform, string, Outcome.Result<string, MigrationError>> input0,
+        string value0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsPlatform value1,
+        string value3
+    )
+    {
+        var result = input0(arg1: value0, arg2: value1, arg3: "tenant");
+        Assert.Contains(value3, (Error(actual: result)).Value.Message);
     }
 }

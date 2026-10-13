@@ -5,7 +5,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 // - primary key columns left at the default nullability are NOT NULL on the platform
 // - a parenthesized default such as (1) is stored without the redundant parentheses
 [Collection(MigrationPlatformSuite.Name)]
-public sealed record DeclaredSchemaRerunTests
+public sealed partial record DeclaredSchemaRerunTests
 {
     private readonly MigrationPostgresContainerFixture _postgres;
     private readonly SqlServerContainerFixture _sqlServer;
@@ -51,12 +51,7 @@ public sealed record DeclaredSchemaRerunTests
         """;
 
     [Theory]
-    [InlineData("sqlite", PrimaryKeyDefaultNullability)]
-    [InlineData("postgres", PrimaryKeyDefaultNullability)]
-    [InlineData("sqlserver", PrimaryKeyDefaultNullability)]
-    [InlineData("sqlite", ParenthesizedDefault)]
-    [InlineData("postgres", ParenthesizedDefault)]
-    [InlineData("sqlserver", ParenthesizedDefault)]
+    [MemberData(nameof(Migrate_DeclaredSchema_VerifiesAndRerunsCleanlyInlineCases))]
     public async Task Migrate_DeclaredSchema_VerifiesAndRerunsCleanly(string provider, string yaml)
     {
         var schemaPath = Path.GetTempFileName();

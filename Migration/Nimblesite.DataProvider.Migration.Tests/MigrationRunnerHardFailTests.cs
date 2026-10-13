@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
+
 using MigrationRunnerResult = Outcome.Result<
     bool,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -10,12 +12,7 @@ public sealed partial record MigrationPlatformRegressionTests
 {
     // Implements [MIG-RUNNER-HARD-FAIL] and [MIG-TEST-CROSS-PLATFORM].
     [Theory]
-    [InlineData("sqlite", false)]
-    [InlineData("postgres", false)]
-    [InlineData("sqlserver", false)]
-    [InlineData("sqlite", true)]
-    [InlineData("postgres", true)]
-    [InlineData("sqlserver", true)]
+    [MemberData(nameof(Runner_FailedOperationReturnsErrorAndHonorsContinueOnErrorInlineCases))]
     public async Task Runner_FailedOperationReturnsErrorAndHonorsContinueOnError(
         string provider,
         bool continueOnError
@@ -27,11 +24,10 @@ public sealed partial record MigrationPlatformRegressionTests
 
     private static void AssertRunnerHardFail(MigrationTarget target, bool continueOnError)
     {
-        var baseline = new SchemaDefinition
-        {
-            Name = "runner_hard_fail",
-            Tables = [ParentTable("runner_baseline")],
-        };
+        var baseline = SchemaTestData.Schema(
+            name: "runner_hard_fail",
+            tables: [ParentTable("runner_baseline")]
+        );
         Migrate(target, baseline);
         AssertBaseline(target);
         var before = new CreateTableOperation(ParentTable("runner_before"));
@@ -73,11 +69,7 @@ public sealed partial record MigrationPlatformRegressionTests
             connection: target.Connection,
             operations: [before, broken, after],
             generateDdl: GenerateDdl,
-            options: new MigrationOptions
-            {
-                ContinueOnError = continueOnError,
-                UseTransaction = false,
-            }
+            options: Dataset_ApplyFailureScenario_1(continueOnError: continueOnError)
         );
     }
 

@@ -1,72 +1,15 @@
-using Nimblesite.Sql.Model;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public sealed class CodeGenerationExtendedE2ETests
+public sealed partial class CodeGenerationExtendedE2ETests
 {
     private static readonly IReadOnlyList<DatabaseColumn> OrderColumns =
-    [
-        new()
-        {
-            Name = "OrderId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-            IsPrimaryKey = true,
-        },
-        new()
-        {
-            Name = "CustomerName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Total",
-            SqlType = "REAL",
-            CSharpType = "decimal",
-        },
-    ];
+        CodeGenerationColumnSets.OrderColumns;
 
     private static readonly IReadOnlyList<DatabaseColumn> AllJoinedColumns =
-    [
-        new()
-        {
-            Name = "OrderId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-        },
-        new()
-        {
-            Name = "CustomerName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Total",
-            SqlType = "REAL",
-            CSharpType = "decimal",
-        },
-        new()
-        {
-            Name = "LineItemId",
-            SqlType = "TEXT",
-            CSharpType = "Guid",
-        },
-        new()
-        {
-            Name = "ProductName",
-            SqlType = "TEXT",
-            CSharpType = "string",
-        },
-        new()
-        {
-            Name = "Quantity",
-            SqlType = "INTEGER",
-            CSharpType = "int",
-        },
-    ];
+        CodeGenerationColumnSets.AllJoinedColumns;
 
     private static GroupingConfig CreateOrderGroupingConfig() =>
         new(
@@ -84,53 +27,11 @@ public sealed class CodeGenerationExtendedE2ETests
             )
         );
 
-    private static DatabaseTable CreateTableWithIdentity() =>
-        new()
-        {
-            Name = "Products",
-            Schema = "main",
-            Columns = new DatabaseColumn[]
-            {
-                new()
-                {
-                    Name = "Id",
-                    SqlType = "TEXT",
-                    CSharpType = "Guid",
-                    IsPrimaryKey = true,
-                },
-                new()
-                {
-                    Name = "RowNum",
-                    SqlType = "INTEGER",
-                    CSharpType = "int",
-                    IsIdentity = true,
-                },
-                new()
-                {
-                    Name = "Name",
-                    SqlType = "TEXT",
-                    CSharpType = "string",
-                },
-                new()
-                {
-                    Name = "Price",
-                    SqlType = "REAL",
-                    CSharpType = "decimal",
-                },
-            },
-        };
-
     private static Task<Result<IReadOnlyList<DatabaseColumn>, SqlError>> MockGetColumnMetadata(
         string connectionString,
         string sql,
         IEnumerable<ParameterInfo> parameters
-    ) =>
-        Task.FromResult<Result<IReadOnlyList<DatabaseColumn>, SqlError>>(
-            new Result<IReadOnlyList<DatabaseColumn>, SqlError>.Ok<
-                IReadOnlyList<DatabaseColumn>,
-                SqlError
-            >(AllJoinedColumns)
-        );
+    ) => CodeGenerationTestDoubles.ColumnMetadata(columns: AllJoinedColumns);
 
     private static CodeGenerationConfig CreateConfig() =>
         new(getColumnMetadata: MockGetColumnMetadata);
@@ -138,58 +39,60 @@ public sealed class CodeGenerationExtendedE2ETests
     [Fact]
     public void GenerateGroupedQueryMethod_ViaConfig_ProducesParentChildCode()
     {
-        var result = CreateConfig()
-            .GenerateGroupedQueryMethod(
-                "OrderQueries",
-                "GetOrdersWithItems",
-                "SELECT o.OrderId, o.CustomerName, o.Total, li.LineItemId, li.ProductName, li.Quantity FROM Orders o JOIN LineItems li ON o.OrderId = li.OrderId",
-                Array.Empty<ParameterInfo>(),
-                AllJoinedColumns,
-                CreateOrderGroupingConfig(),
-                "SqliteConnection"
-            );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
+        var ok = Ok(
+            read: () =>
+                CreateConfig()
+                    .GenerateGroupedQueryMethod(
+                        "OrderQueries",
+                        "GetOrdersWithItems",
+                        "SELECT o.OrderId, o.CustomerName, o.Total, li.LineItemId, li.ProductName, li.Quantity FROM Orders o JOIN LineItems li ON o.OrderId = li.OrderId",
+                        Array.Empty<ParameterInfo>(),
+                        AllJoinedColumns,
+                        CreateOrderGroupingConfig(),
+                        "SqliteConnection"
+                    ),
+            message: "Expected StringOk"
+        );
         var code = ok.Value;
 
-        Assert.Contains("public static partial class OrderQueries", code);
-        Assert.Contains("GetOrdersWithItemsAsync", code);
-        Assert.Contains("SqliteConnection", code);
-        Assert.Contains("SELECT o.OrderId", code);
-        Assert.Contains("GroupResults", code);
-        Assert.Contains("Order", code);
-        Assert.Contains("LineItem", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "public static partial class OrderQueries",
+                "GetOrdersWithItemsAsync",
+                "SqliteConnection",
+                "SELECT o.OrderId",
+                "GroupResults",
+                "Order",
+                "LineItem",
+            ]
+        );
     }
 
     [Fact]
     public void GenerateGroupedQueryMethod_WithParameters_IncludesParameterHandling()
     {
-        var result = CreateConfig()
-            .GenerateGroupedQueryMethod(
-                "OrderQueries",
-                "GetOrdersByCustomer",
-                "SELECT o.OrderId FROM Orders o JOIN LineItems li ON o.OrderId = li.OrderId WHERE o.CustomerId = @customerId",
-                new List<ParameterInfo> { new(Name: "customerId", SqlType: "TEXT") },
-                AllJoinedColumns,
-                CreateOrderGroupingConfig(),
-                "SqliteConnection"
-            );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
+        var ok = Ok(
+            read: () =>
+                CreateConfig()
+                    .GenerateGroupedQueryMethod(
+                        "OrderQueries",
+                        "GetOrdersByCustomer",
+                        "SELECT o.OrderId FROM Orders o JOIN LineItems li ON o.OrderId = li.OrderId WHERE o.CustomerId = @customerId",
+                        new List<ParameterInfo> { new(Name: "customerId", SqlType: "TEXT") },
+                        AllJoinedColumns,
+                        CreateOrderGroupingConfig(),
+                        "SqliteConnection"
+                    ),
+            message: "Expected StringOk"
+        );
         var code = ok.Value;
 
-        Assert.Contains("customerId", code);
-        Assert.Contains("@customerId", code);
-        Assert.Contains("AddWithValue", code);
-        Assert.Contains("GetOrdersByCustomerAsync", code);
+        ContainsAll(
+            actual: code,
+            expected: ["customerId", "@customerId", "AddWithValue", "GetOrdersByCustomerAsync"]
+        );
     }
 
     [Fact]
@@ -206,60 +109,42 @@ public sealed class CodeGenerationExtendedE2ETests
                 "SqliteConnection"
             );
 
-        if (result is not StringError err)
-        {
-            Assert.Fail("Expected StringError");
-            return;
-        }
-        Assert.Contains("className", err.Value.Message, StringComparison.OrdinalIgnoreCase);
+        VerifyReusableWorkflow15(input0: result, value1: "className");
     }
 
     [Fact]
     public void GenerateGroupedQueryMethod_EmptyColumns_ReturnsError()
     {
-        var result = CreateConfig()
-            .GenerateGroupedQueryMethod(
-                "TestClass",
-                "TestMethod",
-                "SELECT 1",
-                Array.Empty<ParameterInfo>(),
-                Array.Empty<DatabaseColumn>(),
-                CreateOrderGroupingConfig(),
-                "SqliteConnection"
-            );
-
-        Assert.True(result is StringError);
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: CreateConfig()
+                .GenerateGroupedQueryMethod(
+                    "TestClass",
+                    "TestMethod",
+                    "SELECT 1",
+                    Array.Empty<ParameterInfo>(),
+                    Array.Empty<DatabaseColumn>(),
+                    CreateOrderGroupingConfig(),
+                    "SqliteConnection"
+                )
+        );
     }
 
     [Fact]
     public void GenerateTableOperations_WithInsertAndUpdate_ProducesAllMethods()
     {
-        var generator = new DefaultTableOperationGenerator(connectionType: "SqliteConnection");
-        var tableConfig = new TableConfig
-        {
-            Name = "Products",
-            Schema = "main",
-            GenerateInsert = true,
-            GenerateUpdate = true,
-        };
-
-        var result = generator.GenerateTableOperations(
-            table: CreateTableWithIdentity(),
-            config: tableConfig
+        var code = GenerateConfiguredTableOperationOk(
+            connectionType: "SqliteConnection",
+            schema: "main",
+            generateUpdate: true
         );
 
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
-        var code = ok.Value;
-
         Assert.Contains("ProductsExtensions", code);
-        Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("UPDATE", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("namespace Generated", code);
-        Assert.Contains("Microsoft.Data.Sqlite", code);
+        ContainsAll(
+            actual: code,
+            expected: ["INSERT", "UPDATE"],
+            comparison: StringComparison.OrdinalIgnoreCase
+        );
+        ContainsAll(actual: code, expected: ["namespace Generated", "Microsoft.Data.Sqlite"]);
     }
 
     [Fact]
@@ -270,12 +155,7 @@ public sealed class CodeGenerationExtendedE2ETests
 
         var result = generator.GenerateTableOperations(table: null!, config: tableConfig);
 
-        if (result is not StringError err)
-        {
-            Assert.Fail("Expected StringError");
-            return;
-        }
-        Assert.Contains("table", err.Value.Message, StringComparison.OrdinalIgnoreCase);
+        VerifyReusableWorkflow15(input0: result, value1: "table");
     }
 
     [Fact]
@@ -286,134 +166,126 @@ public sealed class CodeGenerationExtendedE2ETests
             config: null!
         );
 
-        if (result is not StringError err)
-        {
-            Assert.Fail("Expected StringError");
-            return;
-        }
-        Assert.Contains("config", err.Value.Message, StringComparison.OrdinalIgnoreCase);
+        VerifyReusableWorkflow15(input0: result, value1: "config");
     }
 
     [Fact]
     public void GenerateInsertMethod_ExcludesIdentityColumns()
     {
-        var result = new DefaultTableOperationGenerator(
-            connectionType: "SqliteConnection"
-        ).GenerateInsertMethod(table: CreateTableWithIdentity());
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
+        var ok = Ok(
+            read: () =>
+                new DefaultTableOperationGenerator(
+                    connectionType: "SqliteConnection"
+                ).GenerateInsertMethod(table: CreateTableWithIdentity()),
+            message: "Expected StringOk"
+        );
         var code = ok.Value;
 
         Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Products", code);
-        Assert.Contains("Name", code);
-        Assert.Contains("Price", code);
+        ContainsAll(actual: code, expected: ["Products", "Name", "Price"]);
         Assert.DoesNotContain("RowNum", code);
     }
 
     [Fact]
     public void GenerateUpdateMethod_UsesPrimaryKeyInWhere()
     {
-        var result = new DefaultTableOperationGenerator(
-            connectionType: "SqliteConnection"
-        ).GenerateUpdateMethod(table: CreateTableWithIdentity());
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
+        var ok = Ok(
+            read: () =>
+                new DefaultTableOperationGenerator(
+                    connectionType: "SqliteConnection"
+                ).GenerateUpdateMethod(table: CreateTableWithIdentity()),
+            message: "Expected StringOk"
+        );
         var code = ok.Value;
 
-        Assert.Contains("UPDATE", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Products", code);
-        Assert.Contains("WHERE", code, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Id", code);
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: code,
+            value0: "UPDATE",
+            value2: "Products"
+        );
+        global::Nimblesite.DataProvider.Tests.QueryBuilderE2ETests.VerifyReusableWorkflow1(
+            input0: code,
+            value0: "WHERE",
+            value2: "Id"
+        );
     }
 
     [Fact]
     public void GenerateModelType_ProducesRecordWithProperties()
     {
-        var result = new DefaultCodeTemplate().GenerateModelType(
-            typeName: "PatientRecord",
-            columns: OrderColumns
+        var ok = Ok(
+            read: () =>
+                new DefaultCodeTemplate().GenerateModelType(
+                    typeName: "PatientRecord",
+                    columns: OrderColumns
+                ),
+            message: "Expected StringOk"
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
         var code = ok.Value;
 
-        Assert.Contains("PatientRecord", code);
-        Assert.Contains("OrderId", code);
-        Assert.Contains("CustomerName", code);
-        Assert.Contains("Total", code);
+        ContainsAll(actual: code, expected: ["PatientRecord", "OrderId", "CustomerName", "Total"]);
     }
 
     [Fact]
     public void GenerateModelType_EmptyTypeName_ReturnsError()
     {
-        var result = new DefaultCodeTemplate().GenerateModelType(
-            typeName: "",
-            columns: OrderColumns
+        global::Tests.Shared.ResultAssertions.Error(
+            actual: new DefaultCodeTemplate().GenerateModelType(typeName: "", columns: OrderColumns)
         );
-
-        Assert.True(result is StringError);
     }
 
     [Fact]
     public void GenerateDataAccessMethod_ProducesExtensionMethod()
     {
-        var result = new DefaultCodeTemplate().GenerateDataAccessMethod(
-            methodName: "GetHighValueOrders",
-            returnTypeName: "OrderRecord",
-            sql: "SELECT OrderId, CustomerName, Total FROM Orders WHERE Total > @minTotal",
-            parameters: new List<ParameterInfo> { new(Name: "minTotal", SqlType: "REAL") },
-            columns: OrderColumns
+        var ok = Ok(
+            read: () =>
+                new DefaultCodeTemplate().GenerateDataAccessMethod(
+                    methodName: "GetHighValueOrders",
+                    returnTypeName: "OrderRecord",
+                    sql: "SELECT OrderId, CustomerName, Total FROM Orders WHERE Total > @minTotal",
+                    parameters: new List<ParameterInfo> { new(Name: "minTotal", SqlType: "REAL") },
+                    columns: OrderColumns
+                ),
+            message: "Expected StringOk"
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
-        var code = ok.Value;
-
-        Assert.Contains("GetHighValueOrdersExtensions", code);
-        Assert.Contains("GetHighValueOrders", code);
-        Assert.Contains("OrderRecord", code);
-        Assert.Contains("minTotal", code);
-        Assert.Contains("SqliteConnection", code);
+        VerifyReusableWorkflow6(
+            input0: ok,
+            input1: ContainsAll,
+            value0: "GetHighValueOrdersExtensions",
+            value1: "GetHighValueOrders",
+            value2: "OrderRecord",
+            value3: "minTotal",
+            value4: "SqliteConnection"
+        );
     }
 
     [Fact]
     public void GenerateSourceFile_CombinesModelAndDataAccess()
     {
-        var result = new DefaultCodeTemplate().GenerateSourceFile(
-            namespaceName: "MyApp.Generated",
-            modelCode: "public sealed record OrderRecord(Guid OrderId, string CustomerName);",
-            dataAccessCode: "public static partial class OrderQueries { }"
+        var ok = Ok(
+            read: () =>
+                new DefaultCodeTemplate().GenerateSourceFile(
+                    namespaceName: "MyApp.Generated",
+                    modelCode: "public sealed record OrderRecord(Guid OrderId, string? CustomerName);",
+                    dataAccessCode: "public static partial class OrderQueries { }"
+                ),
+            message: "Expected StringOk"
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
         var code = ok.Value;
 
-        Assert.Contains("namespace MyApp.Generated;", code);
-        Assert.Contains("using System;", code);
-        Assert.Contains("using Microsoft.Data.Sqlite;", code);
-        Assert.Contains("using Outcome;", code);
-        Assert.Contains("OrderRecord", code);
-        Assert.Contains("OrderQueries", code);
+        ContainsAll(
+            actual: code,
+            expected:
+            [
+                "namespace MyApp.Generated;",
+                "using System;",
+                "using Microsoft.Data.Sqlite;",
+                "using Outcome;",
+                "OrderRecord",
+                "OrderQueries",
+            ]
+        );
+        _ = global::Tests.Shared.GeneratedCodeCompiler.Compile(source: code);
     }
 
     [Fact]
@@ -439,17 +311,15 @@ public sealed class CodeGenerationExtendedE2ETests
     [Fact]
     public void GenerateSourceFile_OnlyModelCode_Succeeds()
     {
-        var result = new DefaultCodeTemplate().GenerateSourceFile(
-            namespaceName: "MyApp",
-            modelCode: "public sealed record Widget(string Name);",
-            dataAccessCode: ""
+        var ok = Ok(
+            read: () =>
+                new DefaultCodeTemplate().GenerateSourceFile(
+                    namespaceName: "MyApp",
+                    modelCode: "public sealed record Widget(string Name);",
+                    dataAccessCode: ""
+                ),
+            message: "Expected StringOk"
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
         Assert.Contains("Widget", ok.Value);
         Assert.Contains("namespace MyApp;", ok.Value);
     }
@@ -457,16 +327,14 @@ public sealed class CodeGenerationExtendedE2ETests
     [Fact]
     public void GenerateGroupedModels_ProducesParentAndChildTypes()
     {
-        var result = new DefaultCodeTemplate().GenerateGroupedModels(
-            groupingConfig: CreateOrderGroupingConfig(),
-            columns: AllJoinedColumns
+        var ok = Ok(
+            read: () =>
+                new DefaultCodeTemplate().GenerateGroupedModels(
+                    groupingConfig: CreateOrderGroupingConfig(),
+                    columns: AllJoinedColumns
+                ),
+            message: "Expected StringOk"
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
         Assert.Contains("Order", ok.Value);
         Assert.Contains("LineItem", ok.Value);
     }
@@ -492,51 +360,88 @@ public sealed class CodeGenerationExtendedE2ETests
     [Fact]
     public void GenerateTableOperations_InsertOnly_OmitsUpdate()
     {
-        var generator = new DefaultTableOperationGenerator(connectionType: "SqliteConnection");
-        var tableConfig = new TableConfig
-        {
-            Name = "Products",
-            Schema = "main",
-            GenerateInsert = true,
-            GenerateUpdate = false,
-        };
-
-        var result = generator.GenerateTableOperations(
-            table: CreateTableWithIdentity(),
-            config: tableConfig
+        var code = GenerateConfiguredTableOperationOk(
+            connectionType: "SqliteConnection",
+            schema: "main",
+            generateUpdate: false
         );
-
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
-        Assert.Contains("INSERT", ok.Value, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ProductsExtensions", ok.Value);
+        Assert.Contains("INSERT", code, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ProductsExtensions", code);
     }
 
     [Fact]
     public void DefaultTableOperationGenerator_SqlServerConnectionType_UsesCorrectNamespace()
     {
-        var generator = new DefaultTableOperationGenerator(connectionType: "SqlConnection");
-        var tableConfig = new TableConfig
-        {
-            Name = "Products",
-            Schema = "dbo",
-            GenerateInsert = true,
-            GenerateUpdate = true,
-        };
+        var code = GenerateConfiguredTableOperationOk(
+            connectionType: "SqlConnection",
+            schema: "dbo",
+            generateUpdate: true
+        );
+        Assert.Contains("Microsoft.Data.SqlClient", code);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string GenerateConfiguredTableOperationOk(
+        string connectionType,
+        string schema,
+        bool generateUpdate
+    ) =>
+        Ok(
+            read: () =>
+                GenerateConfiguredTableOperation(
+                    value0: connectionType,
+                    value2: schema,
+                    value4: generateUpdate
+                ),
+            message: "Expected StringOk"
+        ).Value;
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::Outcome.Result<
+        global::System.String,
+        global::Nimblesite.Sql.Model.SqlError
+    > GenerateConfiguredTableOperation(string value0, string value2, bool value4)
+    {
+        var generator = new DefaultTableOperationGenerator(connectionType: value0);
+        var tableConfig = Dataset_GenerateConfiguredTableOperation_1(
+            value2: value2,
+            value4: value4
+        );
 
         var result = generator.GenerateTableOperations(
             table: CreateTableWithIdentity(),
             config: tableConfig
         );
 
-        if (result is not StringOk ok)
-        {
-            Assert.Fail("Expected StringOk");
-            return;
-        }
-        Assert.Contains("Microsoft.Data.SqlClient", ok.Value);
+        return result;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow6(
+        Result<string, Sql.Model.SqlError>.Ok<string, Sql.Model.SqlError> input0,
+        Action<string?, System.Collections.Immutable.ImmutableArray<string>> input1,
+        string value0,
+        string value1,
+        string value2,
+        string value3,
+        string value4
+    )
+    {
+        var code = input0.Value;
+
+        input1(arg1: code, arg2: [value0, value1, value2, value3, value4]);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow15(
+        Result<string, Sql.Model.SqlError> input0,
+        string value1
+    )
+    {
+        var err = global::Tests.Shared.ResultAssertions.Expected<StringError>(
+            actual: input0,
+            message: "Expected StringError"
+        );
+        Assert.Contains(value1, err.Value.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

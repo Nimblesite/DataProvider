@@ -311,42 +311,22 @@ const HOVER_DATABASE: &[(&str, &str, &str, Option<&str>)] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
-
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
-    }
+    use crate::{schema::SchemaCache, test_support::make_col};
 
     fn sample_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![TableInfo {
-            name: "users".to_string(),
-            schema: "public".to_string(),
-            columns: vec![
-                make_col("id", "uuid", false, true),
-                make_col("name", "text", false, false),
-                make_col("email", "text", true, false),
-            ],
-        }])
+        independent_expanded_schema_data_1()
     }
 
     // ── get_hover (keyword only) ──
 
     #[test]
     fn test_hover_select() {
-        let info = get_hover("select").unwrap();
-        assert!(info.title.contains("select"));
-        assert!(info.signature.is_some());
+        crate::test_support::verify_hover_keyword("select", "select", true);
     }
 
     #[test]
     fn test_hover_case_insensitive() {
-        let info = get_hover("SELECT").unwrap();
-        assert!(info.title.contains("select"));
+        crate::test_support::verify_hover_keyword("SELECT", "select", false);
     }
 
     #[test]
@@ -358,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_hover_unknown_word() {
-        assert!(get_hover("zzz_not_a_keyword").is_none());
+        crate::test_support::verify_hover_unknown("zzz_not_a_keyword");
     }
 
     #[test]
@@ -427,12 +407,7 @@ mod tests {
 
     #[test]
     fn test_hover_table_name() {
-        let schema = sample_schema();
-        let info = get_hover_with_schema("users", None, Some(&schema)).unwrap();
-        assert!(info.title.contains("users"));
-        assert!(info.title.contains("Table"));
-        assert!(info.detail.contains("id"));
-        assert!(info.signature.is_some());
+        crate::test_support::verify_hover_table(&sample_schema(), &[]);
     }
 
     #[test]
@@ -475,4 +450,6 @@ mod tests {
         let info = get_hover_with_schema("id", Some(("users", "id")), Some(&schema)).unwrap();
         assert!(info.detail.contains("Primary Key: yes"));
     }
+
+    include!("hover_expanded_schema_data_0.fixtures.rs");
 }

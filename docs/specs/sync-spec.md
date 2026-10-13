@@ -1021,3 +1021,138 @@ CREATE TABLE _sync_clients (
 - [RFC 4122 - UUID](https://tools.ietf.org/html/rfc4122)
 - [RFC 8785 - JSON Canonicalization](https://tools.ietf.org/html/rfc8785)
 - [Dotmim.Sync Documentation](https://dotmimsync.readthedocs.io/)
+
+### Shared SQLite client operations [SYNC-CLIENT-API-SHARED]
+
+SQLite connection extensions and SyncClientRepository share client listing, upsert,
+and multiple-delete execution. Both public APIs preserve their existing database-error
+message prefixes, version ordering, affected-row counts, and created-at semantics.
+A missing client table produces a SyncErrorDatabase through every client API.
+
+### Shared expression test execution [SYNC-EXPRESSION-TEST-CASES]
+
+Named expression and corner-case tests retain their exact JSON inputs, LQL
+expressions, and expected values. A shared helper owns JSON parsing, expression
+evaluation, and equality assertion. Each named case still executes independently.
+
+### Shared mapping test data [SYNC-MAPPING-TEST-DATA]
+
+Mapping, expression, and corner-case tests share their mapping configuration and
+insert-log defaults. The mapping factory reuses `TableMapping.Identity`; each
+scenario retains its explicit direction, primary-key mapping, exclusions, enabled
+state, and multi-target configuration. Test inputs and assertions remain unchanged.
+The same fixture executes mappings and retains each caller’s exact xUnit result-type
+assertion, including successful and skipped outcomes and the explicit mapping direction.
+
+### Shared mapping integration setup [SYNC-MAPPING-E2E-SETUP]
+
+Tests with the default User-to-Customer mapping create their source connection and mapping config through one fixture method. Each connection remains disposed by the calling test; custom mappings keep their explicit configuration.
+
+The mapping integration fixture shares execution of push mappings and the
+success-result assertion. Default User-to-customer column renames are defined
+once; explicit transforms, exclusions and the empty mapping case remain explicit.
+All 14 database scenarios and their assertions remain, separated into mapping and
+edge-case partial files while sharing the original database lifecycle.
+
+### Shared scalar reads [SYNC-SCALAR-READ-SHARED]
+
+SQLite log aggregates, oldest-log lookup and minimum-client-version lookup share
+the existing mapping repository command executor. Their SQL statements and error
+message prefixes remain unchanged. An Int64 scalar is returned as-is; null,
+DBNull and other scalar types retain the previous zero fallback. Only
+SqliteException is converted to SyncErrorDatabase, and commands are disposed on
+both success and failure. Readers with different conversion rules remain separate.
+
+### [SYNC-MAPPING-TRANSFORM-FIXTURE] Shared user transform fixture
+
+The named LQL transformation tests share their identical User-to-Customer mapping
+setup and successful-result assertion. Each case retains its column transforms,
+input payload, and all positive and negative payload assertions. The fixture keeps
+the strict configuration, insert metadata, primary key, and push direction unchanged.
+
+### Shared person command parameters [SYNC-TEST-PERSON-PARAMETERS]
+
+Cross-database and SQLite sync tests share binding the id, name, and email parameters and executing the command. Each test retains its original SQL and connection, including insert versus update statements and provider-specific table casing. Parameters are created by the command's provider and retain their string values.
+
+### Reuse typed test result assertions [TEST-TYPED-RESULT]
+
+Tests use the value returned by their existing xUnit type assertion instead of checking the same result and then casting it separately. Each assertion retains its original type, arguments, and call count. Every test case and all following value checks remain unchanged. This applies to shared testing practice across DataProvider and Sync.
+
+### Shared subscription roundtrip [SYNC-TEST-SUBSCRIPTION-ROUNDTRIP]
+
+SQLite extension cases share insertion, retrieval and success/single-row checks while retaining the record, query and expiry inputs and their separate assertions.
+
+### Shared sync log test reader [SYNC-TEST-LOG-READER]
+
+The test database owns the common parameterized sync-log query, row mapping and operation parser. Coordinator and integration fixtures reuse it, preserving ordered pagination, null payloads and the coordinator SQLite error result.
+
+### Shared trigger schema validation [SYNC-TRIGGER-SHARED-GENERATION]
+
+SQLite and PostgreSQL share column validation, primary-key selection, trigger assembly,
+and generation logging. Each provider retains its metadata query and SQL dialect.
+SQLite still drops existing triggers before creation; PostgreSQL retains its existing
+creation behavior. Public trigger APIs and provider column types remain unchanged.
+Direct tests cover empty columns, missing keys, first-key selection, column order,
+metadata failures and exact trigger separators; existing database tests cover DDL.
+
+### Shared HTTP mapping string cases [SYNC-TEST-STRING-TRANSFORMS]
+
+Eleven string-transform cases share their identical mapping execution and payload
+assertions as a theory. Every mapping ID, source and target table, primary key, LQL
+expression, payload and expected string is preserved in its own data row. The original
+case names label those rows. The number of executed cases and equality assertions
+remains unchanged; nullable, numeric, boolean and multi-assertion cases remain separate.
+
+### Shared trigger event templates [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE]
+
+Each provider uses one event template for INSERT and UPDATE. Event names and logged
+operation values retain their original casing; JSON payloads, primary-key casing and
+SQL whitespace remain identical. DELETE retains its separate payload behavior.
+Existing trigger tests exercise both events through the public provider API.
+
+### Shared provider trigger workflow [SYNC-TRIGGER-SHARED-WORKFLOW]
+
+Providers reuse trigger composition, schema result handling and creation/error
+logging. SQLite retains drop-before-create; provider exception types, DDL execution
+and metadata extraction remain provider-specific.
+
+### Shared sync-client storage [SYNC-CLIENT-SHARED-STORAGE]
+
+SQLite and PostgreSQL reuse client lookup, upsert, deletion and row mapping.
+Provider-typed public APIs and exception handling remain intact. Command factories
+create native provider parameters with the same names and string/integer values;
+SQL text, row ordering and caller-specific error prefixes remain unchanged.
+
+### Shared repository writes [SYNC-REPOSITORY-SHARED-WRITES]
+
+SQLite and Postgres repository mutations share command lifetime, parameter binding,
+execution and typed exception conversion in Core. Each caller retains its SQL,
+parameter order, Boolean or row-count result and original failure prefix.
+Parameter factories evaluate after the SQL is assigned inside the exception scope.
+
+### Shared coordinator batching [SYNC-COORDINATOR-SHARED-BATCHES]
+
+Pull and push share batch fetching, empty-batch termination, error propagation,
+version advancement and completion. Pull retains its trigger-suppression finally
+block and retrying change application; push retains its remote-send callback.
+Structured phase logs retain the rendered operation messages.
+
+The SQLite mapping compatibility API delegates single-record reads and matching deletes to `MappingStateRepository`. Both upsert APIs use shared bind/execute operations while retaining their original SQL text. Public signatures, result variants and database-error messages remain unchanged.
+
+### Shared repository reads [SYNC-REPOSITORY-SHARED-READS]
+
+Provider repositories reuse command creation, parameter binding, disposal and
+provider-specific exception handling. Each query retains its SQL, row projection,
+null handling and original error result. Writes use the same command lifecycle.
+
+## [SYNC-MAPPED-SHARED-BATCHES]
+
+Mapped pull and push share fetch, termination, version advancement and mapping state updates. Mapping application, echo prevention, hash writes, failure propagation and trigger suppression retain their direction-specific ordering.
+
+## [SYNC-TEST-SHARED-DATABASE-BOOTSTRAP]
+
+SQLite integration fixtures share opening their isolated disk database, creating the sync schema and setting the origin. Per-scenario table setup and fixture disposal remain with each test class.
+
+### Shared HTTP database connections [SYNC-HTTP-SHARED-CONNECTION-LIFETIME]
+
+HTTP repository adapters use one typed connection-lifetime operation: construct, open, invoke the provider operation, then dispose. Fetch, client upsert, maximum-version and apply operations retain their provider calls and exception behavior.

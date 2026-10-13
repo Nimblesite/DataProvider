@@ -14,41 +14,13 @@ public static class SqlStatementExtensionsSQLite
     /// </summary>
     /// <param name="statement">The LqlStatement to convert</param>
     /// <returns>A Result containing either SQLite SQL string or a SqlError</returns>
-    public static Result<string, SqlError> ToSQLite(this LqlStatement statement)
-    {
-        ArgumentNullException.ThrowIfNull(statement);
-
-        if (LqlStatementValidator.Validate(statement) is SqlError error)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(error);
-        }
-
-        try
-        {
-            // Implements [LQL-CTE] and [LQL-DERIVED-TABLE].
-            if (statement.AstNode is { } node && SubqueryLayout.Applies(node))
-            {
-                return new Result<string, SqlError>.Ok<string, SqlError>(
-                    SubqueryLayout.Render(node, SqlPaging.LimitOffset)
-                );
-            }
-
-            if (statement.AstNode is Pipeline pipeline)
-            {
-                var sql = ConvertPipelineToSQLite(pipeline);
-                return new Result<string, SqlError>.Ok<string, SqlError>(sql);
-            }
-
-            var unknownSql = statement.AstNode is Identifier identifier
-                ? $"SELECT *\nFROM {identifier.Name}"
-                : "-- Unknown AST node type";
-            return new Result<string, SqlError>.Ok<string, SqlError>(unknownSql);
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
-        }
-    }
+    // Implements [LQL-RENDER-SHARED].
+    public static Result<string, SqlError> ToSQLite(this LqlStatement statement) =>
+        StatementRendering.Render(
+            statement: statement,
+            paging: SqlPaging.LimitOffset,
+            renderPipeline: ConvertPipelineToSQLite
+        );
 
     /// <summary>
     /// Converts a Nimblesite.Sql.Model.SelectStatement to SQLite syntax
@@ -56,18 +28,9 @@ public static class SqlStatementExtensionsSQLite
     /// </summary>
     /// <param name="statement">The SelectStatement to convert</param>
     /// <returns>A Result containing either SQLite SQL string or a SqlError</returns>
-    public static Result<string, SqlError> ToSQLite(this SelectStatement statement)
-    {
-        try
-        {
-            var sql = SQLiteContext.ToSQLiteSql(statement);
-            return new Result<string, SqlError>.Ok<string, SqlError>(sql);
-        }
-        catch (Exception ex)
-        {
-            return new Result<string, SqlError>.Error<string, SqlError>(SqlError.FromException(ex));
-        }
-    }
+    // Implements [LQL-RENDER-SHARED].
+    public static Result<string, SqlError> ToSQLite(this SelectStatement statement) =>
+        StatementRendering.Capture(render: () => SQLiteContext.ToSQLiteSql(statement));
 
     private static string ConvertPipelineToSQLite(Pipeline pipeline)
     {

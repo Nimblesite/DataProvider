@@ -24,5 +24,46 @@
 
   <ItemGroup>
     <ProjectReference Include="../Nimblesite.Sync.Core/Nimblesite.Sync.Core.csproj" />
+    <ProjectReference Include="../Nimblesite.Sync.SQLite/Nimblesite.Sync.SQLite.csproj" />
+    <ProjectReference Include="../Nimblesite.Sync.Postgres/Nimblesite.Sync.Postgres.csproj" />
+    <ProjectReference Include="../Nimblesite.Sync.SqlServer/Nimblesite.Sync.SqlServer.csproj" />
+    <ProjectReference Include="../../Migration/DataProviderMigrate/DataProviderMigrate.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+    <Compile
+      Include="../../Tests.Shared/SyncDatabaseTargets.cs"
+      Link="Shared/SyncDatabaseTargets.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/SqlServerContainerFixture.cs"
+      Link="Shared/SqlServerContainerFixture.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/PostgresContainerFixture.cs"
+      Link="Shared/PostgresContainerFixture.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/PostgresCollection.cs"
+      Link="Shared/PostgresCollection.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/SyncFixtureSqliteHelpers.cs"
+      Link="Shared/SyncFixtureSqliteHelpers.cs"
+    />
   </ItemGroup>
 </Project>

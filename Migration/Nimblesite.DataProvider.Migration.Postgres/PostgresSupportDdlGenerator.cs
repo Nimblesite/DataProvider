@@ -102,32 +102,19 @@ public static partial class PostgresDdlGenerator
 
     private static string FunctionBody(PostgresFunctionDefinition function)
     {
-        if (
-            !string.IsNullOrWhiteSpace(function.Body)
-            && !string.IsNullOrWhiteSpace(function.BodyLql)
-        )
-        {
-            throw new InvalidOperationException(
-                "PostgreSQL function body and bodyLql are mutually exclusive: "
-                    + $"{function.Schema}.{function.Name}"
-            );
-        }
+        FunctionBodyValidation.EnsureMutuallyExclusive(function);
 
         if (string.IsNullOrWhiteSpace(function.BodyLql))
         {
             return function.Body.Trim();
         }
 
-        var result = LqlFunctionBodyTranspiler.TranslatePostgresBody(
-            function.BodyLql,
-            $"{function.Schema}.{function.Name}"
+        return PostgresDdlGenerator.UnwrapOrThrow(
+            LqlFunctionBodyTranspiler.TranslatePostgresBody(
+                function.BodyLql,
+                $"{function.Schema}.{function.Name}"
+            )
         );
-        return result switch
-        {
-            Outcome.Result<string, MigrationError>.Ok<string, MigrationError> ok => ok.Value,
-            Outcome.Result<string, MigrationError>.Error<string, MigrationError> err =>
-                throw new InvalidOperationException(err.Value.Message),
-        };
     }
 
     private static string FunctionSignature(PostgresFunctionDefinition function) =>

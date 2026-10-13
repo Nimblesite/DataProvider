@@ -6,10 +6,9 @@ namespace Nimblesite.Lql.SqlServer;
 /// <summary>
 /// SQL Server context implementation for generating SQL Server-specific SQL
 /// </summary>
-public sealed class SqlServerContext : ISqlContext
+public sealed class SqlServerContext : SelectContextBase
 {
     private readonly IFunctionMappingProvider _functionMappingProvider;
-    private readonly SelectStatementBuilder _builder = new();
     private string? _baseTable;
     private string? _baseAlias;
 
@@ -23,21 +22,16 @@ public sealed class SqlServerContext : ISqlContext
     }
 
     /// <summary>
-    /// Gets a value indicating whether this query has joins
-    /// </summary>
-    public bool HasJoins => _builder.Build().HasJoins;
-
-    /// <summary>
     /// Sets the base table for the query
     /// </summary>
     /// <param name="tableName">The base table name</param>
-    public void SetBaseTable(string tableName)
+    public override void SetBaseTable(string tableName)
     {
         ArgumentNullException.ThrowIfNull(tableName);
 
         _baseTable = tableName;
         _baseAlias = GenerateTableAlias(tableName);
-        _builder.AddTable(tableName, _baseAlias);
+        Builder.AddTable(tableName, _baseAlias);
     }
 
     /// <summary>
@@ -46,88 +40,36 @@ public sealed class SqlServerContext : ISqlContext
     /// <param name="joinType">The type of join (INNER JOIN, LEFT JOIN, etc.)</param>
     /// <param name="tableName">The table to join</param>
     /// <param name="condition">The join condition</param>
-    public void AddJoin(string joinType, string tableName, string? condition)
+    public override void AddJoin(string joinType, string tableName, string? condition)
     {
         ArgumentNullException.ThrowIfNull(tableName);
 
         var alias = GenerateTableAlias(tableName);
-        _builder.AddTable(tableName, alias);
+        Builder.AddTable(tableName, alias);
         if (!string.IsNullOrEmpty(condition))
         {
-            _builder.AddJoin(_baseTable ?? "", tableName, condition, joinType);
+            Builder.AddJoin(_baseTable ?? "", tableName, condition, joinType);
         }
     }
 
     /// <summary>
-    /// Sets the SELECT columns for the query
-    /// </summary>
-    /// <param name="columns">The columns to select</param>
-    /// <param name="distinct">Whether to use DISTINCT</param>
-    public void SetSelectColumns(IEnumerable<ColumnInfo> columns, bool distinct = false) =>
-        _builder.WithSelectColumns(columns, distinct);
-
-    /// <summary>
-    /// Adds a WHERE condition
-    /// </summary>
-    /// <param name="condition">The condition to add</param>
-    public void AddWhereCondition(WhereCondition condition) =>
-        _builder.AddWhereCondition(condition);
-
-    /// <summary>
-    /// Adds GROUP BY columns
-    /// </summary>
-    /// <param name="columns">The columns to group by</param>
-    public void AddGroupBy(IEnumerable<ColumnInfo> columns) => _builder.AddGroupBy(columns);
-
-    /// <summary>
-    /// Adds ORDER BY items
-    /// </summary>
-    /// <param name="orderItems">The order items (column, direction)</param>
-    public void AddOrderBy(IEnumerable<(string Column, string Direction)> orderItems)
-    {
-        foreach (var (column, direction) in orderItems)
-        {
-            _builder.AddOrderBy(column, direction);
-        }
-    }
-
-    /// <summary>
-    /// Adds a HAVING condition
+    /// Rejects a null HAVING condition before recording it.
     /// </summary>
     /// <param name="condition">The having condition</param>
-    public void AddHaving(string condition)
+    public override void AddHaving(string condition)
     {
         ArgumentNullException.ThrowIfNull(condition);
 
-        _builder.WithHaving(condition);
+        Builder.WithHaving(condition);
     }
-
-    /// <summary>
-    /// Sets the LIMIT (TOP for SQL Server)
-    /// </summary>
-    /// <param name="count">The limit count</param>
-    public void SetLimit(string count) => _builder.WithLimit(count);
-
-    /// <summary>
-    /// Sets the OFFSET
-    /// </summary>
-    /// <param name="count">The offset count</param>
-    public void SetOffset(string count) => _builder.WithOffset(count);
-
-    /// <summary>
-    /// Adds a UNION or UNION ALL
-    /// </summary>
-    /// <param name="query">The query to union with</param>
-    /// <param name="isUnionAll">Whether this is UNION ALL</param>
-    public void AddUnion(string query, bool isUnionAll) => _builder.AddUnion(query, isUnionAll);
 
     /// <summary>
     /// Generates the final SQL query
     /// </summary>
     /// <returns>The SQL Server query string</returns>
-    public string GenerateSQL()
+    public override string GenerateSQL()
     {
-        var statement = _builder.Build();
+        var statement = Builder.Build();
 
         return GenerateStatementSQL(statement);
     }
@@ -283,14 +225,10 @@ public sealed class SqlServerContext : ISqlContext
     /// <param name="condition">The WHERE condition</param>
     /// <returns>The SQL string for the condition</returns>
     private static string GenerateWhereConditionSql(WhereCondition condition) =>
-        condition switch
-        {
-            ComparisonCondition c => $"{GenerateColumnSql(c.Left)} {c.Operator.ToSql()} {c.Right}",
-            LogicalOperator lo => lo.ToSql(),
-            Parenthesis p => p.IsOpening ? "(" : ")",
-            ExpressionCondition e => e.Expression,
-            _ => "/*UNKNOWN_WHERE*/",
-        };
+        StatementBuilderOperations.FormatWhereCondition(
+            condition: condition,
+            formatColumn: GenerateColumnSql
+        );
 
     /// <summary>
     /// Generates SQL for a ColumnInfo

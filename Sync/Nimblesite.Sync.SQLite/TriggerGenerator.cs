@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
+// Implements [SYNC-TRIGGER-SHARED-GENERATION].
 namespace Nimblesite.Sync.SQLite;
 
 /// <summary>
@@ -32,18 +33,14 @@ public static class TriggerGenerator
         string tableName,
         IReadOnlyList<string> columns,
         string pkColumn
-    )
-    {
-        var sb = new StringBuilder();
-
-        sb.AppendLine(GenerateInsertTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateUpdateTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateDeleteTrigger(tableName, pkColumn));
-
-        return sb.ToString();
-    }
+    ) =>
+        TriggerGenerationWorkflow.Compose(
+            tableName: tableName,
+            columns: columns,
+            pkColumn: pkColumn,
+            change: GenerateChangeTrigger,
+            delete: GenerateDeleteTrigger
+        );
 
     /// <summary>
     /// Generates triggers for a table by reading schema from database.
@@ -61,58 +58,15 @@ public static class TriggerGenerator
         SqliteConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
-
-        var columnsResult = GetTableColumns(connection, tableName);
-
-        if (columnsResult is ColumnInfoListError error)
-        {
-            logger.LogError(
-                "TRIGGER: Failed to get columns for {Table}: {Error}",
-                tableName,
-                error.Value
-            );
-            return new StringSyncError(error.Value);
-        }
-
-        var columns = ((ColumnInfoListOk)columnsResult).Value;
-
-        if (columns.Count == 0)
-        {
-            logger.LogError("TRIGGER: Table {Table} not found or has no columns", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' not found or has no columns")
-            );
-        }
-
-        var pkColumn = columns.FirstOrDefault(c => c.IsPrimaryKey);
-        if (pkColumn is null)
-        {
-            logger.LogError("TRIGGER: Table {Table} has no primary key", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' has no primary key")
-            );
-        }
-
-        logger.LogDebug(
-            "TRIGGER: Table {Table} has {ColumnCount} columns, PK={PK}",
-            tableName,
-            columns.Count,
-            pkColumn.Name
+    ) =>
+        TriggerGenerationWorkflow.FromSchema(
+            tableName: tableName,
+            readColumns: () => GetTableColumns(connection: connection, tableName: tableName),
+            isPrimaryKey: column => column.IsPrimaryKey,
+            columnName: column => column.Name,
+            generate: GenerateTriggers,
+            logger: logger
         );
-
-        var columnNames = columns.Select(c => c.Name).ToList();
-        var triggers = GenerateTriggers(tableName, columnNames, pkColumn.Name);
-
-        logger.LogInformation(
-            "TRIGGER: Generated INSERT/UPDATE/DELETE triggers for table {Table}",
-            tableName
-        );
-
-        return new StringSyncOk(triggers);
-    }
 
     /// <summary>
     /// Creates sync triggers in the database for a table.
@@ -130,43 +84,21 @@ public static class TriggerGenerator
         SqliteConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Creating triggers for table {Table}", tableName);
-
-        // Drop existing triggers first to allow re-creation
-        var dropResult = DropTriggers(connection, tableName, logger);
-        if (dropResult is BoolSyncError dropError)
-        {
-            return dropError;
-        }
-
-        var triggersResult = GenerateTriggersFromSchema(connection, tableName, logger);
-
-        if (triggersResult is StringSyncError error)
-        {
-            return new BoolSyncError(error.Value);
-        }
-
-        var triggers = ((StringSyncOk)triggersResult).Value;
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = triggers;
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Created triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to create triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to create triggers: {ex.Message}")
-            );
-        }
-    }
+    ) =>
+        TriggerGenerationWorkflow.Create<SqliteConnection, SqliteException>(
+            connection: connection,
+            tableName: tableName,
+            generate: () =>
+                GenerateTriggersFromSchema(
+                    connection: connection,
+                    tableName: tableName,
+                    logger: logger
+                ),
+            configure: (command, sql) => command.CommandText = sql,
+            logger: logger,
+            prepare: () =>
+                DropTriggers(connection: connection, tableName: tableName, logger: logger)
+        );
 
     /// <summary>
     /// Drops sync triggers for a table.
@@ -186,32 +118,24 @@ public static class TriggerGenerator
         ILogger logger
     )
     {
-        logger.LogDebug("TRIGGER: Dropping triggers for table {Table}", tableName);
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = string.Format(
-                CultureInfo.InvariantCulture,
-                """
-                DROP TRIGGER IF EXISTS {0}_sync_insert;
-                DROP TRIGGER IF EXISTS {0}_sync_update;
-                DROP TRIGGER IF EXISTS {0}_sync_delete;
-                """,
-                tableName
-            );
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Dropped triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to drop triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to drop triggers: {ex.Message}")
-            );
-        }
+        return TriggerGenerationWorkflow.Drop<SqliteException>(
+            tableName: tableName,
+            logger: logger,
+            execute: () =>
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = string.Format(
+                    CultureInfo.InvariantCulture,
+                    """
+                    DROP TRIGGER IF EXISTS {0}_sync_insert;
+                    DROP TRIGGER IF EXISTS {0}_sync_update;
+                    DROP TRIGGER IF EXISTS {0}_sync_delete;
+                    """,
+                    tableName
+                );
+                cmd.ExecuteNonQuery();
+            }
+        );
     }
 
     /// <summary>
@@ -230,119 +154,69 @@ public static class TriggerGenerator
         string tableName
     )
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"PRAGMA table_info({tableName})";
-
-            var columns = new List<TriggerColumnInfo>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+        return SyncCommandExecution.Read<SqliteException, ColumnInfoListResult>(
+            connection: connection,
+            setSql: command => command.CommandText = $"PRAGMA table_info({tableName})",
+            parameters: () => [],
+            read: command =>
             {
-                // PRAGMA table_info pk column: 0=not PK, 1+=position in composite PK
-                // So any non-zero value means this column is part of the primary key
-                columns.Add(
-                    new TriggerColumnInfo(
-                        Name: reader.GetString(1),
-                        Type: reader.GetString(2),
-                        IsPrimaryKey: reader.GetInt32(5) > 0
+                return new ColumnInfoListOk(
+                    SyncCommandExecution.ReadRows<TriggerColumnInfo>(
+                        command: command,
+                        read: row => new TriggerColumnInfo(
+                            Name: row.GetString(1),
+                            Type: row.GetString(2),
+                            IsPrimaryKey: row.GetInt32(5) > 0
+                        )
                     )
                 );
+            },
+            failure: ex =>
+            {
+                return new ColumnInfoListError(
+                    new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
+                );
             }
-
-            return new ColumnInfoListOk(columns);
-        }
-        catch (SqliteException ex)
-        {
-            return new ColumnInfoListError(
-                new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
-            );
-        }
+        );
     }
 
-    private static string GenerateInsertTrigger(
-        string tableName,
-        IReadOnlyList<string> columns,
-        string pkColumn
-    ) =>
-        string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_insert
-            AFTER INSERT ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', NEW.{1}),
-                    'insert',
-                    {2},
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn,
-            BuildJsonObject(columns, "NEW")
-        );
+    // Implements [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE].
+    private static readonly CompositeFormat ChangeTriggerFormat = CompositeFormat.Parse(
+        format: global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification6
+    );
 
-    private static string GenerateUpdateTrigger(
+    private static string GenerateChangeTrigger(
         string tableName,
         IReadOnlyList<string> columns,
-        string pkColumn
+        string pkColumn,
+        string operation,
+        string eventName
     ) =>
         string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_update
-            AFTER UPDATE ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', NEW.{1}),
-                    'update',
-                    {2},
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn,
-            BuildJsonObject(columns, "NEW")
+            provider: CultureInfo.InvariantCulture,
+            format: ChangeTriggerFormat,
+            args:
+            [
+                tableName,
+                pkColumn,
+                BuildJsonObject(columns: columns, prefix: "NEW"),
+                operation,
+                eventName,
+            ]
         );
 
     private static string GenerateDeleteTrigger(string tableName, string pkColumn) =>
-        string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE TRIGGER {0}_sync_delete
-            AFTER DELETE ON {0}
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES (
-                    '{0}',
-                    json_object('{1}', OLD.{1}),
-                    'delete',
-                    NULL,
-                    (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                );
-            END;
-            """,
-            tableName,
-            pkColumn
-        );
+        string.Format(CultureInfo.InvariantCulture, DeleteTriggerFormat, tableName, pkColumn);
 
     private static string BuildJsonObject(IReadOnlyList<string> columns, string prefix)
     {
         var pairs = columns.Select(c => $"'{c}', {prefix}.{c}");
         return $"json_object({string.Join(", ", pairs)})";
     }
+
+    // Implements [SYNC-TRIGGER-SHARED-GENERATION].
+    private static readonly global::System.Text.CompositeFormat DeleteTriggerFormat =
+        global::System.Text.CompositeFormat.Parse(
+            format: global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification7
+        );
 }

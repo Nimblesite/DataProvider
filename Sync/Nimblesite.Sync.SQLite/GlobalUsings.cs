@@ -27,14 +27,6 @@ global using ColumnInfoListResult = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.SQLite.TriggerColumnInfo>,
     Nimblesite.Sync.Core.SyncError
 >;
-global using IntSyncError = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Error<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
-global using IntSyncOk = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>.Ok<
-    int,
-    Nimblesite.Sync.Core.SyncError
->;
 global using IntSyncResult = Outcome.Result<int, Nimblesite.Sync.Core.SyncError>;
 global using LongSyncError = Outcome.Result<long, Nimblesite.Sync.Core.SyncError>.Error<
     long,
@@ -126,48 +118,12 @@ global using SubscriptionResult = Outcome.Result<
     Nimblesite.Sync.Core.SyncSubscription?,
     Nimblesite.Sync.Core.SyncError
 >;
-global using SyncClientError = Outcome.Result<
-    Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->.Error<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
-global using SyncClientListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncClientListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
-    Nimblesite.Sync.Core.SyncError
->;
 global using SyncClientListResult = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncClient>,
     Nimblesite.Sync.Core.SyncError
 >;
-global using SyncClientOk = Outcome.Result<
-    Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->.Ok<Nimblesite.Sync.Core.SyncClient?, Nimblesite.Sync.Core.SyncError>;
 global using SyncClientResult = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncLogListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncLogListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
     Nimblesite.Sync.Core.SyncError
 >;
 global using SyncLogListResult = Outcome.Result<

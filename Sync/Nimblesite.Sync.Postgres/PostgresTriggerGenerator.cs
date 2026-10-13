@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
+// Implements [SYNC-TRIGGER-SHARED-GENERATION].
 namespace Nimblesite.Sync.Postgres;
 
 /// <summary>
@@ -30,18 +31,14 @@ public static class PostgresTriggerGenerator
         string tableName,
         IReadOnlyList<string> columns,
         string pkColumn
-    )
-    {
-        var sb = new StringBuilder();
-
-        sb.AppendLine(GenerateInsertTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateUpdateTrigger(tableName, columns, pkColumn));
-        sb.AppendLine();
-        sb.AppendLine(GenerateDeleteTrigger(tableName, pkColumn));
-
-        return sb.ToString();
-    }
+    ) =>
+        TriggerGenerationWorkflow.Compose(
+            tableName: tableName,
+            columns: columns,
+            pkColumn: pkColumn,
+            change: GenerateChangeTrigger,
+            delete: GenerateDeleteTrigger
+        );
 
     /// <summary>
     /// Generates triggers for a table by reading schema from database.
@@ -59,58 +56,15 @@ public static class PostgresTriggerGenerator
         NpgsqlConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Generating triggers from schema for table {Table}", tableName);
-
-        var columnsResult = GetTableColumns(connection, tableName);
-
-        if (columnsResult is ColumnInfoListError error)
-        {
-            logger.LogError(
-                "TRIGGER: Failed to get columns for {Table}: {Error}",
-                tableName,
-                error.Value
-            );
-            return new StringSyncError(error.Value);
-        }
-
-        var columns = ((ColumnInfoListOk)columnsResult).Value;
-
-        if (columns.Count == 0)
-        {
-            logger.LogError("TRIGGER: Table {Table} not found or has no columns", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' not found or has no columns")
-            );
-        }
-
-        var pkColumn = columns.FirstOrDefault(c => c.IsPrimaryKey);
-        if (pkColumn is null)
-        {
-            logger.LogError("TRIGGER: Table {Table} has no primary key", tableName);
-            return new StringSyncError(
-                new SyncErrorDatabase($"Table '{tableName}' has no primary key")
-            );
-        }
-
-        logger.LogDebug(
-            "TRIGGER: Table {Table} has {ColumnCount} columns, PK={PK}",
-            tableName,
-            columns.Count,
-            pkColumn.Name
+    ) =>
+        TriggerGenerationWorkflow.FromSchema(
+            tableName: tableName,
+            readColumns: () => GetTableColumns(connection: connection, tableName: tableName),
+            isPrimaryKey: column => column.IsPrimaryKey,
+            columnName: column => column.Name,
+            generate: GenerateTriggers,
+            logger: logger
         );
-
-        var columnNames = columns.Select(c => c.Name).ToList();
-        var triggers = GenerateTriggers(tableName, columnNames, pkColumn.Name);
-
-        logger.LogInformation(
-            "TRIGGER: Generated INSERT/UPDATE/DELETE triggers for table {Table}",
-            tableName
-        );
-
-        return new StringSyncOk(triggers);
-    }
 
     /// <summary>
     /// Creates sync triggers in the database for a table.
@@ -128,36 +82,19 @@ public static class PostgresTriggerGenerator
         NpgsqlConnection connection,
         string tableName,
         ILogger logger
-    )
-    {
-        logger.LogDebug("TRIGGER: Creating triggers for table {Table}", tableName);
-
-        var triggersResult = GenerateTriggersFromSchema(connection, tableName, logger);
-
-        if (triggersResult is StringSyncError error)
-        {
-            return new BoolSyncError(error.Value);
-        }
-
-        var triggers = ((StringSyncOk)triggersResult).Value;
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = triggers;
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Created triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to create triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to create triggers: {ex.Message}")
-            );
-        }
-    }
+    ) =>
+        TriggerGenerationWorkflow.Create<NpgsqlConnection, NpgsqlException>(
+            connection: connection,
+            tableName: tableName,
+            generate: () =>
+                GenerateTriggersFromSchema(
+                    connection: connection,
+                    tableName: tableName,
+                    logger: logger
+                ),
+            configure: (command, sql) => command.CommandText = sql,
+            logger: logger
+        );
 
     /// <summary>
     /// Drops sync triggers for a table.
@@ -177,37 +114,29 @@ public static class PostgresTriggerGenerator
         ILogger logger
     )
     {
-        logger.LogDebug("TRIGGER: Dropping triggers for table {Table}", tableName);
-
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            var lowerTable = tableName.ToLowerInvariant();
-            cmd.CommandText = string.Format(
-                CultureInfo.InvariantCulture,
-                """
-                DROP TRIGGER IF EXISTS {0}_sync_insert ON {1};
-                DROP TRIGGER IF EXISTS {0}_sync_update ON {1};
-                DROP TRIGGER IF EXISTS {0}_sync_delete ON {1};
-                DROP FUNCTION IF EXISTS {0}_sync_insert_fn();
-                DROP FUNCTION IF EXISTS {0}_sync_update_fn();
-                DROP FUNCTION IF EXISTS {0}_sync_delete_fn();
-                """,
-                lowerTable,
-                tableName
-            );
-            cmd.ExecuteNonQuery();
-
-            logger.LogInformation("TRIGGER: Dropped triggers for table {Table}", tableName);
-            return new BoolSyncOk(true);
-        }
-        catch (NpgsqlException ex)
-        {
-            logger.LogError(ex, "TRIGGER: Failed to drop triggers for {Table}", tableName);
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to drop triggers: {ex.Message}")
-            );
-        }
+        return TriggerGenerationWorkflow.Drop<NpgsqlException>(
+            tableName: tableName,
+            logger: logger,
+            execute: () =>
+            {
+                using var cmd = connection.CreateCommand();
+                var lowerTable = tableName.ToLowerInvariant();
+                cmd.CommandText = string.Format(
+                    CultureInfo.InvariantCulture,
+                    """
+                    DROP TRIGGER IF EXISTS {0}_sync_insert ON {1};
+                    DROP TRIGGER IF EXISTS {0}_sync_update ON {1};
+                    DROP TRIGGER IF EXISTS {0}_sync_delete ON {1};
+                    DROP FUNCTION IF EXISTS {0}_sync_insert_fn();
+                    DROP FUNCTION IF EXISTS {0}_sync_update_fn();
+                    DROP FUNCTION IF EXISTS {0}_sync_delete_fn();
+                    """,
+                    lowerTable,
+                    tableName
+                );
+                cmd.ExecuteNonQuery();
+            }
+        );
     }
 
     /// <summary>
@@ -226,135 +155,63 @@ public static class PostgresTriggerGenerator
         string tableName
     )
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT 
-                    c.column_name,
-                    c.data_type,
-                    CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_pk
-                FROM information_schema.columns c
-                LEFT JOIN (
-                    SELECT kcu.column_name
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.key_column_usage kcu 
-                        ON tc.constraint_name = kcu.constraint_name
-                        AND tc.table_schema = kcu.table_schema
-                    WHERE tc.table_name = @tableName
-                        AND tc.constraint_type = 'PRIMARY KEY'
-                ) pk ON c.column_name = pk.column_name
-                WHERE c.table_name = @tableName
-                    AND c.table_schema = 'public'
-                ORDER BY c.ordinal_position
-                """;
-            cmd.Parameters.AddWithValue("@tableName", tableName.ToLowerInvariant());
-
-            var columns = new List<TriggerColumnInfo>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
+        return SyncCommandExecution.Read<NpgsqlException, ColumnInfoListResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .Postgres
+                    .PostgresSyncLogRepository
+                    .SqlSpecification4,
+            parameters: () => [("@tableName", tableName.ToLowerInvariant())],
+            read: command =>
             {
-                columns.Add(
-                    new TriggerColumnInfo(
-                        Name: reader.GetString(0),
-                        Type: reader.GetString(1),
-                        IsPrimaryKey: reader.GetBoolean(2)
+                return new ColumnInfoListOk(
+                    SyncCommandExecution.ReadRows<TriggerColumnInfo>(
+                        command: command,
+                        read: row => new TriggerColumnInfo(
+                            Name: row.GetString(0),
+                            Type: row.GetString(1),
+                            IsPrimaryKey: row.GetBoolean(2)
+                        )
                     )
                 );
+            },
+            failure: ex =>
+            {
+                return new ColumnInfoListError(
+                    new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
+                );
             }
-
-            return new ColumnInfoListOk(columns);
-        }
-        catch (NpgsqlException ex)
-        {
-            return new ColumnInfoListError(
-                new SyncErrorDatabase($"Failed to get table columns: {ex.Message}")
-            );
-        }
-    }
-
-    private static string GenerateInsertTrigger(
-        string tableName,
-        IReadOnlyList<string> columns,
-        string pkColumn
-    )
-    {
-        var lowerTable = tableName.ToLowerInvariant();
-        var pkLower = pkColumn.ToLowerInvariant();
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE OR REPLACE FUNCTION {0}_sync_insert_fn() RETURNS TRIGGER AS $$
-            BEGIN
-                IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
-                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                    VALUES (
-                        '{1}',
-                        jsonb_build_object('{4}', NEW."{2}")::text,
-                        'insert',
-                        {3}::text,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    );
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS {0}_sync_insert ON "{1}";
-            CREATE TRIGGER {0}_sync_insert
-            AFTER INSERT ON "{1}"
-            FOR EACH ROW EXECUTE FUNCTION {0}_sync_insert_fn();
-            """,
-            lowerTable,
-            tableName,
-            pkColumn,
-            BuildJsonbObject(columns, "NEW"),
-            pkLower
         );
     }
 
-    private static string GenerateUpdateTrigger(
+    // Implements [SYNC-TRIGGER-SHARED-EVENT-TEMPLATE].
+    private static readonly CompositeFormat ChangeTriggerFormat = CompositeFormat.Parse(
+        format: global::Nimblesite.Sync.Postgres.PostgresSyncLogRepository.SqlSpecification5
+    );
+
+    private static string GenerateChangeTrigger(
         string tableName,
         IReadOnlyList<string> columns,
-        string pkColumn
-    )
-    {
-        var lowerTable = tableName.ToLowerInvariant();
-        var pkLower = pkColumn.ToLowerInvariant();
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            """
-            CREATE OR REPLACE FUNCTION {0}_sync_update_fn() RETURNS TRIGGER AS $$
-            BEGIN
-                IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
-                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                    VALUES (
-                        '{1}',
-                        jsonb_build_object('{4}', NEW."{2}")::text,
-                        'update',
-                        {3}::text,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    );
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS {0}_sync_update ON "{1}";
-            CREATE TRIGGER {0}_sync_update
-            AFTER UPDATE ON "{1}"
-            FOR EACH ROW EXECUTE FUNCTION {0}_sync_update_fn();
-            """,
-            lowerTable,
-            tableName,
-            pkColumn,
-            BuildJsonbObject(columns, "NEW"),
-            pkLower
+        string pkColumn,
+        string operation,
+        string eventName
+    ) =>
+        string.Format(
+            provider: CultureInfo.InvariantCulture,
+            format: ChangeTriggerFormat,
+            args:
+            [
+                tableName.ToLowerInvariant(),
+                tableName,
+                pkColumn,
+                BuildJsonbObject(columns: columns, prefix: "NEW"),
+                pkColumn.ToLowerInvariant(),
+                operation,
+                eventName,
+            ]
         );
-    }
 
     private static string GenerateDeleteTrigger(string tableName, string pkColumn)
     {
@@ -362,29 +219,7 @@ public static class PostgresTriggerGenerator
         var pkLower = pkColumn.ToLowerInvariant();
         return string.Format(
             CultureInfo.InvariantCulture,
-            """
-            CREATE OR REPLACE FUNCTION {0}_sync_delete_fn() RETURNS TRIGGER AS $$
-            BEGIN
-                IF (SELECT sync_active FROM _sync_session LIMIT 1) = 0 THEN
-                    INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                    VALUES (
-                        '{1}',
-                        jsonb_build_object('{3}', OLD."{2}")::text,
-                        'delete',
-                        NULL,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-                    );
-                END IF;
-                RETURN OLD;
-            END;
-            $$ LANGUAGE plpgsql;
-
-            DROP TRIGGER IF EXISTS {0}_sync_delete ON "{1}";
-            CREATE TRIGGER {0}_sync_delete
-            AFTER DELETE ON "{1}"
-            FOR EACH ROW EXECUTE FUNCTION {0}_sync_delete_fn();
-            """,
+            DeleteTriggerFormat,
             lowerTable,
             tableName,
             pkColumn,
@@ -406,4 +241,10 @@ public static class PostgresTriggerGenerator
         var pairs = columns.Select(c => $"'{c.ToLowerInvariant()}', {prefix}.\"{c}\"");
         return $"jsonb_build_object({string.Join(", ", pairs)})";
     }
+
+    // Implements [SYNC-TRIGGER-SHARED-GENERATION].
+    private static readonly global::System.Text.CompositeFormat DeleteTriggerFormat =
+        global::System.Text.CompositeFormat.Parse(
+            format: global::Nimblesite.Sync.Postgres.PostgresSyncLogRepository.SqlSpecification6
+        );
 }

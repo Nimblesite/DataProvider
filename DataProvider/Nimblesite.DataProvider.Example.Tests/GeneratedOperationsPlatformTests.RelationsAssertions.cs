@@ -1,117 +1,25 @@
 using System.Data.Common;
 using System.Globalization;
-using Xunit;
 
 namespace Nimblesite.DataProvider.Example.Tests;
 
 public sealed partial class GeneratedOperationsPlatformTests
 {
-    private static void AssertInsertedRelations(DbConnection connection, RelationIds ids)
-    {
-        AssertRow(
-            connection,
-            "Customer",
-            ("Id", ids.Customer),
-            ("CustomerName", "Acme Customer"),
-            ("Email", "acme@example.test")
-        );
-        AssertRow(
-            connection,
-            "Invoice",
-            ("Id", ids.Invoice),
-            ("InvoiceNumber", "INV-001"),
-            ("TotalAmount", 120m),
-            ("DiscountAmount", null)
-        );
-        AssertRow(
-            connection,
-            "InvoiceLine",
-            ("Id", ids.InvoiceLine),
-            ("InvoiceId", ids.Invoice),
-            ("Description", "Initial line"),
-            ("Quantity", 2m)
-        );
-        AssertRow(
-            connection,
-            "Address",
-            ("Id", ids.Address),
-            ("CustomerId", ids.Customer),
-            ("Street", "100 First St"),
-            ("City", "Sydney")
-        );
-        AssertRow(
-            connection,
-            "Orders",
-            ("Id", ids.Order),
-            ("CustomerId", ids.Customer),
-            ("OrderNumber", "ORD-001"),
-            ("Status", "Pending")
-        );
-        AssertRow(
-            connection,
-            "OrderItem",
-            ("Id", ids.OrderItem),
-            ("OrderId", ids.Order),
-            ("ProductName", "Widget"),
-            ("Subtotal", 90m)
-        );
-    }
+    private static void AssertInsertedRelations(DbConnection connection, RelationIds ids) =>
+        AssertRelationRows(connection, RelationRowsInserted(ids: ids));
 
-    private static void AssertUpdatedRelations(DbConnection connection, RelationIds ids)
+    private static void AssertUpdatedRelations(DbConnection connection, RelationIds ids) =>
+        AssertRelationRows(connection, RelationRowsUpdated(ids: ids));
+
+    private static void AssertRelationRows(
+        DbConnection connection,
+        (string Table, (string Column, object? Value)[] Values)[] rows
+    )
     {
-        AssertRow(
-            connection,
-            "Customer",
-            ("Id", ids.Customer),
-            ("CustomerName", "Acme Customer"),
-            ("Email", "acme@example.test")
-        );
-        AssertRow(
-            connection,
-            "Invoice",
-            ("Id", ids.Invoice),
-            ("InvoiceNumber", "INV-UPDATED"),
-            ("CustomerName", "Acme Updated"),
-            ("TotalAmount", 200m),
-            ("DiscountAmount", 25m),
-            ("Notes", "Updated invoice")
-        );
-        AssertRow(
-            connection,
-            "InvoiceLine",
-            ("Id", ids.InvoiceLine),
-            ("InvoiceId", ids.Invoice),
-            ("Description", "Updated line"),
-            ("Quantity", 4m),
-            ("Amount", 200m)
-        );
-        AssertRow(
-            connection,
-            "Address",
-            ("Id", ids.Address),
-            ("CustomerId", ids.Customer),
-            ("Street", "200 Second Ave"),
-            ("City", "Melbourne"),
-            ("ZipCode", "3000")
-        );
-        AssertRow(
-            connection,
-            "Orders",
-            ("Id", ids.Order),
-            ("CustomerId", ids.Customer),
-            ("OrderNumber", "ORD-UPDATED"),
-            ("TotalAmount", 150m),
-            ("Status", "Completed")
-        );
-        AssertRow(
-            connection,
-            "OrderItem",
-            ("Id", ids.OrderItem),
-            ("OrderId", ids.Order),
-            ("ProductName", "Updated widget"),
-            ("Quantity", 5m),
-            ("Subtotal", 150m)
-        );
+        foreach (var (table, values) in rows)
+        {
+            AssertRow(connection, table, values);
+        }
     }
 
     private static void AssertRow(

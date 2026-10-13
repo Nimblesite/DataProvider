@@ -6,38 +6,39 @@
 #![allow(unused_imports)]
 #![allow(unused_mut)]
 #![allow(unused_braces)]
-use super::lqllistener::*;
-use super::lqlvisitor::*;
-use antlr_rust::atn::{ATN, INVALID_ALT};
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::dfa::DFA;
-use antlr_rust::error_strategy::{DefaultErrorStrategy, ErrorStrategy};
-use antlr_rust::errors::*;
-use antlr_rust::int_stream::EOF;
-use antlr_rust::parser::{BaseParser, Parser, ParserNodeType, ParserRecog};
-use antlr_rust::parser_atn_simulator::ParserATNSimulator;
-use antlr_rust::parser_rule_context::{cast, cast_mut, BaseParserRuleContext, ParserRuleContext};
-use antlr_rust::recognizer::{Actions, Recognizer};
-use antlr_rust::rule_context::{BaseRuleContext, CustomRuleContext, RuleContext};
-use antlr_rust::token::{OwningToken, Token, TOKEN_EOF};
-use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
-use antlr_rust::token_stream::TokenStream;
-use antlr_rust::tree::*;
-use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::TokenSource;
+use std::{
+    any::{Any, TypeId},
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+    convert::TryFrom,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+    sync::Arc,
+};
 
-use antlr_rust::lazy_static;
-use antlr_rust::{TidAble, TidExt};
+use antlr_rust::{
+    atn::{ATN, INVALID_ALT},
+    atn_deserializer::ATNDeserializer,
+    dfa::DFA,
+    error_strategy::{DefaultErrorStrategy, ErrorStrategy},
+    errors::*,
+    int_stream::EOF,
+    lazy_static,
+    parser::{BaseParser, Parser, ParserNodeType, ParserRecog},
+    parser_atn_simulator::ParserATNSimulator,
+    parser_rule_context::{cast, cast_mut, BaseParserRuleContext, ParserRuleContext},
+    recognizer::{Actions, Recognizer},
+    rule_context::{BaseRuleContext, CustomRuleContext, RuleContext},
+    token::{OwningToken, Token, TOKEN_EOF},
+    token_factory::{CommonTokenFactory, TokenAware, TokenFactory},
+    token_stream::TokenStream,
+    tree::*,
+    vocabulary::{Vocabulary, VocabularyImpl},
+    PredictionContextCache, TidAble, TidExt, TokenSource,
+};
 
-use std::any::{Any, TypeId};
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
+use super::{lqllistener::*, lqlvisitor::*};
 
 pub const T__0: isize = 1;
 pub const T__1: isize = 2;
@@ -378,7 +379,8 @@ where
     }
 }
 
-/// Trait for monomorphized trait object that corresponds to the nodes of parse tree generated for LqlParser
+/// Trait for monomorphized trait object that corresponds to the nodes of parse tree generated for
+/// LqlParser
 pub trait LqlParserContext<'input>:
     for<'x> Listenable<dyn LqlListener<'input> + 'x>
     + for<'x> Visitable<dyn LqlVisitor<'input> + 'x>
@@ -500,7 +502,7 @@ impl<'input> CustomRuleContext<'input> for ProgramContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_program
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_program }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_program }
 }
 antlr_rust::tid! {ProgramContextExt<'a>}
 
@@ -557,7 +559,7 @@ where
         let mut _localctx: Rc<ProgramContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(71);
@@ -580,7 +582,7 @@ where
                 {
                     {
                         {
-                            /*InvokeRule statement*/
+                            // InvokeRule statement
                             recog.base.set_state(68);
                             recog.statement()?;
                         }
@@ -643,7 +645,7 @@ impl<'input> CustomRuleContext<'input> for StatementContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_statement
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_statement }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_statement }
 }
 antlr_rust::tid! {StatementContextExt<'a>}
 
@@ -701,30 +703,30 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.base.input.la(1) {
                 WITH => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule withStmt*/
+                        // InvokeRule withStmt
                         recog.base.set_state(76);
                         recog.withStmt()?;
                     }
                 }
 
                 T__3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
-                        /*InvokeRule letStmt*/
+                        // InvokeRule letStmt
                         recog.base.set_state(77);
                         recog.letStmt()?;
                     }
                 }
 
                 T__1 | T__6 | CASE | PARAMETER | IDENT | INT | DECIMAL | STRING | ASTERISK => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
-                        /*InvokeRule pipeExpr*/
+                        // InvokeRule pipeExpr
                         recog.base.set_state(78);
                         recog.pipeExpr()?;
                     }
@@ -785,7 +787,7 @@ impl<'input> CustomRuleContext<'input> for WithStmtContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_withStmt
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_withStmt }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_withStmt }
 }
 antlr_rust::tid! {WithStmtContextExt<'a>}
 
@@ -848,13 +850,13 @@ where
         let mut _localctx: Rc<WithStmtContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(81);
                 recog.base.match_token(WITH, &mut recog.err_handler)?;
 
-                /*InvokeRule cteDef*/
+                // InvokeRule cteDef
                 recog.base.set_state(82);
                 recog.cteDef()?;
 
@@ -867,7 +869,7 @@ where
                             recog.base.set_state(83);
                             recog.base.match_token(T__0, &mut recog.err_handler)?;
 
-                            /*InvokeRule cteDef*/
+                            // InvokeRule cteDef
                             recog.base.set_state(84);
                             recog.cteDef()?;
                         }
@@ -876,7 +878,7 @@ where
                     recog.err_handler.sync(&mut recog.base)?;
                     _la = recog.base.input.la(1);
                 }
-                /*InvokeRule pipeExpr*/
+                // InvokeRule pipeExpr
                 recog.base.set_state(90);
                 recog.pipeExpr()?;
             }
@@ -931,7 +933,7 @@ impl<'input> CustomRuleContext<'input> for CteDefContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_cteDef
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_cteDef }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_cteDef }
 }
 antlr_rust::tid! {CteDefContextExt<'a>}
 
@@ -989,7 +991,7 @@ where
         recog.base.enter_rule(_localctx.clone(), 6, RULE_cteDef);
         let mut _localctx: Rc<CteDefContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(92);
@@ -1001,7 +1003,7 @@ where
                 recog.base.set_state(94);
                 recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                /*InvokeRule pipeExpr*/
+                // InvokeRule pipeExpr
                 recog.base.set_state(95);
                 recog.pipeExpr()?;
 
@@ -1059,7 +1061,7 @@ impl<'input> CustomRuleContext<'input> for LetStmtContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_letStmt
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_letStmt }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_letStmt }
 }
 antlr_rust::tid! {LetStmtContextExt<'a>}
 
@@ -1109,7 +1111,7 @@ where
         recog.base.enter_rule(_localctx.clone(), 8, RULE_letStmt);
         let mut _localctx: Rc<LetStmtContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(98);
@@ -1121,7 +1123,7 @@ where
                 recog.base.set_state(100);
                 recog.base.match_token(T__4, &mut recog.err_handler)?;
 
-                /*InvokeRule pipeExpr*/
+                // InvokeRule pipeExpr
                 recog.base.set_state(101);
                 recog.pipeExpr()?;
             }
@@ -1176,7 +1178,7 @@ impl<'input> CustomRuleContext<'input> for PipeExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_pipeExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_pipeExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_pipeExpr }
 }
 antlr_rust::tid! {PipeExprContextExt<'a>}
 
@@ -1225,10 +1227,10 @@ where
         let mut _localctx: Rc<PipeExprContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule expr*/
+                // InvokeRule expr
                 recog.base.set_state(103);
                 recog.expr()?;
 
@@ -1241,7 +1243,7 @@ where
                             recog.base.set_state(104);
                             recog.base.match_token(T__5, &mut recog.err_handler)?;
 
-                            /*InvokeRule expr*/
+                            // InvokeRule expr
                             recog.base.set_state(105);
                             recog.expr()?;
                         }
@@ -1302,7 +1304,7 @@ impl<'input> CustomRuleContext<'input> for ExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_expr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_expr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_expr }
 }
 antlr_rust::tid! {ExprContextExt<'a>}
 
@@ -1435,7 +1437,7 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(6, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
                         recog.base.set_state(111);
@@ -1464,7 +1466,7 @@ where
                                     != 0)
                         {
                             {
-                                /*InvokeRule argList*/
+                                // InvokeRule argList
                                 recog.base.set_state(113);
                                 recog.argList()?;
                             }
@@ -1479,7 +1481,7 @@ where
                         recog.base.set_state(118);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule windowSpec*/
+                        // InvokeRule windowSpec
                         recog.base.set_state(119);
                         recog.windowSpec()?;
 
@@ -1488,7 +1490,7 @@ where
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
                         recog.base.set_state(122);
@@ -1517,7 +1519,7 @@ where
                                     != 0)
                         {
                             {
-                                /*InvokeRule argList*/
+                                // InvokeRule argList
                                 recog.base.set_state(124);
                                 recog.argList()?;
                             }
@@ -1528,7 +1530,7 @@ where
                     }
                 }
                 3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
                         recog.base.set_state(128);
@@ -1536,13 +1538,13 @@ where
                     }
                 }
                 4 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 4);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 4);
                     recog.base.enter_outer_alt(None, 4);
                     {
                         recog.base.set_state(129);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule pipeExpr*/
+                        // InvokeRule pipeExpr
                         recog.base.set_state(130);
                         recog.pipeExpr()?;
 
@@ -1551,34 +1553,34 @@ where
                     }
                 }
                 5 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 5);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 5);
                     recog.base.enter_outer_alt(None, 5);
                     {
-                        /*InvokeRule qualifiedIdent*/
+                        // InvokeRule qualifiedIdent
                         recog.base.set_state(133);
                         recog.qualifiedIdent()?;
                     }
                 }
                 6 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 6);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 6);
                     recog.base.enter_outer_alt(None, 6);
                     {
-                        /*InvokeRule lambdaExpr*/
+                        // InvokeRule lambdaExpr
                         recog.base.set_state(134);
                         recog.lambdaExpr()?;
                     }
                 }
                 7 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 7);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 7);
                     recog.base.enter_outer_alt(None, 7);
                     {
-                        /*InvokeRule caseExpr*/
+                        // InvokeRule caseExpr
                         recog.base.set_state(135);
                         recog.caseExpr()?;
                     }
                 }
                 8 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 8);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 8);
                     recog.base.enter_outer_alt(None, 8);
                     {
                         recog.base.set_state(136);
@@ -1586,7 +1588,7 @@ where
                     }
                 }
                 9 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 9);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 9);
                     recog.base.enter_outer_alt(None, 9);
                     {
                         recog.base.set_state(137);
@@ -1594,7 +1596,7 @@ where
                     }
                 }
                 10 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 10);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 10);
                     recog.base.enter_outer_alt(None, 10);
                     {
                         recog.base.set_state(138);
@@ -1602,7 +1604,7 @@ where
                     }
                 }
                 11 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 11);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 11);
                     recog.base.enter_outer_alt(None, 11);
                     {
                         recog.base.set_state(139);
@@ -1610,7 +1612,7 @@ where
                     }
                 }
                 12 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 12);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 12);
                     recog.base.enter_outer_alt(None, 12);
                     {
                         recog.base.set_state(140);
@@ -1671,7 +1673,7 @@ impl<'input> CustomRuleContext<'input> for WindowSpecContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_windowSpec
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_windowSpec }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_windowSpec }
 }
 antlr_rust::tid! {WindowSpecContextExt<'a>}
 
@@ -1722,7 +1724,7 @@ where
         let mut _localctx: Rc<WindowSpecContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(144);
@@ -1730,7 +1732,7 @@ where
                 _la = recog.base.input.la(1);
                 if _la == PARTITION {
                     {
-                        /*InvokeRule partitionClause*/
+                        // InvokeRule partitionClause
                         recog.base.set_state(143);
                         recog.partitionClause()?;
                     }
@@ -1741,7 +1743,7 @@ where
                 _la = recog.base.input.la(1);
                 if _la == ORDER {
                     {
-                        /*InvokeRule orderClause*/
+                        // InvokeRule orderClause
                         recog.base.set_state(146);
                         recog.orderClause()?;
                     }
@@ -1799,7 +1801,7 @@ impl<'input> CustomRuleContext<'input> for PartitionClauseContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_partitionClause
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_partitionClause }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_partitionClause }
 }
 antlr_rust::tid! {PartitionClauseContextExt<'a>}
 
@@ -1860,7 +1862,7 @@ where
             .enter_rule(_localctx.clone(), 16, RULE_partitionClause);
         let mut _localctx: Rc<PartitionClauseContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(149);
@@ -1869,7 +1871,7 @@ where
                 recog.base.set_state(150);
                 recog.base.match_token(BY, &mut recog.err_handler)?;
 
-                /*InvokeRule argList*/
+                // InvokeRule argList
                 recog.base.set_state(151);
                 recog.argList()?;
             }
@@ -1924,7 +1926,7 @@ impl<'input> CustomRuleContext<'input> for OrderClauseContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_orderClause
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_orderClause }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_orderClause }
 }
 antlr_rust::tid! {OrderClauseContextExt<'a>}
 
@@ -1984,7 +1986,7 @@ where
             .enter_rule(_localctx.clone(), 18, RULE_orderClause);
         let mut _localctx: Rc<OrderClauseContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(153);
@@ -1993,7 +1995,7 @@ where
                 recog.base.set_state(154);
                 recog.base.match_token(BY, &mut recog.err_handler)?;
 
-                /*InvokeRule orderByArgList*/
+                // InvokeRule orderByArgList
                 recog.base.set_state(155);
                 recog.orderByArgList()?;
             }
@@ -2049,7 +2051,7 @@ impl<'input> CustomRuleContext<'input> for OrderByArgListContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_orderByArgList
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_orderByArgList }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_orderByArgList }
 }
 antlr_rust::tid! {OrderByArgListContextExt<'a>}
 
@@ -2101,10 +2103,10 @@ where
         let mut _localctx: Rc<OrderByArgListContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule orderByArg*/
+                // InvokeRule orderByArg
                 recog.base.set_state(157);
                 recog.orderByArg()?;
 
@@ -2117,7 +2119,7 @@ where
                             recog.base.set_state(158);
                             recog.base.match_token(T__0, &mut recog.err_handler)?;
 
-                            /*InvokeRule orderByArg*/
+                            // InvokeRule orderByArg
                             recog.base.set_state(159);
                             recog.orderByArg()?;
                         }
@@ -2178,7 +2180,7 @@ impl<'input> CustomRuleContext<'input> for OrderByArgContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_orderByArg
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_orderByArg }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_orderByArg }
 }
 antlr_rust::tid! {OrderByArgContextExt<'a>}
 
@@ -2249,7 +2251,7 @@ where
         let mut _localctx: Rc<OrderByArgContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(169);
@@ -2257,21 +2259,21 @@ where
                 match recog.interpreter.adaptive_predict(10, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule arithmeticExpr*/
+                            // InvokeRule arithmeticExpr
                             recog.base.set_state(165);
                             recog.arithmeticExpr()?;
                         }
                     }
                     2 => {
                         {
-                            /*InvokeRule functionCall*/
+                            // InvokeRule functionCall
                             recog.base.set_state(166);
                             recog.functionCall()?;
                         }
                     }
                     3 => {
                         {
-                            /*InvokeRule qualifiedIdent*/
+                            // InvokeRule qualifiedIdent
                             recog.base.set_state(167);
                             recog.qualifiedIdent()?;
                         }
@@ -2288,7 +2290,7 @@ where
                 _la = recog.base.input.la(1);
                 if _la == ASC || _la == DESC {
                     {
-                        /*InvokeRule orderDirection*/
+                        // InvokeRule orderDirection
                         recog.base.set_state(171);
                         recog.orderDirection()?;
                     }
@@ -2345,7 +2347,7 @@ impl<'input> CustomRuleContext<'input> for LambdaExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_lambdaExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_lambdaExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_lambdaExpr }
 }
 antlr_rust::tid! {LambdaExprContextExt<'a>}
 
@@ -2405,7 +2407,7 @@ where
         let mut _localctx: Rc<LambdaExprContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(174);
@@ -2440,7 +2442,7 @@ where
                 recog.base.set_state(185);
                 recog.base.match_token(T__7, &mut recog.err_handler)?;
 
-                /*InvokeRule logicalExpr*/
+                // InvokeRule logicalExpr
                 recog.base.set_state(186);
                 recog.logicalExpr()?;
             }
@@ -2496,7 +2498,7 @@ impl<'input> CustomRuleContext<'input> for QualifiedIdentContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_qualifiedIdent
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_qualifiedIdent }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_qualifiedIdent }
 }
 antlr_rust::tid! {QualifiedIdentContextExt<'a>}
 
@@ -2551,7 +2553,7 @@ where
         let mut _localctx: Rc<QualifiedIdentContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(188);
@@ -2629,7 +2631,7 @@ impl<'input> CustomRuleContext<'input> for ArgListContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_argList
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_argList }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_argList }
 }
 antlr_rust::tid! {ArgListContextExt<'a>}
 
@@ -2678,10 +2680,10 @@ where
         let mut _localctx: Rc<ArgListContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule arg*/
+                // InvokeRule arg
                 recog.base.set_state(195);
                 recog.arg()?;
 
@@ -2694,7 +2696,7 @@ where
                             recog.base.set_state(196);
                             recog.base.match_token(T__0, &mut recog.err_handler)?;
 
-                            /*InvokeRule arg*/
+                            // InvokeRule arg
                             recog.base.set_state(197);
                             recog.arg()?;
                         }
@@ -2755,7 +2757,7 @@ impl<'input> CustomRuleContext<'input> for ArgContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_arg
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_arg }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_arg }
 }
 antlr_rust::tid! {ArgContextExt<'a>}
 
@@ -2849,94 +2851,94 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(15, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule columnAlias*/
+                        // InvokeRule columnAlias
                         recog.base.set_state(203);
                         recog.columnAlias()?;
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
-                        /*InvokeRule arithmeticExpr*/
+                        // InvokeRule arithmeticExpr
                         recog.base.set_state(204);
                         recog.arithmeticExpr()?;
                     }
                 }
                 3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
-                        /*InvokeRule functionCall*/
+                        // InvokeRule functionCall
                         recog.base.set_state(205);
                         recog.functionCall()?;
                     }
                 }
                 4 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 4);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 4);
                     recog.base.enter_outer_alt(None, 4);
                     {
-                        /*InvokeRule caseExpr*/
+                        // InvokeRule caseExpr
                         recog.base.set_state(206);
                         recog.caseExpr()?;
                     }
                 }
                 5 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 5);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 5);
                     recog.base.enter_outer_alt(None, 5);
                     {
-                        /*InvokeRule expr*/
+                        // InvokeRule expr
                         recog.base.set_state(207);
                         recog.expr()?;
                     }
                 }
                 6 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 6);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 6);
                     recog.base.enter_outer_alt(None, 6);
                     {
-                        /*InvokeRule namedArg*/
+                        // InvokeRule namedArg
                         recog.base.set_state(208);
                         recog.namedArg()?;
                     }
                 }
                 7 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 7);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 7);
                     recog.base.enter_outer_alt(None, 7);
                     {
-                        /*InvokeRule comparison*/
+                        // InvokeRule comparison
                         recog.base.set_state(209);
                         recog.comparison()?;
                     }
                 }
                 8 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 8);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 8);
                     recog.base.enter_outer_alt(None, 8);
                     {
-                        /*InvokeRule pipeExpr*/
+                        // InvokeRule pipeExpr
                         recog.base.set_state(210);
                         recog.pipeExpr()?;
                     }
                 }
                 9 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 9);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 9);
                     recog.base.enter_outer_alt(None, 9);
                     {
-                        /*InvokeRule lambdaExpr*/
+                        // InvokeRule lambdaExpr
                         recog.base.set_state(211);
                         recog.lambdaExpr()?;
                     }
                 }
                 10 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 10);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 10);
                     recog.base.enter_outer_alt(None, 10);
                     {
                         recog.base.set_state(212);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule pipeExpr*/
+                        // InvokeRule pipeExpr
                         recog.base.set_state(213);
                         recog.pipeExpr()?;
 
@@ -2998,7 +3000,7 @@ impl<'input> CustomRuleContext<'input> for ColumnAliasContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_columnAlias
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_columnAlias }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_columnAlias }
 }
 antlr_rust::tid! {ColumnAliasContextExt<'a>}
 
@@ -3078,7 +3080,7 @@ where
         let mut _localctx: Rc<ColumnAliasContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(222);
@@ -3086,21 +3088,21 @@ where
                 match recog.interpreter.adaptive_predict(16, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule arithmeticExpr*/
+                            // InvokeRule arithmeticExpr
                             recog.base.set_state(218);
                             recog.arithmeticExpr()?;
                         }
                     }
                     2 => {
                         {
-                            /*InvokeRule functionCall*/
+                            // InvokeRule functionCall
                             recog.base.set_state(219);
                             recog.functionCall()?;
                         }
                     }
                     3 => {
                         {
-                            /*InvokeRule qualifiedIdent*/
+                            // InvokeRule qualifiedIdent
                             recog.base.set_state(220);
                             recog.qualifiedIdent()?;
                         }
@@ -3177,7 +3179,7 @@ impl<'input> CustomRuleContext<'input> for ArithmeticExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_arithmeticExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticExpr }
 }
 antlr_rust::tid! {ArithmeticExprContextExt<'a>}
 
@@ -3229,10 +3231,10 @@ where
         let mut _localctx: Rc<ArithmeticExprContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule arithmeticTerm*/
+                // InvokeRule arithmeticTerm
                 recog.base.set_state(228);
                 recog.arithmeticTerm()?;
 
@@ -3264,7 +3266,7 @@ where
                                 recog.err_handler.report_match(&mut recog.base);
                                 recog.base.consume(&mut recog.err_handler);
                             }
-                            /*InvokeRule arithmeticTerm*/
+                            // InvokeRule arithmeticTerm
                             recog.base.set_state(230);
                             recog.arithmeticTerm()?;
                         }
@@ -3326,7 +3328,7 @@ impl<'input> CustomRuleContext<'input> for ArithmeticTermContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_arithmeticTerm
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticTerm }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticTerm }
 }
 antlr_rust::tid! {ArithmeticTermContextExt<'a>}
 
@@ -3366,7 +3368,8 @@ pub trait ArithmeticTermContextAttrs<'input>:
         self.children_of_type()
     }
     /// Retrieves 'i's TerminalNode corresponding to token ASTERISK, starting from 0.
-    /// Returns `None` if number of children corresponding to token ASTERISK is less or equal than `i`.
+    /// Returns `None` if number of children corresponding to token ASTERISK is less or equal than
+    /// `i`.
     fn ASTERISK(&self, i: usize) -> Option<Rc<TerminalNode<'input, LqlParserContextType>>>
     where
         Self: Sized,
@@ -3394,10 +3397,10 @@ where
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
             let mut _alt: isize;
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule arithmeticFactor*/
+                // InvokeRule arithmeticFactor
                 recog.base.set_state(236);
                 recog.arithmeticFactor()?;
 
@@ -3419,7 +3422,7 @@ where
                                     recog.err_handler.report_match(&mut recog.base);
                                     recog.base.consume(&mut recog.err_handler);
                                 }
-                                /*InvokeRule arithmeticFactor*/
+                                // InvokeRule arithmeticFactor
                                 recog.base.set_state(238);
                                 recog.arithmeticFactor()?;
                             }
@@ -3482,7 +3485,7 @@ impl<'input> CustomRuleContext<'input> for ArithmeticFactorContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_arithmeticFactor
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticFactor }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_arithmeticFactor }
 }
 antlr_rust::tid! {ArithmeticFactorContextExt<'a>}
 
@@ -3591,16 +3594,16 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(20, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule qualifiedIdent*/
+                        // InvokeRule qualifiedIdent
                         recog.base.set_state(244);
                         recog.qualifiedIdent()?;
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
                         recog.base.set_state(245);
@@ -3608,7 +3611,7 @@ where
                     }
                 }
                 3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
                         recog.base.set_state(246);
@@ -3616,7 +3619,7 @@ where
                     }
                 }
                 4 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 4);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 4);
                     recog.base.enter_outer_alt(None, 4);
                     {
                         recog.base.set_state(247);
@@ -3624,7 +3627,7 @@ where
                     }
                 }
                 5 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 5);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 5);
                     recog.base.enter_outer_alt(None, 5);
                     {
                         recog.base.set_state(248);
@@ -3632,25 +3635,25 @@ where
                     }
                 }
                 6 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 6);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 6);
                     recog.base.enter_outer_alt(None, 6);
                     {
-                        /*InvokeRule functionCall*/
+                        // InvokeRule functionCall
                         recog.base.set_state(249);
                         recog.functionCall()?;
                     }
                 }
                 7 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 7);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 7);
                     recog.base.enter_outer_alt(None, 7);
                     {
-                        /*InvokeRule caseExpr*/
+                        // InvokeRule caseExpr
                         recog.base.set_state(250);
                         recog.caseExpr()?;
                     }
                 }
                 8 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 8);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 8);
                     recog.base.enter_outer_alt(None, 8);
                     {
                         recog.base.set_state(251);
@@ -3658,13 +3661,13 @@ where
                     }
                 }
                 9 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 9);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 9);
                     recog.base.enter_outer_alt(None, 9);
                     {
                         recog.base.set_state(252);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule arithmeticExpr*/
+                        // InvokeRule arithmeticExpr
                         recog.base.set_state(253);
                         recog.arithmeticExpr()?;
 
@@ -3727,7 +3730,7 @@ impl<'input> CustomRuleContext<'input> for FunctionCallContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_functionCall
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_functionCall }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_functionCall }
 }
 antlr_rust::tid! {FunctionCallContextExt<'a>}
 
@@ -3802,7 +3805,7 @@ where
         let mut _localctx: Rc<FunctionCallContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(258);
@@ -3844,7 +3847,7 @@ where
                             }
                         }
 
-                        /*InvokeRule argList*/
+                        // InvokeRule argList
                         recog.base.set_state(263);
                         recog.argList()?;
                     }
@@ -3864,7 +3867,7 @@ where
                         recog.base.set_state(268);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule windowSpec*/
+                        // InvokeRule windowSpec
                         recog.base.set_state(269);
                         recog.windowSpec()?;
 
@@ -3924,7 +3927,7 @@ impl<'input> CustomRuleContext<'input> for NamedArgContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_namedArg
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_namedArg }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_namedArg }
 }
 antlr_rust::tid! {NamedArgContextExt<'a>}
 
@@ -3989,7 +3992,7 @@ where
         let mut _localctx: Rc<NamedArgContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(274);
@@ -4011,14 +4014,14 @@ where
                 match recog.interpreter.adaptive_predict(24, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule comparison*/
+                            // InvokeRule comparison
                             recog.base.set_state(276);
                             recog.comparison()?;
                         }
                     }
                     2 => {
                         {
-                            /*InvokeRule logicalExpr*/
+                            // InvokeRule logicalExpr
                             recog.base.set_state(277);
                             recog.logicalExpr()?;
                         }
@@ -4078,7 +4081,7 @@ impl<'input> CustomRuleContext<'input> for LogicalExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_logicalExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_logicalExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_logicalExpr }
 }
 antlr_rust::tid! {LogicalExprContextExt<'a>}
 
@@ -4144,10 +4147,10 @@ where
         let mut _localctx: Rc<LogicalExprContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
             let mut _alt: isize;
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule andExpr*/
+                // InvokeRule andExpr
                 recog.base.set_state(280);
                 recog.andExpr()?;
 
@@ -4161,7 +4164,7 @@ where
                                 recog.base.set_state(281);
                                 recog.base.match_token(OR, &mut recog.err_handler)?;
 
-                                /*InvokeRule andExpr*/
+                                // InvokeRule andExpr
                                 recog.base.set_state(282);
                                 recog.andExpr()?;
                             }
@@ -4223,7 +4226,7 @@ impl<'input> CustomRuleContext<'input> for AndExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_andExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_andExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_andExpr }
 }
 antlr_rust::tid! {AndExprContextExt<'a>}
 
@@ -4287,10 +4290,10 @@ where
         let mut _localctx: Rc<AndExprContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
             let mut _alt: isize;
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
-                /*InvokeRule atomicExpr*/
+                // InvokeRule atomicExpr
                 recog.base.set_state(288);
                 recog.atomicExpr()?;
 
@@ -4304,7 +4307,7 @@ where
                                 recog.base.set_state(289);
                                 recog.base.match_token(AND, &mut recog.err_handler)?;
 
-                                /*InvokeRule atomicExpr*/
+                                // InvokeRule atomicExpr
                                 recog.base.set_state(290);
                                 recog.atomicExpr()?;
                             }
@@ -4366,7 +4369,7 @@ impl<'input> CustomRuleContext<'input> for AtomicExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_atomicExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_atomicExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_atomicExpr }
 }
 antlr_rust::tid! {AtomicExprContextExt<'a>}
 
@@ -4420,22 +4423,22 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(27, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule comparison*/
+                        // InvokeRule comparison
                         recog.base.set_state(296);
                         recog.comparison()?;
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
                         recog.base.set_state(297);
                         recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                        /*InvokeRule logicalExpr*/
+                        // InvokeRule logicalExpr
                         recog.base.set_state(298);
                         recog.logicalExpr()?;
 
@@ -4497,7 +4500,7 @@ impl<'input> CustomRuleContext<'input> for ComparisonContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_comparison
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_comparison }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_comparison }
 }
 antlr_rust::tid! {ComparisonContextExt<'a>}
 
@@ -4594,7 +4597,8 @@ pub trait ComparisonContextAttrs<'input>:
         self.children_of_type()
     }
     /// Retrieves 'i's TerminalNode corresponding to token PARAMETER, starting from 0.
-    /// Returns `None` if number of children corresponding to token PARAMETER is less or equal than `i`.
+    /// Returns `None` if number of children corresponding to token PARAMETER is less or equal than
+    /// `i`.
     fn PARAMETER(&self, i: usize) -> Option<Rc<TerminalNode<'input, LqlParserContextType>>>
     where
         Self: Sized,
@@ -4654,31 +4658,31 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(34, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule arithmeticExpr*/
+                        // InvokeRule arithmeticExpr
                         recog.base.set_state(303);
                         recog.arithmeticExpr()?;
 
-                        /*InvokeRule comparisonOp*/
+                        // InvokeRule comparisonOp
                         recog.base.set_state(304);
                         recog.comparisonOp()?;
 
-                        /*InvokeRule arithmeticExpr*/
+                        // InvokeRule arithmeticExpr
                         recog.base.set_state(305);
                         recog.arithmeticExpr()?;
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
-                        /*InvokeRule qualifiedIdent*/
+                        // InvokeRule qualifiedIdent
                         recog.base.set_state(307);
                         recog.qualifiedIdent()?;
 
-                        /*InvokeRule comparisonOp*/
+                        // InvokeRule comparisonOp
                         recog.base.set_state(308);
                         recog.comparisonOp()?;
 
@@ -4687,7 +4691,7 @@ where
                         match recog.interpreter.adaptive_predict(28, &mut recog.base)? {
                             1 => {
                                 {
-                                    /*InvokeRule qualifiedIdent*/
+                                    // InvokeRule qualifiedIdent
                                     recog.base.set_state(309);
                                     recog.qualifiedIdent()?;
                                 }
@@ -4718,13 +4722,13 @@ where
                     }
                 }
                 3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
                         recog.base.set_state(317);
                         recog.base.match_token(IDENT, &mut recog.err_handler)?;
 
-                        /*InvokeRule comparisonOp*/
+                        // InvokeRule comparisonOp
                         recog.base.set_state(318);
                         recog.comparisonOp()?;
 
@@ -4733,7 +4737,7 @@ where
                         match recog.interpreter.adaptive_predict(29, &mut recog.base)? {
                             1 => {
                                 {
-                                    /*InvokeRule qualifiedIdent*/
+                                    // InvokeRule qualifiedIdent
                                     recog.base.set_state(319);
                                     recog.qualifiedIdent()?;
                                 }
@@ -4764,13 +4768,13 @@ where
                     }
                 }
                 4 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 4);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 4);
                     recog.base.enter_outer_alt(None, 4);
                     {
                         recog.base.set_state(327);
                         recog.base.match_token(PARAMETER, &mut recog.err_handler)?;
 
-                        /*InvokeRule comparisonOp*/
+                        // InvokeRule comparisonOp
                         recog.base.set_state(328);
                         recog.comparisonOp()?;
 
@@ -4779,7 +4783,7 @@ where
                         match recog.interpreter.adaptive_predict(30, &mut recog.base)? {
                             1 => {
                                 {
-                                    /*InvokeRule qualifiedIdent*/
+                                    // InvokeRule qualifiedIdent
                                     recog.base.set_state(329);
                                     recog.qualifiedIdent()?;
                                 }
@@ -4810,10 +4814,10 @@ where
                     }
                 }
                 5 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 5);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 5);
                     recog.base.enter_outer_alt(None, 5);
                     {
-                        /*InvokeRule qualifiedIdent*/
+                        // InvokeRule qualifiedIdent
                         recog.base.set_state(337);
                         recog.qualifiedIdent()?;
 
@@ -4822,7 +4826,7 @@ where
                         _la = recog.base.input.la(1);
                         if _la == ASC || _la == DESC {
                             {
-                                /*InvokeRule orderDirection*/
+                                // InvokeRule orderDirection
                                 recog.base.set_state(338);
                                 recog.orderDirection()?;
                             }
@@ -4830,7 +4834,7 @@ where
                     }
                 }
                 6 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 6);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 6);
                     recog.base.enter_outer_alt(None, 6);
                     {
                         recog.base.set_state(341);
@@ -4841,7 +4845,7 @@ where
                         _la = recog.base.input.la(1);
                         if _la == ASC || _la == DESC {
                             {
-                                /*InvokeRule orderDirection*/
+                                // InvokeRule orderDirection
                                 recog.base.set_state(342);
                                 recog.orderDirection()?;
                             }
@@ -4849,7 +4853,7 @@ where
                     }
                 }
                 7 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 7);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 7);
                     recog.base.enter_outer_alt(None, 7);
                     {
                         recog.base.set_state(345);
@@ -4860,7 +4864,7 @@ where
                         _la = recog.base.input.la(1);
                         if _la == ASC || _la == DESC {
                             {
-                                /*InvokeRule orderDirection*/
+                                // InvokeRule orderDirection
                                 recog.base.set_state(346);
                                 recog.orderDirection()?;
                             }
@@ -4868,7 +4872,7 @@ where
                     }
                 }
                 8 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 8);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 8);
                     recog.base.enter_outer_alt(None, 8);
                     {
                         recog.base.set_state(349);
@@ -4876,7 +4880,7 @@ where
                     }
                 }
                 9 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 9);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 9);
                     recog.base.enter_outer_alt(None, 9);
                     {
                         recog.base.set_state(350);
@@ -4884,7 +4888,7 @@ where
                     }
                 }
                 10 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 10);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 10);
                     recog.base.enter_outer_alt(None, 10);
                     {
                         recog.base.set_state(351);
@@ -4892,37 +4896,37 @@ where
                     }
                 }
                 11 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 11);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 11);
                     recog.base.enter_outer_alt(None, 11);
                     {
-                        /*InvokeRule expr*/
+                        // InvokeRule expr
                         recog.base.set_state(352);
                         recog.expr()?;
                     }
                 }
                 12 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 12);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 12);
                     recog.base.enter_outer_alt(None, 12);
                     {
-                        /*InvokeRule existsExpr*/
+                        // InvokeRule existsExpr
                         recog.base.set_state(353);
                         recog.existsExpr()?;
                     }
                 }
                 13 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 13);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 13);
                     recog.base.enter_outer_alt(None, 13);
                     {
-                        /*InvokeRule nullCheckExpr*/
+                        // InvokeRule nullCheckExpr
                         recog.base.set_state(354);
                         recog.nullCheckExpr()?;
                     }
                 }
                 14 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 14);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 14);
                     recog.base.enter_outer_alt(None, 14);
                     {
-                        /*InvokeRule inExpr*/
+                        // InvokeRule inExpr
                         recog.base.set_state(355);
                         recog.inExpr()?;
                     }
@@ -4981,7 +4985,7 @@ impl<'input> CustomRuleContext<'input> for ExistsExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_existsExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_existsExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_existsExpr }
 }
 antlr_rust::tid! {ExistsExprContextExt<'a>}
 
@@ -5033,7 +5037,7 @@ where
             .enter_rule(_localctx.clone(), 52, RULE_existsExpr);
         let mut _localctx: Rc<ExistsExprContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(358);
@@ -5042,7 +5046,7 @@ where
                 recog.base.set_state(359);
                 recog.base.match_token(T__1, &mut recog.err_handler)?;
 
-                /*InvokeRule pipeExpr*/
+                // InvokeRule pipeExpr
                 recog.base.set_state(360);
                 recog.pipeExpr()?;
 
@@ -5101,7 +5105,7 @@ impl<'input> CustomRuleContext<'input> for NullCheckExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_nullCheckExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_nullCheckExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_nullCheckExpr }
 }
 antlr_rust::tid! {NullCheckExprContextExt<'a>}
 
@@ -5187,7 +5191,7 @@ where
         let mut _localctx: Rc<NullCheckExprContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(366);
@@ -5195,7 +5199,7 @@ where
                 match recog.interpreter.adaptive_predict(35, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule qualifiedIdent*/
+                            // InvokeRule qualifiedIdent
                             recog.base.set_state(363);
                             recog.qualifiedIdent()?;
                         }
@@ -5280,7 +5284,7 @@ impl<'input> CustomRuleContext<'input> for InExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_inExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_inExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_inExpr }
 }
 antlr_rust::tid! {InExprContextExt<'a>}
 
@@ -5358,7 +5362,7 @@ where
         recog.base.enter_rule(_localctx.clone(), 56, RULE_inExpr);
         let mut _localctx: Rc<InExprContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(377);
@@ -5366,7 +5370,7 @@ where
                 match recog.interpreter.adaptive_predict(37, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule qualifiedIdent*/
+                            // InvokeRule qualifiedIdent
                             recog.base.set_state(374);
                             recog.qualifiedIdent()?;
                         }
@@ -5393,14 +5397,14 @@ where
                 match recog.interpreter.adaptive_predict(38, &mut recog.base)? {
                     1 => {
                         {
-                            /*InvokeRule pipeExpr*/
+                            // InvokeRule pipeExpr
                             recog.base.set_state(381);
                             recog.pipeExpr()?;
                         }
                     }
                     2 => {
                         {
-                            /*InvokeRule argList*/
+                            // InvokeRule argList
                             recog.base.set_state(382);
                             recog.argList()?;
                         }
@@ -5462,7 +5466,7 @@ impl<'input> CustomRuleContext<'input> for CaseExprContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_caseExpr
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_caseExpr }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_caseExpr }
 }
 antlr_rust::tid! {CaseExprContextExt<'a>}
 
@@ -5541,7 +5545,7 @@ where
         let mut _localctx: Rc<CaseExprContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(387);
@@ -5553,7 +5557,7 @@ where
                 loop {
                     {
                         {
-                            /*InvokeRule whenClause*/
+                            // InvokeRule whenClause
                             recog.base.set_state(388);
                             recog.whenClause()?;
                         }
@@ -5573,7 +5577,7 @@ where
                         recog.base.set_state(393);
                         recog.base.match_token(ELSE, &mut recog.err_handler)?;
 
-                        /*InvokeRule caseResult*/
+                        // InvokeRule caseResult
                         recog.base.set_state(394);
                         recog.caseResult()?;
                     }
@@ -5633,7 +5637,7 @@ impl<'input> CustomRuleContext<'input> for WhenClauseContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_whenClause
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_whenClause }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_whenClause }
 }
 antlr_rust::tid! {WhenClauseContextExt<'a>}
 
@@ -5699,20 +5703,20 @@ where
             .enter_rule(_localctx.clone(), 60, RULE_whenClause);
         let mut _localctx: Rc<WhenClauseContextAll> = _localctx;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(399);
                 recog.base.match_token(WHEN, &mut recog.err_handler)?;
 
-                /*InvokeRule comparison*/
+                // InvokeRule comparison
                 recog.base.set_state(400);
                 recog.comparison()?;
 
                 recog.base.set_state(401);
                 recog.base.match_token(THEN, &mut recog.err_handler)?;
 
-                /*InvokeRule caseResult*/
+                // InvokeRule caseResult
                 recog.base.set_state(402);
                 recog.caseResult()?;
             }
@@ -5767,7 +5771,7 @@ impl<'input> CustomRuleContext<'input> for CaseResultContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_caseResult
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_caseResult }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_caseResult }
 }
 antlr_rust::tid! {CaseResultContextExt<'a>}
 
@@ -5867,34 +5871,34 @@ where
             recog.err_handler.sync(&mut recog.base)?;
             match recog.interpreter.adaptive_predict(41, &mut recog.base)? {
                 1 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 1);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 1);
                     recog.base.enter_outer_alt(None, 1);
                     {
-                        /*InvokeRule arithmeticExpr*/
+                        // InvokeRule arithmeticExpr
                         recog.base.set_state(404);
                         recog.arithmeticExpr()?;
                     }
                 }
                 2 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 2);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 2);
                     recog.base.enter_outer_alt(None, 2);
                     {
-                        /*InvokeRule comparison*/
+                        // InvokeRule comparison
                         recog.base.set_state(405);
                         recog.comparison()?;
                     }
                 }
                 3 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 3);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 3);
                     recog.base.enter_outer_alt(None, 3);
                     {
-                        /*InvokeRule qualifiedIdent*/
+                        // InvokeRule qualifiedIdent
                         recog.base.set_state(406);
                         recog.qualifiedIdent()?;
                     }
                 }
                 4 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 4);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 4);
                     recog.base.enter_outer_alt(None, 4);
                     {
                         recog.base.set_state(407);
@@ -5902,7 +5906,7 @@ where
                     }
                 }
                 5 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 5);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 5);
                     recog.base.enter_outer_alt(None, 5);
                     {
                         recog.base.set_state(408);
@@ -5910,7 +5914,7 @@ where
                     }
                 }
                 6 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 6);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 6);
                     recog.base.enter_outer_alt(None, 6);
                     {
                         recog.base.set_state(409);
@@ -5918,7 +5922,7 @@ where
                     }
                 }
                 7 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 7);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 7);
                     recog.base.enter_outer_alt(None, 7);
                     {
                         recog.base.set_state(410);
@@ -5926,7 +5930,7 @@ where
                     }
                 }
                 8 => {
-                    //recog.base.enter_outer_alt(_localctx.clone(), 8);
+                    // recog.base.enter_outer_alt(_localctx.clone(), 8);
                     recog.base.enter_outer_alt(None, 8);
                     {
                         recog.base.set_state(411);
@@ -5988,7 +5992,7 @@ impl<'input> CustomRuleContext<'input> for OrderDirectionContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_orderDirection
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_orderDirection }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_orderDirection }
 }
 antlr_rust::tid! {OrderDirectionContextExt<'a>}
 
@@ -6044,7 +6048,7 @@ where
         let mut _localctx: Rc<OrderDirectionContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(414);
@@ -6111,7 +6115,7 @@ impl<'input> CustomRuleContext<'input> for ComparisonOpContextExt<'input> {
     fn get_rule_index(&self) -> usize {
         RULE_comparisonOp
     }
-    //fn type_rule_index() -> usize where Self: Sized { RULE_comparisonOp }
+    // fn type_rule_index() -> usize where Self: Sized { RULE_comparisonOp }
 }
 antlr_rust::tid! {ComparisonOpContextExt<'a>}
 
@@ -6158,7 +6162,7 @@ where
         let mut _localctx: Rc<ComparisonOpContextAll> = _localctx;
         let mut _la: isize = -1;
         let result: Result<(), ANTLRError> = (|| {
-            //recog.base.enter_outer_alt(_localctx.clone(), 1);
+            // recog.base.enter_outer_alt(_localctx.clone(), 1);
             recog.base.enter_outer_alt(None, 1);
             {
                 recog.base.set_state(416);

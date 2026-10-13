@@ -29,8 +29,14 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference
+      Include="../DataProvider/DataProvider.csproj"
+      ReferenceOutputAssembly="false"
+      SkipGetTargetFrameworkProperties="true"
+    />
     <ProjectReference Include="../Nimblesite.DataProvider.Core/Nimblesite.DataProvider.Core.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.SQLite/Nimblesite.DataProvider.SQLite.csproj" />
+    <ProjectReference Include="../Nimblesite.DataProvider.Postgres/Nimblesite.DataProvider.Postgres.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.SqlServer/Nimblesite.DataProvider.SqlServer.csproj" />
     <ProjectReference Include="../Nimblesite.DataProvider.Parsing.Tests/Nimblesite.DataProvider.Parsing.Tests.csproj" />
     <ProjectReference Include="../../Other/Nimblesite.Sql.Model/Nimblesite.Sql.Model.csproj" />
@@ -43,5 +49,36 @@
     <None Update="TestSqlFiles\**\*.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+    <Compile
+      Include="../../Tests.Shared/CodeGenerationTestDoubles.cs"
+      Link="Shared/CodeGenerationTestDoubles.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/ExtensionTestCases.cs"
+      Link="Shared/ExtensionTestCases.cs"
+    />
+    <Compile Include="../../Tests.Shared/SqliteSchemaSetup.cs" Link="Shared/SqliteSchemaSetup.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Tests.Shared/GeneratedCodeCompiler.cs"
+      Link="Shared/GeneratedCodeCompiler.cs"
+    />
+    <Compile
+      Include="../../Tests.Shared/SqlServerContainerFixture.cs"
+      Link="Shared/SqlServerContainerFixture.cs"
+    />
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile Include="../../Tests.Shared/RowAssertions.cs" Link="Shared/RowAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
+    />
   </ItemGroup>
 </Project>

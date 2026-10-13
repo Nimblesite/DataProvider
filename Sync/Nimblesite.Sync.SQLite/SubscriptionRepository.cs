@@ -17,11 +17,7 @@ public static class SubscriptionRepository
     public static SubscriptionListResult GetAll(SqliteConnection connection) =>
         QueryList(
             connection,
-            """
-            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-            FROM _sync_subscriptions
-            ORDER BY created_at ASC
-            """
+            global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification8
         );
 
     /// <summary>
@@ -32,31 +28,33 @@ public static class SubscriptionRepository
     /// <returns>Subscription if found, null if not found, or database error.</returns>
     public static SubscriptionResult GetById(SqliteConnection connection, string subscriptionId)
     {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-                FROM _sync_subscriptions
-                WHERE subscription_id = @subscriptionId
-                """;
-            cmd.Parameters.AddWithValue("@subscriptionId", subscriptionId);
-
-            using var reader = cmd.ExecuteReader();
-
-            if (!reader.Read())
+        return SyncCommandExecution.Read<SqliteException, SubscriptionResult>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification9,
+            parameters: () => [("@subscriptionId", subscriptionId)],
+            read: command =>
             {
-                return new SubscriptionOk(null);
-            }
+                using var reader = command.ExecuteReader();
 
-            return new SubscriptionOk(ReadSubscription(reader));
-        }
-        catch (SqliteException ex)
-        {
-            return new SubscriptionError(
-                new SyncErrorDatabase($"Failed to get subscription: {ex.Message}")
-            );
-        }
+                if (!reader.Read())
+                {
+                    return new SubscriptionOk(null);
+                }
+
+                return new SubscriptionOk(ReadSubscription(reader));
+            },
+            failure: ex =>
+            {
+                return new SubscriptionError(
+                    new SyncErrorDatabase($"Failed to get subscription: {ex.Message}")
+                );
+            }
+        );
     }
 
     /// <summary>
@@ -71,12 +69,7 @@ public static class SubscriptionRepository
     ) =>
         QueryList(
             connection,
-            """
-            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-            FROM _sync_subscriptions
-            WHERE table_name = @tableName
-            ORDER BY created_at ASC
-            """,
+            global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification10,
             cmd => cmd.Parameters.AddWithValue("@tableName", tableName)
         );
 
@@ -92,12 +85,7 @@ public static class SubscriptionRepository
     ) =>
         QueryList(
             connection,
-            """
-            SELECT subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at
-            FROM _sync_subscriptions
-            WHERE origin_id = @originId
-            ORDER BY created_at ASC
-            """,
+            global::Nimblesite.Sync.SQLite.MappingStateRepository.SqlSpecification11,
             cmd => cmd.Parameters.AddWithValue("@originId", originId)
         );
 
@@ -107,41 +95,30 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="subscription">Subscription to insert.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Insert(SqliteConnection connection, SyncSubscription subscription)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                INSERT INTO _sync_subscriptions
-                    (subscription_id, origin_id, subscription_type, table_name, filter, created_at, expires_at)
-                VALUES
-                    (@subscriptionId, @originId, @subscriptionType, @tableName, @filter, @createdAt, @expiresAt)
-                """;
-            cmd.Parameters.AddWithValue("@subscriptionId", subscription.SubscriptionId);
-            cmd.Parameters.AddWithValue("@originId", subscription.OriginId);
-            cmd.Parameters.AddWithValue(
-                "@subscriptionType",
-                subscription.Type.ToString().ToLowerInvariant()
-            );
-            cmd.Parameters.AddWithValue("@tableName", subscription.TableName);
-            cmd.Parameters.AddWithValue("@filter", subscription.Filter ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@createdAt", subscription.CreatedAt);
-            cmd.Parameters.AddWithValue(
-                "@expiresAt",
-                subscription.ExpiresAt ?? (object)DBNull.Value
-            );
-
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to insert subscription: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult Insert(
+        SqliteConnection connection,
+        SyncSubscription subscription
+    ) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification12,
+            parameters: () =>
+                [
+                    ("@subscriptionId", subscription.SubscriptionId),
+                    ("@originId", subscription.OriginId),
+                    ("@subscriptionType", subscription.Type.ToString().ToLowerInvariant()),
+                    ("@tableName", subscription.TableName),
+                    ("@filter", subscription.Filter ?? (object)DBNull.Value),
+                    ("@createdAt", subscription.CreatedAt),
+                    ("@expiresAt", subscription.ExpiresAt ?? (object)DBNull.Value),
+                ],
+            failurePrefix: "Failed to insert subscription"
+        );
 
     /// <summary>
     /// Deletes a subscription by ID.
@@ -149,24 +126,15 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="subscriptionId">Subscription ID to delete.</param>
     /// <returns>Success or database error.</returns>
-    public static BoolSyncResult Delete(SqliteConnection connection, string subscriptionId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "DELETE FROM _sync_subscriptions WHERE subscription_id = @subscriptionId";
-            cmd.Parameters.AddWithValue("@subscriptionId", subscriptionId);
-            cmd.ExecuteNonQuery();
-            return new BoolSyncOk(true);
-        }
-        catch (SqliteException ex)
-        {
-            return new BoolSyncError(
-                new SyncErrorDatabase($"Failed to delete subscription: {ex.Message}")
-            );
-        }
-    }
+    public static BoolSyncResult Delete(SqliteConnection connection, string subscriptionId) =>
+        SyncCommandExecution.Write<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText =
+                    "DELETE FROM _sync_subscriptions WHERE subscription_id = @subscriptionId",
+            parameters: () => [("@subscriptionId", subscriptionId)],
+            failurePrefix: "Failed to delete subscription"
+        );
 
     /// <summary>
     /// Deletes all subscriptions for an origin.
@@ -174,24 +142,14 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="originId">Origin ID to delete subscriptions for.</param>
     /// <returns>Number of deleted subscriptions or database error.</returns>
-    public static IntSyncResult DeleteByOrigin(SqliteConnection connection, string originId)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM _sync_subscriptions WHERE origin_id = @originId";
-            cmd.Parameters.AddWithValue("@originId", originId);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static IntSyncResult DeleteByOrigin(SqliteConnection connection, string originId) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = "DELETE FROM _sync_subscriptions WHERE origin_id = @originId",
+            parameters: () => [("@originId", originId)],
+            failurePrefix: "Failed to delete subscriptions"
+        );
 
     /// <summary>
     /// Deletes expired subscriptions.
@@ -199,27 +157,21 @@ public static class SubscriptionRepository
     /// <param name="connection">SQLite connection.</param>
     /// <param name="currentTimestamp">Current timestamp to compare against.</param>
     /// <returns>Number of deleted subscriptions or database error.</returns>
-    public static IntSyncResult DeleteExpired(SqliteConnection connection, string currentTimestamp)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                DELETE FROM _sync_subscriptions
-                WHERE expires_at IS NOT NULL AND expires_at < @currentTimestamp
-                """;
-            cmd.Parameters.AddWithValue("@currentTimestamp", currentTimestamp);
-
-            var deleted = cmd.ExecuteNonQuery();
-            return new IntSyncOk(deleted);
-        }
-        catch (SqliteException ex)
-        {
-            return new IntSyncError(
-                new SyncErrorDatabase($"Failed to delete expired subscriptions: {ex.Message}")
-            );
-        }
-    }
+    public static IntSyncResult DeleteExpired(
+        SqliteConnection connection,
+        string currentTimestamp
+    ) =>
+        SyncCommandExecution.WriteCount<SqliteException>(
+            connection: connection,
+            setSql: command =>
+                command.CommandText = global::Nimblesite
+                    .Sync
+                    .SQLite
+                    .MappingStateRepository
+                    .SqlSpecification13,
+            parameters: () => [("@currentTimestamp", currentTimestamp)],
+            failurePrefix: "Failed to delete expired subscriptions"
+        );
 
     [SuppressMessage(
         "Security",
@@ -238,15 +190,12 @@ public static class SubscriptionRepository
             cmd.CommandText = sql;
             bindParameters?.Invoke(cmd);
 
-            var subscriptions = new List<SyncSubscription>();
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                subscriptions.Add(ReadSubscription(reader));
-            }
-
-            return new SubscriptionListOk(subscriptions);
+            return new SubscriptionListOk(
+                SyncCommandExecution.ReadRows<SyncSubscription>(
+                    command: cmd,
+                    read: row => ReadSubscription(row)
+                )
+            );
         }
         catch (SqliteException ex)
         {
@@ -256,7 +205,9 @@ public static class SubscriptionRepository
         }
     }
 
-    internal static SyncSubscription ReadSubscription(SqliteDataReader reader) =>
+    internal static SyncSubscription ReadSubscription(
+        global::System.Data.Common.DbDataReader reader
+    ) =>
         new(
             SubscriptionId: reader.GetString(0),
             OriginId: reader.GetString(1),

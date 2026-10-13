@@ -1,40 +1,25 @@
-using Microsoft.Data.Sqlite;
-using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
 /// Tests for DbConnectionExtensions methods to improve coverage
 /// </summary>
-public sealed class DbConnectionExtensionsTests : IDisposable
+public sealed partial class DbConnectionExtensionsTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly string _dbPath;
 
     public DbConnectionExtensionsTests()
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"dbconn_ext_tests_{Guid.NewGuid()}.db");
-        _connection = new SqliteConnection($"Data Source={_dbPath}");
-        _connection.Open();
+        (_dbPath, _connection) = global::Tests.Shared.TempSqliteDatabase.Create("dbconn_ext_tests");
         CreateSchema();
     }
 
     //TODO: this is illegal because this should be using migrations
     private void CreateSchema()
     {
-        using var command = new SqliteCommand(
-            """
-            CREATE TABLE TestTable (
-                Id INTEGER PRIMARY KEY,
-                Name TEXT NOT NULL,
-                Value INTEGER NOT NULL
-            );
-            INSERT INTO TestTable (Name, Value) VALUES ('Alpha', 10);
-            INSERT INTO TestTable (Name, Value) VALUES ('Beta', 20);
-            INSERT INTO TestTable (Name, Value) VALUES ('Gamma', 30);
-            """,
-            _connection
-        );
+        using var command = new SqliteCommand(Data_CreateSchema_1, _connection);
         command.ExecuteNonQuery();
     }
 
@@ -43,70 +28,45 @@ public sealed class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var result = nullConnection!.Query(
-            "SELECT * FROM TestTable",
-            null,
-            reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            nullConnection!.Query(
+                "SELECT * FROM TestTable",
+                null,
+                reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
+            )
         );
-
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
-        var error = (
-            (Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                IReadOnlyList<TestRecord>,
-                SqlError
-            >)result
-        ).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Query_WithNullSql_ReturnsError()
     {
-        var result = _connection.Query(
-            null!,
-            null,
-            reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
-        );
-
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
-        var error = (
-            (Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                IReadOnlyList<TestRecord>,
-                SqlError
-            >)result
-        ).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Query_WithEmptySql_ReturnsError()
-    {
-        var result = _connection.Query(
-            "   ",
-            null,
-            reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
-        );
-
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            _connection.Query(
+                null!,
+                null,
+                reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
+            )
         );
     }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Query_WithEmptySql_ReturnsError_CasesData))]
+    public void Query_WithEmptySql_ReturnsError_Cases(string caseName, string value0) =>
+        ExtensionTestCases.RunQueryErrorCase<TestRecord>(
+            caseName: caseName,
+            sql: value0,
+            query: sql =>
+                _connection.Query(
+                    sql,
+                    null,
+                    reader => new TestRecord
+                    {
+                        Name = reader.GetString(1),
+                        Value = reader.GetInt32(2),
+                    }
+                )
+        );
 
     [Fact]
     public void Query_WithValidSql_ReturnsResults()
@@ -117,19 +77,7 @@ public sealed class DbConnectionExtensionsTests : IDisposable
             reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
         );
 
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
-        var records = (
-            (Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                IReadOnlyList<TestRecord>,
-                SqlError
-            >)result
-        ).Value;
+        var records = RequireQueryRecords(input0: result);
         Assert.Equal(3, records.Count);
         Assert.Equal("Alpha", records[0].Name);
     }
@@ -143,19 +91,7 @@ public sealed class DbConnectionExtensionsTests : IDisposable
             reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
         );
 
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
-        var records = (
-            (Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                IReadOnlyList<TestRecord>,
-                SqlError
-            >)result
-        ).Value;
+        var records = RequireQueryRecords(input0: result);
         Assert.Equal(2, records.Count);
         Assert.Equal("Beta", records[0].Name);
         Assert.Equal("Gamma", records[1].Name);
@@ -170,38 +106,8 @@ public sealed class DbConnectionExtensionsTests : IDisposable
             null
         );
 
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
-        var records = (
-            (Result<IReadOnlyList<TestRecord>, SqlError>.Ok<
-                IReadOnlyList<TestRecord>,
-                SqlError
-            >)result
-        ).Value;
+        var records = RequireQueryRecords(input0: result);
         Assert.Empty(records);
-    }
-
-    [Fact]
-    public void Query_WithInvalidSql_ReturnsError()
-    {
-        var result = _connection.Query(
-            "SELECT * FROM NonExistentTable",
-            null,
-            reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
-        );
-
-        Assert.True(
-            result
-                is Result<IReadOnlyList<TestRecord>, SqlError>.Error<
-                    IReadOnlyList<TestRecord>,
-                    SqlError
-                >
-        );
     }
 
     [Fact]
@@ -209,52 +115,37 @@ public sealed class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var result = nullConnection!.Execute(
-            "INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)"
+        ExtensionTestCases.AssertErrorMentionsNull<int>(
+            nullConnection!.Execute("INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)")
         );
-
-        Assert.True(result is IntError);
-        var error = ((IntError)result).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Execute_WithNullSql_ReturnsError()
     {
-        var result = _connection.Execute(null!);
-
-        Assert.True(result is IntError);
-        var error = ((IntError)result).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
+        ExtensionTestCases.AssertErrorMentionsNull<int>(_connection.Execute(null!));
     }
 
-    [Fact]
-    public void Execute_WithEmptySql_ReturnsError()
-    {
-        var result = _connection.Execute("   ");
-
-        Assert.True(result is IntError);
-    }
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Execute_WithEmptySql_ReturnsError_ContextCasesData))]
+    public void Execute_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
+        ExtensionTestCases.RunExecuteErrorCase(
+            caseName: caseName,
+            sql: value0,
+            execute: sql => _connection.Execute(sql)
+        );
 
     [Fact]
     public void Execute_WithValidSql_ReturnsRowsAffected()
     {
-        var result = _connection.Execute(
-            "INSERT INTO TestTable (Name, Value) VALUES (@name, @value)",
-            [new SqliteParameter("@name", "Delta"), new SqliteParameter("@value", 40)]
-        );
-
-        Assert.True(result is IntOk);
-        var rowsAffected = ((IntOk)result).Value;
+        var rowsAffected = Ok(read: () =>
+            _connection.Execute(
+                "INSERT INTO TestTable (Name, Value) VALUES (@name, @value)",
+                [new SqliteParameter("@name", "Delta"), new SqliteParameter("@value", 40)]
+            )
+        ).Value;
         Assert.Equal(1, rowsAffected);
-    }
-
-    [Fact]
-    public void Execute_WithInvalidSql_ReturnsError()
-    {
-        var result = _connection.Execute("INSERT INTO NonExistentTable (Name) VALUES ('Test')");
-
-        Assert.True(result is IntError);
     }
 
     [Fact]
@@ -262,37 +153,36 @@ public sealed class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var result = nullConnection!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1");
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(
+            nullConnection!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1")
+        );
     }
 
     [Fact]
     public void Scalar_WithNullSql_ReturnsError()
     {
-        var result = _connection.Scalar<string>(null!);
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(_connection.Scalar<string>(null!));
     }
 
-    [Fact]
-    public void Scalar_WithEmptySql_ReturnsError()
-    {
-        var result = _connection.Scalar<string>("   ");
-
-        Assert.False(result is NullableStringOk);
-    }
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(Scalar_WithEmptySql_ReturnsError_ContextCasesData))]
+    public void Scalar_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
+        ExtensionTestCases.RunScalarNotOkCase<string?>(
+            caseName: caseName,
+            sql: value0,
+            scalar: sql => _connection.Scalar<string>(sql)
+        );
 
     [Fact]
     public void Scalar_WithValidSql_ReturnsValue()
     {
         var result = _connection.Scalar<string>("SELECT Name FROM TestTable ORDER BY Name LIMIT 1");
 
-        Assert.True(result is NullableStringOk);
-        if (result is NullableStringOk ok)
-        {
-            Assert.Equal("Alpha", ok.Value);
-        }
+        global::Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.VerifyReusableWorkflow3(
+            input0: result,
+            value0: "Alpha"
+        );
     }
 
     [Fact]
@@ -303,19 +193,10 @@ public sealed class DbConnectionExtensionsTests : IDisposable
             [new SqliteParameter("@minValue", 15)]
         );
 
-        Assert.True(result is NullableStringOk);
-        if (result is NullableStringOk ok)
-        {
-            Assert.Equal("Beta", ok.Value);
-        }
-    }
-
-    [Fact]
-    public void Scalar_WithInvalidSql_ReturnsError()
-    {
-        var result = _connection.Scalar<string>("SELECT Name FROM NonExistentTable");
-
-        Assert.False(result is NullableStringOk);
+        global::Nimblesite.DataProvider.Tests.DbTransactionExtensionsTests.VerifyReusableWorkflow3(
+            input0: result,
+            value0: "Beta"
+        );
     }
 
     public void Dispose()
@@ -344,5 +225,18 @@ public sealed class DbConnectionExtensionsTests : IDisposable
     {
         public string Name { get; init; } = "";
         public int Value { get; init; }
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Tests.DbConnectionExtensionsTests.TestRecord> RequireQueryRecords(
+        global::Outcome.Result<
+            global::System.Collections.Generic.IReadOnlyList<global::Nimblesite.DataProvider.Tests.DbConnectionExtensionsTests.TestRecord>,
+            global::Nimblesite.Sql.Model.SqlError
+        > input0
+    )
+    {
+        var records = Ok(actual: input0).Value;
+
+        return records;
     }
 }

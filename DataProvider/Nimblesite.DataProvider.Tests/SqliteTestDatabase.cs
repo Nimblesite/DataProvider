@@ -1,5 +1,3 @@
-using Microsoft.Data.Sqlite;
-
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
@@ -21,9 +19,7 @@ internal sealed class SqliteTestDatabase : IDisposable
     /// <param name="prefix">Temp-file name prefix identifying the fixture.</param>
     public SqliteTestDatabase(string prefix)
     {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"{prefix}_{Guid.NewGuid()}.db");
-        Connection = new SqliteConnection($"Data Source={_dbPath}");
-        Connection.Open();
+        (_dbPath, Connection) = global::Tests.Shared.TempSqliteDatabase.Create(prefix);
     }
 
     /// <summary>

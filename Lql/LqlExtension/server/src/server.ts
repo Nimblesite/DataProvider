@@ -32,6 +32,14 @@ interface CompletionItem {
     documentation?: string;
 }
 
+/** Build a single-line range from column 0 to endCharacter. */
+function lineRange(line: number, endCharacter: number): Range {
+    return {
+        start: { line, character: 0 },
+        end: { line, character: endCharacter }
+    };
+}
+
 // Diagnostic severity levels
 const DiagnosticSeverity = {
     Error: 1,
@@ -115,10 +123,7 @@ class LqlLanguageServer {
             const closeBrackets = (line.match(/[\}\]\)]/g) || []).length;
             if (openBrackets !== closeBrackets) {
                 diagnostics.push({
-                    range: {
-                        start: { line: i, character: 0 },
-                        end: { line: i, character: line.length }
-                    },
+                    range: lineRange(i, line.length),
                     message: 'Unmatched brackets detected',
                     severity: DiagnosticSeverity.Error
                 });
@@ -302,10 +307,7 @@ class LqlLanguageServer {
             const currentIndent = line.match(/^\s*/)?.[0] || '';
 
             if (currentIndent !== expectedIndent) {
-                const range: Range = {
-                    start: { line: i, character: 0 },
-                    end: { line: i, character: currentIndent.length }
-                };
+                const range: Range = lineRange(i, currentIndent.length);
                 edits.push({ range, newText: expectedIndent });
             }
 

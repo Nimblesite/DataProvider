@@ -31,6 +31,9 @@ public static class PostgresDatabaseEffects
         // "timestamp with time zone") because it's strictly more specific
         // than the CLR type reported by the reader. PostgresTypeMapper
         // already handles the unknown-type fallback.
-        return PostgresTypeMapper.MapPostgresTypeToCSharp(dataTypeName, isNullable);
+        return PostgresTypeMapper.MapPostgresTypeToCSharp(
+            pgType: fieldType == typeof(decimal) ? "numeric" : dataTypeName,
+            isNullable: isNullable
+        );
     }
 }

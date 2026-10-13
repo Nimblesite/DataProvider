@@ -1,3 +1,6 @@
+using static global::Tests.Shared.ResultAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-PG-SUPPORT-DDL].
@@ -11,7 +14,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Disposed via IAsyncLifetime.DisposeAsync"
 )]
-public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresSupportReadbackE2ETests(PostgresContainerFixture fixture)
     : IAsyncLifetime
 {
     private NpgsqlConnection? _connection;
@@ -35,28 +38,22 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
     [Fact]
     public void SupportObjects_InspectAfterApply_DoesNotEmitSecondDiff()
     {
-        if (_connection is not NpgsqlConnection connection)
-        {
-            Assert.Fail("PostgreSQL connection not initialized.");
-            return;
-        }
+        var connection = global::Tests.Shared.ResultAssertions.Expected<NpgsqlConnection>(
+            actual: _connection,
+            message: "PostgreSQL connection not initialized."
+        );
 
         var desired = SupportSchema();
         var current = Inspect(connection);
         var operations = Diff(current, desired);
 
-        var apply = MigrationRunner.Apply(
-            connection,
-            operations,
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            _logger
+        var apply = PostgresTestDb.TryApply(
+            connection: connection,
+            operations: operations,
+            logger: _logger
         );
 
-        Assert.True(
-            apply is MigrationApplyResultOk,
-            $"Migration failed: {(apply as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: apply);
 
         var inspected = Inspect(connection);
         var secondDiff = Diff(inspected, desired);
@@ -102,76 +99,10 @@ public sealed class PostgresSupportReadbackE2ETests(PostgresContainerFixture fix
     }
 
     private SchemaDefinition Inspect(NpgsqlConnection connection) =>
-        ((SchemaResultOk)PostgresSchemaInspector.Inspect(connection, "public", _logger)).Value;
+        (Ok(actual: PostgresSchemaInspector.Inspect(connection, "public", _logger))).Value;
 
     private IReadOnlyList<SchemaOperation> Diff(
         SchemaDefinition current,
         SchemaDefinition desired
-    ) => ((OperationsResultOk)SchemaDiff.Calculate(current, desired, logger: _logger)).Value;
-
-    private static SchemaDefinition SupportSchema() =>
-        new()
-        {
-            Name = "support_readback",
-            Roles =
-            [
-                new PostgresRoleDefinition
-                {
-                    Name = "nap_app_user",
-                    Login = false,
-                    BypassRls = false,
-                },
-            ],
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Schema = "public",
-                    Name = "current_tenant_id",
-                    Returns = "uuid",
-                    Language = "sql",
-                    Volatility = "stable",
-                    SecurityDefiner = true,
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                    ExecuteRoles = ["nap_app_user"],
-                    RevokePublicExecute = true,
-                },
-            ],
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["nap_app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "documents",
-                    Privileges = ["SELECT"],
-                    Roles = ["nap_app_user"],
-                },
-            ],
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "documents",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                },
-            ],
-        };
+    ) => SchemaDiffAssertions.Diff(current: current, desired: desired, logger: _logger);
 }

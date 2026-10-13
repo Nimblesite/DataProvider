@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-SQLITE] tests from docs/specs/rls-spec.md.
@@ -5,7 +6,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// E2E tests for SQLite row-level security trigger emulation.
 /// </summary>
-public sealed class SqliteRlsMigrationTests
+public sealed partial class SqliteRlsMigrationTests
 {
     [Fact]
     public void Sqlite_EnableRls_CreatesRlsContextTable()
@@ -23,13 +24,7 @@ public sealed class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Insert]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Insert);
 
             var ex = Assert.Throws<SqliteException>(() =>
                 InsertDocument(connection, "doc-b", "user-b")
@@ -43,12 +38,7 @@ public sealed class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Update]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Update);
 
             var ex = Assert.Throws<SqliteException>(() =>
                 SqliteTestDb.Execute(connection, "UPDATE [Documents] SET [OwnerId]='user-b'")
@@ -62,12 +52,7 @@ public sealed class SqliteRlsMigrationTests
     {
         SqliteTestDb.WithDb(connection =>
         {
-            SqliteTestDb.ApplySchema(
-                connection,
-                DocumentsSchema(OwnerPolicy([RlsOperation.Delete]))
-            );
-            SqliteTestDb.SetUser(connection, "user-a");
-            InsertDocument(connection, "doc-a", "user-a");
+            VerifySharedStep4(input0: connection, value0: RlsOperation.Delete);
             SqliteTestDb.SetUser(connection, "user-b");
 
             var ex = Assert.Throws<SqliteException>(() =>
@@ -147,8 +132,9 @@ public sealed class SqliteRlsMigrationTests
 
     // Implements [RLS-DIFF]: SELECT-only policies must replace stale secure-view predicates.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [MemberData(
+        nameof(Sqlite_SelectPolicy_ChangedUsingPredicateBlocksPreviouslyVisibleRowsInlineCases)
+    )]
     public void Sqlite_SelectPolicy_ChangedUsingPredicateBlocksPreviouslyVisibleRows(
         bool legacyView
     )
@@ -205,13 +191,7 @@ public sealed class SqliteRlsMigrationTests
     public void Sqlite_TriggerPredicate_IgnoresKeywordsInsideComments()
     {
         var predicate = SqliteRlsPredicateReader.TriggerPredicate(
-            triggerSql: """
-            CREATE TRIGGER [rls_insert_owner_Documents] -- BEGIN
-            BEFORE INSERT ON [Documents]
-            BEGIN
-              SELECT RAISE(ABORT, 'RLS') WHERE NOT (NEW.[OwnerId] = 'allowed');
-            END -- END
-            """
+            triggerSql: Data_Sqlite_TriggerPredicate_IgnoresKeywordsInsideComments_1
         );
         Assert.Equal(expected: "[OwnerId] = 'allowed'", actual: predicate);
     }
@@ -254,7 +234,7 @@ public sealed class SqliteRlsMigrationTests
     }
 
     private static SchemaDefinition DocumentsSchema(RlsPolicyDefinition policy) =>
-        new() { Name = "sqlite", Tables = [DocumentsTable(policy)] };
+        SchemaTestData.Schema(name: "sqlite", tables: [DocumentsTable(policy)]);
 
     private static string LegacySelectViewDdl(RlsPolicyDefinition policy) =>
         SqliteDdlGenerator
@@ -271,70 +251,14 @@ public sealed class SqliteRlsMigrationTests
                 comparisonType: StringComparison.Ordinal
             );
 
-    private static TableDefinition DocumentsTable(RlsPolicyDefinition policy) =>
-        new()
-        {
-            Schema = "main",
-            Name = "Documents",
-            Columns =
-            [
-                RequiredText("Id"),
-                RequiredText("OwnerId"),
-                new ColumnDefinition { Name = "Title", Type = PortableTypes.Text },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Name = "PK_Documents", Columns = ["Id"] },
-            RowLevelSecurity = new RlsPolicySetDefinition { Policies = [policy] },
-        };
-
     private static SchemaDefinition GroupMembershipSchema() =>
-        new()
-        {
-            Name = "sqlite",
-            Tables = [MembershipTable(), DocumentsTable(GroupMembershipPolicy())],
-        };
-
-    private static TableDefinition MembershipTable() =>
-        new()
-        {
-            Schema = "main",
-            Name = "UserGroupMemberships",
-            Columns = [RequiredText("Id"), RequiredText("UserId")],
-            PrimaryKey = new PrimaryKeyDefinition
-            {
-                Name = "PK_UserGroupMemberships",
-                Columns = ["Id"],
-            },
-        };
+        SchemaTestData.Schema(
+            name: "sqlite",
+            tables: [MembershipTable(), DocumentsTable(GroupMembershipPolicy())]
+        );
 
     private static ColumnDefinition RequiredText(string name) =>
-        new()
-        {
-            Name = name,
-            Type = PortableTypes.Text,
-            IsNullable = false,
-        };
-
-    private static RlsPolicyDefinition OwnerPolicy(IReadOnlyList<RlsOperation> ops) =>
-        new()
-        {
-            Name = "owner_isolation",
-            Operations = ops,
-            UsingLql = "OwnerId = current_user_id()",
-            WithCheckLql = "OwnerId = current_user_id()",
-        };
-
-    private static RlsPolicyDefinition GroupMembershipPolicy() =>
-        new()
-        {
-            Name = "group_member_insert",
-            Operations = [RlsOperation.Insert],
-            WithCheckLql = """
-                exists(
-                  UserGroupMemberships
-                  |> filter(fn(m) => m.UserId = current_user_id())
-                )
-                """,
-        };
+        SchemaTestData.Column(name: name, type: PortableTypes.Text, isNullable: false);
 
     private static void InsertDocument(SqliteConnection connection, string id, string ownerId) =>
         SqliteTestDb.Execute(
@@ -347,4 +271,16 @@ public sealed class SqliteRlsMigrationTests
             connection,
             $"INSERT INTO [UserGroupMemberships]([Id], [UserId]) VALUES ('{id}', '{userId}')"
         );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySharedStep4(
+        SqliteConnection input0,
+        global::Nimblesite.DataProvider.Migration.Core.RlsOperation value0
+    )
+    {
+        SqliteTestDb.ApplySchema(input0, DocumentsSchema(OwnerPolicy([value0])));
+        SqliteTestDb.SetUser(input0, "user-a");
+
+        InsertDocument(input0, "doc-a", "user-a");
+    }
 }

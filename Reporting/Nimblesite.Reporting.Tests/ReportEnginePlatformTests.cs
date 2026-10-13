@@ -7,6 +7,7 @@ using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Tests;
 using Nimblesite.Reporting.Engine;
 using Nimblesite.Sql.Model;
+using Nimblesite.TestSupport;
 using Npgsql;
 using Xunit;
 using ConnError = Outcome.Result<System.Data.IDbConnection, Nimblesite.Sql.Model.SqlError>.Error<

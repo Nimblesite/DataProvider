@@ -1,40 +1,12 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class SchemaSupportYamlSerializerTests
+public sealed partial class SchemaSupportYamlSerializerTests
 {
     [Fact]
     public void FromYaml_PostgresSupportObjects_Deserializes()
     {
-        var yaml = """
-            name: nap
-            roles:
-              - name: app_user
-                grantTo: [postgres]
-            functions:
-              - schema: public
-                name: is_member
-                arguments:
-                  - name: tenant_id
-                    type: uuid
-                  - name: user_id
-                    type: uuid
-                returns: boolean
-                securityDefiner: true
-                body: SELECT true
-                executeRoles: [app_user, app_admin]
-            grants:
-              - schema: public
-                target: AllTablesInSchema
-                privileges: [SELECT, INSERT, UPDATE, DELETE]
-                roles: [app_user, app_admin]
-              - schema: auth
-                target: Table
-                objectName: users
-                privileges: [SELECT]
-                roles: [app_user]
-                runAs: supabase_admin
-            tables: []
-            """;
+        var yaml = Data_FromYaml_PostgresSupportObjects_Deserializes_1;
 
         var schema = SchemaYamlSerializer.FromYaml(yaml);
 
@@ -51,25 +23,17 @@ public sealed class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresSupportObjects_OmitsSemanticDefaults()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "nap",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_user_id",
-                    Returns = "uuid",
-                    Body = "SELECT NULL::uuid",
-                },
-            ],
-        };
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1
+            );
 
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-
-        Assert.Contains("functions:", yaml, StringComparison.Ordinal);
-        Assert.Contains("name: app_user_id", yaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("language: sql", yaml, StringComparison.Ordinal);
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: yaml,
+            value0: "functions:",
+            value1: "name: app_user_id",
+            value3: "language: sql"
+        );
         Assert.DoesNotContain("volatility: stable", yaml, StringComparison.Ordinal);
         Assert.DoesNotContain("revokePublicExecute: true", yaml, StringComparison.Ordinal);
     }
@@ -77,23 +41,10 @@ public sealed class SchemaSupportYamlSerializerTests
     [Fact]
     public void ToYaml_PostgresGrantRunAs_EmitsRunAs()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "nap",
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "auth",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_user", "app_admin"],
-                    RunAs = "supabase_admin",
-                },
-            ],
-        };
-
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml =
+            global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+                input0: Fixture_ToYaml_PostgresGrantRunAs_EmitsRunAs_1
+            );
 
         Assert.Contains("runAs: supabase_admin", yaml, StringComparison.Ordinal);
     }

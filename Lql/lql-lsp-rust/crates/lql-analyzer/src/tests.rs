@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod diagnostics_tests {
-    use crate::diagnostics::{analyze, Diagnostic, DiagnosticSeverity};
-    use crate::scope::ScopeMap;
+    use crate::{
+        diagnostics::{analyze, Diagnostic, DiagnosticSeverity},
+        scope::ScopeMap,
+    };
 
     fn empty_scope() -> ScopeMap {
         ScopeMap::new()
@@ -16,29 +18,20 @@ mod diagnostics_tests {
 
     // ── analyze: empty / comments ──────────────────────────────────────
     #[test]
-    fn empty_source_produces_no_diagnostics() {
-        let diags = analyze("", &empty_scope());
-        assert!(diags.is_empty());
-    }
-
-    #[test]
-    fn comment_only_produces_no_diagnostics() {
-        let diags = analyze("-- this is a comment", &empty_scope());
-        assert!(diags.is_empty());
-    }
-
-    #[test]
-    fn blank_lines_ignored() {
-        let diags = analyze("\n\n\n", &empty_scope());
-        assert!(diags.is_empty());
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn empty_source_produces_no_diagnostics_cases() {
+        for &(input0,) in named_cases(NAMED_CASES_4) {
+            crate::test_support::verify_analyze_empty_source(input0);
+        }
     }
 
     // ── pipe spacing ───────────────────────────────────────────────────
     #[test]
-    fn correct_pipe_spacing_no_warning() {
-        let diags = analyze("users |> select(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "Pipeline");
-        assert!(pipe_diags.is_empty());
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn correct_pipe_spacing_no_warning_cases() {
+        for &(input0, input1) in named_cases(NAMED_CASES_1) {
+            crate::test_support::verify_no_diags_matching(input0, input1);
+        }
     }
 
     #[test]
@@ -60,48 +53,21 @@ mod diagnostics_tests {
     }
 
     #[test]
-    fn missing_space_both_sides() {
-        let diags = analyze("users|>select(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "Pipeline");
-        assert_eq!(pipe_diags.len(), 2);
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn missing_space_both_sides_cases() {
+        for &(input0, input1, input2) in named_cases(NAMED_CASES_2) {
+            let diags = analyze(input0, &empty_scope());
+            let pipe_diags = diags_matching(&diags, input1);
+            assert_eq!(pipe_diags.len(), input2);
+        }
     }
 
     #[test]
-    fn tab_before_pipe_is_ok() {
-        let diags = analyze("users\t|> select(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "preceded");
-        assert!(pipe_diags.is_empty());
-    }
-
-    #[test]
-    fn tab_after_pipe_is_ok() {
-        let diags = analyze("users |>\tselect(users.id)", &empty_scope());
-        let pipe_diags = diags_matching(&diags, "followed");
-        assert!(pipe_diags.is_empty());
-    }
-
-    #[test]
-    fn pipe_at_end_of_line_no_after_warning() {
-        let diags = analyze("users |>", &empty_scope());
-        let after = diags_matching(&diags, "followed");
-        assert!(after.is_empty());
-    }
-
-    #[test]
-    fn pipe_at_start_of_line_no_before_warning() {
-        let diags = analyze("|> select(users.id)", &empty_scope());
-        let before = diags_matching(&diags, "preceded");
-        assert!(before.is_empty());
-    }
-
-    #[test]
-    fn multiple_pipes_on_one_line() {
-        let diags = analyze(
-            "a |> filter(fn(r) => r.a.x > 1) |> select(a.id)",
-            &empty_scope(),
-        );
-        let pipe_diags = diags_matching(&diags, "Pipeline");
-        assert!(pipe_diags.is_empty());
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn multiple_pipes_on_one_line_cases() {
+        for &(input0, input1) in named_cases(NAMED_CASES_3) {
+            crate::test_support::verify_no_diags_matching(input0, input1);
+        }
     }
 
     #[test]
@@ -113,12 +79,6 @@ mod diagnostics_tests {
     }
 
     // ── unknown functions ──────────────────────────────────────────────
-    #[test]
-    fn known_function_no_diagnostic() {
-        let diags = analyze("users |> select(users.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
-    }
 
     #[test]
     fn unknown_function_reported() {
@@ -140,74 +100,15 @@ mod diagnostics_tests {
 
     #[test]
     fn keyword_not_reported_as_unknown() {
-        // "fn" after pipe should not be flagged
-        let diags = analyze("users |> filter(fn(r) => r.users.id > 0)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown function: `fn`");
-        assert!(unknown.is_empty());
+        crate::test_support::verify_no_diags_matching(
+            "users |> filter(fn(r) => r.users.id > 0)",
+            "Unknown function: `fn`",
+        );
     }
 
     #[test]
     fn all_known_functions_recognized() {
-        let known = [
-            "select",
-            "filter",
-            "join",
-            "left_join",
-            "right_join",
-            "cross_join",
-            "group_by",
-            "order_by",
-            "having",
-            "limit",
-            "offset",
-            "union",
-            "union_all",
-            "insert",
-            "update",
-            "delete",
-            "count",
-            "sum",
-            "avg",
-            "min",
-            "max",
-            "first",
-            "last",
-            "concat",
-            "substring",
-            "length",
-            "trim",
-            "upper",
-            "lower",
-            "replace",
-            "round",
-            "floor",
-            "ceil",
-            "abs",
-            "sqrt",
-            "power",
-            "mod",
-            "now",
-            "today",
-            "year",
-            "month",
-            "day",
-            "hour",
-            "minute",
-            "second",
-            "coalesce",
-            "nullif",
-            "isnull",
-            "isnotnull",
-            "row_number",
-            "rank",
-            "dense_rank",
-            "ntile",
-            "lag",
-            "lead",
-            "extract",
-            "date_trunc",
-            "current_date",
-        ];
+        let known = independent_all_known_functions_recognized_data_1();
         for func in known {
             let source = format!("x |> {func}(x.id)");
             let diags = analyze(&source, &empty_scope());
@@ -221,91 +122,14 @@ mod diagnostics_tests {
     }
 
     #[test]
-    fn case_insensitive_function_check() {
-        let diags = analyze("x |> SELECT(x.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
-    }
-
-    #[test]
-    fn string_literal_not_checked_for_functions() {
-        // 'blah(' inside a string shouldn't trigger unknown function
-        let diags = analyze(
-            "users |> filter(fn(r) => r.users.name = 'blah(')",
-            &empty_scope(),
-        );
-        let unknown = diags_matching(&diags, "Unknown function: `blah`");
-        assert!(unknown.is_empty());
-    }
-
-    #[test]
-    fn escaped_quote_in_string() {
-        let diags = analyze(
-            r"users |> filter(fn(r) => r.users.name = 'it\'s(test')",
-            &empty_scope(),
-        );
-        let unknown = diags_matching(&diags, "Unknown function: `s`");
-        assert!(unknown.is_empty());
-    }
-
-    #[test]
-    fn identifier_not_followed_by_paren_not_reported() {
-        let diags = analyze("users |> select(users.foobar)", &empty_scope());
-        let unknown = diags_matching(&diags, "Unknown");
-        assert!(unknown.is_empty());
-    }
-
-    #[test]
     fn keyword_identifiers_not_flagged() {
-        let keywords = [
-            "let",
-            "fn",
-            "as",
-            "asc",
-            "desc",
-            "and",
-            "or",
-            "not",
-            "distinct",
-            "exists",
-            "null",
-            "is",
-            "in",
-            "case",
-            "when",
-            "then",
-            "else",
-            "end",
-            "with",
-            "over",
-            "partition",
-            "order",
-            "by",
-            "on",
-            "like",
-            "from",
-            "interval",
-        ];
+        let keywords = independent_keyword_identifiers_not_flagged_data_2();
         for kw in keywords {
             let source = format!("x |> filter(fn(r) => {kw}(r.x.y))");
             let diags = analyze(&source, &empty_scope());
             let unknown = diags_matching(&diags, &format!("Unknown function: `{kw}`"));
             assert!(unknown.is_empty(), "Keyword `{kw}` flagged as unknown");
         }
-    }
-
-    #[test]
-    fn function_with_whitespace_before_paren() {
-        let diags = analyze("x |> foobar  (x.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "foobar");
-        assert_eq!(unknown.len(), 1);
-    }
-
-    #[test]
-    fn underscore_identifier_as_function() {
-        let diags = analyze("x |> _my_func(x.id)", &empty_scope());
-        let unknown = diags_matching(&diags, "_my_func");
-        assert_eq!(unknown.len(), 1);
     }
 
     // NOTE: Bracket checking is handled by ANTLR parse errors (reported separately
@@ -340,13 +164,23 @@ mod diagnostics_tests {
         assert_eq!(pipe_diags.len(), 1);
         assert_eq!(pipe_diags[0].line, 1);
     }
+
+    include!("tests_expectations_0.fixtures.rs");
+
+    include!("tests_case_inputs.fixtures.rs");
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../Tests.Shared/RustNamedCases.rs"
+    ));
 }
 
 #[cfg(test)]
 mod completion_tests {
-    use crate::completion::{get_completions, CompletionContext, CompletionKind};
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
-    use crate::scope::ScopeMap;
+    use crate::{
+        completion::{get_completions, CompletionContext, CompletionKind},
+        schema::SchemaCache,
+        scope::ScopeMap,
+    };
 
     fn ctx(prefix: &str, after_pipe: bool, in_lambda: bool) -> CompletionContext {
         CompletionContext {
@@ -360,62 +194,18 @@ mod completion_tests {
     }
 
     fn test_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![
-            TableInfo {
-                name: "users".to_string(),
-                schema: "public".to_string(),
-                columns: vec![
-                    ColumnInfo {
-                        name: "id".to_string(),
-                        sql_type: "uuid".to_string(),
-                        is_nullable: false,
-                        is_primary_key: true,
-                    },
-                    ColumnInfo {
-                        name: "name".to_string(),
-                        sql_type: "text".to_string(),
-                        is_nullable: false,
-                        is_primary_key: false,
-                    },
-                    ColumnInfo {
-                        name: "email".to_string(),
-                        sql_type: "text".to_string(),
-                        is_nullable: true,
-                        is_primary_key: false,
-                    },
-                ],
-            },
-            TableInfo {
-                name: "orders".to_string(),
-                schema: "public".to_string(),
-                columns: (0..8)
-                    .map(|i| ColumnInfo {
-                        name: format!("col{i}"),
-                        sql_type: "integer".to_string(),
-                        is_nullable: false,
-                        is_primary_key: i == 0,
-                    })
-                    .collect(),
-            },
-        ])
+        independent_schema_data_1()
     }
 
     // ── after pipe completions ─────────────────────────────────────────
     #[test]
     fn after_pipe_returns_pipeline_ops() {
-        let items = get_completions(&ctx("", true, false), &ScopeMap::new(), None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"select"));
-        assert!(labels.contains(&"filter"));
-        assert!(labels.contains(&"join"));
-        assert!(labels.contains(&"group_by"));
-        assert!(labels.contains(&"order_by"));
-        assert!(labels.contains(&"limit"));
-        assert!(labels.contains(&"offset"));
-        assert!(labels.contains(&"having"));
-        assert!(labels.contains(&"union"));
-        assert!(labels.contains(&"insert"));
-        assert!(labels.contains(&"left_join"));
+        assert_default_completion_labels(
+            "",
+            true,
+            false,
+            &independent_after_pipe_returns_pipeline_ops_data_3(),
+        );
     }
 
     #[test]
@@ -429,7 +219,7 @@ mod completion_tests {
     #[test]
     fn pipeline_ops_have_snippets() {
         let items = get_completions(&ctx("", true, false), &ScopeMap::new(), None);
-        let select = items.iter().find(|i| i.label == "select").unwrap();
+        let select = crate::test_support::completion_by_label(&items, "select");
         assert!(select.insert_text.is_some());
         assert_eq!(select.kind, CompletionKind::Function);
         assert_eq!(select.sort_priority, 1);
@@ -438,15 +228,12 @@ mod completion_tests {
     // ── lambda completions ─────────────────────────────────────────────
     #[test]
     fn in_lambda_returns_logical_ops() {
-        let items = get_completions(&ctx("", false, true), &ScopeMap::new(), None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"and"));
-        assert!(labels.contains(&"or"));
-        assert!(labels.contains(&"not"));
-        assert!(labels.contains(&"is"));
-        assert!(labels.contains(&"in"));
-        assert!(labels.contains(&"like"));
-        assert!(labels.contains(&"exists"));
+        assert_default_completion_labels(
+            "",
+            false,
+            true,
+            &["and", "or", "not", "is", "in", "like", "exists"],
+        );
     }
 
     #[test]
@@ -460,21 +247,18 @@ mod completion_tests {
     // ── keyword completions ────────────────────────────────────────────
     #[test]
     fn keyword_completions_returned() {
-        let items = get_completions(&ctx("", false, false), &ScopeMap::new(), None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"let"));
-        assert!(labels.contains(&"fn"));
-        assert!(labels.contains(&"case"));
-        assert!(labels.contains(&"as"));
-        assert!(labels.contains(&"asc"));
-        assert!(labels.contains(&"desc"));
-        assert!(labels.contains(&"distinct"));
+        assert_default_completion_labels(
+            "",
+            false,
+            false,
+            &["let", "fn", "case", "as", "asc", "desc", "distinct"],
+        );
     }
 
     #[test]
     fn keyword_completions_are_keyword_kind() {
         let items = get_completions(&ctx("le", false, false), &ScopeMap::new(), None);
-        let let_item = items.iter().find(|i| i.label == "let").unwrap();
+        let let_item = crate::test_support::completion_by_label(&items, "let");
         assert_eq!(let_item.kind, CompletionKind::Keyword);
         assert!(let_item.insert_text.is_none());
         assert_eq!(let_item.sort_priority, 3);
@@ -483,22 +267,18 @@ mod completion_tests {
     // ── aggregate completions ──────────────────────────────────────────
     #[test]
     fn aggregate_completions_returned() {
-        let items = get_completions(&ctx("", false, false), &ScopeMap::new(), None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"count"));
-        assert!(labels.contains(&"sum"));
-        assert!(labels.contains(&"avg"));
-        assert!(labels.contains(&"max"));
-        assert!(labels.contains(&"min"));
-        assert!(labels.contains(&"row_number"));
-        assert!(labels.contains(&"rank"));
-        assert!(labels.contains(&"dense_rank"));
+        assert_default_completion_labels(
+            "",
+            false,
+            false,
+            &independent_aggregate_completions_returned_data_4(),
+        );
     }
 
     #[test]
     fn aggregate_completions_have_snippets() {
         let items = get_completions(&ctx("cou", false, false), &ScopeMap::new(), None);
-        let count = items.iter().find(|i| i.label == "count").unwrap();
+        let count = crate::test_support::completion_by_label(&items, "count");
         assert_eq!(count.insert_text.as_deref(), Some("count($0)"));
         assert_eq!(count.sort_priority, 2);
     }
@@ -506,17 +286,12 @@ mod completion_tests {
     // ── string function completions ────────────────────────────────────
     #[test]
     fn string_functions_returned() {
-        let items = get_completions(&ctx("", false, false), &ScopeMap::new(), None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"concat"));
-        assert!(labels.contains(&"substring"));
-        assert!(labels.contains(&"length"));
-        assert!(labels.contains(&"trim"));
-        assert!(labels.contains(&"upper"));
-        assert!(labels.contains(&"lower"));
-        assert!(labels.contains(&"round"));
-        assert!(labels.contains(&"abs"));
-        assert!(labels.contains(&"coalesce"));
+        assert_default_completion_labels(
+            "",
+            false,
+            false,
+            &independent_string_functions_returned_data_5(),
+        );
     }
 
     // ── schema-based completions ───────────────────────────────────────
@@ -524,20 +299,16 @@ mod completion_tests {
     fn table_completions_from_schema() {
         let schema = test_schema();
         let items = get_completions(&ctx("us", false, false), &ScopeMap::new(), Some(&schema));
-        let table_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == CompletionKind::Table)
-            .collect();
-        assert_eq!(table_items.len(), 1);
-        assert_eq!(table_items[0].label, "users");
-        assert!(table_items[0].detail.contains("3 columns"));
+        let users =
+            crate::test_support::single_completion_of_kind(&items, CompletionKind::Table, "users");
+        assert!(users.detail.contains("3 columns"));
     }
 
     #[test]
     fn table_with_many_columns_truncates_doc() {
         let schema = test_schema();
         let items = get_completions(&ctx("or", false, false), &ScopeMap::new(), Some(&schema));
-        let orders = items.iter().find(|i| i.label == "orders").unwrap();
+        let orders = crate::test_support::completion_by_label(&items, "orders");
         assert!(orders.documentation.contains("8 total"));
     }
 
@@ -549,9 +320,7 @@ mod completion_tests {
         c.word_prefix = "".to_string();
         let items = get_completions(&c, &ScopeMap::new(), Some(&schema));
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"id"));
-        assert!(labels.contains(&"name"));
-        assert!(labels.contains(&"email"));
+        crate::test_support::assert_labels(&labels, &["id", "name", "email"], true);
         assert_eq!(items.len(), 3);
         // All should be Column kind
         for item in &items {
@@ -584,10 +353,8 @@ mod completion_tests {
     #[test]
     fn no_schema_returns_no_table_completions() {
         let items = get_completions(&ctx("us", false, false), &ScopeMap::new(), None);
-        let table_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == CompletionKind::Table)
-            .collect();
+        let table_items =
+            crate::test_support::completion_items_of_kind(&items, CompletionKind::Table);
         assert!(table_items.is_empty());
     }
 
@@ -597,13 +364,12 @@ mod completion_tests {
         let mut scope = ScopeMap::new();
         scope.add_binding("my_var".to_string(), 0, 0);
         let items = get_completions(&ctx("my", false, false), &scope, None);
-        let var_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == CompletionKind::Variable)
-            .collect();
-        assert_eq!(var_items.len(), 1);
-        assert_eq!(var_items[0].label, "my_var");
-        assert_eq!(var_items[0].sort_priority, 5);
+        let var = crate::test_support::single_completion_of_kind(
+            &items,
+            CompletionKind::Variable,
+            "my_var",
+        );
+        assert_eq!(var.sort_priority, 5);
     }
 
     #[test]
@@ -611,12 +377,7 @@ mod completion_tests {
         let mut scope = ScopeMap::new();
         scope.add_table("products".to_string());
         let items = get_completions(&ctx("pro", false, false), &scope, None);
-        let table_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == CompletionKind::Table)
-            .collect();
-        assert_eq!(table_items.len(), 1);
-        assert_eq!(table_items[0].label, "products");
+        crate::test_support::single_completion_of_kind(&items, CompletionKind::Table, "products");
     }
 
     #[test]
@@ -649,81 +410,58 @@ mod completion_tests {
     #[test]
     fn completions_sorted_by_priority_then_alpha() {
         let items = get_completions(&ctx("", true, false), &ScopeMap::new(), None);
-        for window in items.windows(2) {
-            assert!(
-                window[0].sort_priority <= window[1].sort_priority
-                    || (window[0].sort_priority == window[1].sort_priority
-                        && window[0].label <= window[1].label),
-                "Items not sorted: {} ({}) before {} ({})",
-                window[0].label,
-                window[0].sort_priority,
-                window[1].label,
-                window[1].sort_priority
-            );
+        crate::test_support::assert_completions_sorted(&items);
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn assert_default_completion_labels(
+        prefix: &str,
+        after_pipe: bool,
+        in_lambda: bool,
+        expected: &[&str],
+    ) {
+        let items = get_completions(&ctx(prefix, after_pipe, in_lambda), &ScopeMap::new(), None);
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        for label in expected {
+            assert!(labels.contains(label), "missing completion: {label}");
         }
     }
+
+    include!("tests_expectations_1.fixtures.rs");
+
+    include!("tests_schema_data_0.fixtures.rs");
 }
 
 #[cfg(test)]
 mod hover_tests {
-    use crate::hover::{get_hover, get_hover_with_schema};
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
+    use crate::{
+        hover::{get_hover, get_hover_with_schema},
+        schema::SchemaCache,
+    };
 
     fn test_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![TableInfo {
-            name: "users".to_string(),
-            schema: "public".to_string(),
-            columns: vec![
-                ColumnInfo {
-                    name: "id".to_string(),
-                    sql_type: "uuid".to_string(),
-                    is_nullable: false,
-                    is_primary_key: true,
-                },
-                ColumnInfo {
-                    name: "name".to_string(),
-                    sql_type: "text".to_string(),
-                    is_nullable: true,
-                    is_primary_key: false,
-                },
-            ],
-        }])
+        independent_schema_data_2()
     }
 
     // ── get_hover ──────────────────────────────────────────────────────
     #[test]
     fn hover_known_keyword() {
-        let info = get_hover("select").unwrap();
-        assert!(info.title.contains("select"));
-        assert!(info.signature.is_some());
+        crate::test_support::verify_hover_keyword("select", "select", true);
     }
 
     #[test]
     fn hover_case_insensitive() {
-        let info = get_hover("SELECT").unwrap();
-        assert!(info.title.contains("select"));
+        crate::test_support::verify_hover_keyword("SELECT", "select", false);
     }
 
     #[test]
     fn hover_unknown_word_returns_none() {
-        assert!(get_hover("foobar").is_none());
+        crate::test_support::verify_hover_unknown("foobar");
     }
 
     #[test]
     fn hover_all_pipeline_ops() {
-        for word in &[
-            "select",
-            "filter",
-            "join",
-            "left_join",
-            "group_by",
-            "order_by",
-            "having",
-            "limit",
-            "offset",
-            "union",
-            "insert",
-        ] {
+        for word in &independent_hover_all_pipeline_ops_data_6() {
             assert!(
                 get_hover(word).is_some(),
                 "No hover for pipeline op: {word}"
@@ -741,17 +479,7 @@ mod hover_tests {
 
     #[test]
     fn hover_all_string_functions() {
-        for word in &[
-            "concat",
-            "substring",
-            "length",
-            "trim",
-            "upper",
-            "lower",
-            "round",
-            "abs",
-            "coalesce",
-        ] {
+        for word in &independent_hover_all_string_functions_data_7() {
             assert!(get_hover(word).is_some(), "No hover for: {word}");
         }
     }
@@ -773,13 +501,7 @@ mod hover_tests {
     // ── get_hover_with_schema ──────────────────────────────────────────
     #[test]
     fn hover_table_name_with_schema() {
-        let schema = test_schema();
-        let info = get_hover_with_schema("users", None, Some(&schema)).unwrap();
-        assert!(info.title.contains("users"));
-        assert!(info.title.contains("Table"));
-        assert!(info.detail.contains("id"));
-        assert!(info.detail.contains("name"));
-        assert!(info.signature.is_some());
+        crate::test_support::verify_hover_table(&test_schema(), &["name"]);
     }
 
     #[test]
@@ -842,59 +564,28 @@ mod hover_tests {
         let info = get_hover_with_schema("select", Some(("nonexistent", "col")), Some(&schema));
         assert!(info.is_some()); // falls back to keyword "select"
     }
+
+    include!("tests_expectations_2.fixtures.rs");
+
+    include!("tests_schema_data_1.fixtures.rs");
 }
 
 #[cfg(test)]
 mod schema_tests {
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
+    use crate::schema::SchemaCache;
 
     fn test_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![
-            TableInfo {
-                name: "Users".to_string(),
-                schema: "public".to_string(),
-                columns: vec![
-                    ColumnInfo {
-                        name: "id".to_string(),
-                        sql_type: "uuid".to_string(),
-                        is_nullable: false,
-                        is_primary_key: true,
-                    },
-                    ColumnInfo {
-                        name: "Name".to_string(),
-                        sql_type: "text".to_string(),
-                        is_nullable: true,
-                        is_primary_key: false,
-                    },
-                ],
-            },
-            TableInfo {
-                name: "Orders".to_string(),
-                schema: "sales".to_string(),
-                columns: vec![ColumnInfo {
-                    name: "total".to_string(),
-                    sql_type: "numeric".to_string(),
-                    is_nullable: false,
-                    is_primary_key: false,
-                }],
-            },
-        ])
+        independent_schema_data_3()
     }
 
     #[test]
     fn default_cache_is_empty() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_empty());
-        assert_eq!(cache.table_count(), 0);
-        assert!(cache.table_names().is_empty());
-        assert!(cache.age().is_none());
+        crate::test_support::verify_cache_default_is_empty();
     }
 
     #[test]
     fn from_tables_populates_cache() {
-        let cache = test_schema();
-        assert!(!cache.is_empty());
-        assert_eq!(cache.table_count(), 2);
+        crate::test_support::verify_cache_from_tables(&test_schema());
     }
 
     #[test]
@@ -908,10 +599,9 @@ mod schema_tests {
     #[test]
     fn get_table_case_insensitive() {
         let cache = test_schema();
-        assert!(cache.get_table("users").is_some());
-        assert!(cache.get_table("USERS").is_some());
-        assert!(cache.get_table("Users").is_some());
-        assert!(cache.get_table("nonexistent").is_none());
+        crate::test_support::verify_case_insensitive(&["users", "USERS", "Users"], |v| {
+            cache.get_table(v).is_some()
+        });
     }
 
     #[test]
@@ -923,27 +613,22 @@ mod schema_tests {
 
     #[test]
     fn get_columns_unknown_table_empty() {
-        let cache = test_schema();
-        let cols = cache.get_columns("nonexistent");
-        assert!(cols.is_empty());
+        crate::test_support::verify_cache_columns_empty(&test_schema());
     }
 
     #[test]
     fn age_populated_after_creation() {
-        let cache = test_schema();
-        assert!(cache.age().is_some());
+        crate::test_support::verify_cache_age_some(&test_schema());
     }
 
     #[test]
     fn is_stale_true_for_default() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_stale(std::time::Duration::from_secs(60)));
+        crate::test_support::verify_staleness(&SchemaCache::default(), 60, true);
     }
 
     #[test]
     fn is_stale_false_for_fresh() {
-        let cache = test_schema();
-        assert!(!cache.is_stale(std::time::Duration::from_secs(60)));
+        crate::test_support::verify_staleness(&test_schema(), 60, false);
     }
 
     // ── TableInfo ──────────────────────────────────────────────────────
@@ -951,10 +636,9 @@ mod schema_tests {
     fn get_column_case_insensitive() {
         let cache = test_schema();
         let table = cache.get_table("users").unwrap();
-        assert!(table.get_column("Name").is_some());
-        assert!(table.get_column("name").is_some());
-        assert!(table.get_column("NAME").is_some());
-        assert!(table.get_column("nonexistent").is_none());
+        crate::test_support::verify_case_insensitive(&["Name", "name", "NAME"], |v| {
+            table.get_column(v).is_some()
+        });
     }
 
     #[test]
@@ -977,168 +661,114 @@ mod schema_tests {
     // ── ColumnInfo ─────────────────────────────────────────────────────
     #[test]
     fn type_description_pk_not_null() {
-        let col = ColumnInfo {
-            name: "id".to_string(),
-            sql_type: "uuid".to_string(),
-            is_nullable: false,
-            is_primary_key: true,
-        };
-        let desc = col.type_description();
-        assert!(desc.contains("uuid"));
-        assert!(desc.contains("PK"));
-        assert!(desc.contains("NOT NULL"));
+        crate::test_support::verify_type_description(
+            "id",
+            "uuid",
+            false,
+            true,
+            "uuid (PK) NOT NULL",
+        );
     }
 
     #[test]
     fn type_description_nullable_no_pk() {
-        let col = ColumnInfo {
-            name: "name".to_string(),
-            sql_type: "text".to_string(),
-            is_nullable: true,
-            is_primary_key: false,
-        };
-        let desc = col.type_description();
-        assert_eq!(desc, "text");
-        assert!(!desc.contains("PK"));
-        assert!(!desc.contains("NOT NULL"));
+        crate::test_support::verify_type_description("name", "text", true, false, "text");
     }
 
     #[test]
     fn type_description_not_null_no_pk() {
-        let col = ColumnInfo {
-            name: "total".to_string(),
-            sql_type: "numeric".to_string(),
-            is_nullable: false,
-            is_primary_key: false,
-        };
-        let desc = col.type_description();
-        assert_eq!(desc, "numeric NOT NULL");
+        crate::test_support::verify_type_description(
+            "total",
+            "numeric",
+            false,
+            false,
+            "numeric NOT NULL",
+        );
     }
 
     #[test]
     fn type_description_nullable_pk() {
-        let col = ColumnInfo {
-            name: "weird".to_string(),
-            sql_type: "integer".to_string(),
-            is_nullable: true,
-            is_primary_key: true,
-        };
-        let desc = col.type_description();
-        assert_eq!(desc, "integer (PK)");
+        crate::test_support::verify_type_description(
+            "weird",
+            "integer",
+            true,
+            true,
+            "integer (PK)",
+        );
     }
+
+    include!("tests_schema_data_2.fixtures.rs");
 }
 
 #[cfg(test)]
 mod scope_tests {
-    use crate::scope::ScopeMap;
-
     #[test]
     fn new_scope_is_empty() {
-        let scope = ScopeMap::new();
-        assert!(scope.binding_names().is_empty());
-        assert!(scope.table_names().is_empty());
+        crate::test_support::verify_scope_is_empty();
     }
 
     #[test]
     fn add_and_retrieve_binding() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("x".to_string(), 5, 10);
-        assert!(scope.has_binding("x"));
-        assert!(!scope.has_binding("y"));
-        let info = scope.get_binding("x").unwrap();
-        assert_eq!(info.name, "x");
-        assert_eq!(info.line, 5);
-        assert_eq!(info.col, 10);
+        crate::test_support::verify_scope_add_binding(5, 10);
     }
 
     #[test]
     fn binding_names_returns_all() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("a".to_string(), 0, 0);
-        scope.add_binding("b".to_string(), 1, 0);
-        let names = scope.binding_names();
-        assert_eq!(names.len(), 2);
-        assert!(names.contains(&"a"));
-        assert!(names.contains(&"b"));
+        crate::test_support::verify_cross_module_test_binding_names("a", "b");
     }
 
     #[test]
     fn overwrite_binding() {
-        let mut scope = ScopeMap::new();
-        scope.add_binding("x".to_string(), 0, 0);
-        scope.add_binding("x".to_string(), 5, 10);
-        let info = scope.get_binding("x").unwrap();
-        assert_eq!(info.line, 5);
-        assert_eq!(scope.binding_names().len(), 1);
+        crate::test_support::verify_scope_overwrite_binding();
     }
 
     #[test]
     fn get_binding_none_for_unknown() {
-        let scope = ScopeMap::new();
-        assert!(scope.get_binding("nope").is_none());
+        crate::test_support::verify_scope_get_binding_none("nope");
     }
 
     #[test]
     fn add_and_retrieve_table() {
-        let mut scope = ScopeMap::new();
-        scope.add_table("users".to_string());
-        let names = scope.table_names();
-        assert_eq!(names.len(), 1);
-        assert_eq!(names[0], "users");
+        crate::test_support::verify_scope_add_single_table("users");
     }
 
     #[test]
     fn add_table_deduplicates() {
-        let mut scope = ScopeMap::new();
-        scope.add_table("users".to_string());
-        scope.add_table("users".to_string());
-        assert_eq!(scope.table_names().len(), 1);
+        crate::test_support::verify_scope_add_duplicate_table("users");
     }
 
     #[test]
     fn add_multiple_tables() {
-        let mut scope = ScopeMap::new();
-        scope.add_table("users".to_string());
-        scope.add_table("orders".to_string());
-        assert_eq!(scope.table_names().len(), 2);
+        crate::test_support::verify_scope_add_tables(&["users", "orders"]);
     }
 
     #[test]
     fn default_trait() {
-        let scope = ScopeMap::default();
-        assert!(scope.binding_names().is_empty());
-        assert!(scope.table_names().is_empty());
+        crate::test_support::verify_scope_default_trait();
     }
 }
 
 #[cfg(test)]
 mod symbol_tests {
-    use crate::symbols::{extract_symbols, SymbolKind};
+    use crate::symbols::extract_symbols;
 
     #[test]
     fn empty_source_no_symbols() {
-        let symbols = extract_symbols("");
-        assert!(symbols.is_empty());
+        crate::test_support::verify_cross_module_empty_source_no_symbols("");
     }
 
     #[test]
     fn single_let_binding() {
-        let symbols = extract_symbols("let x = users |> select(users.id)");
-        assert_eq!(symbols.len(), 1);
-        assert_eq!(symbols[0].name, "x");
-        assert_eq!(symbols[0].kind, SymbolKind::Variable);
-        assert_eq!(symbols[0].line, 0);
+        crate::test_support::verify_cross_module_single_let_binding();
     }
 
     #[test]
     fn multiple_let_bindings() {
-        let source = "let a = users |> select(users.id)\nlet b = orders |> limit(10)";
-        let symbols = extract_symbols(source);
-        assert_eq!(symbols.len(), 2);
-        assert_eq!(symbols[0].name, "a");
-        assert_eq!(symbols[0].line, 0);
-        assert_eq!(symbols[1].name, "b");
-        assert_eq!(symbols[1].line, 1);
+        crate::test_support::verify_symbols_multiple_lets(
+            "let a = users |> select(users.id)\nlet b = orders |> limit(10)",
+            "a",
+            "b",
+        );
     }
 
     #[test]
@@ -1150,8 +780,7 @@ mod symbol_tests {
 
     #[test]
     fn no_let_binding_in_comment() {
-        let symbols = extract_symbols("-- let x = 42");
-        assert!(symbols.is_empty());
+        crate::test_support::verify_cross_module_empty_source_no_symbols("-- let x = 42");
     }
 
     #[test]
@@ -1199,10 +828,13 @@ mod symbol_tests {
 /// from the analyzer context, ensuring transitive coverage.
 #[cfg(test)]
 mod parser_integration_tests {
-    use lql_parser::error::ParseError;
-    use lql_parser::span::Span;
-    use lql_parser::tokens::{
-        get_pipe_token_positions, get_token_structure, lex_pipe_positions, lex_tokens, token_types,
+    use lql_parser::{
+        error::ParseError,
+        span::Span,
+        tokens::{
+            get_pipe_token_positions, get_token_structure, lex_pipe_positions, lex_tokens,
+            token_types, tokens_of_type,
+        },
     };
 
     // ── lex_tokens ────────────────────────────────────────────────────────
@@ -1210,10 +842,7 @@ mod parser_integration_tests {
     fn lex_tokens_simple_pipeline() {
         let tokens = lex_tokens("users |> select(users.id)");
         assert!(!tokens.is_empty());
-        let idents: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::IDENT)
-            .collect();
+        let idents = tokens_of_type(&tokens, token_types::IDENT);
         assert!(idents.len() >= 2);
         assert_eq!(idents[0].text, "users");
     }
@@ -1221,10 +850,7 @@ mod parser_integration_tests {
     #[test]
     fn lex_tokens_finds_pipe_token() {
         let tokens = lex_tokens("a |> b");
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 1);
         assert_eq!(pipes[0].text, "|>");
     }
@@ -1237,17 +863,7 @@ mod parser_integration_tests {
 
     #[test]
     fn lex_tokens_parens() {
-        let tokens = lex_tokens("select(x)");
-        let opens: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::OPEN_PAREN)
-            .collect();
-        let closes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::CLOSE_PAREN)
-            .collect();
-        assert_eq!(opens.len(), 1);
-        assert_eq!(closes.len(), 1);
+        crate::test_support::verify_lex_tokens_parens("select(x)", 1, 1);
     }
 
     #[test]
@@ -1262,10 +878,7 @@ mod parser_integration_tests {
     fn lex_tokens_complex_source() {
         let source = "users\n|> filter(fn(r) => r.age > 18)\n|> select(users.id)";
         let tokens = lex_tokens(source);
-        let pipes: Vec<_> = tokens
-            .iter()
-            .filter(|t| t.token_type == token_types::PIPE)
-            .collect();
+        let pipes = tokens_of_type(&tokens, token_types::PIPE);
         assert_eq!(pipes.len(), 2);
     }
 
@@ -1292,11 +905,7 @@ mod parser_integration_tests {
     // ── get_token_structure ───────────────────────────────────────────────
     #[test]
     fn token_structure_empty() {
-        let ts = get_token_structure("");
-        assert!(ts.pipe_positions.is_empty());
-        assert!(ts.lines_ending_open_paren.is_empty());
-        assert!(ts.lines_starting_close_paren.is_empty());
-        assert!(ts.comment_lines.is_empty());
+        crate::test_support::verify_token_structure("", &[], 0, &[], &[]);
     }
 
     #[test]
@@ -1320,12 +929,13 @@ mod parser_integration_tests {
 
     #[test]
     fn token_structure_complex() {
-        let source = "-- query\nusers\n|> select(\n  users.id\n)\n|> limit(10)";
-        let ts = get_token_structure(source);
-        assert_eq!(ts.comment_lines, vec![0]);
-        assert_eq!(ts.pipe_positions.len(), 2);
-        assert_eq!(ts.lines_ending_open_paren, vec![2]);
-        assert_eq!(ts.lines_starting_close_paren, vec![4]);
+        crate::test_support::verify_token_structure(
+            "-- query\nusers\n|> select(\n  users.id\n)\n|> limit(10)",
+            &[0],
+            2,
+            &[2],
+            &[4],
+        );
     }
 
     #[test]

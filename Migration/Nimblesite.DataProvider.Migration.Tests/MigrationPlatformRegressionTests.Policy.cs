@@ -36,23 +36,22 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("MIG-E-RLS-MSSQL-UNSUPPORTED", result.Output, StringComparison.Ordinal);
         Assert.Equal(before, SqlServerSchemaSnapshot(target));
-        using var command = target.Connection.CreateCommand();
-        command.CommandText =
-            "SELECT (SELECT COUNT(*) FROM sys.security_policies) + (SELECT COUNT(*) FROM sys.objects WHERE type = 'IF')";
         Assert.Equal(
             0,
-            Convert.ToInt32(
-                command.ExecuteScalar(),
-                System.Globalization.CultureInfo.InvariantCulture
+            global::Tests.Shared.DatabaseCommands.ScalarInt32(
+                connection: target.Connection,
+                configure: command =>
+                    command.CommandText =
+                        "SELECT (SELECT COUNT(*) FROM sys.security_policies) + (SELECT COUNT(*) FROM sys.objects WHERE type = 'IF')"
             )
         );
     }
 
     private static string SqlServerSchemaSnapshot(MigrationTarget target) =>
         SchemaYamlSerializer.ToYaml(
-            Assert
-                .IsType<SchemaResultOk>(
-                    Nimblesite.DataProvider.Migration.SqlServer.SqlServerSchemaInspector.Inspect(
+            global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: Nimblesite.DataProvider.Migration.SqlServer.SqlServerSchemaInspector.Inspect(
                         connection: Assert.IsType<Microsoft.Data.SqlClient.SqlConnection>(
                             target.Connection
                         )
@@ -79,7 +78,11 @@ public sealed partial record MigrationPlatformRegressionTests
     private static PolicySnapshot ReadPostgresPolicy(MigrationTarget target)
     {
         using var command = target.Connection.CreateCommand();
-        command.CommandText = """
+        VerifyReusableWorkflow1(
+            input0: command,
+            input1: AddParameter,
+            input2: target,
+            value0: """
             SELECT policy.qual, policy.with_check, table_catalog.relrowsecurity, policy.cmd
             FROM pg_policies policy
             JOIN pg_namespace table_schema ON table_schema.nspname = policy.schemaname
@@ -87,8 +90,8 @@ public sealed partial record MigrationPlatformRegressionTests
                                        AND table_catalog.relname = policy.tablename
             WHERE policy.schemaname = @schema AND policy.tablename = 'documents'
               AND policy.policyname = 'documents_access'
-            """;
-        AddParameter(command, "@schema", target.Schema);
+            """
+        );
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read(), "Missing documents_access policy in pg_policies");
         Assert.True(reader.GetBoolean(2), "Row-level security is disabled on documents");
@@ -125,7 +128,11 @@ public sealed partial record MigrationPlatformRegressionTests
     private static PolicySnapshot ReadSqlServerPolicy(MigrationTarget target)
     {
         using var command = target.Connection.CreateCommand();
-        command.CommandText = """
+        VerifyReusableWorkflow1(
+            input0: command,
+            input1: AddParameter,
+            input2: target,
+            value0: """
             SELECT predicate.predicate_type_desc, predicate.predicate_definition,
                    module.definition, policy.is_enabled
             FROM sys.security_policies policy
@@ -147,8 +154,8 @@ public sealed partial record MigrationPlatformRegressionTests
                   = function_schema.name + '.' + function_object.name + '('
               )
             ORDER BY predicate.predicate_type_desc, predicate.predicate_definition
-            """;
-        AddParameter(command, "@schema", target.Schema);
+            """
+        );
         using var reader = command.ExecuteReader();
         var filters = ImmutableArray.CreateBuilder<string>();
         var blocks = ImmutableArray.CreateBuilder<string>();
@@ -178,24 +185,22 @@ public sealed partial record MigrationPlatformRegressionTests
         bool checkAllowed
     )
     {
-        if (usingAllowed)
-        {
-            Assert.Equal(original.Using, changed.Using);
-        }
-        else
-        {
-            Assert.NotEqual(original.Using, changed.Using);
-        }
-        if (checkAllowed)
-        {
-            Assert.Equal(original.WithCheck, changed.WithCheck);
-        }
-        else
-        {
-            Assert.NotEqual(original.WithCheck, changed.WithCheck);
-        }
+        AssertClauseChanged(original.Using, changed.Using, usingAllowed);
+        AssertClauseChanged(original.WithCheck, changed.WithCheck, checkAllowed);
         Assert.False(string.IsNullOrWhiteSpace(changed.Using), provider);
         Assert.False(string.IsNullOrWhiteSpace(changed.WithCheck), provider);
+    }
+
+    private static void AssertClauseChanged(string original, string changed, bool allowed)
+    {
+        if (allowed)
+        {
+            Assert.Equal(original, changed);
+        }
+        else
+        {
+            Assert.NotEqual(original, changed);
+        }
     }
 
     // Implements [RLS-DIFF]. Assert the requested clauses, including the one not changed.

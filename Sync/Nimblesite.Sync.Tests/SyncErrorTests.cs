@@ -3,16 +3,12 @@ namespace Nimblesite.Sync.Tests;
 /// <summary>
 /// Tests for SyncError types.
 /// </summary>
-public sealed class SyncErrorTests
+public sealed partial class SyncErrorTests
 {
     [Fact]
     public void SyncErrorForeignKeyViolation_CreatesCorrectRecord()
     {
-        var error = new SyncErrorForeignKeyViolation(
-            "Person",
-            "{\"Id\":\"p1\"}",
-            "FK_Person_Department"
-        );
+        var error = Dataset_SyncErrorForeignKeyViolation_CreatesCorrectRecord_1();
 
         Assert.Equal("Person", error.TableName);
         Assert.Equal("{\"Id\":\"p1\"}", error.PkValue);
@@ -22,15 +18,7 @@ public sealed class SyncErrorTests
     [Fact]
     public void SyncErrorDeferredChangeFailed_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncErrorDeferredChangeFailed_CreatesCorrectRecord_1();
 
         var error = new SyncErrorDeferredChangeFailed(entry, "Max retries exceeded");
 
@@ -67,25 +55,9 @@ public sealed class SyncErrorTests
     [Fact]
     public void SyncErrorUnresolvedConflict_CreatesCorrectRecord()
     {
-        var localChange = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"p1\",\"Name\":\"LocalName\"}",
-            "local-origin",
-            "2024-01-01T00:00:00Z"
-        );
+        var localChange = Fixture_SyncErrorUnresolvedConflict_CreatesCorrectRecord_1();
 
-        var remoteChange = new SyncLogEntry(
-            2,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Update,
-            "{\"Id\":\"p1\",\"Name\":\"RemoteName\"}",
-            "remote-origin",
-            "2024-01-01T00:00:01Z"
-        );
+        var remoteChange = Fixture_SyncErrorUnresolvedConflict_CreatesCorrectRecord_2();
 
         var error = new SyncErrorUnresolvedConflict(localChange, remoteChange);
 
@@ -99,17 +71,11 @@ public sealed class SyncErrorTests
         var errors = new SyncError[]
         {
             new SyncErrorForeignKeyViolation("T", "PK", "Details"),
-            new SyncErrorDeferredChangeFailed(
-                new SyncLogEntry(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS"),
-                "Reason"
-            ),
+            Dataset_AllSyncErrors_DeriveFromSyncError_1(),
             new SyncErrorFullResyncRequired(1, 100),
             new SyncErrorHashMismatch("E", "A"),
             new SyncErrorDatabase("Msg"),
-            new SyncErrorUnresolvedConflict(
-                new SyncLogEntry(1, "T", "PK", SyncOperation.Update, "{}", "O1", "TS1"),
-                new SyncLogEntry(2, "T", "PK", SyncOperation.Update, "{}", "O2", "TS2")
-            ),
+            Dataset_AllSyncErrors_DeriveFromSyncError_2(),
         };
 
         foreach (var error in errors)

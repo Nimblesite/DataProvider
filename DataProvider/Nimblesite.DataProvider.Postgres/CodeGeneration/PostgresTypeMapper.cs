@@ -81,17 +81,7 @@ public static class PostgresTypeMapper
             _ => "string",
         };
 
-        if (baseType == "byte[]")
-        {
-            return "byte[]?";
-        }
-
-        if (isNullable && !baseType.EndsWith("[]", StringComparison.Ordinal))
-        {
-            return baseType + "?";
-        }
-
-        return baseType;
+        return ApplyNullability(baseType: baseType, isNullable: isNullable);
     }
 
     /// <summary>
@@ -132,17 +122,7 @@ public static class PostgresTypeMapper
             _ => "string",
         };
 
-        if (baseType == "byte[]")
-        {
-            return "byte[]?";
-        }
-
-        if (isNullable && !baseType.EndsWith("[]", StringComparison.Ordinal))
-        {
-            return baseType + "?";
-        }
-
-        return baseType;
+        return ApplyNullability(baseType: baseType, isNullable: isNullable);
     }
 
     /// <summary>
@@ -218,4 +198,10 @@ public static class PostgresTypeMapper
             return "int";
         return "object";
     }
+
+    // Implements [DP-MODEL-SHARED-EMISSION].
+    private static string ApplyNullability(string baseType, bool isNullable) =>
+        baseType == "byte[]" ? "byte[]?"
+        : isNullable && !baseType.EndsWith("[]", StringComparison.Ordinal) ? baseType + "?"
+        : baseType;
 }

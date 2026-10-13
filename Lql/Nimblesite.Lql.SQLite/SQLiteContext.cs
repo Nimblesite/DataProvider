@@ -5,9 +5,8 @@ namespace Nimblesite.Lql.SQLite;
 /// <summary>
 /// Context for building SQLite queries with proper table aliases and structure
 /// </summary>
-public sealed class SQLiteContext : ISqlContext
+public sealed class SQLiteContext : SelectContextBase
 {
-    private readonly SelectStatementBuilder _builder = new();
     private string? _baseTable;
 
     /// <summary>
@@ -16,18 +15,13 @@ public sealed class SQLiteContext : ISqlContext
     public SQLiteContext() { }
 
     /// <summary>
-    /// Gets a value indicating whether this query has joins
-    /// </summary>
-    public bool HasJoins => _builder.Build().HasJoins;
-
-    /// <summary>
     /// Sets the base table for the query
     /// </summary>
     /// <param name="tableName">The base table name</param>
-    public void SetBaseTable(string tableName)
+    public override void SetBaseTable(string tableName)
     {
         _baseTable = tableName;
-        _builder.AddTable(tableName);
+        Builder.AddTable(tableName);
     }
 
     /// <summary>
@@ -36,81 +30,23 @@ public sealed class SQLiteContext : ISqlContext
     /// <param name="joinType">The type of join (INNER JOIN, LEFT JOIN, etc.)</param>
     /// <param name="tableName">The table to join</param>
     /// <param name="condition">The join condition</param>
-    public void AddJoin(string joinType, string tableName, string? condition)
+    public override void AddJoin(string joinType, string tableName, string? condition)
     {
-        _builder.AddTable(tableName);
+        Builder.AddTable(tableName);
         if (!string.IsNullOrEmpty(condition) && !string.IsNullOrEmpty(_baseTable))
         {
-            _builder.AddJoin(_baseTable, tableName, condition, joinType);
+            Builder.AddJoin(_baseTable, tableName, condition, joinType);
         }
     }
-
-    /// <summary>
-    /// Sets the SELECT columns for the query
-    /// </summary>
-    /// <param name="columns">The columns to select</param>
-    /// <param name="distinct">Whether to use DISTINCT</param>
-    public void SetSelectColumns(IEnumerable<ColumnInfo> columns, bool distinct = false) =>
-        _builder.WithSelectColumns(columns, distinct);
-
-    /// <summary>
-    /// Adds a WHERE condition
-    /// </summary>
-    /// <param name="condition">The condition to add</param>
-    public void AddWhereCondition(WhereCondition condition) =>
-        _builder.AddWhereCondition(condition);
-
-    /// <summary>
-    /// Adds GROUP BY columns
-    /// </summary>
-    /// <param name="columns">The columns to group by</param>
-    public void AddGroupBy(IEnumerable<ColumnInfo> columns) => _builder.AddGroupBy(columns);
-
-    /// <summary>
-    /// Adds ORDER BY items
-    /// </summary>
-    /// <param name="orderItems">The order items (column, direction)</param>
-    public void AddOrderBy(IEnumerable<(string Column, string Direction)> orderItems)
-    {
-        foreach (var (column, direction) in orderItems)
-        {
-            _builder.AddOrderBy(column, direction);
-        }
-    }
-
-    /// <summary>
-    /// Adds a HAVING condition
-    /// </summary>
-    /// <param name="condition">The having condition</param>
-    public void AddHaving(string condition) => _builder.WithHaving(condition);
-
-    /// <summary>
-    /// Sets the LIMIT
-    /// </summary>
-    /// <param name="count">The limit count</param>
-    public void SetLimit(string count) => _builder.WithLimit(count);
-
-    /// <summary>
-    /// Sets the OFFSET
-    /// </summary>
-    /// <param name="count">The offset count</param>
-    public void SetOffset(string count) => _builder.WithOffset(count);
-
-    /// <summary>
-    /// Adds a UNION or UNION ALL
-    /// </summary>
-    /// <param name="query">The query to union with</param>
-    /// <param name="isUnionAll">Whether this is UNION ALL</param>
-    public void AddUnion(string query, bool isUnionAll) => _builder.AddUnion(query, isUnionAll);
 
     /// <summary>
     /// Generates the final SQL query
     /// </summary>
     /// <returns>The SQL query string</returns>
-    public string GenerateSQL()
+    public override string GenerateSQL()
     {
         // Generate SQL from the builder instead of creating another statement
-        var selectStatement = _builder.Build();
+        var selectStatement = Builder.Build();
         return GenerateSQLiteSQL(selectStatement);
     }
 
@@ -128,7 +64,7 @@ public sealed class SQLiteContext : ISqlContext
         }
 
         // Generate SQL from the builder instead of recursing
-        var selectStatement = _builder.Build();
+        var selectStatement = Builder.Build();
         return GenerateSQLiteSQL(selectStatement);
     }
 
@@ -162,21 +98,21 @@ public sealed class SQLiteContext : ISqlContext
         // Add columns to select
         foreach (var column in selectStep.Columns)
         {
-            _builder.AddSelectColumn(column);
+            Builder.AddSelectColumn(column);
         }
     }
 
     private void ProcessFilterStep(FilterStep filterStep) =>
         // Add WHERE conditions - FilterStep.Condition is already a WhereCondition
-        _builder.AddWhereCondition(filterStep.Condition);
+        Builder.AddWhereCondition(filterStep.Condition);
 
     private void ProcessJoinStep(JoinStep joinStep)
     {
         var join = joinStep.JoinRelationship;
-        _builder.AddTable(join.RightTable);
+        Builder.AddTable(join.RightTable);
         if (!string.IsNullOrEmpty(join.Condition) && !string.IsNullOrEmpty(_baseTable))
         {
-            _builder.AddJoin(_baseTable, join.RightTable, join.Condition, join.JoinType);
+            Builder.AddJoin(_baseTable, join.RightTable, join.Condition, join.JoinType);
         }
     }
 
@@ -185,13 +121,13 @@ public sealed class SQLiteContext : ISqlContext
         // Add ORDER BY
         foreach (var (column, direction) in orderByStep.OrderItems)
         {
-            _builder.AddOrderBy(column, direction);
+            Builder.AddOrderBy(column, direction);
         }
     }
 
     private void ProcessLimitStep(LimitStep limitStep) =>
         // SQLite supports LIMIT
-        _builder.WithLimit(limitStep.Count.ToString());
+        Builder.WithLimit(limitStep.Count.ToString());
 
     /// <summary>
     /// Public helper to generate SQLite SQL from an existing SelectStatement
@@ -370,12 +306,8 @@ public sealed class SQLiteContext : ISqlContext
     /// <param name="condition">The condition to format</param>
     /// <returns>Formatted condition string</returns>
     private static string FormatWhereCondition(WhereCondition condition) =>
-        condition switch
-        {
-            ComparisonCondition c => $"{FormatColumn(c.Left)} {c.Operator.ToSql()} {c.Right}",
-            LogicalOperator lo => lo.ToSql(),
-            Parenthesis p => p.IsOpening ? "(" : ")",
-            ExpressionCondition e => e.Expression,
-            _ => "/*UNKNOWN_WHERE*/",
-        };
+        StatementBuilderOperations.FormatWhereCondition(
+            condition: condition,
+            formatColumn: FormatColumn
+        );
 }

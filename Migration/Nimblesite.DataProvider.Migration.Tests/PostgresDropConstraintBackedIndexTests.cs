@@ -1,7 +1,7 @@
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixture fixture)
+public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresContainerFixture fixture)
 {
     private const string SchemaName = "public";
     private const string TableName = "api_keys";
@@ -18,15 +18,7 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
 
         try
         {
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    SchemaWithUniqueConstraint(),
-                    Logger
-                ),
-                Logger
-            );
+            PostgresTestDb.ApplySchema(connection, SchemaWithUniqueConstraint(), Logger);
             var upgrade = PostgresTestDb.Calculate(
                 PostgresTestDb.Inspect(connection, Logger),
                 SchemaWithoutUniqueConstraint(),
@@ -58,16 +50,10 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
 
         try
         {
-            var desired = SchemaWithUniqueConstraint();
-
-            PostgresTestDb.Apply(
-                connection,
-                PostgresTestDb.Calculate(
-                    PostgresTestDb.Inspect(connection, Logger),
-                    desired,
-                    Logger
-                ),
-                Logger
+            var desired = VerifyReusableWorkflow30(
+                input0: SchemaWithUniqueConstraint,
+                input1: connection,
+                input2: Logger
             );
 
             var inspected = PostgresTestDb
@@ -104,31 +90,6 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
         }
     }
 
-    private static SchemaDefinition SchemaWithUniqueConstraint() =>
-        Schema
-            .Define("Issue49")
-            .Table(
-                SchemaName,
-                TableName,
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("key_hash", PortableTypes.VarChar(255), c => c.NotNull())
-                        .Unique(ConstraintName, "key_hash")
-            )
-            .Build();
-
-    private static SchemaDefinition SchemaWithoutUniqueConstraint() =>
-        Schema
-            .Define("Issue49")
-            .Table(
-                SchemaName,
-                TableName,
-                t =>
-                    t.Column("id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("key_hash", PortableTypes.VarChar(255), c => c.NotNull())
-            )
-            .Build();
-
     private static bool IsConstraintBackedIndexDrop(SchemaOperation operation) =>
         operation
             is DropIndexOperation
@@ -138,37 +99,16 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
                 IndexName: ConstraintName,
             };
 
-    private static bool ConstraintExists(NpgsqlConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_constraint c
-                JOIN pg_class t ON t.oid = c.conrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                WHERE n.nspname = @schema
-                AND t.relname = @table
-                AND c.conname = @constraint
-            )
-            """;
-        AddObjectParameters(command);
-        return command.ExecuteScalar() is bool exists && exists;
-    }
+    private static bool ConstraintExists(NpgsqlConnection connection) =>
+        ObjectExists(connection, Data_ConstraintExists_1);
 
-    private static bool IndexExists(NpgsqlConnection connection)
+    private static bool IndexExists(NpgsqlConnection connection) =>
+        ObjectExists(connection, Data_IndexExists_1);
+
+    private static bool ObjectExists(NpgsqlConnection connection, string sql)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_class i
-                JOIN pg_namespace n ON n.oid = i.relnamespace
-                WHERE n.nspname = @schema
-                AND i.relname = @constraint
-                AND i.relkind = 'i'
-            )
-            """;
+        command.CommandText = sql;
         AddObjectParameters(command);
         return command.ExecuteScalar() is bool exists && exists;
     }
@@ -178,5 +118,23 @@ public sealed class PostgresDropConstraintBackedIndexTests(PostgresContainerFixt
         command.Parameters.AddWithValue("@schema", SchemaName);
         command.Parameters.AddWithValue("@table", TableName);
         command.Parameters.AddWithValue("@constraint", ConstraintName);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static SchemaDefinition VerifyReusableWorkflow30(
+        Func<SchemaDefinition> input0,
+        NpgsqlConnection input1,
+        ILogger input2
+    )
+    {
+        var desired = input0();
+
+        PostgresTestDb.Apply(
+            input1,
+            PostgresTestDb.Calculate(PostgresTestDb.Inspect(input1, input2), desired, input2),
+            input2
+        );
+
+        return desired;
     }
 }

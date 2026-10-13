@@ -37,15 +37,8 @@ public static partial class LqlDefaultTranslator
             "true" => "true",
             "false" => "false",
 
-            // Numeric literals (pass through)
-            var n when int.TryParse(n, out _) => n,
-            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
-
-            // String literals (already quoted with single quotes)
-            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
-
-            // Function calls (lower, upper, coalesce, etc.)
-            _ => TranslateFunctionCall(lqlExpression, ToPostgresFunction),
+            // Literals and function calls handled identically across platforms.
+            _ => TranslateLiteralOrFunction(lqlExpression, normalized, ToPostgresFunction),
         };
     }
 
@@ -77,15 +70,8 @@ public static partial class LqlDefaultTranslator
             "true" => "1",
             "false" => "0",
 
-            // Numeric literals (pass through)
-            var n when int.TryParse(n, out _) => n,
-            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
-
-            // String literals (already quoted with single quotes)
-            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
-
-            // Function calls
-            _ => TranslateFunctionCall(lqlExpression, ToSqliteFunction),
+            // Literals and function calls handled identically across platforms.
+            _ => TranslateLiteralOrFunction(lqlExpression, normalized, ToSqliteFunction),
         };
     }
 
@@ -95,6 +81,24 @@ public static partial class LqlDefaultTranslator
         + "substr(lower(hex(randomblob(2))),2) || '-' || "
         + "substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || "
         + "lower(hex(randomblob(6))))";
+
+    private static string TranslateLiteralOrFunction(
+        string lqlExpression,
+        string normalized,
+        Func<string, string[], string> functionTranslator
+    ) =>
+        normalized switch
+        {
+            // Numeric literals (pass through)
+            var n when int.TryParse(n, out _) => n,
+            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
+
+            // String literals (already quoted with single quotes)
+            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
+
+            // Function calls (lower, upper, coalesce, etc.)
+            _ => TranslateFunctionCall(lqlExpression, functionTranslator),
+        };
 
     private static string TranslateFunctionCall(
         string expression,
@@ -121,39 +125,30 @@ public static partial class LqlDefaultTranslator
     }
 
     private static string ToPostgresFunction(string functionName, string[] args) =>
-        functionName switch
-        {
-            "lower" => $"lower({string.Join(", ", args)})",
-            "upper" => $"upper({string.Join(", ", args)})",
-            "coalesce" => $"COALESCE({string.Join(", ", args)})",
-            "length" => $"length({string.Join(", ", args)})",
-            "substring" => args.Length >= 3
-                ? $"substring({args[0]} from {args[1]} for {args[2]})"
-                : $"substring({string.Join(", ", args)})",
-            "trim" => $"trim({string.Join(", ", args)})",
-            "concat" => $"concat({string.Join(", ", args)})",
-            "abs" => $"abs({string.Join(", ", args)})",
-            "round" => $"round({string.Join(", ", args)})",
-            _ => $"{functionName}({string.Join(", ", args)})",
-        };
+        FormatDefaultFunction(functionName: functionName, args: args, sqlite: false);
 
     private static string ToSqliteFunction(string functionName, string[] args) =>
-        functionName switch
-        {
-            "lower" => $"lower({string.Join(", ", args)})",
-            "upper" => $"upper({string.Join(", ", args)})",
-            "coalesce" => $"coalesce({string.Join(", ", args)})",
-            "length" => $"length({string.Join(", ", args)})",
-            "substring" => args.Length >= 3
-                ? $"substr({args[0]}, {args[1]}, {args[2]})"
-                : $"substr({string.Join(", ", args)})",
-            "trim" => $"trim({string.Join(", ", args)})",
-            "concat" => args.Length > 0 ? string.Join(" || ", args) : "''",
-            "abs" => $"abs({string.Join(", ", args)})",
-            "round" => $"round({string.Join(", ", args)})",
-            _ => $"{functionName}({string.Join(", ", args)})",
-        };
+        FormatDefaultFunction(functionName: functionName, args: args, sqlite: true);
 
     [GeneratedRegex(@"^(?<func>\w+)\s*\((?<args>.*)\)$", RegexOptions.Singleline)]
     private static partial Regex FunctionCallRegex();
+
+    // Implements [MIG-DEFAULT-SHARED-FUNCTION-FORMATTING].
+    private static string FormatDefaultFunction(string functionName, string[] args, bool sqlite) =>
+        functionName switch
+        {
+            "coalesce" => FormatCall(functionName: sqlite ? "coalesce" : "COALESCE", args: args),
+            "substring" => args.Length >= 3
+                ? (
+                    sqlite
+                        ? $"substr({args[0]}, {args[1]}, {args[2]})"
+                        : $"substring({args[0]} from {args[1]} for {args[2]})"
+                )
+                : FormatCall(functionName: sqlite ? "substr" : "substring", args: args),
+            "concat" when sqlite => args.Length > 0 ? string.Join(" || ", args) : "''",
+            _ => FormatCall(functionName: functionName, args: args),
+        };
+
+    private static string FormatCall(string functionName, string[] args) =>
+        $"{functionName}({string.Join(", ", args)})";
 }

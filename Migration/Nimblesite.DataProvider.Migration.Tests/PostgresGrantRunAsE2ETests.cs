@@ -1,7 +1,10 @@
+using static global::Tests.Shared.ResultAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
+public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
 {
     [Fact]
     public void GrantRunAs_AppliesNapAuthShapeGrantsThroughSchemaOwner()
@@ -17,10 +20,7 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appAdmin)} NOLOGIN");
         PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q("test")}");
         PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q(migrate)}");
-        PostgresTestDb.Exec(
-            connection,
-            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
-        );
+        GrantConnect(connection, migrate);
         PostgresTestDb.Exec(connection, $"CREATE SCHEMA {Q(schema)} AUTHORIZATION {Q(owner)}");
         PostgresTestDb.Exec(
             connection,
@@ -28,15 +28,13 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         );
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
-        var result = MigrationRunner.Apply(
-            migrateConnection,
-            NapAuthGrants(schema, owner, appUser, appAdmin),
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            NullLogger.Instance
+        global::Tests.Shared.ResultAssertions.Ok(
+            actual: PostgresTestDb.TryApply(
+                connection: migrateConnection,
+                operations: NapAuthGrants(schema, owner, appUser, appAdmin),
+                logger: NullLogger.Instance
+            )
         );
-
-        Assert.True(result is MigrationApplyResultOk);
         Assert.True(HasSchemaPrivilege(connection, appUser, schema, "USAGE"));
         Assert.True(HasSchemaPrivilege(connection, appAdmin, schema, "USAGE"));
         Assert.True(HasTablePrivilege(connection, appUser, schema, "users", "SELECT"));
@@ -52,36 +50,31 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
-        PostgresTestDb.Exec(
-            connection,
-            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
-        );
+        GrantConnect(connection, migrate);
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
-        var result = MigrationRunner.Apply(
-            migrateConnection,
+        var result = PostgresTestDb.TryApply(
+            connection: migrateConnection,
+            operations:
             [
-                new GrantPrivilegesOperation(
-                    new PostgresGrantDefinition
-                    {
-                        Schema = "public",
-                        Target = PostgresGrantTarget.Schema,
-                        Privileges = ["USAGE"],
-                        Roles = [appUser],
-                        RunAs = owner,
-                    }
+                Dataset_GrantRunAs_MissingRoleMembership_ReturnsClearGrantToMessage_1(
+                    appUser: appUser,
+                    owner: owner
                 ),
             ],
-            PostgresDdlGenerator.Generate,
-            MigrationOptions.Default,
-            NullLogger.Instance
+            logger: NullLogger.Instance
         );
 
-        Assert.True(result is MigrationApplyResultError);
-        var error = ((MigrationApplyResultError)result).Value;
+        var error = Expected<MigrationApplyResultError>(actual: result).Value;
         Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", error.Message);
         Assert.Contains($"GRANT \"{owner}\" TO \"{migrate}\"", error.Message);
     }
+
+    private static void GrantConnect(NpgsqlConnection connection, string role) =>
+        PostgresTestDb.Exec(
+            connection,
+            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(role)}"
+        );
 
     private static (string Suffix, string Owner, string Migrate, string AppUser) NewGrantRoles()
     {
@@ -102,36 +95,33 @@ public sealed class PostgresGrantRunAsE2ETests(PostgresContainerFixture fixture)
     ) =>
         [
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = [appUser, appAdmin],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Schema,
+                    privileges: ["USAGE"],
+                    roles: [appUser, appAdmin],
+                    runAs: owner
+                )
             ),
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = [appAdmin],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["SELECT", "INSERT"],
+                    roles: [appAdmin],
+                    runAs: owner
+                )
             ),
             new GrantPrivilegesOperation(
-                new PostgresGrantDefinition
-                {
-                    Schema = schema,
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "users",
-                    Privileges = ["SELECT"],
-                    Roles = [appUser],
-                    RunAs = owner,
-                }
+                SchemaTestData.PostgresGrant(
+                    schema: schema,
+                    target: PostgresGrantTarget.Table,
+                    objectName: "users",
+                    privileges: ["SELECT"],
+                    roles: [appUser],
+                    runAs: owner
+                )
             ),
         ];
 

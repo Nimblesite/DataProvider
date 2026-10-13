@@ -51,9 +51,27 @@ internal static class SqliteRlsDdlBuilder
     {
         var ddl = new List<string>();
         AddRestrictiveWarning(policy, ddl);
-        AddInsertTrigger(policy, tableName, ddl);
-        AddUpdateTrigger(policy, tableName, ddl);
-        AddDeleteTrigger(policy, tableName, ddl);
+        AddPolicyTrigger(
+            policy: policy,
+            tableName: tableName,
+            ddl: ddl,
+            operation: RlsOperation.Insert,
+            predicate: policy.WithCheckLql
+        );
+        AddPolicyTrigger(
+            policy: policy,
+            tableName: tableName,
+            ddl: ddl,
+            operation: RlsOperation.Update,
+            predicate: policy.WithCheckLql
+        );
+        AddPolicyTrigger(
+            policy: policy,
+            tableName: tableName,
+            ddl: ddl,
+            operation: RlsOperation.Delete,
+            predicate: policy.UsingLql
+        );
         AddSecureView(policy, tableName, ddl);
         return string.Join(";\n", ddl);
     }
@@ -66,42 +84,6 @@ internal static class SqliteRlsDdlBuilder
         if (!policy.IsPermissive)
         {
             ddl.Add("-- MIG-W-RLS-SQLITE-RESTRICTIVE-APPROX");
-        }
-    }
-
-    private static void AddInsertTrigger(
-        RlsPolicyDefinition policy,
-        string tableName,
-        List<string> ddl
-    )
-    {
-        if (Applies(policy, RlsOperation.Insert) && HasText(policy.WithCheckLql))
-        {
-            ddl.Add(Trigger(policy, tableName, "insert", "INSERT", "NEW", policy.WithCheckLql!));
-        }
-    }
-
-    private static void AddUpdateTrigger(
-        RlsPolicyDefinition policy,
-        string tableName,
-        List<string> ddl
-    )
-    {
-        if (Applies(policy, RlsOperation.Update) && HasText(policy.WithCheckLql))
-        {
-            ddl.Add(Trigger(policy, tableName, "update", "UPDATE", "NEW", policy.WithCheckLql!));
-        }
-    }
-
-    private static void AddDeleteTrigger(
-        RlsPolicyDefinition policy,
-        string tableName,
-        List<string> ddl
-    )
-    {
-        if (Applies(policy, RlsOperation.Delete) && HasText(policy.UsingLql))
-        {
-            ddl.Add(Trigger(policy, tableName, "delete", "DELETE", "OLD", policy.UsingLql!));
         }
     }
 
@@ -209,4 +191,26 @@ internal static class SqliteRlsDdlBuilder
 
     private static string TriggerName(string sqlOp, string policyName, string tableName) =>
         $"rls_{sqlOp}_{policyName}_{tableName}";
+
+    // Implements [RLS-SQLITE-SHARED-POLICY-TRIGGERS].
+    private static void AddPolicyTrigger(
+        RlsPolicyDefinition policy,
+        string tableName,
+        List<string> ddl,
+        RlsOperation operation,
+        string? predicate
+    )
+    {
+        if (Applies(policy: policy, op: operation) && predicate is { } text && HasText(value: text))
+            ddl.Add(
+                item: Trigger(
+                    policy: policy,
+                    tableName: tableName,
+                    sqlOp: operation.ToString().ToLowerInvariant(),
+                    verb: operation.ToString().ToUpperInvariant(),
+                    rowAlias: operation == RlsOperation.Delete ? "OLD" : "NEW",
+                    lql: text
+                )
+            );
+    }
 }

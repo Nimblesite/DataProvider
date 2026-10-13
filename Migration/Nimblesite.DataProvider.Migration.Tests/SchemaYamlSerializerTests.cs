@@ -1,62 +1,36 @@
-using System.Globalization;
+// Implements [MIG-TEST-ID-NAME-COLUMNS].
+// Implements [CI-TEST-SHARED-COMMAND].
+
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 /// <summary>
 /// E2E tests for YAML schema serialization and deserialization.
 /// </summary>
-public sealed class SchemaYamlSerializerTests
+public sealed partial class SchemaYamlSerializerTests
 {
     [Fact]
     public void ToYaml_SimpleSchema_ProducesValidYaml()
     {
         // Arrange
-        var schema = Schema
-            .Define("test")
-            .Table(
-                "Users",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Email", PortableTypes.VarChar(255), c => c.NotNull())
-                        .Column("Name", PortableTypes.Text)
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml = VerifySharedContinuation10(
+            input0: Fixture_ToYaml_SimpleSchema_ProducesValidYaml_1
+        );
 
         // Assert
         Assert.NotNull(yaml);
-        Assert.Contains("name: test", yaml);
-        Assert.Contains("tables:", yaml);
-        Assert.Contains("Users", yaml);
-        Assert.Contains("Uuid", yaml);
-        Assert.Contains("VarChar(255)", yaml);
+        ContainsAll(
+            actual: yaml,
+            expected: ["name: test", "tables:", "Users", "Uuid", "VarChar(255)"]
+        );
     }
 
     [Fact]
     public void FromYaml_ValidYaml_DeserializesCorrectly()
     {
         // Arrange
-        var yaml = """
-            name: test_schema
-            tables:
-              - name: Products
-                schema: public
-                columns:
-                  - name: Id
-                    type: Uuid
-                    isNullable: false
-                  - name: Name
-                    type: VarChar(200)
-                    isNullable: false
-                  - name: Price
-                    type: Decimal(10,2)
-                    isNullable: true
-                primaryKey:
-                  columns:
-                    - Id
-            """;
+        var yaml = Data_FromYaml_ValidYaml_DeserializesCorrectly_1;
 
         // Act
         var schema = SchemaYamlSerializer.FromYaml(yaml);
@@ -87,34 +61,7 @@ public sealed class SchemaYamlSerializerTests
     public void RoundTrip_ComplexSchema_PreservesAllData()
     {
         // Arrange
-        var schema = Schema
-            .Define("complex_schema")
-            .Table(
-                "Users",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Email", PortableTypes.NVarChar(255), c => c.NotNull())
-                        .Column(
-                            "CreatedAt",
-                            PortableTypes.DateTime(),
-                            c => c.NotNull().DefaultLql("now()")
-                        )
-                        .Column(
-                            "IsActive",
-                            PortableTypes.Boolean,
-                            c => c.NotNull().DefaultLql("true")
-                        )
-                        .Index("idx_users_email", "Email", unique: true)
-            )
-            .Table(
-                "Orders",
-                t =>
-                    t.Column("Id", PortableTypes.BigInt, c => c.PrimaryKey().Identity())
-                        .Column("UserId", PortableTypes.Uuid, c => c.NotNull())
-                        .Column("Total", PortableTypes.Decimal(12, 2), c => c.NotNull())
-                        .ForeignKey("UserId", "Users", "Id", ForeignKeyAction.Cascade)
-            )
-            .Build();
+        var schema = Fixture_RoundTrip_ComplexSchema_PreservesAllData_1();
 
         // Act
         var yaml = SchemaYamlSerializer.ToYaml(schema);
@@ -126,52 +73,27 @@ public sealed class SchemaYamlSerializerTests
 
         var usersOriginal = schema.Tables.First(t => t.Name == "Users");
         var usersRestored = restored.Tables.First(t => t.Name == "Users");
-        Assert.Equal(usersOriginal.Columns.Count, usersRestored.Columns.Count);
-        Assert.Equal(usersOriginal.Indexes.Count, usersRestored.Indexes.Count);
+        AssertTableShapeMatches(usersOriginal, usersRestored);
 
         var ordersOriginal = schema.Tables.First(t => t.Name == "Orders");
         var ordersRestored = restored.Tables.First(t => t.Name == "Orders");
-        Assert.Equal(ordersOriginal.Columns.Count, ordersRestored.Columns.Count);
-        Assert.Equal(ordersOriginal.ForeignKeys.Count, ordersRestored.ForeignKeys.Count);
+        AssertTableShapeMatches(ordersOriginal, ordersRestored);
+    }
+
+    // Implements [MIG-TEST-YAML-ROUNDTRIP]: a round-tripped table keeps the same
+    // column, index and foreign-key counts.
+    private static void AssertTableShapeMatches(TableDefinition expected, TableDefinition actual)
+    {
+        Assert.Equal(expected.Columns.Count, actual.Columns.Count);
+        Assert.Equal(expected.Indexes.Count, actual.Indexes.Count);
+        Assert.Equal(expected.ForeignKeys.Count, actual.ForeignKeys.Count);
     }
 
     [Fact]
     public void PortableType_AllTypes_SerializeCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("types_test")
-            .Table(
-                "AllTypes",
-                t =>
-                    t.Column("TinyInt", PortableTypes.TinyInt)
-                        .Column("SmallInt", PortableTypes.SmallInt)
-                        .Column("Int", PortableTypes.Int)
-                        .Column("BigInt", PortableTypes.BigInt)
-                        .Column("Decimal", PortableTypes.Decimal(18, 4))
-                        .Column("Float", PortableTypes.Float)
-                        .Column("Double", PortableTypes.Double)
-                        .Column("Money", PortableTypes.Money)
-                        .Column("Bool", PortableTypes.Boolean)
-                        .Column("Char", PortableTypes.Char(10))
-                        .Column("VarChar", PortableTypes.VarChar(100))
-                        .Column("NChar", PortableTypes.NChar(5))
-                        .Column("NVarChar", PortableTypes.NVarChar(500))
-                        .Column("NVarCharMax", PortableTypes.NVarCharMax)
-                        .Column("Text", PortableTypes.Text)
-                        .Column("Binary", PortableTypes.Binary(16))
-                        .Column("VarBinary", PortableTypes.VarBinary(256))
-                        .Column("VarBinaryMax", PortableTypes.VarBinaryMax)
-                        .Column("Blob", PortableTypes.Blob)
-                        .Column("Date", PortableTypes.Date)
-                        .Column("Time", PortableTypes.Time(3))
-                        .Column("DateTime", PortableTypes.DateTime(6))
-                        .Column("DateTimeOffset", PortableTypes.DateTimeOffset)
-                        .Column("Uuid", PortableTypes.Uuid)
-                        .Column("Json", PortableTypes.Json)
-                        .Column("Xml", PortableTypes.Xml)
-            )
-            .Build();
+        var schema = Fixture_PortableType_AllTypes_SerializeCorrectly_1();
 
         // Act
         var yaml = SchemaYamlSerializer.ToYaml(schema);
@@ -207,27 +129,9 @@ public sealed class SchemaYamlSerializerTests
     public void ForeignKey_WithActions_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("fk_test")
-            .Table("Parent", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Table(
-                "Child",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("ParentId", PortableTypes.Uuid, c => c.NotNull())
-                        .ForeignKey(
-                            "ParentId",
-                            "Parent",
-                            "Id",
-                            onDelete: ForeignKeyAction.Cascade,
-                            onUpdate: ForeignKeyAction.SetNull
-                        )
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
+        var restored = RoundtripSchema(
+            input0: Fixture_ForeignKey_WithActions_SerializesCorrectly_1
+        );
 
         // Assert
         var childTable = restored.Tables.First(t => t.Name == "Child");
@@ -243,27 +147,7 @@ public sealed class SchemaYamlSerializerTests
     public void Index_WithFilter_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("index_test")
-            .Table(
-                "Items",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("IsActive", PortableTypes.Boolean, c => c.NotNull())
-                        .Column("Name", PortableTypes.VarChar(100))
-                        .Index("idx_active_items", "Name", unique: true, filter: "IsActive = 1")
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
-        Assert.Single(table.Indexes);
-
-        var index = table.Indexes[0];
+        var index = RoundtripSingleIndex(input0: Fixture_Index_WithFilter_SerializesCorrectly_1);
         Assert.Equal("idx_active_items", index.Name);
         Assert.True(index.IsUnique);
         Assert.Equal("IsActive = 1", index.Filter);
@@ -273,26 +157,7 @@ public sealed class SchemaYamlSerializerTests
     public void ExpressionIndex_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("expr_index_test")
-            .Table(
-                "Artists",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Name", PortableTypes.VarChar(200), c => c.NotNull())
-                        .ExpressionIndex("uq_artists_name_ci", "lower(Name)", unique: true)
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
-        Assert.Single(table.Indexes);
-
-        var index = table.Indexes[0];
+        var index = RoundtripSingleIndex(input0: Fixture_ExpressionIndex_SerializesCorrectly_1);
         Assert.Equal("uq_artists_name_ci", index.Name);
         Assert.True(index.IsUnique);
         Assert.Single(index.Expressions);
@@ -303,28 +168,7 @@ public sealed class SchemaYamlSerializerTests
     public void CheckConstraint_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("check_test")
-            .Table(
-                "Products",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column(
-                            "Price",
-                            PortableTypes.Decimal(10, 2),
-                            c => c.NotNull().Check("CK_Products_Price", "Price >= 0")
-                        )
-                        .Column("Quantity", PortableTypes.Int, c => c.NotNull())
-                        .Check("CK_Products_Quantity", "Quantity >= 0")
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
+        var table = Roundtrip(input0: Fixture_CheckConstraint_SerializesCorrectly_1);
 
         var priceCol = table.Columns.First(c => c.Name == "Price");
         Assert.Equal("Price >= 0", priceCol.CheckConstraint);
@@ -339,27 +183,9 @@ public sealed class SchemaYamlSerializerTests
     public void UniqueConstraint_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("unique_test")
-            .Table(
-                "Users",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Email", PortableTypes.VarChar(255), c => c.NotNull())
-                        .Column("TenantId", PortableTypes.Uuid, c => c.NotNull())
-                        .Unique("UQ_Users_Email_Tenant", "Email", "TenantId")
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
-
-        // Assert
-        var table = restored.Tables[0];
-        Assert.Single(table.UniqueConstraints);
-
-        var uc = table.UniqueConstraints[0];
+        var uc = Assert.Single(
+            Roundtrip(input0: Fixture_UniqueConstraint_SerializesCorrectly_1).UniqueConstraints
+        );
         Assert.Equal("UQ_Users_Email_Tenant", uc.Name);
         Assert.Equal(2, uc.Columns.Count);
         Assert.Contains("Email", uc.Columns);
@@ -371,15 +197,7 @@ public sealed class SchemaYamlSerializerTests
     {
         // Arrange
         var tempFile = Path.GetTempFileName();
-        var yaml = """
-            name: file_test
-            tables:
-              - name: TestTable
-                columns:
-                  - name: Id
-                    type: Int
-                    isNullable: false
-            """;
+        var yaml = Data_FromYamlFile_ValidFile_LoadsSchema_1;
         File.WriteAllText(tempFile, yaml);
 
         try
@@ -404,10 +222,7 @@ public sealed class SchemaYamlSerializerTests
     {
         // Arrange
         var tempFile = Path.GetTempFileName();
-        var schema = Schema
-            .Define("file_write_test")
-            .Table("Table1", t => t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey()))
-            .Build();
+        var schema = Data_ToYamlFile_WritesValidYaml_1();
 
         try
         {
@@ -417,8 +232,7 @@ public sealed class SchemaYamlSerializerTests
 
             // Assert
             var content = File.ReadAllText(tempFile);
-            Assert.Contains("file_write_test", content);
-            Assert.Contains("Table1", content);
+            ContainsAll(actual: content, expected: ["file_write_test", "Table1"]);
 
             // Verify it can be read back
             var restoredYaml = File.ReadAllText(tempFile);
@@ -452,22 +266,7 @@ public sealed class SchemaYamlSerializerTests
     public void PortableType_EnumType_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("enum_test")
-            .Table(
-                "Items",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column(
-                            "Status",
-                            PortableTypes.Enum("item_status", "pending", "active", "archived")
-                        )
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
+        var restored = RoundtripSchema(input0: Fixture_PortableType_EnumType_SerializesCorrectly_1);
 
         // Assert
         var statusCol = restored.Tables[0].Columns.First(c => c.Name == "Status");
@@ -485,28 +284,7 @@ public sealed class SchemaYamlSerializerTests
     public void DefaultLqlExpression_SerializesCorrectly()
     {
         // Arrange
-        var schema = Schema
-            .Define("lql_test")
-            .Table(
-                "Events",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey().DefaultLql("gen_uuid()"))
-                        .Column(
-                            "CreatedAt",
-                            PortableTypes.DateTime(),
-                            c => c.NotNull().DefaultLql("now()")
-                        )
-                        .Column(
-                            "IsActive",
-                            PortableTypes.Boolean,
-                            c => c.NotNull().DefaultLql("true")
-                        )
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
-        var restored = SchemaYamlSerializer.FromYaml(yaml);
+        var restored = RoundtripSchema(input0: Fixture_DefaultLqlExpression_SerializesCorrectly_1);
 
         // Assert
         var idCol = restored.Tables[0].Columns.First(c => c.Name == "Id");
@@ -523,55 +301,7 @@ public sealed class SchemaYamlSerializerTests
     public void IntegrationTest_YamlToSqlite_CreatesDatabaseSuccessfully()
     {
         // Arrange - Create schema from YAML
-        var yaml = """
-            name: integration_test
-            tables:
-              - name: Users
-                schema: public
-                columns:
-                  - name: Id
-                    type: Uuid
-                    isNullable: false
-                  - name: Email
-                    type: VarChar(255)
-                    isNullable: false
-                  - name: Name
-                    type: Text
-                    isNullable: true
-                primaryKey:
-                  columns:
-                    - Id
-                indexes:
-                  - name: idx_users_email
-                    columns:
-                      - Email
-                    isUnique: true
-              - name: Orders
-                schema: public
-                columns:
-                  - name: Id
-                    type: BigInt
-                    isNullable: false
-                    isIdentity: true
-                  - name: UserId
-                    type: Uuid
-                    isNullable: false
-                  - name: Total
-                    type: Decimal(12,2)
-                    isNullable: false
-                primaryKey:
-                  columns:
-                    - Id
-                foreignKeys:
-                  - columns:
-                      - UserId
-                    referencedTable: Users
-                    referencedSchema: public
-                    referencedColumns:
-                      - Id
-                    onDelete: Cascade
-                    onUpdate: NoAction
-            """;
+        var yaml = Data_IntegrationTest_YamlToSqlite_CreatesDatabaseSuccessfully_1;
 
         var schema = SchemaYamlSerializer.FromYaml(yaml);
 
@@ -585,9 +315,10 @@ public sealed class SchemaYamlSerializerTests
             foreach (var table in schema.Tables)
             {
                 var ddl = SqliteDdlGenerator.Generate(new CreateTableOperation(table));
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = ddl;
-                cmd.ExecuteNonQuery();
+                DatabaseCommands.Execute(
+                    connection: connection,
+                    configure: command => command.CommandText = ddl
+                );
             }
 
             // Assert - Verify tables exist
@@ -613,17 +344,7 @@ public sealed class SchemaYamlSerializerTests
         {
             connection.Close();
             connection.Dispose();
-            if (File.Exists(dbPath))
-            {
-                try
-                {
-                    File.Delete(dbPath);
-                }
-                catch
-                {
-                    /* File may be locked */
-                }
-            }
+            global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: dbPath);
         }
     }
 
@@ -631,18 +352,7 @@ public sealed class SchemaYamlSerializerTests
     public void ToYaml_OmitsSemanticDefaultValues()
     {
         // Arrange - Schema with all default values
-        var schema = Schema
-            .Define("test")
-            .Table(
-                "Users",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Name", PortableTypes.Text) // nullable by default
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml = VerifySharedContinuation10(input0: Fixture_ToYaml_OmitsSemanticDefaultValues_1);
 
         // Assert - These default values should NOT appear in the YAML
         Assert.DoesNotContain("isNullable: true", yaml);
@@ -657,18 +367,9 @@ public sealed class SchemaYamlSerializerTests
     public void VectorType_YamlRoundTrip_PreservesDimensions()
     {
         // Arrange - schema with a pgvector embeddings column
-        var schema = Schema
-            .Define("ai")
-            .Table(
-                "Documents",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Embedding", PortableTypes.Vector(1536), c => c.NotNull())
-            )
-            .Build();
-
-        // Act
-        var yaml = SchemaYamlSerializer.ToYaml(schema);
+        var yaml = VerifySharedContinuation10(
+            input0: Fixture_VectorType_YamlRoundTrip_PreservesDimensions_1
+        );
         var restored = SchemaYamlSerializer.FromYaml(yaml);
 
         // Assert
@@ -678,45 +379,80 @@ public sealed class SchemaYamlSerializerTests
         Assert.Equal(1536, vec.Dimensions);
     }
 
-    [Fact]
-    public void VectorType_PostgresDdl_EmitsPgVectorType()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(nameof(VectorType_PostgresDdl_EmitsPgVectorType_ContextCasesData))]
+    public void VectorType_PostgresDdl_EmitsPgVectorType_ContextCases(
+        string caseName,
+        Func<SchemaDefinition> input0,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Migration.Core.SchemaOperation,
+            global::System.String
+        > value0,
+        string value3
+    )
     {
-        // Arrange
-        var schema = Schema
-            .Define("ai")
-            .Table(
-                "Documents",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Embedding", PortableTypes.Vector(768), c => c.NotNull())
-            )
-            .Build();
-
-        // Act
-        var ddl = PostgresDdlGenerator.Generate(new CreateTableOperation(schema.Tables[0]));
-
-        // Assert
-        Assert.Contains("\"Embedding\" vector(768) NOT NULL", ddl, StringComparison.Ordinal);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseOperationCaseMatrix2(input0: input0, value0: value0, value3: value3);
     }
 
-    [Fact]
-    public void VectorType_SqliteDdl_FallsBackToBlob()
-    {
-        // Arrange
-        var schema = Schema
-            .Define("ai")
-            .Table(
-                "Documents",
-                t =>
-                    t.Column("Id", PortableTypes.Uuid, c => c.PrimaryKey())
-                        .Column("Embedding", PortableTypes.Vector(768), c => c.NotNull())
-            )
-            .Build();
+    // Implements [MIG-TEST-YAML-ROUNDTRIP].
+    private static TableDefinition RoundtripFirstTable(SchemaDefinition schema) =>
+        SchemaYamlSerializer.FromYaml(yaml: SchemaYamlSerializer.ToYaml(schema: schema)).Tables[0];
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static TableDefinition Roundtrip(Func<SchemaDefinition> input0) =>
+        VerifyReusableWorkflow13(input0: input0, input1: RoundtripFirstTable);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static IndexDefinition RoundtripSingleIndex(Func<SchemaDefinition> input0) =>
+        Assert.Single(Roundtrip(input0: input0).Indexes);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static SchemaDefinition RoundtripSchema(Func<SchemaDefinition> input0) =>
+        SchemaYamlSerializer.FromYaml(VerifySharedContinuation10(input0: input0));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static string VerifySharedContinuation10(Func<SchemaDefinition> input0)
+    { // Arrange
+        var schema = input0();
 
         // Act
-        var ddl = SqliteDdlGenerator.Generate(new CreateTableOperation(schema.Tables[0]));
+        var yaml = SchemaYamlSerializer.ToYaml(schema);
 
-        // Assert - SQLite has no native vector; must fall back to BLOB
-        Assert.Contains("[Embedding] BLOB NOT NULL", ddl, StringComparison.Ordinal);
+        return yaml;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static TableDefinition VerifyReusableWorkflow13(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition, TableDefinition> input1
+    )
+    { // Arrange
+        var schema = input0();
+
+        // Act
+        var table = input1(arg: schema);
+
+        return table;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseOperationCaseMatrix2(
+        Func<SchemaDefinition> input0,
+        global::System.Func<
+            global::Nimblesite.DataProvider.Migration.Core.SchemaOperation,
+            global::System.String
+        > value0,
+        string value3
+    )
+    { // Arrange
+        var schema = input0();
+
+        // Act
+        var ddl = value0(arg: new CreateTableOperation(schema.Tables[0]));
+
+        // Assert
+        Assert.Contains(value3, ddl, StringComparison.Ordinal);
     }
 }

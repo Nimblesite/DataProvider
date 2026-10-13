@@ -10,22 +10,11 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-DIFF]. Issue #119: view qualification must not become policy drift.
 [Collection(Postgres15TestSuite.Name)]
-public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fixture)
+public sealed partial class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fixture)
 {
     [Theory]
-    [InlineData("id = 1", "id = 2", null, null, false)]
-    [InlineData("id = 1", "items.id = 2", "id > 0", "id > 0", true)]
-    [InlineData("id > 0", "id > 0", "id = 1", "id = 2", false)]
-    [InlineData(null, null, "id = 1", "id = 2", false)]
-    [InlineData("NOT (id = 1)", "NOT (id = 2)", null, null, true)]
-    [InlineData("abs(id) = 1", "abs(id) = 2", null, null, true)]
-    [InlineData("\"id\" = 1", "\"id\" = 2", null, null, true)]
-    [InlineData(
-        "EXISTS (SELECT 1 FROM public.items AS other WHERE other.id = items.id)",
-        "EXISTS (SELECT 1 FROM public.items AS other WHERE other.id = id)",
-        null,
-        null,
-        true
+    [MemberData(
+        nameof(ColumnPredicates_CreateReapplyAndChangeWithoutFalseIntegrityDriftInlineCases)
     )]
     public void ColumnPredicates_CreateReapplyAndChangeWithoutFalseIntegrityDrift(
         string? initialUsing,
@@ -86,13 +75,8 @@ public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fix
             connection: connection,
             operations:
             [
-                new AlterRlsPolicyOperation(
-                    Schema: "public",
-                    TableName: "items",
-                    Policy: before with
-                    {
-                        UsingSql = "id = 2",
-                    }
+                Dataset_RealPredicateDrift_FailsIntegrityAndRollsBackPolicyAlteration_1(
+                    before: before
                 ),
             ],
             generateDdl: PostgresDdlGenerator.Generate,
@@ -113,12 +97,14 @@ public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fix
 
     private static bool RejectDrift(NpgsqlConnection connection, SchemaDefinition desired)
     {
-        var live = Assert
-            .IsType<SchemaResultOk>(PostgresPolicyCatalogNormalizer.Inspect(connection: connection))
+        var live = global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: PostgresPolicyCatalogNormalizer.Inspect(connection: connection)
+            )
             .Value;
-        var normalized = Assert
-            .IsType<SchemaResultOk>(
-                PostgresPolicyCatalogNormalizer.Normalize(
+        var normalized = global::Tests
+            .Shared.ResultAssertions.ExactOk(
+                actual: PostgresPolicyCatalogNormalizer.Normalize(
                     connection: connection,
                     live: live,
                     desired: desired
@@ -167,9 +153,9 @@ public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fix
         Assert.Single(
             Assert
                 .Single(
-                    Assert
-                        .IsType<SchemaResultOk>(
-                            PostgresSchemaInspector.Inspect(connection: connection)
+                    global::Tests
+                        .Shared.ResultAssertions.ExactOk(
+                            actual: PostgresSchemaInspector.Inspect(connection: connection)
                         )
                         .Value.Tables
                 )
@@ -178,28 +164,5 @@ public sealed class PostgresPolicyCatalogCliTests(Postgres15ContainerFixture fix
         );
 
     private static string PolicyYaml(string? predicate, string? check, bool sql) =>
-        $$"""
-            name: nap_policy_repro
-            tables:
-              - name: items
-                schema: public
-                columns:
-                  - name: id
-                    type: Int
-                    isNullable: false
-                primaryKey:
-                  columns: [id]
-                rowLevelSecurity:
-                  enabled: true
-                  forced: true
-                  policies:
-                    - name: item_visible
-                      permissive: true
-                      operations: [{{(check is null ? "Select" : predicate is null ? "Insert" : "All")}}]
-                      roles: [PUBLIC]
-                      {{(predicate is null ? "" : $"{(sql ? "usingSql" : "using")}: '{predicate}'")}}
-                      {{(
-                check is null ? "" : $"{(sql ? "withCheckSql" : "withCheck")}: '{check}'"
-            )}}
-            """;
+        SqlData_PolicyYaml_1(check: check, predicate: predicate, sql: sql);
 }

@@ -1,3 +1,6 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 using BodyError = Outcome.Result<
     string,
     Nimblesite.DataProvider.Migration.Core.MigrationError
@@ -9,22 +12,10 @@ using BodyOk = Outcome.Result<string, Nimblesite.DataProvider.Migration.Core.Mig
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
-public sealed class PostgresFunctionBodyLqlTests
+public sealed partial class PostgresFunctionBodyLqlTests
 {
     [Theory]
-    [InlineData(
-        "current_setting('app.tenant_id')::uuid",
-        "SELECT current_setting('app.tenant_id', true)::uuid"
-    )]
-    [InlineData(
-        "SELECT current_setting('app.user_id')::uuid",
-        "SELECT current_setting('app.user_id', true)::uuid"
-    )]
-    [InlineData("true", "SELECT true")]
-    [InlineData(
-        "is_member(current_setting('app.user_id')::uuid, current_setting('app.tenant_id')::uuid)",
-        "SELECT is_member(current_setting('app.user_id', true)::uuid, current_setting('app.tenant_id', true)::uuid)"
-    )]
+    [MemberData(nameof(TranslatePostgresBody_NapScalarShapes_EmitsSqlBodyInlineCases))]
     public void TranslatePostgresBody_NapScalarShapes_EmitsSqlBody(string bodyLql, string expected)
     {
         var sql = Body(bodyLql);
@@ -35,33 +26,22 @@ public sealed class PostgresFunctionBodyLqlTests
     [Fact]
     public void TranslatePostgresBody_ExistsPipeline_EmitsSelectExists()
     {
-        var sql = Body(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.user_id = u and m.tenant_id = t)
-            )
-            """
-        );
+        var sql = Body(Data_TranslatePostgresBody_ExistsPipeline_EmitsSelectExists_1);
 
-        Assert.StartsWith("SELECT EXISTS (", sql, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", sql, StringComparison.Ordinal);
-        Assert.Contains("user_id = u", sql, StringComparison.Ordinal);
-        Assert.Contains("tenant_id = t", sql, StringComparison.Ordinal);
+        MigrationAssertions.AssertSqlContains(
+            sql,
+            "SELECT EXISTS (",
+            "FROM tenant_members",
+            "user_id = u",
+            "tenant_id = t"
+        );
     }
 
     [Fact]
     public void TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate()
     {
         // Implements [LQL-PREDICATE-IN-LIST].
-        var sql = Body(
-            """
-            exists(
-              tenant_members
-              |> filter(fn(m) => m.user_id = u and m.tenant_id = t and m.role in ('owner', 'admin'))
-            )
-            """
-        );
+        var sql = Body(Data_TranslatePostgresBody_ExistsPipelineWithInList_EmitsInPredicate_1);
 
         Assert.Contains("role IN ('owner', 'admin')", sql, StringComparison.Ordinal);
     }
@@ -69,17 +49,7 @@ public sealed class PostgresFunctionBodyLqlTests
     [Fact]
     public void FromYaml_FunctionBodyLql_Deserializes()
     {
-        var schema = SchemaYamlSerializer.FromYaml(
-            """
-            name: nap
-            functions:
-              - schema: public
-                name: app_tenant_id
-                returns: uuid
-                bodyLql: current_setting('app.tenant_id')::uuid
-            tables: []
-            """
-        );
+        var schema = SchemaYamlSerializer.FromYaml(Data_FromYaml_FunctionBodyLql_Deserializes_1);
 
         Assert.Single(schema.Functions);
         Assert.Equal("current_setting('app.tenant_id')::uuid", schema.Functions[0].BodyLql);
@@ -90,17 +60,7 @@ public sealed class PostgresFunctionBodyLqlTests
     public void FromYaml_FunctionBodyAndBodyLql_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            SchemaYamlSerializer.FromYaml(
-                """
-                name: nap
-                functions:
-                  - name: app_tenant_id
-                    returns: uuid
-                    body: SELECT NULL::uuid
-                    bodyLql: current_setting('app.tenant_id')::uuid
-                tables: []
-                """
-            )
+            SchemaYamlSerializer.FromYaml(Data_FromYaml_FunctionBodyAndBodyLql_Throws_1)
         );
 
         Assert.Contains("mutually exclusive", ex.Message, StringComparison.Ordinal);
@@ -111,19 +71,7 @@ public sealed class PostgresFunctionBodyLqlTests
     public void ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody()
     {
         var yaml = SchemaYamlSerializer.ToYaml(
-            new SchemaDefinition
-            {
-                Name = "nap",
-                Functions =
-                [
-                    new PostgresFunctionDefinition
-                    {
-                        Name = "app_tenant_id",
-                        Returns = "uuid",
-                        BodyLql = "current_setting('app.tenant_id')::uuid",
-                    },
-                ],
-            }
+            Fixture_ToYaml_FunctionBodyLql_EmitsBodyLqlNotBody_1()
         );
 
         Assert.Contains("bodyLql: current_setting('app.tenant_id')::uuid", yaml);
@@ -134,66 +82,36 @@ public sealed class PostgresFunctionBodyLqlTests
     public void Generate_CreateFunction_BodyLqlCurrentSetting_EmitsDollarQuotedSqlBody()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.tenant_id')::uuid",
-                }
-            )
+            Dataset_Generate_CreateFunction_BodyLqlCurrentSetting_EmitsDollarQuotedSqlBody_1()
         );
 
-        Assert.Contains("AS $function$", ddl, StringComparison.Ordinal);
-        Assert.Contains(
-            "SELECT current_setting('app.tenant_id', true)::uuid",
-            ddl,
-            StringComparison.Ordinal
+        global::Nimblesite.DataProvider.Migration.Tests.RlsCurrentSettingLqlTests.VerifyCrossClassChecks2(
+            input0: ddl,
+            value0: "AS $function$",
+            value1: "SELECT current_setting('app.tenant_id', true)::uuid",
+            value3: "bodyLql"
         );
-        Assert.DoesNotContain("bodyLql", ddl, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Generate_CreateFunction_BodyLqlExists_EmitsSelectExistsBody()
     {
         var ddl = PostgresDdlGenerator.Generate(
-            new CreateOrReplaceFunctionOperation(
-                new PostgresFunctionDefinition
-                {
-                    Name = "is_member",
-                    Returns = "boolean",
-                    Arguments =
-                    [
-                        new PostgresFunctionArgumentDefinition { Name = "u", Type = "uuid" },
-                        new PostgresFunctionArgumentDefinition { Name = "t", Type = "uuid" },
-                    ],
-                    SecurityDefiner = true,
-                    BodyLql =
-                        "exists(tenant_members |> filter(fn(m) => m.user_id = u and m.tenant_id = t))",
-                }
-            )
+            Dataset_Generate_CreateFunction_BodyLqlExists_EmitsSelectExistsBody_1()
         );
 
-        Assert.Contains("SELECT EXISTS (", ddl, StringComparison.Ordinal);
-        Assert.Contains("FROM tenant_members", ddl, StringComparison.Ordinal);
-        Assert.Contains("user_id = u", ddl, StringComparison.Ordinal);
-        Assert.Contains("tenant_id = t", ddl, StringComparison.Ordinal);
+        ContainsAll(
+            actual: ddl,
+            expected: ["SELECT EXISTS (", "FROM tenant_members", "user_id = u", "tenant_id = t"],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
     public void Generate_CreateFunction_BodyAndBodyLql_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            PostgresDdlGenerator.Generate(
-                new CreateOrReplaceFunctionOperation(
-                    new PostgresFunctionDefinition
-                    {
-                        Name = "bad",
-                        Body = "SELECT true",
-                        BodyLql = "true",
-                    }
-                )
-            )
+            PostgresDdlGenerator.Generate(Dataset_Generate_CreateFunction_BodyAndBodyLql_Throws_1())
         );
 
         Assert.Contains("mutually exclusive", ex.Message, StringComparison.Ordinal);
@@ -202,80 +120,43 @@ public sealed class PostgresFunctionBodyLqlTests
     [Fact]
     public void SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "nap",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                },
-            ],
-        };
-        var desired = current with
-        {
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    BodyLql = "current_setting('app.tenant_id')::uuid",
-                },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
-        Assert.Empty(((OperationsResultOk)result).Value);
+        var result = VerifySharedChecks6(
+            input0: Fixture_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1,
+            input1: Dataset_SchemaDiff_BodyLqlEquivalentToInspectedBody_HasNoOperations_1
+        );
+        Assert.Empty((Ok(actual: result)).Value);
     }
 
     [Fact]
     public void SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction()
     {
-        var current = new SchemaDefinition
-        {
-            Name = "nap",
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "uuid",
-                    Body = "SELECT current_setting('app.tenant_id', true)::uuid",
-                },
-            ],
-        };
-        var desired = current with
-        {
-            Functions =
-            [
-                new PostgresFunctionDefinition
-                {
-                    Name = "app_tenant_id",
-                    Returns = "text",
-                    BodyLql = "current_setting('app.tenant_id')",
-                },
-            ],
-        };
-
-        var result = SchemaDiff.Calculate(current, desired);
-
-        Assert.True(result is OperationsResultOk);
-        Assert.Contains(
-            ((OperationsResultOk)result).Value,
-            op => op is CreateOrReplaceFunctionOperation
+        var result = VerifySharedChecks6(
+            input0: Fixture_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1,
+            input1: Dataset_SchemaDiff_BodyLqlChange_EmitsCreateOrReplaceFunction_1
         );
+        Assert.Contains((Ok(actual: result)).Value, op => op is CreateOrReplaceFunctionOperation);
     }
 
     private static string Body(string bodyLql)
     {
         var result = LqlFunctionBodyTranspiler.TranslatePostgresBody(bodyLql, "public.test");
         Assert.True(result is BodyOk, result is BodyError e ? e.Value.Message : "expected Ok");
-        return ((BodyOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static Outcome.Result<
+        IReadOnlyList<SchemaOperation>,
+        MigrationError
+    > VerifySharedChecks6(Func<SchemaDefinition> input0, Func<PostgresFunctionDefinition> input1)
+    {
+        var current = input0();
+        var desired = current with { Functions = [input1()] };
+
+        var result = SchemaDiff.Calculate(current, desired);
+
+        Assert.True(result is OperationsResultOk);
+
+        return result;
     }
 }

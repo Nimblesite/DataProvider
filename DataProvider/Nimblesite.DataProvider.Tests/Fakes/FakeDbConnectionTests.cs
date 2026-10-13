@@ -2,8 +2,6 @@
 #pragma warning disable CA2000 // Dispose objects before losing scope
 #pragma warning disable CA1849 // Synchronous blocking calls
 
-using System.Data.Common;
-
 namespace Nimblesite.DataProvider.Tests.Fakes;
 
 public class FakeDbConnectionTests
@@ -12,13 +10,7 @@ public class FakeDbConnectionTests
     public void FakeDbConnection_ActsAsFactoryForFakeTransaction()
     {
         // Arrange
-        var connection = new FakeDbConnection(sql => new FakeDataReader(
-            ["Id", "Name"],
-            [typeof(int), typeof(string)],
-            [
-                [1, "Test"],
-            ]
-        ));
+        var connection = new FakeDbConnection(sql => UserReader(name: "Test"));
 
         // Act
         connection.Open();
@@ -33,104 +25,91 @@ public class FakeDbConnectionTests
     [Fact]
     public void FakeTransaction_UsesCallbackToReturnDataBasedOnSelectStatement()
     {
-        // Arrange - Using switch expression to return different data based on SQL
-        var connection = new FakeDbConnection(sql =>
-            sql switch
-            {
-                var s when s.Contains("SELECT * FROM Users", StringComparison.Ordinal) =>
-                    new FakeDataReader(
-                        ["Id", "Name", "Email"],
-                        [typeof(int), typeof(string), typeof(string)],
-                        [
-                            [1, "John Doe", "john@example.com"],
-                            [2, "Jane Smith", "jane@example.com"],
-                        ]
-                    ),
-
-                var s when s.Contains("SELECT * FROM Posts", StringComparison.Ordinal) =>
-                    new FakeDataReader(
-                        ["Id", "Title", "UserId"],
-                        [typeof(int), typeof(string), typeof(int)],
-                        [
-                            [1, "First Post", 1],
-                            [2, "Second Post", 2],
-                        ]
-                    ),
-
-                var s when s.Contains("SELECT COUNT(*) FROM Users", StringComparison.Ordinal) =>
-                    new FakeDataReader(
-                        ["Count"],
-                        [typeof(int)],
-                        [
-                            [2],
-                        ]
-                    ),
-
-                _ => new FakeDataReader(
-                    ["Error"],
-                    [typeof(string)],
+        // Arrange - Using a match/case table to return different data based on SQL
+        var connection = ConnectionFor(
+            (
+                "SELECT * FROM Users",
+                new FakeDataReader(
+                    ["Id", "Name", "Email"],
+                    [typeof(int), typeof(string), typeof(string)],
                     [
-                        ["Unknown query"],
+                        [1, "John Doe", "john@example.com"],
+                        [2, "Jane Smith", "jane@example.com"],
                     ]
-                ),
-            }
+                )
+            ),
+            (
+                "SELECT * FROM Posts",
+                new FakeDataReader(
+                    ["Id", "Title", "UserId"],
+                    [typeof(int), typeof(string), typeof(int)],
+                    [
+                        [1, "First Post", 1],
+                        [2, "Second Post", 2],
+                    ]
+                )
+            ),
+            (
+                "SELECT COUNT(*) FROM Users",
+                new FakeDataReader(
+                    ["Count"],
+                    [typeof(int)],
+                    [
+                        [2],
+                    ]
+                )
+            )
         );
 
-        connection.Open();
-
         // Act & Assert - Test Users query
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var usersReader = transaction.GetDataReader("SELECT * FROM Users");
+        ReadRows(
+            connection: connection,
+            sql: "SELECT * FROM Users",
+            assert: usersReader =>
+            {
+                Assert.True(usersReader.Read());
+                Assert.Equal(1, usersReader.GetInt32(0));
+                Assert.Equal("John Doe", usersReader.GetString(1));
+                Assert.Equal("john@example.com", usersReader.GetString(2));
 
-        Assert.True(usersReader.Read());
-        Assert.Equal(1, usersReader.GetInt32(0));
-        Assert.Equal("John Doe", usersReader.GetString(1));
-        Assert.Equal("john@example.com", usersReader.GetString(2));
+                Assert.True(usersReader.Read());
+                Assert.Equal(2, usersReader.GetInt32(0));
+                Assert.Equal("Jane Smith", usersReader.GetString(1));
+                Assert.Equal("jane@example.com", usersReader.GetString(2));
 
-        Assert.True(usersReader.Read());
-        Assert.Equal(2, usersReader.GetInt32(0));
-        Assert.Equal("Jane Smith", usersReader.GetString(1));
-        Assert.Equal("jane@example.com", usersReader.GetString(2));
-
-        Assert.False(usersReader.Read());
+                Assert.False(usersReader.Read());
+            }
+        );
     }
 
     [Fact]
     public void FakeTransaction_HandlesCountQuery()
     {
         // Arrange
-        var connection = new FakeDbConnection(sql =>
-            sql switch
-            {
-                var s when s.Contains("SELECT COUNT(*) FROM Users", StringComparison.Ordinal) =>
-                    new FakeDataReader(
-                        ["Count"],
-                        [typeof(int)],
-                        [
-                            [42],
-                        ]
-                    ),
-
-                _ => new FakeDataReader(
-                    ["Error"],
-                    [typeof(string)],
+        var connection = ConnectionFor(
+            (
+                "SELECT COUNT(*) FROM Users",
+                new FakeDataReader(
+                    ["Count"],
+                    [typeof(int)],
                     [
-                        ["Unknown query"],
+                        [42],
                     ]
-                ),
-            }
+                )
+            )
         );
 
-        connection.Open();
-
-        // Act
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var reader = transaction.GetDataReader("SELECT COUNT(*) FROM Users");
-
-        // Assert
-        Assert.True(reader.Read());
-        Assert.Equal(42, reader.GetInt32(0));
-        Assert.False(reader.Read());
+        // Act & Assert
+        ReadRows(
+            connection: connection,
+            sql: "SELECT COUNT(*) FROM Users",
+            assert: reader =>
+            {
+                Assert.True(reader.Read());
+                Assert.Equal(42, reader.GetInt32(0));
+                Assert.False(reader.Read());
+            }
+        );
     }
 
     [Fact]
@@ -158,17 +137,18 @@ public class FakeDbConnectionTests
             ]
         ));
 
-        connection.Open();
-
-        // Act
-        using var transaction = (FakeTransaction)connection.BeginTransaction();
-        using var reader = transaction.GetDataReader("SELECT * FROM Users");
-
-        // Assert
-        Assert.True(reader.Read());
-        Assert.Equal(1, reader.GetInt32(0));
-        Assert.Equal("John Doe", reader.GetString(1));
-        Assert.True(reader.IsDBNull(2));
+        // Act & Assert
+        ReadRows(
+            connection: connection,
+            sql: "SELECT * FROM Users",
+            assert: reader =>
+            {
+                Assert.True(reader.Read());
+                Assert.Equal(1, reader.GetInt32(0));
+                Assert.Equal("John Doe", reader.GetString(1));
+                Assert.True(reader.IsDBNull(2));
+            }
+        );
     }
 
     [Fact]
@@ -185,15 +165,23 @@ public class FakeDbConnectionTests
         Assert.False(await reader.IsDBNullAsync(0));
     }
 
+    // Implements [CI-TEST-SHARED-SCENARIOS]: opens the fake connection, runs the
+    // query through a fake transaction and asserts on the returned reader.
+    private static void ReadRows(
+        FakeDbConnection connection,
+        string sql,
+        Action<DbDataReader> assert
+    )
+    {
+        connection.Open();
+        using var transaction = (FakeTransaction)connection.BeginTransaction();
+        using var reader = transaction.GetDataReader(sql);
+        assert(reader);
+    }
+
     private static DbCommand CreateTestUserCommand()
     {
-        var connection = new FakeDbConnection(sql => new FakeDataReader(
-            ["Id", "Name"],
-            [typeof(int), typeof(string)],
-            [
-                [1, "Test User"],
-            ]
-        ));
+        var connection = new FakeDbConnection(sql => UserReader(name: "Test User"));
 
         connection.Open();
 
@@ -201,4 +189,29 @@ public class FakeDbConnectionTests
         command.CommandText = "SELECT * FROM Users";
         return command;
     }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: builds a connection from a
+    // match/reader table, falling back to a fixed "Unknown query" reader.
+    private static FakeDbConnection ConnectionFor(
+        params (string Match, FakeDataReader Reader)[] cases
+    ) =>
+        new(sql =>
+            cases.FirstOrDefault(c => sql.Contains(c.Match, StringComparison.Ordinal)).Reader
+            ?? new FakeDataReader(
+                ["Error"],
+                [typeof(string)],
+                [
+                    ["Unknown query"],
+                ]
+            )
+        );
+
+    private static FakeDataReader UserReader(string name) =>
+        new(
+            ["Id", "Name"],
+            [typeof(int), typeof(string)],
+            [
+                [1, name],
+            ]
+        );
 }

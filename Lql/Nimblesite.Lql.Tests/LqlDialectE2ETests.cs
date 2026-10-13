@@ -3,7 +3,8 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
-using Xunit;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
 
@@ -21,9 +22,7 @@ public sealed partial class LqlDialectE2ETests
         var result = LqlStatementConverter.ToStatement(lqlCode);
         if (result is not Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> parseOk)
         {
-            Assert.Fail(
-                $"Parse failed: {((Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError>)result).Value.DetailedMessage}"
-            );
+            Assert.Fail($"Parse failed: {(Error(actual: result)).Value.DetailedMessage}");
             return default;
         }
 
@@ -33,36 +32,20 @@ public sealed partial class LqlDialectE2ETests
         var ss = stmt.ToSqlServer();
         var sl = stmt.ToSQLite();
 
-        if (pg is not Result<string, SqlError>.Ok<string, SqlError> pgOk)
-        {
-            Assert.Fail("PostgreSql conversion failed");
-            return default;
-        }
-
-        if (ss is not Result<string, SqlError>.Ok<string, SqlError> ssOk)
-        {
-            Assert.Fail("SqlServer conversion failed");
-            return default;
-        }
-
-        if (sl is not Result<string, SqlError>.Ok<string, SqlError> slOk)
-        {
-            Assert.Fail("SQLite conversion failed");
-            return default;
-        }
-
-        return (pgOk.Value, ssOk.Value, slOk.Value);
+        // Implements [LQL-TEST-SHARED-DIALECT-RESULTS]. Preserve conversion and check order.
+        return (
+            Ok(actual: pg, message: "PostgreSql conversion failed").Value,
+            Ok(actual: ss, message: "SqlServer conversion failed").Value,
+            Ok(actual: sl, message: "SQLite conversion failed").Value
+        );
     }
 
     [Fact]
     public void CountFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> select(orders.user_id, count(*) as order_count)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_CountFunction_AllDialects_GeneratesCorrectSQL_1
+        );
 
         Assert.Contains("COUNT(*)", pg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("COUNT(*)", ss, StringComparison.OrdinalIgnoreCase);
@@ -78,43 +61,33 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.status)
-            |> select(
-                orders.status,
-                sum(orders.total) as total_amount,
-                avg(orders.total) as avg_amount
-            )
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_SumAndAvgFunctions_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("SUM", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("AVG", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("total_amount", sql, StringComparison.Ordinal);
-            Assert.Contains("avg_amount", sql, StringComparison.Ordinal);
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "SUM", value1: "AVG");
+            VerifyLifetimePhase1(
+                input0: sql,
+                value0: "total_amount",
+                value1: "avg_amount",
+                value3: "GROUP BY"
+            );
         }
     }
 
     [Fact]
     public void CountDistinctFunction_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> select(orders.user_id, count(distinct orders.product_id) as unique_products)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_CountDistinctFunction_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("COUNT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("COUNT(DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "COUNT", value1: "DISTINCT");
+            AssertBothSqlFragments(input0: sql, value0: "COUNT(DISTINCT", value1: "product_id");
             Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("unique_products", sql, StringComparison.Ordinal);
         }
@@ -123,60 +96,39 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void UpperLowerFunctions_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
+        var (pg, ss, sl) = VerifyReusableWorkflow2(
+            input0: ConvertToAllDialects,
+            value0: """
             users
             |> select(upper(users.name) as upper_name, lower(users.email) as lower_email)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+            """
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("UPPER", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("LOWER", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("upper_name", sql, StringComparison.Ordinal);
-            Assert.Contains("lower_email", sql, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void SelectDistinct_AllDialects_GeneratesDistinctSQL()
-    {
-        var lql = """
-            users |> select_distinct(users.country)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
-
-        foreach (var sql in new[] { pg, ss, sl })
-        {
-            Assert.Contains("SELECT DISTINCT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("country", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "UPPER", value1: "LOWER");
+            ContainsAll(
+                actual: sql,
+                expected: ["upper_name", "lower_email"],
+                comparison: StringComparison.Ordinal
+            );
         }
     }
 
     [Fact]
     public void OffsetAndLimit_AllDialects_GeneratesCorrectPagination()
     {
-        var lql = """
-            users
-            |> order_by(users.name asc)
-            |> offset(20)
-            |> limit(10)
-            |> select(users.id, users.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_OffsetAndLimit_AllDialects_GeneratesCorrectPagination_1
+        );
 
-        Assert.Contains("OFFSET", pg, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", pg, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", pg, StringComparison.Ordinal);
-        Assert.Contains("10", pg, StringComparison.Ordinal);
-        Assert.Contains("OFFSET", sl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LIMIT", sl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", sl, StringComparison.Ordinal);
-        Assert.Contains("10", sl, StringComparison.Ordinal);
+        AssertBothSqlFragments(input0: pg, value0: "OFFSET", value1: "LIMIT");
+        ContainsAll(actual: pg, expected: ["20", "10"], comparison: StringComparison.Ordinal);
+        AssertBothSqlFragments(input0: sl, value0: "OFFSET", value1: "LIMIT");
+        ContainsAll(actual: sl, expected: ["20", "10"], comparison: StringComparison.Ordinal);
         // SQL Server uses OFFSET...FETCH or TOP
         Assert.Contains("OFFSET", ss, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("20", ss, StringComparison.Ordinal);
-        Assert.Contains("10", ss, StringComparison.Ordinal);
+        ContainsAll(actual: ss, expected: ["20", "10"], comparison: StringComparison.Ordinal);
         Assert.True(
             ss.Contains("FETCH", StringComparison.OrdinalIgnoreCase)
                 || ss.Contains("TOP", StringComparison.OrdinalIgnoreCase)
@@ -186,37 +138,27 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void HavingClause_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            orders
-            |> group_by(orders.user_id)
-            |> having(fn(group) => count(*) > 5)
-            |> select(orders.user_id, count(*) as order_count)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_HavingClause_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("HAVING", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("GROUP BY", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "HAVING", value1: "GROUP BY");
         }
     }
 
     [Fact]
     public void LeftJoin_AllDialects_GeneratesLeftJoinSQL()
     {
-        var lql = """
-            users
-            |> left_join(orders, on = users.id = orders.user_id)
-            |> select(users.name, orders.total)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_LeftJoin_AllDialects_GeneratesLeftJoinSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("LEFT", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "LEFT", value1: "JOIN");
+            AssertBothSqlFragments(input0: sql, value0: "orders", value1: "user_id");
             Assert.Contains("total", sql, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -224,22 +166,15 @@ public sealed partial class LqlDialectE2ETests
     [Fact]
     public void MultipleJoins_AllDialects_GeneratesCorrectSQL()
     {
-        var lql = """
-            users
-            |> join(orders, on = users.id = orders.user_id)
-            |> join(products, on = orders.product_id = products.id)
-            |> select(users.name, orders.total, products.name)
-            """;
-        var (pg, ss, sl) = ConvertToAllDialects(lql);
+        var (pg, ss, sl) = VerifySharedChecks1(
+            input0: Data_MultipleJoins_AllDialects_GeneratesCorrectSQL_1
+        );
 
         foreach (var sql in new[] { pg, ss, sl })
         {
-            Assert.Contains("users", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("orders", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("products", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("user_id", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("product_id", sql, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("JOIN", sql, StringComparison.OrdinalIgnoreCase);
+            AssertBothSqlFragments(input0: sql, value0: "users", value1: "orders");
+            AssertBothSqlFragments(input0: sql, value0: "products", value1: "user_id");
+            AssertBothSqlFragments(input0: sql, value0: "product_id", value1: "JOIN");
             Assert.Equal(2, sql.Split("JOIN", StringSplitOptions.None).Length - 1);
         }
     }

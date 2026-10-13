@@ -1,11 +1,7 @@
 using System.Collections.Immutable;
-using SchemaIntegrityOk = Outcome.Result<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->.Ok<
-    System.Collections.Immutable.ImmutableArray<string>,
-    Nimblesite.DataProvider.Migration.Core.MigrationError
->;
+using static global::Tests.Shared.ResultAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -21,82 +17,18 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 ///   3. An inspector may not emit <c>AllTablesInSchema</c> directly even when
 ///      YAML declares it.
 /// </summary>
-public sealed class SchemaIntegrityVerifierIssue59Tests
+public sealed partial class SchemaIntegrityVerifierIssue59Tests
 {
     [Fact]
     public void Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral()
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'pending'::text",
-                        },
-                    ],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'pending'",
-                        },
-                    ],
-                },
-            ],
-        };
+        var live = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_1();
+        var desired = Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_2();
 
-        var mismatches = Verify(live: live, desired: desired);
+        Assert.Empty(Verify(live: live, desired: desired));
 
-        Assert.Empty(mismatches);
-
-        var changedDefault = new SchemaDefinition
-        {
-            Name = "changed-default",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "t",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "status",
-                            Type = PortableTypes.Text,
-                            IsNullable = false,
-                            DefaultValue = "'failed'",
-                        },
-                    ],
-                },
-            ],
-        };
+        var changedDefault =
+            Fixture_Verify_TextDefaultStoredWithTypeCast_TreatedAsEqualToBareLiteral_3();
 
         var changedDefaultMismatches = Verify(live: live, desired: changedDefault);
 
@@ -105,132 +37,24 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
         Assert.DoesNotContain("default expected 'pending'", changedDefaultMismatches[0]);
     }
 
-    [Fact]
-    public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    [Theory]
+    [MemberData(
+        nameof(Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_CasesData)
+    )]
+    public void Verify_MultiRoleGrantInDesired_MatchedAgainstSingleRoleGrantsFromInspector_Cases(
+        string caseName,
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input1,
+        Func<SchemaDefinition, SchemaDefinition> input2,
+        global::System.String value0
+    )
     {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_admin"],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Schema,
-                    Privileges = ["USAGE"],
-                    Roles = ["app_user", "app_admin"],
-                },
-            ],
-        };
-
-        var mismatches = Verify(live: live, desired: desired);
-
-        Assert.Empty(mismatches);
-
-        var missingAdminGrant = new SchemaDefinition
-        {
-            Name = "missing-admin-grant",
-            Grants = [live.Grants[0]],
-        };
-
-        var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
-
-        Assert.Single(missingAdminMismatches);
-        Assert.Contains("grant Schema", missingAdminMismatches[0]);
-        Assert.Contains("missing grant", missingAdminMismatches[0]);
+        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        ExerciseTypedCaseMatrix1(input0: input0, input1: input1, input2: input2, value0: value0);
     }
 
-    [Fact]
-    public void Verify_AllTablesInSchemaTarget_MatchedAgainstPerTableGrantsFromInspector()
-    {
-        var live = new SchemaDefinition
-        {
-            Name = "live",
-            Tables =
-            [
-                new TableDefinition { Schema = "public", Name = "a" },
-                new TableDefinition { Schema = "public", Name = "b" },
-            ],
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "a",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.Table,
-                    ObjectName = "b",
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-            ],
-        };
-        var desired = new SchemaDefinition
-        {
-            Name = "desired",
-            Tables =
-            [
-                new TableDefinition { Schema = "public", Name = "a" },
-                new TableDefinition { Schema = "public", Name = "b" },
-            ],
-            Grants =
-            [
-                new PostgresGrantDefinition
-                {
-                    Schema = "public",
-                    Target = PostgresGrantTarget.AllTablesInSchema,
-                    Privileges = ["SELECT", "INSERT"],
-                    Roles = ["app_user"],
-                },
-            ],
-        };
-
-        var mismatches = Verify(live: live, desired: desired);
-
-        Assert.Empty(mismatches);
-
-        var missingTableGrant = new SchemaDefinition
-        {
-            Name = "missing-table-grant",
-            Tables = live.Tables,
-            Grants = [live.Grants[0]],
-        };
-
-        var missingTableMismatches = Verify(live: missingTableGrant, desired: desired);
-
-        Assert.Single(missingTableMismatches);
-        Assert.Contains("grant AllTablesInSchema", missingTableMismatches[0]);
-        Assert.Contains("missing grant", missingTableMismatches[0]);
-    }
-
-    private static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)
+    internal static ImmutableArray<string> Verify(SchemaDefinition live, SchemaDefinition desired)
     {
         var result = SchemaIntegrityVerifier.Verify(
             live: live,
@@ -242,6 +66,28 @@ public sealed class SchemaIntegrityVerifierIssue59Tests
             result is SchemaIntegrityOk,
             "Expected schema integrity verification to succeed."
         );
-        return ((SchemaIntegrityOk)result).Value;
+        return (Ok(actual: result)).Value;
+    }
+
+    // Implements [CI-TEST-SHARED-CASE-MATRIX].
+    private static void ExerciseTypedCaseMatrix1(
+        Func<SchemaDefinition> input0,
+        Func<SchemaDefinition> input1,
+        Func<SchemaDefinition, SchemaDefinition> input2,
+        global::System.String value0
+    )
+    {
+        var live = input0();
+        var desired = input1();
+
+        Assert.Empty(Verify(live: live, desired: desired));
+
+        var missingAdminGrant = input2(live);
+
+        var missingAdminMismatches = Verify(live: missingAdminGrant, desired: desired);
+
+        Assert.Single(missingAdminMismatches);
+        Assert.Contains(value0, missingAdminMismatches[0]);
+        Assert.Contains("missing grant", missingAdminMismatches[0]);
     }
 }

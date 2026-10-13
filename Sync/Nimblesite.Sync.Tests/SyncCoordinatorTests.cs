@@ -1,7 +1,10 @@
+// Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
+// Implements [CI-TEST-SHARED-COMMAND].
 using System.Globalization;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Tests.Shared;
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 using PullResultResult = Outcome.Result<
     Nimblesite.Sync.Core.PullResult,
     Nimblesite.Sync.Core.SyncError
@@ -17,27 +20,19 @@ namespace Nimblesite.Sync.Tests;
 /// Integration tests for SyncCoordinator.
 /// Uses real SQLite databases - no mocks.
 /// </summary>
-public sealed class SyncCoordinatorTests : IDisposable
+public sealed partial class SyncCoordinatorTests : DualSqliteSyncTestBase
 {
-    private static readonly ILogger Logger = NullLogger.Instance;
-    private readonly string _serverDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"synccoord_server_{Guid.NewGuid()}.db"
-    );
-    private readonly string _clientDbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"synccoord_client_{Guid.NewGuid()}.db"
-    );
-    private readonly SqliteConnection _serverDb;
-    private readonly SqliteConnection _clientDb;
     private const string ServerOrigin = "server-coord-001";
     private const string ClientOrigin = "client-coord-001";
 
     public SyncCoordinatorTests()
-    {
-        _serverDb = CreateSyncDatabase(ServerOrigin, _serverDbPath);
-        _clientDb = CreateSyncDatabase(ClientOrigin, _clientDbPath);
-    }
+        : base(
+            serverPath: global::Tests.Shared.TempSqliteDatabase.PathFor("synccoord_server"),
+            clientPath: global::Tests.Shared.TempSqliteDatabase.PathFor("synccoord_client"),
+            serverOrigin: ServerOrigin,
+            clientOrigin: ClientOrigin,
+            createSql: SqlData_CreateSyncDatabase_1
+        ) { }
 
     #region Pull Tests
 
@@ -46,11 +41,11 @@ public sealed class SyncCoordinatorTests : IDisposable
     {
         var lastVersion = 0L;
 
-        var result = PullFromServer(fromVersion: lastVersion, batch: new BatchConfig(100));
-
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
-        Assert.Equal(0, pull.ChangesApplied);
+        var pull = PullAndAssert(
+            fromVersion: lastVersion,
+            batch: new BatchConfig(100),
+            expected: 0
+        );
         Assert.Equal(0, pull.FromVersion);
         Assert.Equal(0, pull.ToVersion);
     }
@@ -59,26 +54,20 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Pull_ServerHasChanges_AppliesAll()
     {
         // Server has data
-        InsertPerson(_serverDb, "p1", "Alice");
-        InsertPerson(_serverDb, "p2", "Bob");
+        VerifyReusableWorkflow6(input0: _serverDb, value1: "Alice", value3: "Bob");
 
-        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
-
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
-        Assert.Equal(2, pull.ChangesApplied);
+        var pull = PullAndAssert(fromVersion: 0, batch: new BatchConfig(100), expected: 2);
         Assert.Equal(0, pull.FromVersion);
         Assert.True(pull.ToVersion > 0);
 
-        Assert.Equal("Alice", GetPersonName(_clientDb, "p1"));
-        Assert.Equal("Bob", GetPersonName(_clientDb, "p2"));
+        VerifyPersons(_clientDb, "Alice", "p1", "Bob", "p2");
     }
 
     [Fact]
     public void Pull_SkipsOwnOriginChanges_EchoPrevention()
     {
         // Insert on server
-        InsertPerson(_serverDb, "p1", "Alice");
+        InsertPerson(db: _serverDb, id: "p1", name: "Alice");
 
         // Manually insert a change with CLIENT origin into server's sync log
         InsertSyncLogEntry(
@@ -90,12 +79,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             ClientOrigin
         );
 
-        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
-
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
-        // Only 1 change applied (Alice), p2 skipped because it's from own origin
-        Assert.Equal(1, pull.ChangesApplied);
+        var pull = PullAndAssert(fromVersion: 0, batch: new BatchConfig(100), expected: 1);
         Assert.Equal("Alice", GetPersonName(_clientDb, "p1"));
         Assert.Null(GetPersonName(_clientDb, "p2")); // Should NOT be applied
     }
@@ -104,16 +88,9 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Pull_MultipleBatches_ProcessesAll()
     {
         // Create 25 records
-        for (var i = 1; i <= 25; i++)
-        {
-            InsertPerson(_serverDb, $"p{i}", $"Person {i}");
-        }
+        VerifySyncLoopWorkflow3(input0: _serverDb, value1: 25);
 
-        var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(10)); // Small batches
-
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
-        Assert.Equal(25, pull.ChangesApplied);
+        _ = PullAndAssert(fromVersion: 0, batch: new BatchConfig(10), expected: 25);
 
         // Verify all records
         for (var i = 1; i <= 25; i++)
@@ -126,13 +103,12 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Pull_WithForeignKeys_RetriesDeferred()
     {
         // Create Parent first, then Child (FK dependency)
-        InsertParent(_serverDb, "parent1", "Parent One");
-        InsertChild(_serverDb, "child1", "parent1", "Child One");
+        InsertParent(db: _serverDb, id: "parent1", name: "Parent One");
+        InsertChild(db: _serverDb, id: "child1", parentId: "parent1", name: "Child One");
 
         var result = PullFromServer(fromVersion: 0, batch: new BatchConfig(100, 3)); // Allow retries
 
-        Assert.IsType<PullResultOk>(result);
-        var pull = ((PullResultOk)result).Value;
+        var pull = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(2, pull.ChangesApplied);
 
         Assert.Equal("Parent One", GetParentName(_clientDb, "parent1"));
@@ -155,8 +131,7 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
-        Assert.IsType<PullResultError>(result);
-        var error = ((PullResultError)result).Value;
+        var error = (Assert.IsType<PullResultError>(result)).Value;
         Assert.IsType<SyncErrorDatabase>(error);
     }
 
@@ -182,7 +157,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     [Fact]
     public void Pull_UpdatesVersion_Correctly()
     {
-        InsertPerson(_serverDb, "p1", "Alice");
+        InsertPerson(db: _serverDb, id: "p1", name: "Alice");
 
         var capturedVersion = 0L;
         _ = SyncCoordinator.Pull(
@@ -207,48 +182,31 @@ public sealed class SyncCoordinatorTests : IDisposable
     [Fact]
     public void Push_EmptyClient_ReturnsZeroChanges()
     {
-        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
-
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
-        Assert.Equal(0, push.ChangesPushed);
+        _ = PushAndAssert(fromVersion: 0, batch: new BatchConfig(100), expected: 0);
     }
 
     [Fact]
     public void Push_ClientHasChanges_PushesAll()
     {
-        InsertPerson(_clientDb, "p1", "Charlie");
-        InsertPerson(_clientDb, "p2", "Diana");
+        VerifyReusableWorkflow6(input0: _clientDb, value1: "Charlie", value3: "Diana");
 
-        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(100));
+        _ = PushAndAssert(fromVersion: 0, batch: new BatchConfig(100), expected: 2);
 
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
-        Assert.Equal(2, push.ChangesPushed);
-
-        Assert.Equal("Charlie", GetPersonName(_serverDb, "p1"));
-        Assert.Equal("Diana", GetPersonName(_serverDb, "p2"));
+        VerifyPersons(_serverDb, "Charlie", "p1", "Diana", "p2");
     }
 
     [Fact]
     public void Push_MultipleBatches_PushesAll()
     {
-        for (var i = 1; i <= 30; i++)
-        {
-            InsertPerson(_clientDb, $"p{i}", $"Person {i}");
-        }
+        VerifySyncLoopWorkflow3(input0: _clientDb, value1: 30);
 
-        var result = PushFromClient(fromVersion: 0, batch: new BatchConfig(10));
-
-        Assert.IsType<PushResultOk>(result);
-        var push = ((PushResultOk)result).Value;
-        Assert.Equal(30, push.ChangesPushed);
+        _ = PushAndAssert(fromVersion: 0, batch: new BatchConfig(10), expected: 30);
     }
 
     [Fact]
     public void Push_SendFailure_ReturnsError()
     {
-        InsertPerson(_clientDb, "p1", "Alice");
+        InsertPerson(db: _clientDb, id: "p1", name: "Alice");
 
         var result = SyncCoordinator.Push(
             lastPushedVersion: 0,
@@ -270,10 +228,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Sync_PullThenPush_Both()
     {
         // Server has Alice
-        InsertPerson(_serverDb, "s1", "ServerAlice");
-
-        // Client has Bob
-        InsertPerson(_clientDb, "c1", "ClientBob");
+        VerifyReusableWorkflow7(input0: _serverDb, input1: _clientDb);
 
         var result = SyncCoordinator.Sync(
             myOriginId: ClientOrigin,
@@ -291,18 +246,15 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
-        Assert.IsType<SyncResultOk>(result);
-        var sync = ((SyncResultOk)result).Value;
+        var sync = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
         Assert.Equal(1, sync.Pull.ChangesApplied);
         Assert.Equal(1, sync.Push.ChangesPushed);
 
         // Client has both
-        Assert.Equal("ServerAlice", GetPersonName(_clientDb, "s1"));
-        Assert.Equal("ClientBob", GetPersonName(_clientDb, "c1"));
+        VerifyPersons(_clientDb, "ServerAlice", "s1", "ClientBob", "c1");
 
         // Server has both
-        Assert.Equal("ServerAlice", GetPersonName(_serverDb, "s1"));
-        Assert.Equal("ClientBob", GetPersonName(_serverDb, "c1"));
+        VerifyPersons(_serverDb, "ServerAlice", "s1", "ClientBob", "c1");
     }
 
     [Fact]
@@ -331,8 +283,7 @@ public sealed class SyncCoordinatorTests : IDisposable
     [Fact]
     public void Sync_PushFailure_AfterSuccessfulPull_ReturnsError()
     {
-        InsertPerson(_serverDb, "s1", "ServerAlice");
-        InsertPerson(_clientDb, "c1", "ClientBob");
+        VerifyReusableWorkflow7(input0: _serverDb, input1: _clientDb);
 
         var result = SyncCoordinator.Sync(
             ClientOrigin,
@@ -359,19 +310,23 @@ public sealed class SyncCoordinatorTests : IDisposable
     public void Sync_IncrementalSync_OnlyNewChanges()
     {
         // Initial sync
-        InsertPerson(_serverDb, "s1", "ServerAlice");
-        var result1 = PullFromServer(fromVersion: 0, batch: new BatchConfig(100));
+        InsertPerson(db: _serverDb, id: "s1", name: "ServerAlice");
 
-        var firstPull = ((PullResultOk)result1).Value;
+        var firstPull = (
+            Ok(read: () => PullFromServer(fromVersion: 0, batch: new BatchConfig(100)))
+        ).Value;
         Assert.Equal(1, firstPull.ChangesApplied);
 
         // Add more data on server
-        InsertPerson(_serverDb, "s2", "ServerBob");
+        InsertPerson(db: _serverDb, id: "s2", name: "ServerBob");
 
         // Second sync from last version
-        var result2 = PullFromServer(fromVersion: firstPull.ToVersion, batch: new BatchConfig(100));
-
-        var secondPull = ((PullResultOk)result2).Value;
+        // Second sync from last version
+        var secondPull = (
+            Ok(read: () =>
+                PullFromServer(fromVersion: firstPull.ToVersion, batch: new BatchConfig(100))
+            )
+        ).Value;
         Assert.Equal(1, secondPull.ChangesApplied); // Only Bob
         Assert.Equal("ServerBob", GetPersonName(_clientDb, "s2"));
     }
@@ -415,6 +370,22 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
+    private PullResult PullAndAssert(long fromVersion, BatchConfig batch, int expected)
+    {
+        var result = PullFromServer(fromVersion: fromVersion, batch: batch);
+        var pull = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
+        Assert.Equal(expected, pull.ChangesApplied);
+        return pull;
+    }
+
+    private PushResult PushAndAssert(long fromVersion, BatchConfig batch, int expected)
+    {
+        var result = PushFromClient(fromVersion: fromVersion, batch: batch);
+        var push = (global::Tests.Shared.ResultAssertions.ExactOk(actual: result)).Value;
+        Assert.Equal(expected, push.ChangesPushed);
+        return push;
+    }
+
     private PushResultResult PushFromClient(long fromVersion, BatchConfig batch) =>
         SyncCoordinator.Push(
             lastPushedVersion: fromVersion,
@@ -425,143 +396,13 @@ public sealed class SyncCoordinatorTests : IDisposable
             logger: Logger
         );
 
-    private static SqliteConnection CreateSyncDatabase(string originId, string dbPath)
-    {
-        var conn = new SqliteConnection($"Data Source={dbPath}");
-        conn.Open();
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"""
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE _sync_state (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-
-            CREATE TABLE _sync_session (
-                sync_active INTEGER DEFAULT 0
-            );
-            INSERT INTO _sync_session VALUES (0);
-
-            CREATE TABLE _sync_log (
-                version INTEGER PRIMARY KEY AUTOINCREMENT,
-                table_name TEXT NOT NULL,
-                pk_value TEXT NOT NULL,
-                operation TEXT NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
-                payload TEXT,
-                origin TEXT NOT NULL,
-                timestamp TEXT NOT NULL
-            );
-
-            INSERT INTO _sync_state VALUES ('origin_id', '{originId}');
-            INSERT INTO _sync_state VALUES ('last_server_version', '0');
-            INSERT INTO _sync_state VALUES ('last_push_version', '0');
-
-            CREATE TABLE Person (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-
-            CREATE TABLE Parent (
-                Id TEXT PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-
-            CREATE TABLE Child (
-                Id TEXT PRIMARY KEY,
-                ParentId TEXT NOT NULL REFERENCES Parent(Id),
-                Name TEXT NOT NULL
-            );
-
-            -- Sync triggers
-            CREATE TRIGGER Person_sync_insert AFTER INSERT ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-
-            CREATE TRIGGER Person_sync_update AFTER UPDATE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', NEW.Id), 'update',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-
-            CREATE TRIGGER Person_sync_delete AFTER DELETE ON Person
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Person', json_object('Id', OLD.Id), 'delete', NULL,
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-
-            CREATE TRIGGER Parent_sync_insert AFTER INSERT ON Parent
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Parent', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-
-            CREATE TRIGGER Child_sync_insert AFTER INSERT ON Child
-            WHEN (SELECT sync_active FROM _sync_session) = 0
-            BEGIN
-                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-                VALUES ('Child', json_object('Id', NEW.Id), 'insert',
-                        json_object('Id', NEW.Id, 'ParentId', NEW.ParentId, 'Name', NEW.Name),
-                        (SELECT value FROM _sync_state WHERE key = 'origin_id'),
-                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
-            END;
-            """;
-        cmd.ExecuteNonQuery();
-
-        return conn;
-    }
-
     private static SyncLogListResult FetchChanges(SqliteConnection db, long fromVersion, int limit)
     {
         try
         {
-            var entries = new List<SyncLogEntry>();
-            using var cmd = db.CreateCommand();
-            cmd.CommandText = """
-                SELECT version, table_name, pk_value, operation, payload, origin, timestamp
-                FROM _sync_log
-                WHERE version > $fromVersion
-                ORDER BY version ASC
-                LIMIT $limit
-                """;
-            cmd.Parameters.AddWithValue("$fromVersion", fromVersion);
-            cmd.Parameters.AddWithValue("$limit", limit);
-
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                entries.Add(
-                    new SyncLogEntry(
-                        reader.GetInt64(0),
-                        reader.GetString(1),
-                        reader.GetString(2),
-                        ParseOperation(reader.GetString(3)),
-                        reader.IsDBNull(4) ? null : reader.GetString(4),
-                        reader.GetString(5),
-                        reader.GetString(6)
-                    )
-                );
-            }
-
-            return new SyncLogListOk(entries);
+            return new SyncLogListOk(
+                TestDb.FetchChanges(db: db, fromVersion: fromVersion, limit: limit)
+            );
         }
         catch (SqliteException ex)
         {
@@ -569,18 +410,17 @@ public sealed class SyncCoordinatorTests : IDisposable
         }
     }
 
-    private static BoolSyncResult EnableSuppression(SqliteConnection db)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "UPDATE _sync_session SET sync_active = 1";
-        cmd.ExecuteNonQuery();
-        return new BoolSyncOk(true);
-    }
+    private static BoolSyncResult EnableSuppression(SqliteConnection db) =>
+        SetSuppression(db: db, active: true);
 
-    private static BoolSyncResult DisableSuppression(SqliteConnection db)
+    private static BoolSyncResult DisableSuppression(SqliteConnection db) =>
+        SetSuppression(db: db, active: false);
+
+    private static BoolSyncResult SetSuppression(SqliteConnection db, bool active)
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "UPDATE _sync_session SET sync_active = 0";
+        cmd.CommandText = "UPDATE _sync_session SET sync_active = $active";
+        cmd.Parameters.AddWithValue("$active", active ? 1 : 0);
         cmd.ExecuteNonQuery();
         return new BoolSyncOk(true);
     }
@@ -596,7 +436,10 @@ public sealed class SyncCoordinatorTests : IDisposable
                     ApplyUpsert(db, entry);
                     break;
                 case SyncOperation.Delete:
-                    ApplyDelete(db, entry);
+                    global::Nimblesite.Sync.Tests.SyncIntegrationTests.ApplyDelete(
+                        db: db,
+                        entry: entry
+                    );
                     break;
             }
             return new BoolSyncOk(true);
@@ -637,72 +480,12 @@ public sealed class SyncCoordinatorTests : IDisposable
 
     private static void ApplyUpsert(SqliteConnection db, SyncLogEntry entry)
     {
-        var payload = System.Text.Json.JsonSerializer.Deserialize<
-            Dictionary<string, System.Text.Json.JsonElement>
-        >(entry.Payload!);
-
-        using var cmd = db.CreateCommand();
-        switch (entry.TableName)
-        {
-            case "Person":
-                cmd.CommandText = "INSERT OR REPLACE INTO Person (Id, Name) VALUES ($id, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-            case "Parent":
-                cmd.CommandText = "INSERT OR REPLACE INTO Parent (Id, Name) VALUES ($id, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-            case "Child":
-                cmd.CommandText =
-                    "INSERT OR REPLACE INTO Child (Id, ParentId, Name) VALUES ($id, $pid, $name)";
-                cmd.Parameters.AddWithValue("$id", payload!["Id"].GetString());
-                cmd.Parameters.AddWithValue("$pid", payload["ParentId"].GetString());
-                cmd.Parameters.AddWithValue("$name", payload["Name"].GetString());
-                break;
-        }
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void ApplyDelete(SqliteConnection db, SyncLogEntry entry)
-    {
-        var pk = System.Text.Json.JsonSerializer.Deserialize<
-            Dictionary<string, System.Text.Json.JsonElement>
-        >(entry.PkValue);
-
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = $"DELETE FROM {entry.TableName} WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", pk!["Id"].GetString());
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void InsertPerson(SqliteConnection db, string id, string name)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Person (Id, Name) VALUES ($id, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void InsertParent(SqliteConnection db, string id, string name)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Parent (Id, Name) VALUES ($id, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void InsertChild(SqliteConnection db, string id, string parentId, string name)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "INSERT INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)";
-        cmd.Parameters.AddWithValue("$id", id);
-        cmd.Parameters.AddWithValue("$parentId", parentId);
-        cmd.Parameters.AddWithValue("$name", name);
-        cmd.ExecuteNonQuery();
+        global::Nimblesite.Sync.Tests.SyncIntegrationTests.VerifyUnifiedWorkflow101(
+            input0: entry,
+            input1: db,
+            value10: "INSERT OR REPLACE INTO Child (Id, ParentId, Name) VALUES ($id, $pid, $name)",
+            value13: "$pid"
+        );
     }
 
     private static void InsertSyncLogEntry(
@@ -714,87 +497,82 @@ public sealed class SyncCoordinatorTests : IDisposable
         string origin
     )
     {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
-            VALUES ($table, $pk, $op, $payload, $origin, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-            """;
-        cmd.Parameters.AddWithValue("$table", tableName);
-        cmd.Parameters.AddWithValue("$pk", pkValue);
-        cmd.Parameters.AddWithValue("$op", operation);
-        cmd.Parameters.AddWithValue("$payload", payload);
-        cmd.Parameters.AddWithValue("$origin", origin);
-        cmd.ExecuteNonQuery();
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: cmd =>
+                cmd.CommandText = """
+                INSERT INTO _sync_log (table_name, pk_value, operation, payload, origin, timestamp)
+                VALUES ($table, $pk, $op, $payload, $origin, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                """,
+            parameters: () =>
+                [
+                    ("$table", tableName),
+                    ("$pk", pkValue),
+                    ("$op", operation),
+                    ("$payload", payload),
+                    ("$origin", origin),
+                ]
+        );
     }
 
-    private static string? GetName(SqliteConnection db, string table, string id)
+    private static void VerifyPersons(
+        SqliteConnection db,
+        string firstName,
+        string firstId,
+        string secondName,
+        string secondId
+    ) =>
+        global::Nimblesite.Sync.Tests.SyncIntegrationTests.VerifyReusableWorkflow1(
+            input0: GetPersonName,
+            input1: db,
+            value0: firstName,
+            value1: firstId,
+            value2: secondName,
+            value3: secondId
+        );
+
+    private static void SetLastSyncVersion(SqliteConnection db, long version) =>
+        SetStateValue(db, "last_server_version", version);
+
+    private static void SetLastPushVersion(SqliteConnection db, long version) =>
+        SetStateValue(db, "last_push_version", version);
+
+    private static void SetStateValue(SqliteConnection db, string key, long version)
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = $"SELECT Name FROM {table} WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteScalar() as string;
-    }
-
-    private static string? GetPersonName(SqliteConnection db, string id) =>
-        GetName(db, "Person", id);
-
-    private static string? GetParentName(SqliteConnection db, string id) =>
-        GetName(db, "Parent", id);
-
-    private static string? GetChildName(SqliteConnection db, string id) => GetName(db, "Child", id);
-
-    private static void SetLastSyncVersion(SqliteConnection db, long version)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "UPDATE _sync_state SET value = $v WHERE key = 'last_server_version'";
+        cmd.CommandText = "UPDATE _sync_state SET value = $v WHERE key = $k";
         cmd.Parameters.AddWithValue("$v", version.ToString(CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$k", key);
         cmd.ExecuteNonQuery();
-    }
-
-    private static void SetLastPushVersion(SqliteConnection db, long version)
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = "UPDATE _sync_state SET value = $v WHERE key = 'last_push_version'";
-        cmd.Parameters.AddWithValue("$v", version.ToString(CultureInfo.InvariantCulture));
-        cmd.ExecuteNonQuery();
-    }
-
-    private static SyncOperation ParseOperation(string op) =>
-        op switch
-        {
-            "insert" => SyncOperation.Insert,
-            "update" => SyncOperation.Update,
-            "delete" => SyncOperation.Delete,
-            _ => throw new ArgumentException($"Unknown operation: {op}"),
-        };
-
-    public void Dispose()
-    {
-        _serverDb.Dispose();
-        _clientDb.Dispose();
-        if (File.Exists(_serverDbPath))
-        {
-            try
-            {
-                File.Delete(_serverDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
-        if (File.Exists(_clientDbPath))
-        {
-            try
-            {
-                File.Delete(_clientDbPath);
-            }
-            catch
-            {
-                /* File may be locked */
-            }
-        }
     }
 
     #endregion
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow6(
+        SqliteConnection input0,
+        string value1,
+        string value3
+    )
+    { // Server has data
+        InsertPerson(db: input0, id: "p1", name: value1);
+        InsertPerson(db: input0, id: "p2", name: value3);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow7(SqliteConnection input0, SqliteConnection input1)
+    { // Server has Alice
+        InsertPerson(db: input0, id: "s1", name: "ServerAlice");
+
+        // Client has Bob
+        InsertPerson(db: input1, id: "c1", name: "ClientBob");
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifySyncLoopWorkflow3(SqliteConnection input0, int value1)
+    { // Create 25 records
+        for (var i = 1; i <= value1; i++)
+        {
+            InsertPerson(db: input0, id: $"p{i}", name: $"Person {i}");
+        }
+    }
 }

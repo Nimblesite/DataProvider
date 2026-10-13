@@ -43,7 +43,7 @@ internal static class SqliteDatabaseEffects
             return isNullable ? "bool?" : "bool";
         }
 
-        return baseType;
+        return isNullable && !baseType.EndsWith('?') ? $"{baseType}?" : baseType;
     }
 
     private static string ResolveClrType(Type fieldType)

@@ -1,3 +1,6 @@
+using static global::Tests.Shared.StringAssertions;
+
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [MIG-TRIGGER-YAML] from docs/specs/declarative-triggers-spec.md
@@ -6,37 +9,9 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// <summary>
 /// YAML round-trip tests for declarative trigger definitions.
 /// </summary>
-public sealed class TriggerYamlSerializerTests
+public sealed partial class TriggerYamlSerializerTests
 {
-    private const string TriggerYaml = """
-        name: tenant_app
-        tables:
-          - name: tenant_members
-            columns:
-              - name: id
-                type: Uuid
-                isNullable: false
-              - name: tenant_id
-                type: Uuid
-                isNullable: false
-              - name: role
-                type: VarChar(50)
-                isNullable: false
-            primaryKey:
-              columns:
-                - id
-            triggers:
-              - name: assert_not_last_owner
-                timing: Before
-                events: [Update, Delete]
-                forEachRow: true
-                raiseWhen: |
-                  old.role = 'owner' and not exists(
-                    tenant_members
-                    |> filter(fn(m) => m.tenant_id = old.tenant_id and m.role = 'owner' and m.id <> old.id)
-                  )
-                errorMessage: cannot remove the last owner of a tenant
-        """;
+    private const string TriggerYaml = Data_Shared_1;
 
     [Fact]
     public void TriggerDefinition_YamlRoundTrip_PreservesDeclaration()
@@ -44,14 +19,21 @@ public sealed class TriggerYamlSerializerTests
         var schema = SchemaYamlSerializer.FromYaml(TriggerYaml);
         var back = SchemaYamlSerializer.ToYaml(schema);
 
-        Assert.Contains("triggers:", back, StringComparison.Ordinal);
-        Assert.Contains("assert_not_last_owner", back, StringComparison.Ordinal);
-        Assert.Contains("Update", back, StringComparison.Ordinal);
-        Assert.Contains("Delete", back, StringComparison.Ordinal);
-        Assert.Contains("raiseWhen", back, StringComparison.Ordinal);
-        Assert.Contains("not exists", back, StringComparison.Ordinal);
-        Assert.Contains("errorMessage", back, StringComparison.Ordinal);
-        Assert.Contains("cannot remove the last owner", back, StringComparison.Ordinal);
+        ContainsAll(
+            actual: back,
+            expected:
+            [
+                "triggers:",
+                "assert_not_last_owner",
+                "Update",
+                "Delete",
+                "raiseWhen",
+                "not exists",
+                "errorMessage",
+                "cannot remove the last owner",
+            ],
+            comparison: StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -73,21 +55,18 @@ public sealed class TriggerYamlSerializerTests
     [Fact]
     public void Triggers_Absent_DoNotAppearInYaml()
     {
-        var schema = new SchemaDefinition
-        {
-            Name = "t",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "plain",
-                    Columns = [new ColumnDefinition { Name = "id", Type = new UuidType() }],
-                },
-            ],
-        };
+        var yaml = VerifyCrossClassChecks6(input0: Fixture_Triggers_Absent_DoNotAppearInYaml_1);
+
+        Assert.DoesNotContain("triggers", yaml, StringComparison.Ordinal);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static global::System.String VerifyCrossClassChecks6(Func<SchemaDefinition> input0)
+    {
+        var schema = input0();
 
         var yaml = SchemaYamlSerializer.ToYaml(schema);
 
-        Assert.DoesNotContain("triggers", yaml, StringComparison.Ordinal);
+        return yaml;
     }
 }

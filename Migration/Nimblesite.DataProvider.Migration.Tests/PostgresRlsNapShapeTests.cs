@@ -1,3 +1,4 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // EXTREME E2E for NimblesiteAgenticPlatform (NAP) — proves issues #32, #36, #37
@@ -11,55 +12,15 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// production threat model. Every test runs against a real Postgres container.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-[System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Usage",
-    "CA1001:Types that own disposable fields should be disposable",
-    Justification = "Disposed via IAsyncLifetime.DisposeAsync"
-)]
-public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fixture)
+    : PostgresDatabaseTest(fixture)
 {
-    private NpgsqlConnection _connection = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
+    protected override string DatabaseName => "rls_nap";
 
-    public async Task InitializeAsync()
-    {
-        _connection = await fixture.CreateDatabaseAsync("rls_nap").ConfigureAwait(false);
-        BootstrapNapPrelude(_connection);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _connection.DisposeAsync().ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Mirrors NAP's bootstrap.py — creates the SECURITY DEFINER fn and GUC
-    /// reader fns the policies depend on, plus the non-bypassrls app role.
-    /// </summary>
-    private static void BootstrapNapPrelude(NpgsqlConnection conn)
-    {
-        PostgresTestDb.Exec(
-            conn,
-            """
-            DO $$ BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nap_app_user') THEN
-                    CREATE ROLE nap_app_user NOLOGIN NOBYPASSRLS;
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nap_app_admin') THEN
-                    CREATE ROLE nap_app_admin NOLOGIN NOBYPASSRLS;
-                END IF;
-            END$$;
-
-            CREATE OR REPLACE FUNCTION app_user_id() RETURNS uuid AS $$
-                SELECT NULLIF(current_setting('rls.user_id', true), '')::uuid
-            $$ LANGUAGE sql STABLE;
-
-            CREATE OR REPLACE FUNCTION app_tenant_id() RETURNS uuid AS $$
-                SELECT NULLIF(current_setting('rls.tenant_id', true), '')::uuid
-            $$ LANGUAGE sql STABLE;
-            """
-        );
-    }
+    // Mirrors NAP's bootstrap.py — creates the SECURITY DEFINER fn and GUC
+    // reader fns the policies depend on, plus the non-bypassrls app role.
+    protected override void OnDatabaseCreated() =>
+        PostgresTestDb.Exec(Connection, Data_BootstrapNapPrelude_1);
 
     private static readonly string[] TenantTableNames =
     [
@@ -73,69 +34,15 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         // 4 tenant-scoped tables (subset of NAP's 13 — same shape).
         var tables = TenantTableNames.Select(MakeTenantTable).ToList();
-        return new SchemaDefinition { Name = "nap", Tables = tables };
+        return SchemaTestData.Schema(name: "nap", tables: tables);
     }
-
-    private static TableDefinition MakeTenantTable(string tableName) =>
-        new()
-        {
-            Schema = "public",
-            Name = tableName,
-            Columns =
-            [
-                new ColumnDefinition
-                {
-                    Name = "id",
-                    Type = new UuidType(),
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "tenant_id",
-                    Type = new UuidType(),
-                    IsNullable = false,
-                },
-                new ColumnDefinition
-                {
-                    Name = "title",
-                    Type = new VarCharType(200),
-                    IsNullable = false,
-                },
-            ],
-            PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-            RowLevelSecurity = new RlsPolicySetDefinition
-            {
-                Enabled = true,
-                Forced = true, // issue #37 — NAP threat model
-                Policies =
-                [
-                    new RlsPolicyDefinition
-                    {
-                        Name = $"{tableName}_member",
-                        Operations = [RlsOperation.All],
-                        Roles = ["nap_app_user"],
-                        // LQL form — fn calls (app_tenant_id) pass through verbatim.
-                        UsingLql = "tenant_id = app_tenant_id()",
-                        WithCheckLql = "tenant_id = app_tenant_id()",
-                    },
-                    new RlsPolicyDefinition
-                    {
-                        Name = $"{tableName}_admin_all",
-                        Operations = [RlsOperation.All],
-                        Roles = ["nap_app_admin"],
-                        UsingLql = "true",
-                        WithCheckLql = "true",
-                    },
-                ],
-            },
-        };
 
     private void ApplyAndGrant(SchemaDefinition desired)
     {
         PostgresLqlOnlyE2ETests.ApplySchema(
-            connection: _connection,
+            connection: Connection,
             desired: desired,
-            logger: _logger
+            logger: Logger
         );
 
         // Grant CRUD on each table to the app roles (NAP would do this in its
@@ -143,32 +50,11 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         foreach (var t in desired.Tables)
         {
             PostgresTestDb.Exec(
-                _connection,
+                Connection,
                 $"GRANT USAGE ON SCHEMA public TO nap_app_user, nap_app_admin; "
                     + $"GRANT SELECT,INSERT,UPDATE,DELETE ON \"public\".\"{t.Name}\" TO nap_app_user, nap_app_admin"
             );
         }
-    }
-
-    private static void SetSession(
-        NpgsqlConnection conn,
-        NpgsqlTransaction tx,
-        string role,
-        Guid? tenant,
-        Guid? user
-    )
-    {
-        PostgresTestDb.Exec(conn, tx, $"SET LOCAL ROLE {role}");
-        PostgresTestDb.Exec(
-            conn,
-            tx,
-            $"SET LOCAL rls.tenant_id = '{tenant?.ToString() ?? string.Empty}'"
-        );
-        PostgresTestDb.Exec(
-            conn,
-            tx,
-            $"SET LOCAL rls.user_id = '{user?.ToString() ?? string.Empty}'"
-        );
     }
 
     [Fact]
@@ -176,13 +62,8 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT relname, relrowsecurity, relforcerowsecurity
-            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname='public' AND relname IN ('agent_configs','conversations','messages','api_keys')
-            ORDER BY relname
-            """;
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = Data_NapShape_FourTenantTables_AppliesCleanlyAndIsForced_1;
         using var r = cmd.ExecuteReader();
         var rows = new List<(string Name, bool Enabled, bool Forced)>();
         while (r.Read())
@@ -206,46 +87,17 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
 
         // Tenant A user inserts a config.
         var configA = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "nap_app_user", tenantA, userA);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{configA}', '{tenantA}', 'a')"
-            );
-            tx.Commit();
-        }
-
-        // Tenant B user inserts a config.
-        var configB = Guid.NewGuid();
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "nap_app_user", tenantB, userB);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{configB}', '{tenantB}', 'b')"
-            );
-            tx.Commit();
-        }
-
-        // Tenant A user lists -> sees only tenantA's config.
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "nap_app_user", tenantA, userA);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT id FROM public.agent_configs";
-            var ids = new List<Guid>();
-            using var reader = sel.ExecuteReader();
-            while (reader.Read())
-            {
-                ids.Add(reader.GetGuid(0));
-            }
-            Assert.Single(ids);
-            Assert.Equal(configA, ids[0]);
-        }
+        PostgresTestDb.SeedTwoTenantsAndAssertIsolation(
+            Connection,
+            "nap_app_user",
+            "public.agent_configs",
+            configA,
+            tenantA,
+            tenantB,
+            userA,
+            userB,
+            "SELECT id FROM public.agent_configs"
+        );
     }
 
     [Fact]
@@ -256,31 +108,27 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
         // Insert as admin (admin_all policy USING true).
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "nap_app_admin", null, null);
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantA}', 'admin1')"
-            );
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
-                $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantB}', 'admin2')"
-            );
-            tx.Commit();
-        }
+        PostgresTestDb.InsertAsTenant(
+            Connection,
+            "nap_app_admin",
+            null,
+            null,
+            "rls",
+            $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantA}', 'admin1')",
+            $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenantB}', 'admin2')"
+        );
 
-        using (var tx = _connection.BeginTransaction())
-        {
-            SetSession(_connection, tx, "nap_app_admin", null, null);
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT COUNT(*) FROM public.agent_configs";
-            var count = (long)sel.ExecuteScalar()!;
-            Assert.Equal(2, count);
-        }
+        Assert.Equal(
+            2,
+            PostgresTestDb.CountAsTenant(
+                Connection,
+                "nap_app_admin",
+                null,
+                null,
+                "rls",
+                "SELECT COUNT(*) FROM public.agent_configs"
+            )
+        );
     }
 
     [Fact]
@@ -288,12 +136,7 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, NapSchema(), logger: _logger)
-        ).Value;
+        var ops = PostgresTestDb.CalculateChanges(Connection, NapSchema(), Logger);
 
         Assert.Empty(ops);
     }
@@ -304,18 +147,16 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         ApplyAndGrant(NapSchema());
 
         // Rename '*_admin_all' to '*_admin_full' on every table.
-        var renamed = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var renamed = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
-                        RowLevelSecurity = new RlsPolicySetDefinition
-                        {
-                            Enabled = true,
-                            Forced = true,
-                            Policies = t.RowLevelSecurity!.Policies.Select(p =>
+                        RowLevelSecurity = SchemaTestData.RlsPolicySet(
+                            enabled: true,
+                            forced: true,
+                            policies: t.RowLevelSecurity!.Policies.Select(p =>
                                     p.Name.EndsWith("_admin_all", StringComparison.Ordinal)
                                         ? p with
                                         {
@@ -327,20 +168,20 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
                                         }
                                         : p
                                 )
-                                .ToList(),
-                        },
+                                .ToList()
+                        ),
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, renamed, allowDestructive: true, logger: _logger)
-        ).Value;
+        var current = PostgresTestDb.Inspect(Connection, Logger);
+        var ops = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: renamed,
+            destructive: true,
+            logger: Logger
+        );
 
         var drops = ops.OfType<DropRlsPolicyOperation>().ToList();
         var creates = ops.OfType<CreateRlsPolicyOperation>().ToList();
@@ -362,30 +203,21 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        var depleted = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var depleted = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
-                        RowLevelSecurity = new RlsPolicySetDefinition
-                        {
-                            Enabled = true,
-                            Forced = true,
-                            Policies = [t.RowLevelSecurity!.Policies[0]],
-                        },
+                        RowLevelSecurity = Dataset_NapShape_Drift_ForwardOnly_DoesNotDropOrphan_1(
+                            t: t
+                        ),
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, depleted, logger: _logger)
-        ).Value;
+        var ops = PostgresTestDb.CalculateChanges(Connection, depleted, Logger);
 
         Assert.DoesNotContain(ops, o => o is DropRlsPolicyOperation);
     }
@@ -395,68 +227,10 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         // tenant_members_self_or_owner shape:
         // user_id = app_user_id() OR (tenant_id = app_tenant_id() AND is_owner)
-        var schema = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Schema = "public",
-                    Name = "tenant_members",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "user_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "tenant_id",
-                            Type = new UuidType(),
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition
-                        {
-                            Name = "is_owner",
-                            Type = new BooleanType(),
-                            IsNullable = false,
-                            DefaultValue = "false",
-                        },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Enabled = true,
-                        Forced = true,
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "tenant_members_self_or_owner",
-                                Operations = [RlsOperation.Select],
-                                Roles = ["nap_app_user"],
-                                UsingLql =
-                                    "user_id = app_user_id() or (tenant_id = app_tenant_id() and is_owner)",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+        var schema = Fixture_NapShape_OrCombinationPredicate_AppliesCorrectly_1();
         ApplyAndGrant(schema);
 
-        var inspected = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
+        var inspected = PostgresTestDb.Inspect(Connection, Logger);
         var policy = inspected
             .Tables.Single(t => t.Name == "tenant_members")
             .RowLevelSecurity!.Policies.Single();
@@ -469,32 +243,28 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
     {
         ApplyAndGrant(NapSchema());
 
-        var unforced = new SchemaDefinition
-        {
-            Name = "nap",
-            Tables = NapSchema()
+        var unforced = SchemaTestData.Schema(
+            name: "nap",
+            tables: NapSchema()
                 .Tables.Select(t =>
                     t with
                     {
                         RowLevelSecurity = t.RowLevelSecurity! with { Forced = false },
                     }
                 )
-                .ToList(),
-        };
+                .ToList()
+        );
 
-        var current = (
-            (SchemaResultOk)PostgresSchemaInspector.Inspect(_connection, "public", _logger)
-        ).Value;
-
-        var safeOps = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, unforced, logger: _logger)
-        ).Value;
+        var current = PostgresTestDb.Inspect(Connection, Logger);
+        var safeOps = PostgresTestDb.CalculateChanges(Connection, unforced, Logger);
         Assert.DoesNotContain(safeOps, o => o is DisableForceRlsOperation);
 
-        var destructiveOps = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, unforced, allowDestructive: true, logger: _logger)
-        ).Value;
+        var destructiveOps = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: unforced,
+            destructive: true,
+            logger: Logger
+        );
         Assert.Equal(4, destructiveOps.OfType<DisableForceRlsOperation>().Count());
     }
 
@@ -512,26 +282,31 @@ public sealed class PostgresRlsNapShapeTests(PostgresContainerFixture fixture) :
         {
             // Round-robin across tenants -- deterministic distribution, no RNG needed.
             var tenant = tenants[i % tenants.Count];
-            using var tx = _connection.BeginTransaction();
-            SetSession(_connection, tx, "nap_app_user", tenant, Guid.NewGuid());
-            PostgresTestDb.Exec(
-                _connection,
-                tx,
+            PostgresTestDb.InsertAsTenant(
+                Connection,
+                "nap_app_user",
+                tenant,
+                Guid.NewGuid(),
+                "rls",
                 $"INSERT INTO public.agent_configs(id, tenant_id, title) VALUES ('{Guid.NewGuid()}', '{tenant}', 'row{i}')"
             );
-            tx.Commit();
             inserted[tenant]++;
         }
 
         foreach (var tenant in tenants)
         {
-            using var tx = _connection.BeginTransaction();
-            SetSession(_connection, tx, "nap_app_user", tenant, Guid.NewGuid());
-            using var sel = _connection.CreateCommand();
-            sel.Transaction = tx;
-            sel.CommandText = "SELECT COUNT(*) FROM public.agent_configs";
-            var seen = (long)sel.ExecuteScalar()!;
-            Assert.Equal(inserted[tenant], (int)seen);
+            Assert.Equal(
+                inserted[tenant],
+                (int)
+                    PostgresTestDb.CountAsTenant(
+                        Connection,
+                        "nap_app_user",
+                        tenant,
+                        Guid.NewGuid(),
+                        "rls",
+                        "SELECT COUNT(*) FROM public.agent_configs"
+                    )
+            );
         }
     }
 }

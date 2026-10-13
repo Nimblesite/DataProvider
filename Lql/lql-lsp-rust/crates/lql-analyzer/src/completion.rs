@@ -1,5 +1,4 @@
-use crate::schema::SchemaCache;
-use crate::scope::ScopeMap;
+use crate::{schema::SchemaCache, scope::ScopeMap};
 
 /// A completion item returned by the analyzer.
 #[derive(Debug, Clone)]
@@ -9,7 +8,8 @@ pub struct CompletionItem {
     pub detail: String,
     pub documentation: String,
     pub insert_text: Option<String>,
-    /// Sort priority (lower = shown first). Column=0, Pipeline=1, Function=2, Keyword=3, Table=4, Variable=5
+    /// Sort priority (lower = shown first). Column=0, Pipeline=1, Function=2, Keyword=3, Table=4,
+    /// Variable=5
     pub sort_priority: u8,
 }
 
@@ -124,14 +124,14 @@ pub fn get_completions(
     // Scope-based completions
     for name in scope.binding_names() {
         if name.to_ascii_lowercase().starts_with(&prefix) {
-            items.push(CompletionItem {
-                label: name.to_string(),
-                kind: CompletionKind::Variable,
-                detail: "let binding".into(),
-                documentation: format!("Variable bound with `let {name} = ...`"),
-                insert_text: None,
-                sort_priority: 5,
-            });
+            push_named_item(
+                &mut items,
+                name.to_string(),
+                CompletionKind::Variable,
+                "let binding",
+                format!("Variable bound with `let {name} = ...`"),
+                5,
+            );
         }
     }
 
@@ -141,14 +141,14 @@ pub fn get_completions(
             if schema.is_some_and(|s| s.get_table(name).is_some()) {
                 continue;
             }
-            items.push(CompletionItem {
-                label: name.to_string(),
-                kind: CompletionKind::Table,
-                detail: "table".into(),
-                documentation: format!("Table: {name}"),
-                insert_text: None,
-                sort_priority: 4,
-            });
+            push_named_item(
+                &mut items,
+                name.to_string(),
+                CompletionKind::Table,
+                "table",
+                format!("Table: {name}"),
+                4,
+            );
         }
     }
 
@@ -270,6 +270,25 @@ fn build_completions(
         .collect()
 }
 
+/// Pushes a non-snippet completion item with the given priority.
+fn push_named_item(
+    items: &mut Vec<CompletionItem>,
+    name: String,
+    kind: CompletionKind,
+    detail: &str,
+    documentation: String,
+    sort_priority: u8,
+) {
+    items.push(CompletionItem {
+        label: name,
+        kind,
+        detail: detail.into(),
+        documentation,
+        insert_text: None,
+        sort_priority,
+    });
+}
+
 fn aggregate_completions(prefix: &str) -> Vec<CompletionItem> {
     let fns = vec![
         ("count", "Count rows", "count(*) or count(column)"),
@@ -305,42 +324,59 @@ fn string_function_completions(prefix: &str) -> Vec<CompletionItem> {
     build_completions(fns, prefix, CompletionKind::Function, true, 2)
 }
 
-fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
-    let kws = vec![
-        (
-            "let",
-            "Variable binding",
-            "Binds a pipeline result to a name",
-        ),
-        ("fn", "Lambda function", "fn(params) => expression"),
-        ("case", "Case expression", "case when ... then ... end"),
-        ("as", "Column alias", "expression as alias_name"),
-        ("asc", "Ascending order", "Sort ascending"),
-        ("desc", "Descending order", "Sort descending"),
-        ("distinct", "Distinct modifier", "Remove duplicates"),
-    ];
+/// LQL keyword completion entries as `(label, title, snippet)` data.
+const KEYWORD_COMPLETIONS: &[(&str, &str, &str)] = &[
+    (
+        "let",
+        "Variable binding",
+        "Binds a pipeline result to a name",
+    ),
+    ("fn", "Lambda function", "fn(params) => expression"),
+    ("case", "Case expression", "case when ... then ... end"),
+    ("as", "Column alias", "expression as alias_name"),
+    ("asc", "Ascending order", "Sort ascending"),
+    ("desc", "Descending order", "Sort descending"),
+    ("distinct", "Distinct modifier", "Remove duplicates"),
+];
 
-    build_completions(kws, prefix, CompletionKind::Keyword, false, 3)
+/// Lambda-scope operator completion entries as `(label, title, snippet)` data.
+const LAMBDA_COMPLETIONS: &[(&str, &str, &str)] = &[
+    ("and", "Logical AND", "Combines conditions with AND"),
+    ("or", "Logical OR", "Combines conditions with OR"),
+    ("not", "Logical NOT", "Negates a condition"),
+    ("is", "IS check", "IS NULL / IS NOT NULL"),
+    ("in", "IN check", "Check membership in a set"),
+    ("like", "LIKE pattern", "Pattern matching with wildcards"),
+    ("exists", "EXISTS subquery", "Check subquery has results"),
+];
+
+fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
+    build_completions(
+        KEYWORD_COMPLETIONS.to_vec(),
+        prefix,
+        CompletionKind::Keyword,
+        false,
+        3,
+    )
 }
 
 fn lambda_completions(prefix: &str) -> Vec<CompletionItem> {
-    let ops = vec![
-        ("and", "Logical AND", "Combines conditions with AND"),
-        ("or", "Logical OR", "Combines conditions with OR"),
-        ("not", "Logical NOT", "Negates a condition"),
-        ("is", "IS check", "IS NULL / IS NOT NULL"),
-        ("in", "IN check", "Check membership in a set"),
-        ("like", "LIKE pattern", "Pattern matching with wildcards"),
-        ("exists", "EXISTS subquery", "Check subquery has results"),
-    ];
-
-    build_completions(ops, prefix, CompletionKind::Keyword, false, 3)
+    build_completions(
+        LAMBDA_COMPLETIONS.to_vec(),
+        prefix,
+        CompletionKind::Keyword,
+        false,
+        3,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{ColumnInfo, SchemaCache, TableInfo};
+    use crate::{
+        schema::{ColumnInfo, SchemaCache, TableInfo},
+        test_support::make_col,
+    };
 
     fn empty_ctx() -> CompletionContext {
         CompletionContext {
@@ -353,95 +389,66 @@ mod tests {
         }
     }
 
-    fn make_col(name: &str, sql_type: &str, nullable: bool, pk: bool) -> ColumnInfo {
-        ColumnInfo {
-            name: name.to_string(),
-            sql_type: sql_type.to_string(),
-            is_nullable: nullable,
-            is_primary_key: pk,
-        }
+    // Implements [LQL-COMPLETION-TEST-LABELS].
+    fn completion_labels(items: Vec<CompletionItem>) -> Vec<String> {
+        items.into_iter().map(|item| item.label).collect()
     }
 
     fn sample_schema() -> SchemaCache {
-        SchemaCache::from_tables(vec![
-            TableInfo {
-                name: "users".to_string(),
-                schema: "public".to_string(),
-                columns: vec![
-                    make_col("id", "uuid", false, true),
-                    make_col("name", "text", false, false),
-                    make_col("email", "text", true, false),
-                ],
-            },
-            TableInfo {
-                name: "orders".to_string(),
-                schema: "public".to_string(),
-                columns: vec![
-                    make_col("id", "uuid", false, true),
-                    make_col("user_id", "uuid", false, false),
-                    make_col("total", "numeric", true, false),
-                ],
-            },
-        ])
+        independent_expanded_schema_data_1()
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    fn labels_ctx(ctx: &CompletionContext) -> Vec<String> {
+        completion_labels(get_completions(ctx, &ScopeMap::new(), None))
     }
 
     // ── basic completions (no prefix) ──
 
     #[test]
     fn test_empty_context_returns_keywords_and_functions() {
-        let scope = ScopeMap::new();
-        let items = get_completions(&empty_ctx(), &scope, None);
-        assert!(!items.is_empty());
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"let"));
-        assert!(labels.contains(&"count"));
-        assert!(labels.contains(&"concat"));
+        let labels = labels_ctx(&empty_ctx());
+        assert!(!labels.is_empty());
+        crate::test_support::assert_labels(&labels, &["let", "count", "concat"], true);
     }
 
     #[test]
     fn test_after_pipe_includes_pipeline_ops() {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"select"));
-        assert!(labels.contains(&"filter"));
-        assert!(labels.contains(&"join"));
-        assert!(labels.contains(&"left_join"));
-        assert!(labels.contains(&"group_by"));
-        assert!(labels.contains(&"order_by"));
-        assert!(labels.contains(&"having"));
-        assert!(labels.contains(&"limit"));
-        assert!(labels.contains(&"offset"));
-        assert!(labels.contains(&"union"));
-        assert!(labels.contains(&"insert"));
+        crate::test_support::assert_labels(
+            &labels_ctx(&ctx),
+            &[
+                "select",
+                "filter",
+                "join",
+                "left_join",
+                "group_by",
+                "order_by",
+                "having",
+                "limit",
+                "offset",
+                "union",
+                "insert",
+            ],
+            true,
+        );
     }
 
     #[test]
     fn test_in_lambda_includes_logical_ops() {
         let mut ctx = empty_ctx();
         ctx.in_lambda = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"and"));
-        assert!(labels.contains(&"or"));
-        assert!(labels.contains(&"not"));
-        assert!(labels.contains(&"is"));
-        assert!(labels.contains(&"in"));
-        assert!(labels.contains(&"like"));
-        assert!(labels.contains(&"exists"));
+        crate::test_support::assert_labels(
+            &labels_ctx(&ctx),
+            &["and", "or", "not", "is", "in", "like", "exists"],
+            true,
+        );
     }
 
     #[test]
     fn test_not_in_lambda_excludes_logical_ops() {
-        let ctx = empty_ctx();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(!labels.contains(&"and"));
-        assert!(!labels.contains(&"or"));
+        crate::test_support::assert_labels(&labels_ctx(&empty_ctx()), &["and", "or"], false);
     }
 
     // ── prefix filtering ──
@@ -451,8 +458,7 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.word_prefix = "sel".to_string();
         ctx.after_pipe = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
+        let items = get_completions(&ctx, &ScopeMap::new(), None);
         for item in &items {
             assert!(
                 item.label.to_lowercase().starts_with("sel") || item.label.starts_with("sel"),
@@ -466,8 +472,7 @@ mod tests {
     fn test_prefix_no_match_returns_empty_or_fewer() {
         let mut ctx = empty_ctx();
         ctx.word_prefix = "zzz_no_match".to_string();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
+        let items = get_completions(&ctx, &ScopeMap::new(), None);
         assert!(items.is_empty());
     }
 
@@ -477,15 +482,11 @@ mod tests {
     fn test_table_qualifier_returns_columns() {
         let mut ctx = empty_ctx();
         ctx.table_qualifier = Some("users".to_string());
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"id"));
-        assert!(labels.contains(&"name"));
-        assert!(labels.contains(&"email"));
+        let items = get_completions(&ctx, &ScopeMap::new(), Some(&sample_schema()));
+        let labels = completion_labels(items);
+        crate::test_support::assert_labels(&labels, &["id", "name", "email"], true);
         // Should ONLY return columns when qualifier matches
-        assert!(!labels.contains(&"select"));
+        crate::test_support::assert_labels(&labels, &["select"], false);
     }
 
     #[test]
@@ -493,9 +494,7 @@ mod tests {
         let mut ctx = empty_ctx();
         ctx.table_qualifier = Some("users".to_string());
         ctx.word_prefix = "na".to_string();
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
+        let items = get_completions(&ctx, &ScopeMap::new(), Some(&sample_schema()));
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].label, "name");
         assert_eq!(items[0].kind, CompletionKind::Column);
@@ -505,38 +504,29 @@ mod tests {
     fn test_table_qualifier_unknown_table() {
         let mut ctx = empty_ctx();
         ctx.table_qualifier = Some("nonexistent".to_string());
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
+        let items = get_completions(&ctx, &ScopeMap::new(), Some(&sample_schema()));
         // No columns, falls through to other completions
         assert!(!items.is_empty());
-        let kinds: Vec<CompletionKind> = items.iter().map(|i| i.kind).collect();
-        assert!(!kinds.contains(&CompletionKind::Column));
+        assert!(
+            crate::test_support::completion_items_of_kind(&items, CompletionKind::Column)
+                .is_empty()
+        );
     }
 
     #[test]
     fn test_schema_table_completions() {
-        let ctx = empty_ctx();
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
-        let table_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == CompletionKind::Table)
-            .collect();
+        let items = get_completions(&empty_ctx(), &ScopeMap::new(), Some(&sample_schema()));
+        let table_items =
+            crate::test_support::completion_items_of_kind(&items, CompletionKind::Table);
         assert!(table_items.len() >= 2);
         let labels: Vec<&str> = table_items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"users"));
-        assert!(labels.contains(&"orders"));
+        crate::test_support::assert_labels(&labels, &["users", "orders"], true);
     }
 
     #[test]
     fn test_schema_table_completion_shows_column_count() {
-        let ctx = empty_ctx();
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
-        let users_item = items.iter().find(|i| i.label == "users").unwrap();
+        let items = get_completions(&empty_ctx(), &ScopeMap::new(), Some(&sample_schema()));
+        let users_item = crate::test_support::completion_by_label(&items, "users");
         assert!(users_item.detail.contains("3 columns"));
     }
 
@@ -547,9 +537,8 @@ mod tests {
         let ctx = empty_ctx();
         let mut scope = ScopeMap::new();
         scope.add_binding("my_query".to_string(), 0, 0);
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"my_query"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"my_query".to_string()));
     }
 
     #[test]
@@ -557,9 +546,8 @@ mod tests {
         let ctx = empty_ctx();
         let mut scope = ScopeMap::new();
         scope.add_table("my_table".to_string());
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"my_table"));
+        let labels = completion_labels(get_completions(&ctx, &scope, None));
+        assert!(labels.contains(&"my_table".to_string()));
     }
 
     #[test]
@@ -580,20 +568,8 @@ mod tests {
     fn test_completions_sorted_by_priority() {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        for window in items.windows(2) {
-            assert!(
-                window[0].sort_priority <= window[1].sort_priority
-                    || (window[0].sort_priority == window[1].sort_priority
-                        && window[0].label <= window[1].label),
-                "Items not sorted: {} (pri {}) before {} (pri {})",
-                window[0].label,
-                window[0].sort_priority,
-                window[1].label,
-                window[1].sort_priority,
-            );
-        }
+        let items = get_completions(&ctx, &ScopeMap::new(), None);
+        crate::test_support::assert_completions_sorted(&items);
     }
 
     // ── deduplication ──
@@ -602,10 +578,8 @@ mod tests {
     fn test_deduplication() {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        let unique: std::collections::HashSet<&&str> = labels.iter().collect();
+        let labels = labels_ctx(&ctx);
+        let unique: std::collections::HashSet<&String> = labels.iter().collect();
         assert_eq!(labels.len(), unique.len(), "Duplicate completions found");
     }
 
@@ -615,9 +589,8 @@ mod tests {
     fn test_pipeline_completions_have_insert_text() {
         let mut ctx = empty_ctx();
         ctx.after_pipe = true;
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let select_item = items.iter().find(|i| i.label == "select").unwrap();
+        let items = get_completions(&ctx, &ScopeMap::new(), None);
+        let select_item = crate::test_support::completion_by_label(&items, "select");
         assert!(select_item.insert_text.is_some());
         assert!(select_item.insert_text.as_ref().unwrap().contains("$0"));
     }
@@ -628,12 +601,11 @@ mod tests {
     fn test_aggregate_completions() {
         let mut ctx = empty_ctx();
         ctx.word_prefix = "co".to_string();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, None);
-        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(labels.contains(&"count"));
-        assert!(labels.contains(&"coalesce"));
-        assert!(labels.contains(&"concat"));
+        crate::test_support::assert_labels(
+            &labels_ctx(&ctx),
+            &["count", "coalesce", "concat"],
+            true,
+        );
     }
 
     // ── many columns ──
@@ -648,10 +620,8 @@ mod tests {
             schema: "public".to_string(),
             columns: cols,
         }]);
-        let ctx = empty_ctx();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
-        let table_item = items.iter().find(|i| i.label == "big_table").unwrap();
+        let items = get_completions(&empty_ctx(), &ScopeMap::new(), Some(&schema));
+        let table_item = crate::test_support::completion_by_label(&items, "big_table");
         assert!(table_item.documentation.contains("10 total"));
     }
 
@@ -661,12 +631,12 @@ mod tests {
     fn test_column_completion_kind_and_priority() {
         let mut ctx = empty_ctx();
         ctx.table_qualifier = Some("users".to_string());
-        let schema = sample_schema();
-        let scope = ScopeMap::new();
-        let items = get_completions(&ctx, &scope, Some(&schema));
+        let items = get_completions(&ctx, &ScopeMap::new(), Some(&sample_schema()));
         for item in &items {
             assert_eq!(item.kind, CompletionKind::Column);
             assert_eq!(item.sort_priority, 0);
         }
     }
+
+    include!("completion_expanded_schema_data_0.fixtures.rs");
 }

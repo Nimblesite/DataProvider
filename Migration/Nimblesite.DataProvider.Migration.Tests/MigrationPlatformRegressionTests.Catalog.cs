@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Data.Common;
-using System.Globalization;
 
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -60,9 +59,12 @@ public sealed partial record MigrationPlatformRegressionTests
             Assert.Fail($"Missing {table}.{column} in {target.Provider}");
             return false;
         }
-        command.CommandText =
-            "SELECT is_nullable FROM information_schema.columns WHERE table_schema = @schema AND table_name = @table AND column_name = @column";
-        AddParameter(command, "@schema", target.Schema);
+        VerifyReusableWorkflow1(
+            input0: command,
+            input1: AddParameter,
+            input2: target,
+            value0: "SELECT is_nullable FROM information_schema.columns WHERE table_schema = @schema AND table_name = @table AND column_name = @column"
+        );
         AddParameter(command, "@table", table);
         AddParameter(command, "@column", column);
         var value = command.ExecuteScalar();
@@ -143,12 +145,32 @@ public sealed partial record MigrationPlatformRegressionTests
     // Implements [MIG-DIFF-FOREIGN-KEY].
     private static void AssertEndUserForeignKey(MigrationTarget target)
     {
-        var foreignKey = Assert.Single(ReadForeignKeys(target, "usage_events"));
-        Assert.Equal("end_user_id", foreignKey.Column);
-        Assert.Equal("tenant_end_users", foreignKey.ReferencedTable);
-        Assert.Equal("id", foreignKey.ReferencedColumn);
-        Assert.Equal("SET NULL", NormalizedDeleteAction(foreignKey.OnDelete));
+        AssertForeignKeyShape(
+            target,
+            table: "usage_events",
+            column: "end_user_id",
+            referencedTable: "tenant_end_users",
+            referencedColumn: "id",
+            onDelete: "SET NULL"
+        );
         Assert.Empty(ReadForeignKeys(target, "tenant_end_users"));
+    }
+
+    // Implements [MIG-DIFF-FOREIGN-KEY].
+    private static void AssertForeignKeyShape(
+        MigrationTarget target,
+        string table,
+        string column,
+        string referencedTable,
+        string referencedColumn,
+        string onDelete
+    )
+    {
+        var foreignKey = Assert.Single(ReadForeignKeys(target, table));
+        Assert.Equal(column, foreignKey.Column);
+        Assert.Equal(referencedTable, foreignKey.ReferencedTable);
+        Assert.Equal(referencedColumn, foreignKey.ReferencedColumn);
+        Assert.Equal(onDelete, NormalizedDeleteAction(foreignKey.OnDelete));
     }
 
     // Implements [MIG-DIFF-DESTRUCTIVE].
@@ -165,7 +187,7 @@ public sealed partial record MigrationPlatformRegressionTests
         );
         if (includeTenantForeignKey)
         {
-            Assert.Contains(eventKeys, fk => MatchesCleanupForeignKey(fk, "tenant_id", "tenants"));
+            AssertForeignKeyPresence(eventKeys, "tenant_id", "tenants");
         }
         else
         {
@@ -173,10 +195,7 @@ public sealed partial record MigrationPlatformRegressionTests
         }
         if (includeProjectForeignKey)
         {
-            Assert.Contains(
-                eventKeys,
-                fk => MatchesCleanupForeignKey(fk, "project_id", "projects")
-            );
+            AssertForeignKeyPresence(eventKeys, "project_id", "projects");
         }
         else
         {
@@ -187,6 +206,12 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.Empty(ReadForeignKeys(target, "tenants"));
         Assert.Empty(ReadForeignKeys(target, "projects"));
     }
+
+    private static void AssertForeignKeyPresence(
+        IReadOnlyList<ForeignKeySnapshot> eventKeys,
+        string column,
+        string table
+    ) => Assert.Contains(eventKeys, fk => MatchesCleanupForeignKey(fk, column, table));
 
     private static bool MatchesCleanupForeignKey(
         ForeignKeySnapshot fk,
@@ -203,10 +228,7 @@ public sealed partial record MigrationPlatformRegressionTests
 
     private static void AddParameter(DbCommand command, string name, string value)
     {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
+        global::Tests.Shared.DatabaseCommands.Bind(command: command, name: name, value: value);
     }
 
     private sealed record ForeignKeySnapshot(
@@ -215,4 +237,16 @@ public sealed partial record MigrationPlatformRegressionTests
         string ReferencedColumn,
         string OnDelete
     );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private static void VerifyReusableWorkflow1(
+        DbCommand input0,
+        Action<DbCommand, string, string> input1,
+        MigrationTarget input2,
+        string value0
+    )
+    {
+        input0.CommandText = value0;
+        input1(arg1: input0, arg2: "@schema", arg3: input2.Schema);
+    }
 }

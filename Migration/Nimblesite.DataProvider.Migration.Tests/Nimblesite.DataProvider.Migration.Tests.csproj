@@ -44,8 +44,35 @@
       Link="Shared\PostgresContainerFixture.cs"
     />
     <Compile
+      Include="..\..\Tests.Shared\PostgresDatabaseTest.cs"
+      Link="Shared\PostgresDatabaseTest.cs"
+    />
+    <Compile
       Include="..\..\Tests.Shared\PostgresCollection.cs"
       Link="Shared\PostgresCollection.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/DatabaseCommands.cs" Link="Shared/DatabaseCommands.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Tests.Shared/SqlServerContainerFixture.cs"
+      Link="Shared/SqlServerContainerFixture.cs"
+    />
+    <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/MigrationAssertions.cs"
+      Link="Shared/MigrationAssertions.cs"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Tests.Shared/TempSqliteDatabase.cs"
+      Link="Shared/TempSqliteDatabase.cs"
     />
   </ItemGroup>
 </Project>

@@ -1,8 +1,9 @@
+// Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
 // Implements [RLS-DIFF]. Policy alterations and replacements belong to the RLS CLI phase.
 [Collection(PostgresTestSuite.Name)]
-public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixture)
+public sealed partial class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixture)
 {
     [Fact]
     public void RlsPhase_UpdatesPredicateAndScopeWhileStructuralPhaseLeavesPoliciesAlone()
@@ -46,8 +47,10 @@ public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixtur
             );
             Assert.Equal("DELETE", changedScope.Command);
 
-            var live = Assert
-                .IsType<SchemaResultOk>(PostgresSchemaInspector.Inspect(connection, "public"))
+            var live = global::Tests
+                .Shared.ResultAssertions.ExactOk(
+                    actual: PostgresSchemaInspector.Inspect(connection, "public")
+                )
                 .Value;
             Assert.Empty(
                 Assert.IsType<OperationsResultOk>(SchemaDiff.Calculate(live, desired)).Value
@@ -79,11 +82,15 @@ public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixtur
     )
     {
         using var command = connection.CreateCommand();
-        command.CommandText = """
+        VerifyReusableWorkflow20(
+            input0: command,
+            input1: name,
+            value0: """
             SELECT cmd, qual, with_check FROM pg_policies
             WHERE schemaname = 'public' AND tablename = 'documents' AND policyname = @name
-            """;
-        command.Parameters.AddWithValue("name", name);
+            """,
+            value1: "name"
+        );
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read(), $"Missing policy {name}");
         var policy = (
@@ -95,48 +102,15 @@ public sealed class PostgresRlsPhaseUpgradeTests(PostgresContainerFixture fixtur
         return policy;
     }
 
-    private static SchemaDefinition PolicySchema(bool changed) =>
-        new()
-        {
-            Name = "rls_phase_upgrade",
-            Tables =
-            [
-                new TableDefinition
-                {
-                    Name = "documents",
-                    Columns =
-                    [
-                        new ColumnDefinition
-                        {
-                            Name = "id",
-                            Type = PortableTypes.Uuid,
-                            IsNullable = false,
-                        },
-                        new ColumnDefinition { Name = "owner_id", Type = PortableTypes.Uuid },
-                    ],
-                    PrimaryKey = new PrimaryKeyDefinition { Columns = ["id"] },
-                    RowLevelSecurity = new RlsPolicySetDefinition
-                    {
-                        Policies =
-                        [
-                            new RlsPolicyDefinition
-                            {
-                                Name = "owner_policy",
-                                Operations = [RlsOperation.All],
-                                UsingSql = changed ? "owner_id IS NULL" : "owner_id IS NOT NULL",
-                                WithCheckSql = changed
-                                    ? "owner_id IS NULL"
-                                    : "owner_id IS NOT NULL",
-                            },
-                            new RlsPolicyDefinition
-                            {
-                                Name = "scope_policy",
-                                Operations = [changed ? RlsOperation.Delete : RlsOperation.Select],
-                                UsingSql = "TRUE",
-                            },
-                        ],
-                    },
-                },
-            ],
-        };
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow20(
+        NpgsqlCommand input0,
+        string input1,
+        string value0,
+        string value1
+    )
+    {
+        input0.CommandText = value0;
+        input0.Parameters.AddWithValue(value1, input1);
+    }
 }

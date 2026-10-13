@@ -3,7 +3,7 @@ namespace Nimblesite.Sync.Tests;
 /// <summary>
 /// Tests for SyncState, SyncSession, and SyncClient records.
 /// </summary>
-public sealed class SyncStateTests
+public sealed partial class SyncStateTests
 {
     [Fact]
     public void SyncState_CreatesCorrectRecord()
@@ -62,12 +62,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncClient_CreatesCorrectRecord()
     {
-        var client = new SyncClient(
-            "client-001",
-            100,
-            "2024-01-01T00:00:00Z",
-            "2024-01-01T00:00:00Z"
-        );
+        var client = Dataset_SyncClient_CreatesCorrectRecord_1();
 
         Assert.Equal("client-001", client.OriginId);
         Assert.Equal(100, client.LastSyncVersion);
@@ -100,15 +95,7 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncLogEntry_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{\"Id\":\"p1\",\"Name\":\"Alice\"}",
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncLogEntry_CreatesCorrectRecord_1();
 
         Assert.Equal(1, entry.Version);
         Assert.Equal("Person", entry.TableName);
@@ -122,53 +109,37 @@ public sealed class SyncStateTests
     [Fact]
     public void SyncLogEntry_DeleteHasNullPayload()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Delete,
-            null,
-            "origin-1",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_SyncLogEntry_DeleteHasNullPayload_1();
 
         Assert.Null(entry.Payload);
         Assert.Equal(SyncOperation.Delete, entry.Operation);
     }
 
     [Fact]
-    public void SyncOperation_HasCorrectValues()
+    public void EnumTypes_HaveCorrectValues()
     {
         Assert.Equal(SyncOperation.Insert, (SyncOperation)0);
         Assert.Equal(SyncOperation.Update, (SyncOperation)1);
         Assert.Equal(SyncOperation.Delete, (SyncOperation)2);
-    }
-
-    [Fact]
-    public void SubscriptionType_HasCorrectValues()
-    {
         Assert.Equal(SubscriptionType.Record, (SubscriptionType)0);
         Assert.Equal(SubscriptionType.Table, (SubscriptionType)1);
         Assert.Equal(SubscriptionType.Query, (SubscriptionType)2);
+        Assert.Equal(ConflictStrategy.LastWriteWins, (ConflictStrategy)0);
+        Assert.Equal(ConflictStrategy.ServerWins, (ConflictStrategy)1);
+        Assert.Equal(ConflictStrategy.ClientWins, (ConflictStrategy)2);
     }
 
     [Fact]
     public void SyncSubscription_CreatesCorrectRecord()
     {
-        var sub = new SyncSubscription(
-            "sub-1",
-            "origin-1",
-            SubscriptionType.Table,
-            "Person",
-            null,
-            "2024-01-01T00:00:00Z",
-            "2024-12-31T00:00:00Z"
-        );
+        var sub = Dataset_SyncSubscription_CreatesCorrectRecord_1();
 
-        Assert.Equal("sub-1", sub.SubscriptionId);
-        Assert.Equal("origin-1", sub.OriginId);
-        Assert.Equal(SubscriptionType.Table, sub.Type);
-        Assert.Equal("Person", sub.TableName);
+        VerifyReusableWorkflow3(
+            input0: sub,
+            value0: "sub-1",
+            value2: SubscriptionType.Table,
+            value3: "Person"
+        );
         Assert.Null(sub.Filter);
         Assert.Equal("2024-01-01T00:00:00Z", sub.CreatedAt);
         Assert.Equal("2024-12-31T00:00:00Z", sub.ExpiresAt);
@@ -177,15 +148,7 @@ public sealed class SyncStateTests
     [Fact]
     public void ChangeNotification_CreatesCorrectRecord()
     {
-        var entry = new SyncLogEntry(
-            1,
-            "Person",
-            "{\"Id\":\"p1\"}",
-            SyncOperation.Insert,
-            "{}",
-            "origin",
-            "2024-01-01T00:00:00Z"
-        );
+        var entry = Fixture_ChangeNotification_CreatesCorrectRecord_1();
 
         var notification = new ChangeNotification("sub-1", entry);
 
@@ -194,23 +157,17 @@ public sealed class SyncStateTests
     }
 
     [Fact]
-    public void PullResult_CreatesCorrectRecord()
+    public void PullAndPushResult_CreateCorrectRecords()
     {
-        var result = new PullResult(10, 0, 100);
+        var pull = new PullResult(10, 0, 100);
+        Assert.Equal(10, pull.ChangesApplied);
+        Assert.Equal(0, pull.FromVersion);
+        Assert.Equal(100, pull.ToVersion);
 
-        Assert.Equal(10, result.ChangesApplied);
-        Assert.Equal(0, result.FromVersion);
-        Assert.Equal(100, result.ToVersion);
-    }
-
-    [Fact]
-    public void PushResult_CreatesCorrectRecord()
-    {
-        var result = new PushResult(5, 0, 50);
-
-        Assert.Equal(5, result.ChangesPushed);
-        Assert.Equal(0, result.FromVersion);
-        Assert.Equal(50, result.ToVersion);
+        var push = new PushResult(5, 0, 50);
+        Assert.Equal(5, push.ChangesPushed);
+        Assert.Equal(0, push.FromVersion);
+        Assert.Equal(50, push.ToVersion);
     }
 
     [Fact]
@@ -282,14 +239,20 @@ public sealed class SyncStateTests
         Assert.Equal("abc123hash", batch.Hash);
     }
 
-    [Fact]
-    public void ConflictStrategy_HasCorrectValues()
-    {
-        Assert.Equal(ConflictStrategy.LastWriteWins, (ConflictStrategy)0);
-        Assert.Equal(ConflictStrategy.ServerWins, (ConflictStrategy)1);
-        Assert.Equal(ConflictStrategy.ClientWins, (ConflictStrategy)2);
-    }
-
     private static IReadOnlyList<SyncLogEntry> SingleInsertChange() =>
         new List<SyncLogEntry> { new(1, "T", "PK", SyncOperation.Insert, "{}", "O", "TS") };
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static void VerifyReusableWorkflow3(
+        SyncSubscription input0,
+        string value0,
+        global::Nimblesite.Sync.Core.SubscriptionType value2,
+        string value3
+    )
+    {
+        Assert.Equal(value0, input0.SubscriptionId);
+        Assert.Equal("origin-1", input0.OriginId);
+        Assert.Equal(value2, input0.Type);
+        Assert.Equal(value3, input0.TableName);
+    }
 }

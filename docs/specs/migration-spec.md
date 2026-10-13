@@ -1129,9 +1129,148 @@ CREATE UNIQUE INDEX idx_users_email ON Users(Email);
 
 ---
 
+## Shared SQLite Test Lifetime [MIG-TEST-SQLITE-LIFETIME]
+
+Migration integration tests reuse `SqliteTestDb.WithDb` for a fresh temporary
+file database, connection disposal, and cleanup. Each test retains its own
+schema, migration steps, and assertions inside the callback. Cleanup failures
+remain visible; no test-local helper swallows file-deletion failures. Dispose
+the connection before deleting the file, including when the callback fails.
+
+## Shared PostgreSQL Test Runner [MIG-TEST-POSTGRES-RUNNER]
+
+PostgreSQL integration tests use `PostgresTestDb.TryApply` to bind the PostgreSQL
+DDL generator once while preserving each call's options, connection, and logger.
+The helper returns the original runner result without asserting success, so
+tests retain their independent success, failure, idempotency, and catalog checks.
+
 ## References
 
 - [SQLite CREATE TABLE](https://sqlite.org/lang_createtable.html)
 - [PostgreSQL CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html)
 - [SQL Server CREATE TABLE](https://docs.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql)
 - [Prisma Migrate](https://www.prisma.io/docs/orm/prisma-migrate)
+
+### Shared migration test runners [MIG-TEST-RUNNER-SHARED]
+
+Migration tests bind SQLite and PostgreSQL DDL through their canonical test helpers.
+Delegation preserves each call's connection, operation list, options, and logger.
+TryApply returns the original result without asserting success so intentional
+failure cases retain their assertions. Generic runner and verification-callback
+coverage continues to call MigrationRunner directly.
+
+### Shared diff success assertions [MIG-TEST-DIFF-SHARED]
+
+Migration tests reuse one diff executor and successful-result assertion. Each case
+retains its current and desired schemas, additive/destructive option, logger, and
+operation assertions. The successful Outcome case is sealed, so the shared exact
+type assertion preserves the former `result is OperationsResultOk` checks.
+Destructive-cleanup cases remain individually runnable in a partial fixture.
+Non-destructive table, column, and index removal cases share one theory. Each
+original scenario name and pair of schemas remains explicit in its data row;
+the runner applies the original non-destructive diff and empty-result assertion.
+
+### Shared users schema fixture [MIG-TEST-USER-FIXTURE]
+
+Schema-diff tests extend the existing users fixture to share the UUID primary key, optional email column, and optional email index. An email index includes its email column. Schema names, public schema/table names, types, nullability, index defaults, destructive flags, and every operation assertion remain unchanged.
+
+### Shared YAML roundtrip table selection [MIG-TEST-YAML-ROUNDTRIP]
+
+Schema YAML tests share serialization, deserialization, and selecting the first restored table. All original schema definitions, index/check assertions, and defaults remain explicit in their cases. Tests that inspect YAML text retain their separate serialization step.
+
+### Shared table existence assertions [MIG-TEST-TABLE-ASSERTIONS]
+
+Migration integration cases share the same four named table existence assertions, preserving each original check and migration scenario.
+
+### Shared SQLite inspect-diff-apply pipeline [MIG-TEST-SQLITE-SEED]
+
+SQLite migration cases reuse the existing seed helper and inspect its returned migration result. Cases that inspect intermediate operations keep their local pipelines. Existing result assertions, schema declarations and logger arguments are preserved.
+
+The shared users fixture also supplies the optional obsolete `old_field` column for both additive and destructive cleanup cases, preserving their distinct migration flags and assertions. Implements [MIG-TEST-USER-FIXTURE].
+
+### Shared ID and name columns [MIG-TEST-ID-NAME-COLUMNS]
+
+Migration fixtures reuse the exact Id primary-key and non-null Name column recipe.
+Each portable type and size stays at its original call site. Column order, names,
+primary-key membership, nullability, subsequent columns, indexes, and constraints
+remain unchanged.
+
+### Shared schema fixtures [MIG-TEST-SCHEMA-FIXTURES]
+
+Migration tests share constructors for schema, table, column, and constraint
+fixtures. Each supplied field is retained at its call site, including order and
+provider expressions. Defaults match the existing records; explicit null
+collection inputs remain direct model constructions.
+
+### Shared PostgreSQL catalog reader [MIG-PG-SHARED-CATALOG-READER]
+
+Schema inspectors share command creation, reader iteration, and disposal. Every
+catalog query, parameter binding, row projection, and error boundary is retained
+in its inspector. Readers are disposed before commands.
+
+### Shared YAML field emission [MIG-YAML-SHARED-FIELD-EMISSION]
+
+The writer uses one key/string emission operation and a generic default-value guard for string, boolean and integer fields. String sequences reuse the generic sequence writer; emission order, scalar styles and omission rules stay unchanged.
+
+The reflection-free writer shares named mapping headers and default-value checks
+for string, boolean and numeric scalar fields. Original field order, omitted
+semantic defaults and scalar styles remain unchanged.
+
+### Shared PostgreSQL schema setup [MIG-TEST-PG-SCHEMA-WORKFLOW]
+
+Schema scenarios share factory evaluation, initial schema inspection, diff
+application and the original successful-application assertion.
+
+### Shared index conversion workflow [MIG-TEST-SHARED-INDEX-CONVERSION]
+
+Column-to-expression and expression-to-column scenarios share initial migration,
+upgrade calculation, operation checks and upgrade application. Each keeps its own
+schemas, verification query and final expression-presence assertion.
+
+### [MIG-TEST-SHARED-INSPECT-DIFF]
+
+Migration cases share guarded schema difference calculation while preserving inspection, destructive options, logger, operation assertions, and application.
+
+## [MIG-VERIFY-SHARED-OBJECT-MATCHING]
+
+Schema verification uses one ordered expected-object lookup and missing-object workflow. Object-specific drift checks and mismatch text remain in their respective verifier callbacks.
+
+## [MIG-CATALOG-INDEPENDENT-QUERY-DATA]
+
+Independent catalog SELECT specifications are immutable constants in data-only partial files. Command binding, readers and row projections remain in the inspectors. Query text, including whitespace, is preserved.
+
+## [MIG-TEST-SHARED-TENANT-SESSION]
+
+Tenant policy scenarios share session settings, document counting, inserts and seed setup. The setting namespace, optional membership role, generated identifiers, transaction scope and assertion order remain scenario-specific.
+
+### Shared default-expression function formatting [MIG-DEFAULT-SHARED-FUNCTION-FORMATTING]
+
+PostgreSQL and SQLite default-expression translation uses one function-call formatter. Ordinary functions and unknown names retain their original spelling and argument separators. COALESCE casing, substring syntax and SQLite concatenation retain their existing dialect behavior.
+
+### Shared SQLite policy triggers [RLS-SQLITE-SHARED-POLICY-TRIGGERS]
+
+INSERT, UPDATE and DELETE policies share the applicability check and trigger-emission operation. INSERT and UPDATE retain NEW-row WITH CHECK predicates; DELETE retains OLD-row USING predicates. Trigger ordering, names and emitted SQL remain unchanged.
+
+### Shared managed SQLite trigger reads [MIG-SQLITE-SHARED-MANAGED-TRIGGER-READS]
+
+Trigger-name and trigger-definition inspection share command creation, table/pattern parameter binding and reader iteration. Each operation retains its original catalog SQL, row projection, returned list type and resource lifetime.
+
+- **[MIG-INSPECT-SHARED-TABLES]**: Native inspectors share table-result collection: retain successful definitions and log each failed table inspection without aborting subsequent tables.
+
+- **[MIG-FK-ACTION-SQL]**: All migration dialects use one foreign-key action keyword mapping, preserving the original default NO ACTION and every native referential-action keyword.
+
+- **[MIG-FUNCTION-BODY-EXCLUSIVE]**: Both native PostgreSQL DDL paths reuse the existing mutually exclusive body/bodyLql validation and its original failure message.
+
+- **[MIG-PG-DDL-SHARED]**: PostgreSQL DDL generation reuses native identifier quoting and result unwrapping helpers while preserving every generated SQL string and existing error behavior.
+
+- **[MIG-TEST-SHARED-OPERATION-ASSERTIONS]**: Schema diff tests share typed operation-presence assertions and caller predicates; preserve each operation type and every matched field.
+
+- **[RLS-CURRENT-SETTING-REWRITE-ERRORS]**: RLS predicate translation paths share current_setting rewrite outcome handling and preserve the original policy-specific error mapping.
+
+- **[MIG-VERIFY-BEFORE-UP-TO-DATE]**: Before returning the no-operation up-to-date result, the migration CLI verifies the inspected schema against the desired contract.
+
+- **[MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT]**: Schema diffs retain check-constraint expression replacement operations and their native PostgreSQL application scenarios.
+
+- **[MIG-UNIQUE-CONSTRAINT-DIFF]**: Schema diffs retain unique-constraint identity and column expectations when determining create and drop operations.
+
+- **[MIG-VERIFY-DEFAULTS-AND-GRANTS]**: Integrity verification retains normalized default-expression comparison and grant coverage checks, including order-independent privileges.

@@ -1,8 +1,8 @@
-using Nimblesite.Sql.Model;
+using static global::Tests.Shared.RowAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
 
-public class JoinGraphTests
+public partial class JoinGraphTests
 {
     [Fact]
     public void New_JoinGraph_IsEmpty()
@@ -54,9 +54,11 @@ public class JoinGraphTests
         Assert.Equal(3, relationships.Count);
 
         // Verify all relationships are stored
-        Assert.Contains(relationships, r => r.LeftTable == "Users" && r.RightTable == "Posts");
-        Assert.Contains(relationships, r => r.LeftTable == "Posts" && r.RightTable == "Comments");
-        Assert.Contains(relationships, r => r.LeftTable == "Users" && r.RightTable == "Profiles");
+        ContainsAll(
+            rows: relationships,
+            projection: r => (r.LeftTable, r.RightTable),
+            expected: [("Users", "Posts"), ("Posts", "Comments"), ("Users", "Profiles")]
+        );
     }
 
     [Fact]
@@ -77,9 +79,7 @@ public class JoinGraphTests
     }
 
     [Theory]
-    [InlineData("", "Posts", "condition")]
-    [InlineData("Users", "", "condition")]
-    [InlineData("Users", "Posts", "")]
+    [MemberData(nameof(Add_EmptyParameters_StillAddsInlineCases))]
     public void Add_EmptyParameters_StillAdds(string leftTable, string rightTable, string condition)
     {
         // Arrange

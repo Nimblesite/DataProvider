@@ -11,7 +11,7 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// facts skip, so <c>make test</c> stays fast and self-contained while the CI
 /// native job runs the real thing.
 /// </summary>
-public sealed class NativeAotMigrateSmokeTests
+public sealed partial class NativeAotMigrateSmokeTests
 {
     private const string BinEnvVar = "DATAPROVIDERMIGRATE_AOT_BIN";
 
@@ -26,40 +26,17 @@ public sealed class NativeAotMigrateSmokeTests
     // would (correctly) flag as drift — that is a SQLite behaviour, not an AOT
     // concern, so the smoke schema avoids it to keep the test focused on the
     // native binary running the full pipeline.
-    private const string SmokeSchema = """
-        name: aot_smoke
-        tables:
-          - name: Widget
-            columns:
-              - name: Id
-                type: Text
-                isNullable: false
-              - name: Label
-                type: Text
-                isNullable: false
-              - name: Quantity
-                type: Text
-                isNullable: false
-            primaryKey:
-              columns:
-                - Id
-            indexes:
-              - name: idx_widget_label
-                columns:
-                  - Label
-                isUnique: true
-        """;
+    private const string SmokeSchema = Data_Shared_1;
 
     [SkippableFact]
     public void NativeBinary_MigratesSqliteSchema_ExitZero()
     {
-        var bin = NativeBinaryPath();
-        Skip.If(bin is null, $"{BinEnvVar} not set — native AOT binary not published.");
+        var bin = RequireNativeBinary();
 
         var (schemaPath, dbPath) = WriteFixtures();
         try
         {
-            var result = Run(bin!, schemaPath, dbPath);
+            var result = Run(bin, schemaPath, dbPath);
 
             Assert.True(result.ExitCode == 0, userMessage: result.Output);
             Assert.True(File.Exists(dbPath), userMessage: "SQLite database file was not created.");
@@ -78,16 +55,15 @@ public sealed class NativeAotMigrateSmokeTests
     [SkippableFact]
     public void NativeBinary_RerunIsIdempotent_NoOperations()
     {
-        var bin = NativeBinaryPath();
-        Skip.If(bin is null, $"{BinEnvVar} not set — native AOT binary not published.");
+        var bin = RequireNativeBinary();
 
         var (schemaPath, dbPath) = WriteFixtures();
         try
         {
-            var first = Run(bin!, schemaPath, dbPath);
+            var first = Run(bin, schemaPath, dbPath);
             Assert.True(first.ExitCode == 0, userMessage: first.Output);
 
-            var second = Run(bin!, schemaPath, dbPath);
+            var second = Run(bin, schemaPath, dbPath);
             Assert.True(second.ExitCode == 0, userMessage: second.Output);
             Assert.Contains("Schema is up to date", second.Output, StringComparison.Ordinal);
         }
@@ -100,17 +76,23 @@ public sealed class NativeAotMigrateSmokeTests
     [SkippableFact]
     public void NativeBinary_ExportCommand_ReportsUnsupported()
     {
-        var bin = NativeBinaryPath();
-        Skip.If(bin is null, $"{BinEnvVar} not set — native AOT binary not published.");
+        var bin = RequireNativeBinary();
 
         // Implements [MIG-AOT-EXPORT]: export is compiled out of the native build.
         var result = RunRaw(
-            bin!,
+            bin,
             ["export", "--assembly", "x.dll", "--type", "T", "--output", "o.yaml"]
         );
 
         Assert.True(result.ExitCode != 0, userMessage: result.Output);
         Assert.Contains("not available in the native", result.Output, StringComparison.Ordinal);
+    }
+
+    private static string RequireNativeBinary()
+    {
+        var bin = NativeBinaryPath();
+        Skip.If(bin is null, $"{BinEnvVar} not set — native AOT binary not published.");
+        return bin;
     }
 
     private static (string SchemaPath, string DbPath) WriteFixtures()

@@ -22,9 +22,7 @@ public sealed partial record MigrationPlatformRegressionTests
 {
     // Implements [CON-SHARED-CORE] and [MIG-TEST-CROSS-PLATFORM].
     [Theory]
-    [InlineData("sqlite")]
-    [InlineData("postgres")]
-    [InlineData("sqlserver")]
+    [MemberData(nameof(AdoNetEffects_InspectsLiveQueriesAndReportsInvalidSqlInlineCases))]
     public async Task AdoNetEffects_InspectsLiveQueriesAndReportsInvalidSql(string provider)
     {
         await WithAsyncTargetAsync(provider, AssertAdoNetEffectsAsync).ConfigureAwait(true);
