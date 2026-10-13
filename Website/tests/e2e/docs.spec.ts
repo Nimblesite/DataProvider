@@ -57,6 +57,7 @@ const DOC_PAGES = [
   "/blog/getting-started-dataprovider/",
   "/blog/connecting-sql-server/",
   "/blog/lql-simplifies-development/",
+  "/blog/dataprovider-0-11-0-first-stable-release/",
 ];
 
 async function getBodyText(page: Page): Promise<string> {
@@ -170,6 +171,7 @@ test.describe("No ASCII box-drawing diagrams remain", () => {
     "/docs/lql/",
     "/docs/sync/",
     "/docs/migrations/",
+    "/blog/dataprovider-0-11-0-first-stable-release/",
   ];
 
   for (const path of pagesToScan) {
@@ -205,6 +207,7 @@ test.describe("Version is centralised, not hardcoded", () => {
       "Website/src/blog/getting-started-dataprovider.md",
       "Website/src/blog/connecting-sql-server.md",
       "Website/src/blog/lql-simplifies-development.md",
+      "Website/src/blog/dataprovider-0-11-0-first-stable-release.md",
       "README.md",
       "DataProvider/README.md",
       "Lql/README.md",
@@ -259,6 +262,7 @@ test.describe("No Result<T,E> marketing lead-ins", () => {
     "/blog/getting-started-dataprovider/",
     "/blog/connecting-sql-server/",
     "/blog/lql-simplifies-development/",
+    "/blog/dataprovider-0-11-0-first-stable-release/",
   ];
 
   for (const path of pagesToScan) {
