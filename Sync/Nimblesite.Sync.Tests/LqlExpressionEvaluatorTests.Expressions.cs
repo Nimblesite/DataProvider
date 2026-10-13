@@ -1,4 +1,5 @@
 using System.Text.Json;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -17,7 +18,7 @@ public sealed partial class LqlExpressionEvaluatorTests
         string expected
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         LqlExpressionAssertions.EvaluatesTo(json: json, expression: expression, expected: expected);
     }
 
@@ -31,7 +32,7 @@ public sealed partial class LqlExpressionEvaluatorTests
         object value2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix3(value0: value0, value1: value1, value2: value2);
     }
 

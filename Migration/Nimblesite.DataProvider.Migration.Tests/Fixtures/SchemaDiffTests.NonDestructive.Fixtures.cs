@@ -24,4 +24,29 @@ public sealed partial class SchemaDiffTests
                 UsersSchema(name: "Desired", email: true),
             },
         ];
+
+    public static IEnumerable<object[]> DestructiveRemovalCases() =>
+        [
+            new object[]
+            {
+                "Calculate_RemovedTable_DroppedWhenDestructiveAllowed",
+                Fixture_Calculate_RemovedTable_DroppedWhenDestructiveAllowed_1(),
+                UsersSchema(name: "Desired"),
+                "obsolete",
+            },
+            new object[]
+            {
+                "Calculate_RemovedColumn_DroppedWhenDestructiveAllowed",
+                UsersSchema(name: "Current", oldField: true),
+                UsersSchema(name: "Desired"),
+                "old_field",
+            },
+            new object[]
+            {
+                "Calculate_RemovedIndex_DroppedWhenDestructiveAllowed",
+                UsersSchema(name: "Current", indexEmail: true),
+                UsersSchema(name: "Desired", email: true),
+                "idx_users_email",
+            },
+        ];
 }

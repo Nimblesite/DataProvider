@@ -72,14 +72,14 @@ internal static class SubscriptionManager
         string timestamp,
         string? expiresAt = null
     ) =>
-        new(
-            subscriptionId,
-            originId,
-            SubscriptionType.Record,
-            tableName,
-            pkValues,
-            timestamp,
-            expiresAt
+        CreateSubscription(
+            subscriptionId: subscriptionId,
+            originId: originId,
+            type: SubscriptionType.Record,
+            tableName: tableName,
+            filter: pkValues,
+            timestamp: timestamp,
+            expiresAt: expiresAt
         );
 
     /// <summary>
@@ -98,14 +98,14 @@ internal static class SubscriptionManager
         string timestamp,
         string? expiresAt = null
     ) =>
-        new(
-            subscriptionId,
-            originId,
-            SubscriptionType.Table,
-            tableName,
-            null,
-            timestamp,
-            expiresAt
+        CreateSubscription(
+            subscriptionId: subscriptionId,
+            originId: originId,
+            type: SubscriptionType.Table,
+            tableName: tableName,
+            filter: null,
+            timestamp: timestamp,
+            expiresAt: expiresAt
         );
 
     /// <summary>
@@ -126,15 +126,25 @@ internal static class SubscriptionManager
         string timestamp,
         string? expiresAt = null
     ) =>
-        new(
-            subscriptionId,
-            originId,
-            SubscriptionType.Query,
-            tableName,
-            queryCriteria,
-            timestamp,
-            expiresAt
+        CreateSubscription(
+            subscriptionId: subscriptionId,
+            originId: originId,
+            type: SubscriptionType.Query,
+            tableName: tableName,
+            filter: queryCriteria,
+            timestamp: timestamp,
+            expiresAt: expiresAt
         );
+
+    private static SyncSubscription CreateSubscription(
+        string subscriptionId,
+        string originId,
+        SubscriptionType type,
+        string tableName,
+        string? filter,
+        string timestamp,
+        string? expiresAt
+    ) => new(subscriptionId, originId, type, tableName, filter, timestamp, expiresAt);
 
     /// <summary>
     /// Checks if a subscription matches a change.

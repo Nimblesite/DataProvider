@@ -43,15 +43,14 @@ public sealed partial class PostgresFunctionBodyLqlE2ETests(PostgresContainerFix
     private void Apply(SchemaDefinition schema)
     {
         var current = PostgresTestDb.Inspect(Connection, Logger);
-        var ops = ((OperationsResultOk)SchemaDiff.Calculate(current, schema, logger: Logger)).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: schema, logger: Logger);
         var apply = PostgresTestDb.TryApply(
             connection: Connection,
             operations: ops,
             logger: Logger
         );
-        var failure = apply is MigrationApplyResultError error ? error.Value.Message : "unknown";
 
-        Assert.True(apply is MigrationApplyResultOk, $"Migration failed: {failure}");
+        PostgresTestDb.AssertApplyResult(apply: apply);
     }
 
     private sealed record Names(

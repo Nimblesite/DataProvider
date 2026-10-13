@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 #pragma warning disable CA1812 // Avoid uninstantiated internal classes
 
 namespace Nimblesite.DataProvider.Tests;
@@ -332,7 +333,7 @@ public sealed partial class SqlQueryableTests
         object value0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseOperationCaseMatrix1(
             input0: BuildAndAssertQueryStatement,
             value0: Assert.IsType<global::System.Func<global::System.Linq.Expressions.Expression<global::System.Func<

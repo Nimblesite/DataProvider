@@ -11,8 +11,6 @@ public partial class LqlFileBasedTests
     [MemberData(nameof(Joins_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
     [MemberData(nameof(Arithmetic_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
     [MemberData(nameof(BasicOperations_FileBasedTest_ShouldTransformCorrectlyInlineCases))]
-    public void FileBasedTest_ShouldTransformCorrectly(
-        string testCaseName,
-        string dialect
-    ) => ExecuteFileBasedTest(testCaseName, dialect);
+    public void FileBasedTest_ShouldTransformCorrectly(string testCaseName, string dialect) =>
+        ExecuteFileBasedTest(testCaseName, dialect);
 }

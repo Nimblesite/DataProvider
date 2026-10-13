@@ -108,12 +108,9 @@ public static class SyncEndpointExtensions
                     IConfiguration config
                 ) =>
                 {
-                    var connStr =
-                        connectionString
-                        ?? config.GetConnectionString(dbType.ToUpperInvariant())
-                        ?? "";
-
-                    if (string.IsNullOrEmpty(connStr))
+                    if (
+                        ResolveConnectionString(connectionString, dbType, config) is not { } connStr
+                    )
                     {
                         logger.LogWarning("API: No connection string for {DbType}", dbType);
                         return Results.BadRequest($"No connection string configured for {dbType}");
@@ -170,12 +167,9 @@ public static class SyncEndpointExtensions
                     ApiSubscriptionManager subscriptions
                 ) =>
                 {
-                    var connStr =
-                        connectionString
-                        ?? config.GetConnectionString(dbType.ToUpperInvariant())
-                        ?? "";
-
-                    if (string.IsNullOrEmpty(connStr))
+                    if (
+                        ResolveConnectionString(connectionString, dbType, config) is not { } connStr
+                    )
                     {
                         return Results.BadRequest($"No connection string configured for {dbType}");
                     }
@@ -233,12 +227,9 @@ public static class SyncEndpointExtensions
                     IConfiguration config
                 ) =>
                 {
-                    var connStr =
-                        connectionString
-                        ?? config.GetConnectionString(dbType.ToUpperInvariant())
-                        ?? "";
-
-                    if (string.IsNullOrEmpty(connStr))
+                    if (
+                        ResolveConnectionString(connectionString, dbType, config) is not { } connStr
+                    )
                     {
                         return Results.BadRequest($"No connection string configured for {dbType}");
                     }
@@ -284,12 +275,9 @@ public static class SyncEndpointExtensions
                     IConfiguration config
                 ) =>
                 {
-                    var connStr =
-                        connectionString
-                        ?? config.GetConnectionString(dbType.ToUpperInvariant())
-                        ?? "";
-
-                    if (string.IsNullOrEmpty(connStr))
+                    if (
+                        ResolveConnectionString(connectionString, dbType, config) is not { } connStr
+                    )
                     {
                         return Results.BadRequest($"No connection string configured for {dbType}");
                     }
@@ -390,5 +378,16 @@ public static class SyncEndpointExtensions
             .RequireRateLimiting("sync");
 
         return app;
+    }
+
+    private static string? ResolveConnectionString(
+        string? connectionString,
+        string dbType,
+        IConfiguration config
+    )
+    {
+        var connStr =
+            connectionString ?? config.GetConnectionString(dbType.ToUpperInvariant()) ?? "";
+        return string.IsNullOrEmpty(connStr) ? null : connStr;
     }
 }

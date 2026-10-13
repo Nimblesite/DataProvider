@@ -30,24 +30,12 @@ public static partial class SqliteSchemaInspector
                 }
             }
 
-            foreach (var tableName in tableNames)
-            {
-                var tableResult = InspectTable(connection, tableName, logger);
-                if (tableResult is TableResult.Ok<TableDefinition, MigrationError> ok)
-                {
-                    tables.Add(ok.Value);
-                }
-                else if (
-                    tableResult is TableResult.Error<TableDefinition, MigrationError> tableError
-                )
-                {
-                    logger?.LogWarning(
-                        "Failed to inspect table {Table}: {Error}",
-                        tableName,
-                        tableError.Value
-                    );
-                }
-            }
+            SchemaInspectionSupport.CollectTables(
+                tableNames,
+                tableName => InspectTable(connection, tableName, logger),
+                tables,
+                logger
+            );
 
             return new SchemaResult.Ok<SchemaDefinition, MigrationError>(
                 new SchemaDefinition { Name = "sqlite", Tables = tables.AsReadOnly() }
@@ -233,8 +221,8 @@ public static partial class SqliteSchemaInspector
                             Columns = [fromCol],
                             ReferencedTable = refTable,
                             ReferencedColumns = [toCol],
-                            OnDelete = ParseForeignKeyAction(onDelete),
-                            OnUpdate = ParseForeignKeyAction(onUpdate),
+                            OnDelete = SchemaYamlScalars.ParseForeignKeyAction(onDelete),
+                            OnUpdate = SchemaYamlScalars.ParseForeignKeyAction(onUpdate),
                         }
                     );
                 }
@@ -294,16 +282,6 @@ public static partial class SqliteSchemaInspector
         };
     }
 
-    private static ForeignKeyAction ParseForeignKeyAction(string action) =>
-        action.ToUpperInvariant() switch
-        {
-            "CASCADE" => ForeignKeyAction.Cascade,
-            "SET NULL" => ForeignKeyAction.SetNull,
-            "SET DEFAULT" => ForeignKeyAction.SetDefault,
-            "RESTRICT" => ForeignKeyAction.Restrict,
-            _ => ForeignKeyAction.NoAction,
-        };
-
     /// <summary>
     /// Parse expressions from a SQLite index definition string.
     /// Example: "CREATE UNIQUE INDEX uq_name ON table (lower(name), suburb_id)"
@@ -357,43 +335,6 @@ public static partial class SqliteSchemaInspector
 
         var content = indexDef.Substring(parenStart + 1, parenEnd - parenStart - 1);
 
-        // Split by comma, but respect nested parentheses (for function calls)
-        var current = new StringBuilder();
-        depth = 0;
-
-        foreach (var ch in content)
-        {
-            switch (ch)
-            {
-                case '(':
-                    depth++;
-                    current.Append(ch);
-                    break;
-                case ')':
-                    depth--;
-                    current.Append(ch);
-                    break;
-                case ',' when depth == 0:
-                    var expr = current.ToString().Trim();
-                    if (!string.IsNullOrEmpty(expr))
-                    {
-                        expressions.Add(expr);
-                    }
-                    current.Clear();
-                    break;
-                default:
-                    current.Append(ch);
-                    break;
-            }
-        }
-
-        // Add the last expression
-        var lastExpr = current.ToString().Trim();
-        if (!string.IsNullOrEmpty(lastExpr))
-        {
-            expressions.Add(lastExpr);
-        }
-
-        return expressions;
+        return IndexExpressionSplitter.Split(content);
     }
 }

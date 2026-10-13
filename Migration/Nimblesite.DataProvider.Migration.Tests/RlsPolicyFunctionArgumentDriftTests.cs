@@ -1,5 +1,3 @@
-using static global::Tests.Shared.ResultAssertions;
-
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -11,7 +9,7 @@ public sealed partial class RlsPolicyFunctionArgumentDriftTests
         var current = PolicySchema("public.is_member('public.is_member')");
         var desired = PolicySchema("is_member('is_member')");
 
-        var operations = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var operations = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.Contains(operations, operation => operation is AlterRlsPolicyOperation);
     }

@@ -123,17 +123,13 @@ internal static class SchemaYamlWriter
 
     private static void WritePrimaryKey(Emitter e, PrimaryKeyDefinition pk)
     {
-        e.Emit(new MappingStart());
-        StrOpt(e, "name", pk.Name);
-        WriteStrSeq(e, "columns", pk.Columns);
+        StartNamedColumns(e: e, name: pk.Name, columns: pk.Columns);
         e.Emit(new MappingEnd());
     }
 
     private static void WriteForeignKey(Emitter e, ForeignKeyDefinition fk)
     {
-        e.Emit(new MappingStart());
-        StrOpt(e, "name", fk.Name);
-        WriteStrSeq(e, "columns", fk.Columns);
+        StartNamedColumns(e: e, name: fk.Name, columns: fk.Columns);
         StringField(e: e, key: "referencedTable", value: fk.ReferencedTable);
         StrExcept(
             e: e,
@@ -155,9 +151,7 @@ internal static class SchemaYamlWriter
 
     private static void WriteUnique(Emitter e, UniqueConstraintDefinition u)
     {
-        e.Emit(new MappingStart());
-        StrOpt(e, "name", u.Name);
-        WriteStrSeq(e, "columns", u.Columns);
+        StartNamedColumns(e: e, name: u.Name, columns: u.Columns);
         e.Emit(new MappingEnd());
     }
 
@@ -179,18 +173,14 @@ internal static class SchemaYamlWriter
 
     private static void WriteFunction(Emitter e, PostgresFunctionDefinition f)
     {
-        e.Emit(new MappingStart());
-        StrExcept(e: e, key: "schema", value: f.Schema, defaultValue: "public");
+        StartSchemaMapping(e: e, schema: f.Schema);
         StringField(e: e, key: "name", value: f.Name);
         WriteSeq(e, "arguments", f.Arguments, WriteFunctionArg);
         StrExcept(e: e, key: "returns", value: f.Returns, defaultValue: "void");
         StrExcept(e: e, key: "language", value: f.Language, defaultValue: "sql");
         StrExcept(e: e, key: "volatility", value: f.Volatility, defaultValue: "stable");
         BoolExcept(e: e, key: "securityDefiner", value: f.SecurityDefiner, defaultValue: false);
-        if (!string.IsNullOrEmpty(f.Body))
-        {
-            StringField(e: e, key: "body", value: f.Body);
-        }
+        StrOpt(e, "body", f.Body);
         StrOpt(e, "bodyLql", f.BodyLql);
         WriteStrSeq(e, "executeRoles", f.ExecuteRoles);
         BoolExcept(
@@ -205,18 +195,14 @@ internal static class SchemaYamlWriter
     private static void WriteFunctionArg(Emitter e, PostgresFunctionArgumentDefinition a)
     {
         e.Emit(new MappingStart());
-        if (!string.IsNullOrEmpty(a.Name))
-        {
-            StringField(e: e, key: "name", value: a.Name);
-        }
+        StrOpt(e, "name", a.Name);
         StringField(e: e, key: "type", value: a.Type);
         e.Emit(new MappingEnd());
     }
 
     private static void WriteGrant(Emitter e, PostgresGrantDefinition g)
     {
-        e.Emit(new MappingStart());
-        StrExcept(e: e, key: "schema", value: g.Schema, defaultValue: "public");
+        StartSchemaMapping(e: e, schema: g.Schema);
         if (g.Target != PostgresGrantTarget.Table)
         {
             StringField(e: e, key: "target", value: SchemaYamlScalars.Encode(g.Target));
@@ -247,13 +233,12 @@ internal static class SchemaYamlWriter
         BoolExcept(e: e, key: "permissive", value: p.IsPermissive, defaultValue: true);
         if (!(p.Operations.Count == 1 && p.Operations[0] == RlsOperation.All))
         {
-            Key(e, "operations");
-            e.Emit(new SequenceStart(null, null, isImplicit: true, SequenceStyle.Block));
-            foreach (var op in p.Operations)
-            {
-                Str(e, SchemaYamlScalars.Encode(op));
-            }
-            e.Emit(new SequenceEnd());
+            WriteSeq(
+                e,
+                "operations",
+                p.Operations,
+                (emitter, op) => Str(emitter, SchemaYamlScalars.Encode(op))
+            );
         }
         WriteStrSeq(e, "roles", p.Roles);
         StrOpt(e, "using", p.UsingLql);
@@ -342,6 +327,23 @@ internal static class SchemaYamlWriter
     {
         e.Emit(new MappingStart());
         StringField(e: e, key: "name", value: name);
+    }
+
+    // Implements [MIG-YAML-SHARED-FIELD-EMISSION]: primary keys, unique
+    // constraints and foreign keys all begin with an optional name and a column
+    // sequence before their type-specific fields.
+    private static void StartNamedColumns(Emitter e, string? name, IReadOnlyList<string> columns)
+    {
+        e.Emit(new MappingStart());
+        StrOpt(e, "name", name);
+        WriteStrSeq(e, "columns", columns);
+    }
+
+    // Implements [MIG-YAML-SHARED-FIELD-EMISSION].
+    private static void StartSchemaMapping(Emitter e, string schema)
+    {
+        e.Emit(new MappingStart());
+        StrExcept(e: e, key: "schema", value: schema, defaultValue: "public");
     }
 
     private static void StrExcept(Emitter e, string key, string value, string defaultValue)

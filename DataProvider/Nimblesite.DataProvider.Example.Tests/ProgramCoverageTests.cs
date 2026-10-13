@@ -167,20 +167,7 @@ public sealed partial class ProgramCoverageTests : IDisposable
     {
         await SetupTestDatabaseWithNullableFields();
 
-        var result = _connection.GetRecords(
-            (
-                from customer in SelectStatement.From<Generated.Customer>()
-                orderby customer.CustomerName
-                select customer
-            ).ToSqlStatement(),
-            stmt => stmt.ToSQLite(),
-            MapCustomer
-        );
-
-        var customers = Ok(
-            actual: result,
-            message: $"Expected success but got {result.GetType()}"
-        ).Value;
+        var customers = QueryCustomersByLinq(connection: _connection);
 
         var nullEmailCustomer = customers.First(c => c.CustomerName == "No Email Corp");
         Assert.Null(nullEmailCustomer.Email);
@@ -369,8 +356,18 @@ public sealed partial class ProgramCoverageTests : IDisposable
     {
         await SetupTestDatabaseWithNullableFields().ConfigureAwait(false);
 
-        var customers = Ok(read: () =>
-            input0.GetRecords(
+        var customers = QueryCustomersByLinq(connection: input0);
+
+        var nullPhoneCustomer = customers.First(c => c.CustomerName == value0);
+
+        return nullPhoneCustomer;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: ordered LINQ customer projection
+    // shared by the nullable-field mapping tests.
+    private static IReadOnlyList<Customer> QueryCustomersByLinq(SqliteConnection connection) =>
+        Ok(read: () =>
+            connection.GetRecords(
                 (
                     from customer in SelectStatement.From<Generated.Customer>()
                     orderby customer.CustomerName
@@ -380,11 +377,6 @@ public sealed partial class ProgramCoverageTests : IDisposable
                 MapCustomer
             )
         ).Value;
-
-        var nullPhoneCustomer = customers.First(c => c.CustomerName == value0);
-
-        return nullPhoneCustomer;
-    }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     internal static async global::System.Threading.Tasks.Task VerifyReusableWorkflow3(

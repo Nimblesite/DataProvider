@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.Sync.Tests;
 
 /// <summary>
@@ -154,7 +156,7 @@ public sealed partial class SubscriptionManagerTests
         System.String scenario5
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         var sub = SubscriptionManager.CreateRecordSubscription(
             "sub-1",
@@ -196,7 +198,7 @@ public sealed partial class SubscriptionManagerTests
         Func<SyncSubscription> input0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix2(
             input0: input0,
             input1: VerifyReusableWorkflow4,
@@ -253,7 +255,7 @@ public sealed partial class SubscriptionManagerTests
         System.String scenario3
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         var sub = SubscriptionManager.CreateTableSubscription(
             "sub-1",

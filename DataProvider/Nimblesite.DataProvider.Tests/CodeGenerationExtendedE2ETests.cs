@@ -6,26 +6,10 @@ namespace Nimblesite.DataProvider.Tests;
 public sealed partial class CodeGenerationExtendedE2ETests
 {
     private static readonly IReadOnlyList<DatabaseColumn> OrderColumns =
-    [
-        ColumnTestData.Create(
-            name: "OrderId",
-            sqlType: "TEXT",
-            cSharpType: "Guid",
-            isPrimaryKey: true
-        ),
-        ColumnTestData.Create(name: "CustomerName", sqlType: "TEXT", cSharpType: "string"),
-        ColumnTestData.Create(name: "Total", sqlType: "REAL", cSharpType: "decimal"),
-    ];
+        CodeGenerationColumnSets.OrderColumns;
 
     private static readonly IReadOnlyList<DatabaseColumn> AllJoinedColumns =
-    [
-        ColumnTestData.Create(name: "OrderId", sqlType: "TEXT", cSharpType: "Guid"),
-        ColumnTestData.Create(name: "CustomerName", sqlType: "TEXT", cSharpType: "string"),
-        ColumnTestData.Create(name: "Total", sqlType: "REAL", cSharpType: "decimal"),
-        ColumnTestData.Create(name: "LineItemId", sqlType: "TEXT", cSharpType: "Guid"),
-        ColumnTestData.Create(name: "ProductName", sqlType: "TEXT", cSharpType: "string"),
-        ColumnTestData.Create(name: "Quantity", sqlType: "INTEGER", cSharpType: "int"),
-    ];
+        CodeGenerationColumnSets.AllJoinedColumns;
 
     private static GroupingConfig CreateOrderGroupingConfig() =>
         new(

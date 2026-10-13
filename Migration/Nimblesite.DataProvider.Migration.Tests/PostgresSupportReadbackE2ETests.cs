@@ -104,5 +104,5 @@ public sealed partial class PostgresSupportReadbackE2ETests(PostgresContainerFix
     private IReadOnlyList<SchemaOperation> Diff(
         SchemaDefinition current,
         SchemaDefinition desired
-    ) => (Ok(actual: SchemaDiff.Calculate(current, desired, logger: _logger))).Value;
+    ) => SchemaDiffAssertions.Diff(current: current, desired: desired, logger: _logger);
 }

@@ -19,9 +19,8 @@ public static partial class PostgresSyncLogRepository
         NpgsqlConnection connection,
         long fromVersion,
         int limit
-    )
-    {
-        return SyncCommandExecution.Read<NpgsqlException, SyncLogListResult>(
+    ) =>
+        SyncCommandExecution.FetchSyncLogChanges<NpgsqlConnection, NpgsqlException>(
             connection: connection,
             setSql: command =>
                 command.CommandText = global::Nimblesite
@@ -29,24 +28,12 @@ public static partial class PostgresSyncLogRepository
                     .Postgres
                     .PostgresSyncLogRepository
                     .SqlSpecification1,
-            parameters: () => [("@fromVersion", fromVersion), ("@limit", limit)],
-            read: command =>
-            {
-                return new SyncLogListOk(
-                    SyncCommandExecution.ReadRows<SyncLogEntry>(
-                        command: command,
-                        read: row => ReadSyncLogEntry(row)
-                    )
-                );
-            },
-            failure: ex =>
-            {
-                return new SyncLogListError(
-                    new SyncErrorDatabase($"Failed to fetch changes: {ex.Message}")
-                );
-            }
+            batchParameterName: "@limit",
+            fromVersion: fromVersion,
+            batchSize: limit,
+            fallback: SyncOperation.Update,
+            failurePrefix: "Failed to fetch changes"
         );
-    }
 
     /// <summary>
     /// Inserts a change into _sync_log.
@@ -151,24 +138,4 @@ public static partial class PostgresSyncLogRepository
             parameters: () => [("@version", version.ToString(CultureInfo.InvariantCulture))],
             failurePrefix: "Failed to update last server version"
         );
-
-    private static SyncLogEntry ReadSyncLogEntry(global::System.Data.Common.DbDataReader reader) =>
-        new(
-            Version: reader.GetInt64(0),
-            TableName: reader.GetString(1),
-            PkValue: reader.GetString(2),
-            Operation: ParseOperation(reader.GetString(3)),
-            Payload: reader.IsDBNull(4) ? null : reader.GetString(4),
-            Origin: reader.GetString(5),
-            Timestamp: reader.GetString(6)
-        );
-
-    private static SyncOperation ParseOperation(string op) =>
-        op.ToLowerInvariant() switch
-        {
-            "insert" => SyncOperation.Insert,
-            "update" => SyncOperation.Update,
-            "delete" => SyncOperation.Delete,
-            _ => SyncOperation.Update,
-        };
 }

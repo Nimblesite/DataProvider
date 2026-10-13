@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 public class ResultTypeTests
@@ -9,7 +11,7 @@ public class ResultTypeTests
     [InlineData("Result_ErrorValue_CreatesFailureResult", false, "Something went wrong")]
     public void Result_CreatesResult(string caseName, bool isOk, string value)
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
 
         object result = isOk
             ? new Result<string, string>.Ok<string, string>(value)

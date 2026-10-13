@@ -1,9 +1,6 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
 
-using static global::Tests.Shared.ResultAssertions;
-using PersonCommand = global::Tests.Shared.PersonCommandParameters;
-
 namespace Nimblesite.Sync.SQLite.Tests;
 
 /// <summary>
@@ -34,7 +31,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_InsertInSource_AppearsInTarget()
     {
         // Arrange: Insert a person in source
-        InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
 
         // Act: Fetch changes from source, apply to target
         var changes = FetchChangesFromSource();
@@ -50,8 +47,13 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_UpdateInSource_UpdatesTarget()
     {
         // Arrange: Insert then update in source
-        InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
-        UpdatePerson(_sourceDb, "p1", "Alice Updated", "alice.updated@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
+        SyncFixtureSqliteHelpers.UpdatePerson(
+            _sourceDb,
+            "p1",
+            "Alice Updated",
+            "alice.updated@example.com"
+        );
 
         // Act: Sync all changes
         var changes = FetchChangesFromSource();
@@ -67,7 +69,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_DeleteInSource_DeletesFromTarget()
     {
         // Arrange: Insert in both, then delete from source
-        InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
         var changes1 = FetchChangesFromSource();
         ApplyChangesToTarget(changes1);
 
@@ -75,7 +77,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
         Assert.NotNull(GetPerson(_targetDb, "p1"));
 
         // Delete from source
-        DeletePerson(_sourceDb, "p1");
+        SyncFixtureSqliteHelpers.DeletePersonWithEmail(_sourceDb, "p1");
 
         // Act: Sync delete
         var changes2 = FetchChangesFromSource(changes1.Max(c => c.Version));
@@ -92,9 +94,9 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_MultipleRecords_AllSynced()
     {
         // Arrange: Insert multiple records
-        InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
-        InsertPerson(_sourceDb, "p2", "Bob", "bob@example.com");
-        InsertPerson(_sourceDb, "p3", "Charlie", "charlie@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p2", "Bob", "bob@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p3", "Charlie", "charlie@example.com");
 
         // Act: Nimblesite.Sync.Core
         var changes = FetchChangesFromSource();
@@ -114,7 +116,12 @@ public sealed partial class EndToEndSyncTests : IDisposable
         // Arrange: Insert many records
         for (int i = 0; i < 50; i++)
         {
-            InsertPerson(_sourceDb, $"p{i}", $"Person{i}", $"person{i}@example.com");
+            SyncFixtureSqliteHelpers.InsertPerson(
+                _sourceDb,
+                $"p{i}",
+                $"Person{i}",
+                $"person{i}@example.com"
+            );
         }
 
         // Act: Fetch in batches of 10
@@ -148,7 +155,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_TriggerSuppression_PreventsDuplicateLogging()
     {
         // Arrange: Insert in source, sync to target
-        InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "Alice", "alice@example.com");
         var changes = FetchChangesFromSource();
 
         // Act: Apply with suppression enabled
@@ -198,10 +205,10 @@ public sealed partial class EndToEndSyncTests : IDisposable
     public void Sync_BiDirectional_BothDbsGetChanges()
     {
         // Arrange: Insert in source
-        InsertPerson(_sourceDb, "p1", "From Source", "source@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_sourceDb, "p1", "From Source", "source@example.com");
 
         // Insert in target (simulating offline change)
-        InsertPerson(_targetDb, "p2", "From Target", "target@example.com");
+        SyncFixtureSqliteHelpers.InsertPerson(_targetDb, "p2", "From Target", "target@example.com");
 
         // Act: Sync source -> target
         var sourceChanges = FetchChangesFromSource();
@@ -246,52 +253,12 @@ public sealed partial class EndToEndSyncTests : IDisposable
         }
     }
 
-    private static void ExecutePerson(
-        SqliteConnection db,
-        string sql,
-        string id,
-        string name,
-        string email
-    )
-    {
-        using var cmd = db.CreateCommand();
-        cmd.CommandText = sql;
-        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
-    }
-
-    private static void InsertPerson(SqliteConnection db, string id, string name, string email) =>
-        ExecutePerson(
-            db: db,
-            sql: "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)",
-            id: id,
-            name: name,
-            email: email
-        );
-
-    private static void UpdatePerson(SqliteConnection db, string id, string name, string email) =>
-        ExecutePerson(
-            db: db,
-            sql: "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id",
-            id: id,
-            name: name,
-            email: email
-        );
-
     private static void AssertPerson(SqliteConnection db, string id, string name, string email)
     {
         var person = GetPerson(db, id);
         Assert.NotNull(person);
         Assert.Equal(name, person.Value.Name);
         Assert.Equal(email, person.Value.Email);
-    }
-
-    private static void DeletePerson(SqliteConnection db, string id)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
-            parameters: () => [("@id", id)]
-        );
     }
 
     private static (string Id, string Name, string Email)? GetPerson(SqliteConnection db, string id)
@@ -314,12 +281,7 @@ public sealed partial class EndToEndSyncTests : IDisposable
         SqliteConnection db,
         long fromVersion,
         int batchSize = 1000
-    )
-    {
-        var result = SyncLogRepository.FetchChanges(db, fromVersion, batchSize);
-        Assert.IsType<SyncLogListOk>(result);
-        return [.. (Ok(actual: result)).Value];
-    }
+    ) => SyncFixtureSqliteHelpers.FetchSqliteChanges(db, fromVersion, batchSize);
 
     private void ApplyChangesToTarget(List<SyncLogEntry> changes, bool skipSuppression = false) =>
         ApplyChanges(_targetDb, changes, _targetOrigin, skipSuppression);

@@ -73,13 +73,20 @@ public sealed partial class SchemaYamlSerializerTests
 
         var usersOriginal = schema.Tables.First(t => t.Name == "Users");
         var usersRestored = restored.Tables.First(t => t.Name == "Users");
-        Assert.Equal(usersOriginal.Columns.Count, usersRestored.Columns.Count);
-        Assert.Equal(usersOriginal.Indexes.Count, usersRestored.Indexes.Count);
+        AssertTableShapeMatches(usersOriginal, usersRestored);
 
         var ordersOriginal = schema.Tables.First(t => t.Name == "Orders");
         var ordersRestored = restored.Tables.First(t => t.Name == "Orders");
-        Assert.Equal(ordersOriginal.Columns.Count, ordersRestored.Columns.Count);
-        Assert.Equal(ordersOriginal.ForeignKeys.Count, ordersRestored.ForeignKeys.Count);
+        AssertTableShapeMatches(ordersOriginal, ordersRestored);
+    }
+
+    // Implements [MIG-TEST-YAML-ROUNDTRIP]: a round-tripped table keeps the same
+    // column, index and foreign-key counts.
+    private static void AssertTableShapeMatches(TableDefinition expected, TableDefinition actual)
+    {
+        Assert.Equal(expected.Columns.Count, actual.Columns.Count);
+        Assert.Equal(expected.Indexes.Count, actual.Indexes.Count);
+        Assert.Equal(expected.ForeignKeys.Count, actual.ForeignKeys.Count);
     }
 
     [Fact]

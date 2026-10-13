@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
@@ -22,7 +23,7 @@ public sealed partial class MappingEngineTests
         string value1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix4(input0: VerifySharedChecks6, input1: input1, value1: value1);
     }
 
@@ -46,7 +47,7 @@ public sealed partial class MappingEngineTests
         global::Nimblesite.Sync.Core.MappingDirection value0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix5(input0: VerifySharedChecks6, input1: input1, value0: value0);
     }
 
@@ -229,20 +230,9 @@ public sealed partial class MappingEngineTests
     {
         _ = ExpectNullMappedPayload(
             mapping: Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_1,
-            entry: Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_2
+            entry: Fixture_ApplyMapping_DeleteOperation_NullPayload_Succeeds_2,
+            logger: _logger
         );
-    }
-
-    // Implements [CI-TEST-SHARED-SCENARIOS].
-    private MappingSuccess ExpectNullMappedPayload(
-        Func<TableMapping> mapping,
-        Func<SyncLogEntry> entry
-    )
-    {
-        var config = MappingTestData.Strict(mappings: [mapping()]);
-        var success = Expected<MappingSuccess>(entry: entry(), config: config, logger: _logger);
-        Assert.Null(success.Entries[0].MappedPayload);
-        return success;
     }
 
     private static string MapCustomerIdPk(string pk) =>

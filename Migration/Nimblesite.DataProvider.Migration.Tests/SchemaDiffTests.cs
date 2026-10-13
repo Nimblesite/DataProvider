@@ -158,21 +158,21 @@ public sealed partial class SchemaDiffTests
         // Should have: add column (new_field), create index, drop column (old_field),
         // create table (new_table), drop table (obsolete_table)
         Assert.Contains(ops, op => op is AddColumnOperation add && add.Column.Name == "new_field");
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<CreateIndexOperation>(
             ops,
-            op => op is CreateIndexOperation idx && idx.Index.Name == "idx_users_new"
+            idx => idx.Index.Name == "idx_users_new"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropColumnOperation>(
             ops,
-            op => op is DropColumnOperation drop && drop.ColumnName == "old_field"
+            drop => drop.ColumnName == "old_field"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<CreateTableOperation>(
             ops,
-            op => op is CreateTableOperation create && create.Table.Name == "new_table"
+            create => create.Table.Name == "new_table"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropTableOperation>(
             ops,
-            op => op is DropTableOperation dropTable && dropTable.TableName == "obsolete_table"
+            dropTable => dropTable.TableName == "obsolete_table"
         );
     }
 

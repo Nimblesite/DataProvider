@@ -122,8 +122,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         {
             Pipeline pipeline => pipeline,
             Identifier table => new Pipeline { Steps = { new IdentityStep { Base = table } } },
-            _ => throw new SqlErrorException(
-                CreateSqlErrorStatic("Expected a pipeline or table name", context)
+            _ => throw CreateSqlErrorException(
+                message: "Expected a pipeline or table name",
+                context: context
             ),
         };
 
@@ -402,12 +403,10 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             }
 
             // No fallback - fail hard if expr type is not handled
-            throw new SqlErrorException(
-                CreateSqlErrorStatic(
-                    $"Unsupported expr type in comparison: {expr.GetType().Name}",
-                    expr as ParserRuleContext
-                        ?? throw new ArgumentException("Context must be ParserRuleContext")
-                )
+            throw CreateSqlErrorException(
+                message: $"Unsupported expr type in comparison: {expr.GetType().Name}",
+                context: expr as ParserRuleContext
+                    ?? throw new ArgumentException("Context must be ParserRuleContext")
             );
         }
 
@@ -481,11 +480,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // No fallback - fail hard if comparison type is not handled
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported comparison type: {comparison.GetType().Name}",
-                comparison
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported comparison type: {comparison.GetType().Name}",
+            context: comparison
         );
     }
 
@@ -505,8 +502,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         // Implements [LQL-PREDICATE-IN-LIST].
         if (inExpr.argList() == null)
         {
-            throw new SqlErrorException(
-                CreateSqlErrorStatic("IN subqueries are not supported in this context", inExpr)
+            throw CreateSqlErrorException(
+                message: "IN subqueries are not supported in this context",
+                context: inExpr
             );
         }
 
@@ -559,8 +557,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         var node = CreateSubqueryVisitor(outerScope).VisitPipeExpr(pipeExpr);
         return node is Pipeline pipeline
             ? SubqueryLayout.CorrelatedBody(pipeline)
-            : throw new SqlErrorException(
-                CreateSqlErrorStatic("Unsupported subquery expression", pipeExpr)
+            : throw CreateSqlErrorException(
+                message: "Unsupported subquery expression",
+                context: pipeExpr
             );
     }
 
@@ -579,8 +578,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             return tokenText1;
         }
 
-        throw new SqlErrorException(
-            CreateSqlErrorStatic("Unsupported IN left-hand expression", inExpr)
+        throw CreateSqlErrorException(
+            message: "Unsupported IN left-hand expression",
+            context: inExpr
         );
     }
 
@@ -701,11 +701,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // No fallback - fail hard if factor type is not handled
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported arithmetic factor type: {arithmeticFactor.GetType().Name}",
-                arithmeticFactor
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported arithmetic factor type: {arithmeticFactor.GetType().Name}",
+            context: arithmeticFactor
         );
     }
 
@@ -819,12 +817,10 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // No fallback - fail hard if expression type is not handled
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported expression type: {context.GetType().Name}",
-                context as ParserRuleContext
-                    ?? throw new ArgumentException("Context must be ParserRuleContext")
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported expression type: {context.GetType().Name}",
+            context: context as ParserRuleContext
+                ?? throw new ArgumentException("Context must be ParserRuleContext")
         );
     }
 
@@ -1049,8 +1045,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     private static string BaseTableName(Pipeline pipeline, ParserRuleContext context) =>
         pipeline.Steps.OfType<IdentityStep>().FirstOrDefault()?.Base is Identifier table
             ? table.Name
-            : throw new SqlErrorException(
-                CreateSqlErrorStatic("A derived table pipeline needs a base table", context)
+            : throw CreateSqlErrorException(
+                message: "A derived table pipeline needs a base table",
+                context: context
             );
 
     /// <summary>
@@ -1085,11 +1082,8 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The SELECT step.</returns>
-    private static SelectStep CreateSelectStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        var columns = args.Select(MapArgToColumnInfo).ToList();
-        return new SelectStep(columns) { Base = baseNode };
-    }
+    private static SelectStep CreateSelectStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new(MapArgs(args: args, map: MapArgToColumnInfo)) { Base = baseNode };
 
     /// <summary>
     /// Maps an ANTLR argument context to a ColumnInfo object in a platform-agnostic way.
@@ -1124,8 +1118,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         {
             // For subqueries, we create an expression column with the raw text
             // The platform-specific SQL generator will handle proper subquery formatting
-            throw new SqlErrorException(
-                CreateSqlErrorStatic("Subqueries in column mapping are not supported", arg)
+            throw CreateSqlErrorException(
+                message: "Subqueries in column mapping are not supported",
+                context: arg
             );
         }
 
@@ -1168,17 +1163,16 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             }
 
             // Simple identifier or literal
-            throw new SqlErrorException(
-                CreateSqlErrorStatic("Unhandled expression type in column selection", arg)
+            throw CreateSqlErrorException(
+                message: "Unhandled expression type in column selection",
+                context: arg
             );
         }
 
         // No fallback - fail hard if argument type is not handled
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported argument type in column selection: {arg.GetType().Name}",
-                arg
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported argument type in column selection: {arg.GetType().Name}",
+            context: arg
         );
     }
 
@@ -1233,11 +1227,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // Fallback - use the full text as expression
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                "Unhandled column alias type in MapColumnAliasToColumnInfo",
-                columnAlias
-            )
+        throw CreateSqlErrorException(
+            message: "Unhandled column alias type in MapColumnAliasToColumnInfo",
+            context: columnAlias
         );
     }
 
@@ -1247,23 +1239,16 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The UNION step.</returns>
-    private UnionStep CreateUnionStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string otherQuery;
-
-        if (args.Length > 0)
+    private UnionStep CreateUnionStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new()
         {
-            // Extract the union query from the arguments
-            otherQuery = ExtractUnionQuery(args[0]);
-        }
-        else
-        {
-            // If no arguments, provide a placeholder that indicates the issue
-            otherQuery = "-- UNION query not found in arguments";
-        }
-
-        return new UnionStep { Base = baseNode, OtherQuery = otherQuery };
-    }
+            Base = baseNode,
+            OtherQuery = ArgOr(
+                args: args,
+                extract: ExtractUnionQuery,
+                fallback: "-- UNION query not found in arguments"
+            ),
+        };
 
     /// <summary>
     /// Creates an INSERT step.
@@ -1271,26 +1256,14 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The INSERT step.</returns>
-    private static InsertStep CreateInsertStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string table;
-
-        if (args.Length > 0)
+    private static InsertStep CreateInsertStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new(
+            table: ArgOr(args: args, extract: ExtractIdentifier, fallback: "unknown_table"),
+            columns: new List<string>()
+        )
         {
-            table = ExtractIdentifier(args[0]);
-        }
-        else
-        {
-            // If no arguments found, provide a placeholder table name
-            table = "unknown_table";
-        }
-
-        // Don't specify columns - let the INSERT use the same columns as the SELECT
-        var columns = new List<string>(); // Empty list means use SELECT columns
-
-        var insertStep = new InsertStep(table, columns) { Base = baseNode };
-        return insertStep;
-    }
+            Base = baseNode,
+        };
 
     /// <summary>
     /// Extracts condition from lambda or other argument types.
@@ -1318,11 +1291,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
                 return ExtractLambdaCondition(exprContext.lambdaExpr(), inheritedScope);
             }
 
-            throw new SqlErrorException(
-                CreateSqlErrorStatic(
-                    $"Unsupported expression type in ExtractConditionFromLambda: {exprContext.GetType().Name}",
-                    exprContext
-                )
+            throw CreateSqlErrorException(
+                message: $"Unsupported expression type in ExtractConditionFromLambda: {exprContext.GetType().Name}",
+                context: exprContext
             );
         }
 
@@ -1335,25 +1306,15 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         // Check if this is a pipeExpr that might contain a condition
         if (arg.pipeExpr() != null)
         {
-            throw new SqlErrorException(
-                CreateSqlErrorStatic(
-                    "PipeExpr conditions not yet supported in ExtractConditionFromLambda",
-                    arg
-                )
+            throw CreateSqlErrorException(
+                message: "PipeExpr conditions not yet supported in ExtractConditionFromLambda",
+                context: arg
             );
         }
 
-        // Check if this is a lambda expression directly
-        if (arg.lambdaExpr() != null)
-        {
-            return ExtractLambdaCondition(arg.lambdaExpr(), inheritedScope);
-        }
-
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported argument type in ExtractConditionFromLambda: {arg.GetType().Name}",
-                arg
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported argument type in ExtractConditionFromLambda: {arg.GetType().Name}",
+            context: arg
         );
     }
 
@@ -1378,11 +1339,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
             return ProcessLambdaLogicalExpr(logicalExpr, parameters, inheritedScope);
         }
 
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Lambda expression must contain a logical expression: {lambdaExpr.GetType().Name}",
-                lambdaExpr
-            )
+        throw CreateSqlErrorException(
+            message: $"Lambda expression must contain a logical expression: {lambdaExpr.GetType().Name}",
+            context: lambdaExpr
         );
     }
 
@@ -1469,8 +1428,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         {
             // For subqueries, we create an expression column with the raw text
             // The platform-specific SQL generator will handle proper subquery formatting
-            throw new SqlErrorException(
-                CreateSqlErrorStatic("Pipe expressions not supported as identifiers", arg)
+            throw CreateSqlErrorException(
+                message: "Pipe expressions not supported as identifiers",
+                context: arg
             );
         }
 
@@ -1503,11 +1463,9 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
 
         // No fallback - fail hard if argument type is not handled
-        throw new SqlErrorException(
-            CreateSqlErrorStatic(
-                $"Unsupported argument type in ExtractIdentifier: {arg.GetType().Name}",
-                arg
-            )
+        throw CreateSqlErrorException(
+            message: $"Unsupported argument type in ExtractIdentifier: {arg.GetType().Name}",
+            context: arg
         );
     }
 
@@ -1869,11 +1827,7 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     private static SelectDistinctStep CreateSelectDistinctStep(
         INode baseNode,
         LqlParser.ArgContext[] args
-    )
-    {
-        var columns = args.Select(MapArgToColumnInfo).ToList();
-        return new SelectDistinctStep(columns) { Base = baseNode };
-    }
+    ) => new(MapArgs(args: args, map: MapArgToColumnInfo)) { Base = baseNode };
 
     /// <summary>
     /// Creates a GROUP BY step.
@@ -1881,11 +1835,8 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The GROUP BY step.</returns>
-    private static GroupByStep CreateGroupByStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        var columns = args.Select(ExtractIdentifier).ToList();
-        return new GroupByStep(columns) { Base = baseNode };
-    }
+    private static GroupByStep CreateGroupByStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new(MapArgs(args: args, map: ExtractIdentifier)) { Base = baseNode };
 
     /// <summary>
     /// Creates an ORDER BY step.
@@ -1893,11 +1844,8 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The ORDER BY step.</returns>
-    private static OrderByStep CreateOrderByStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        var orderItems = args.Select(ExtractOrderItem).ToList();
-        return new OrderByStep(orderItems) { Base = baseNode };
-    }
+    private static OrderByStep CreateOrderByStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new(MapArgs(args: args, map: ExtractOrderItem)) { Base = baseNode };
 
     /// <summary>
     /// Extracts order item (column and direction) from an argument.
@@ -1946,11 +1894,16 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The HAVING step.</returns>
-    private static HavingStep CreateHavingStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string condition = args.Length > 0 ? ExtractConditionFromLambda(args[0]) : "true";
-        return new HavingStep { Base = baseNode, Condition = condition };
-    }
+    private static HavingStep CreateHavingStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new()
+        {
+            Base = baseNode,
+            Condition = ArgOr(
+                args: args,
+                extract: a => ExtractConditionFromLambda(a),
+                fallback: "true"
+            ),
+        };
 
     /// <summary>
     /// Creates a LIMIT step.
@@ -1958,11 +1911,12 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The LIMIT step.</returns>
-    private static LimitStep CreateLimitStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string limit = args.Length > 0 ? ExtractIdentifier(args[0]) : "10";
-        return new LimitStep { Base = baseNode, Count = limit };
-    }
+    private static LimitStep CreateLimitStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new()
+        {
+            Base = baseNode,
+            Count = ArgOr(args: args, extract: ExtractIdentifier, fallback: "10"),
+        };
 
     /// <summary>
     /// Creates an OFFSET step.
@@ -1970,11 +1924,12 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The OFFSET step.</returns>
-    private static OffsetStep CreateOffsetStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string offset = args.Length > 0 ? ExtractIdentifier(args[0]) : "0";
-        return new OffsetStep { Base = baseNode, Count = offset };
-    }
+    private static OffsetStep CreateOffsetStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new()
+        {
+            Base = baseNode,
+            Count = ArgOr(args: args, extract: ExtractIdentifier, fallback: "0"),
+        };
 
     /// <summary>
     /// Creates a UNION ALL step.
@@ -1982,12 +1937,31 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
     /// <param name="baseNode">The base node.</param>
     /// <param name="args">The arguments.</param>
     /// <returns>The UNION ALL step.</returns>
-    private UnionAllStep CreateUnionAllStep(INode baseNode, LqlParser.ArgContext[] args)
-    {
-        string otherQuery =
-            args.Length > 0 ? ExtractUnionQuery(args[0]) : "-- UNION ALL query not found";
-        return new UnionAllStep { Base = baseNode, OtherQuery = otherQuery };
-    }
+    private UnionAllStep CreateUnionAllStep(INode baseNode, LqlParser.ArgContext[] args) =>
+        new()
+        {
+            Base = baseNode,
+            OtherQuery = ArgOr(
+                args: args,
+                extract: ExtractUnionQuery,
+                fallback: "-- UNION ALL query not found"
+            ),
+        };
+
+    // Returns the extracted first argument, or a caller-supplied fallback when the
+    // step was written without arguments. Implements [LQL-AST-ARG-DEFAULTS].
+    private static string ArgOr(
+        LqlParser.ArgContext[] args,
+        Func<LqlParser.ArgContext, string> extract,
+        string fallback
+    ) => args.Length > 0 ? extract(args[0]) : fallback;
+
+    // Projects every ANTLR argument through one mapper so the step factories stay
+    // uniform. Implements [LQL-AST-ARG-MAPPING].
+    private static List<T> MapArgs<T>(
+        LqlParser.ArgContext[] args,
+        Func<LqlParser.ArgContext, T> map
+    ) => args.Select(map).ToList();
 
     // Implements [LQL-SHARED-TERMINAL-TEXT].
     private static string? TokenText(IReadOnlyList<ITerminalNode?> tokens)
@@ -2017,8 +1991,15 @@ internal sealed class LqlToAstVisitor : LqlBaseVisitor<INode>
         }
         else
         {
-            throw new SqlErrorException(CreateSqlErrorStatic(errorMessage, comparison));
+            throw CreateSqlErrorException(message: errorMessage, context: comparison);
         }
         return colName;
     }
+
+    // Implements [LQL-PARSER-SHARED-EXCEPTION-CONSTRUCTION].
+    private static SqlErrorException CreateSqlErrorException(
+        string message,
+        ParserRuleContext context,
+        string? sourceCode = null
+    ) => new(CreateSqlErrorStatic(message: message, context: context, sourceCode: sourceCode));
 }

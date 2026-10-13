@@ -44,10 +44,12 @@ public sealed partial class SchemaDiffSupportTests
         var current = SupportSchema();
         var desired = current with { Functions = [] };
 
-        var safe = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
-        var destructive = (
-            Ok(actual: SchemaDiff.Calculate(current, desired, allowDestructive: true))
-        ).Value;
+        var safe = SchemaDiffAssertions.Diff(current: current, desired: desired);
+        var destructive = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: desired,
+            destructive: true
+        );
 
         Assert.DoesNotContain(safe, op => op is DropFunctionOperation);
         Assert.Contains(destructive, op => op is DropFunctionOperation);

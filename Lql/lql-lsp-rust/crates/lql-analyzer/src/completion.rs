@@ -324,36 +324,50 @@ fn string_function_completions(prefix: &str) -> Vec<CompletionItem> {
     build_completions(fns, prefix, CompletionKind::Function, true, 2)
 }
 
-fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
-    let kws = vec![
-        (
-            "let",
-            "Variable binding",
-            "Binds a pipeline result to a name",
-        ),
-        ("fn", "Lambda function", "fn(params) => expression"),
-        ("case", "Case expression", "case when ... then ... end"),
-        ("as", "Column alias", "expression as alias_name"),
-        ("asc", "Ascending order", "Sort ascending"),
-        ("desc", "Descending order", "Sort descending"),
-        ("distinct", "Distinct modifier", "Remove duplicates"),
-    ];
+/// LQL keyword completion entries as `(label, title, snippet)` data.
+const KEYWORD_COMPLETIONS: &[(&str, &str, &str)] = &[
+    (
+        "let",
+        "Variable binding",
+        "Binds a pipeline result to a name",
+    ),
+    ("fn", "Lambda function", "fn(params) => expression"),
+    ("case", "Case expression", "case when ... then ... end"),
+    ("as", "Column alias", "expression as alias_name"),
+    ("asc", "Ascending order", "Sort ascending"),
+    ("desc", "Descending order", "Sort descending"),
+    ("distinct", "Distinct modifier", "Remove duplicates"),
+];
 
-    build_completions(kws, prefix, CompletionKind::Keyword, false, 3)
+/// Lambda-scope operator completion entries as `(label, title, snippet)` data.
+const LAMBDA_COMPLETIONS: &[(&str, &str, &str)] = &[
+    ("and", "Logical AND", "Combines conditions with AND"),
+    ("or", "Logical OR", "Combines conditions with OR"),
+    ("not", "Logical NOT", "Negates a condition"),
+    ("is", "IS check", "IS NULL / IS NOT NULL"),
+    ("in", "IN check", "Check membership in a set"),
+    ("like", "LIKE pattern", "Pattern matching with wildcards"),
+    ("exists", "EXISTS subquery", "Check subquery has results"),
+];
+
+fn keyword_completions(prefix: &str) -> Vec<CompletionItem> {
+    build_completions(
+        KEYWORD_COMPLETIONS.to_vec(),
+        prefix,
+        CompletionKind::Keyword,
+        false,
+        3,
+    )
 }
 
 fn lambda_completions(prefix: &str) -> Vec<CompletionItem> {
-    let ops = vec![
-        ("and", "Logical AND", "Combines conditions with AND"),
-        ("or", "Logical OR", "Combines conditions with OR"),
-        ("not", "Logical NOT", "Negates a condition"),
-        ("is", "IS check", "IS NULL / IS NOT NULL"),
-        ("in", "IN check", "Check membership in a set"),
-        ("like", "LIKE pattern", "Pattern matching with wildcards"),
-        ("exists", "EXISTS subquery", "Check subquery has results"),
-    ];
-
-    build_completions(ops, prefix, CompletionKind::Keyword, false, 3)
+    build_completions(
+        LAMBDA_COMPLETIONS.to_vec(),
+        prefix,
+        CompletionKind::Keyword,
+        false,
+        3,
+    )
 }
 
 #[cfg(test)]
@@ -493,8 +507,10 @@ mod tests {
         let items = get_completions(&ctx, &ScopeMap::new(), Some(&sample_schema()));
         // No columns, falls through to other completions
         assert!(!items.is_empty());
-        assert!(crate::test_support::completion_items_of_kind(&items, CompletionKind::Column)
-            .is_empty());
+        assert!(
+            crate::test_support::completion_items_of_kind(&items, CompletionKind::Column)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -585,7 +601,11 @@ mod tests {
     fn test_aggregate_completions() {
         let mut ctx = empty_ctx();
         ctx.word_prefix = "co".to_string();
-        crate::test_support::assert_labels(&labels_ctx(&ctx), &["count", "coalesce", "concat"], true);
+        crate::test_support::assert_labels(
+            &labels_ctx(&ctx),
+            &["count", "coalesce", "concat"],
+            true,
+        );
     }
 
     // ── many columns ──

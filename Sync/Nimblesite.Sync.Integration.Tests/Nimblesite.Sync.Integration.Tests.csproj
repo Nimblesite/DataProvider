@@ -60,4 +60,7 @@
   <ItemGroup>
     <Compile Include="../../Tests.Shared/MappingAssertions.cs" Link="Shared/MappingAssertions.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Tests.Shared/SyncTestFixtures.cs" Link="Shared/SyncTestFixtures.cs" />
+  </ItemGroup>
 </Project>

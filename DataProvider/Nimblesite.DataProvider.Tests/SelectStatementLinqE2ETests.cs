@@ -1,6 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 
 using Nimblesite.Lql.SQLite;
+using static global::Tests.Shared.RowAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -30,18 +31,12 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        DatabaseCommands.Execute(
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
             connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
-
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
-        );
-    }
 
     [Fact]
     public void WhereGeneric_SimpleEquality_ReturnsMatchingRows()
@@ -75,9 +70,11 @@ public sealed partial class SelectStatementLinqE2ETests : IDisposable
 
         var rows = ok.Value;
         Assert.Equal(3, rows.Count);
-        Assert.Contains(rows, r => r.Name == "Tool Alpha");
-        Assert.Contains(rows, r => r.Name == "Tool Beta");
-        Assert.Contains(rows, r => r.Name == "Tool Gamma");
+        ContainsAll(
+            rows: rows,
+            projection: r => r.Name,
+            expected: ["Tool Alpha", "Tool Beta", "Tool Gamma"]
+        );
         Assert.All(rows, r => Assert.Equal("Tools", r.Category));
     }
 

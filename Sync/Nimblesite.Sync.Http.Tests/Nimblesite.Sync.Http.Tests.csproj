@@ -72,6 +72,9 @@
     <Compile Include="../../Tests.Shared/MappingAssertions.cs" Link="Shared/MappingAssertions.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../../Tests.Shared/SyncTestFixtures.cs" Link="Shared/SyncTestFixtures.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile
       Include="../../Tests.Shared/TempSqliteDatabase.Sync.cs"
       Link="Shared/TempSqliteDatabase.Sync.cs"

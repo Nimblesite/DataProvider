@@ -44,11 +44,10 @@ public sealed partial class PostgresUniqueConstraintIssue55E2ETests(
                 Logger
             );
 
-            Assert.Contains(
+            SchemaDiffAssertions.AssertContainsOperation<AddUniqueConstraintOperation>(
                 upgrade,
-                op =>
-                    op is AddUniqueConstraintOperation add
-                    && add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
+                add =>
+                    add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
                     && add.UniqueConstraint.Columns.SequenceEqual(["tenant_id", "name"])
             );
 

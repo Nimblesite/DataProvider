@@ -21,7 +21,7 @@ mod diagnostics_tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn empty_source_produces_no_diagnostics_cases() {
         for &(input0,) in named_cases(NAMED_CASES_4) {
-            verify_expanded_empty_source_produces_no_diagnostics(input0);
+            crate::test_support::verify_analyze_empty_source(input0);
         }
     }
 
@@ -30,7 +30,7 @@ mod diagnostics_tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn correct_pipe_spacing_no_warning_cases() {
         for &(input0, input1) in named_cases(NAMED_CASES_1) {
-            verify_expanded_correct_pipe_spacing_no_warning(input0, input1);
+            crate::test_support::verify_no_diags_matching(input0, input1);
         }
     }
 
@@ -66,7 +66,7 @@ mod diagnostics_tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn multiple_pipes_on_one_line_cases() {
         for &(input0, input1) in named_cases(NAMED_CASES_3) {
-            verify_expanded_multiple_pipes_on_one_line(input0, input1);
+            crate::test_support::verify_no_diags_matching(input0, input1);
         }
     }
 
@@ -100,7 +100,7 @@ mod diagnostics_tests {
 
     #[test]
     fn keyword_not_reported_as_unknown() {
-        verify_correct_pipe_spacing_no_warning(
+        crate::test_support::verify_no_diags_matching(
             "users |> filter(fn(r) => r.users.id > 0)",
             "Unknown function: `fn`",
         );
@@ -165,37 +165,7 @@ mod diagnostics_tests {
         assert_eq!(pipe_diags[0].line, 1);
     }
 
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_correct_pipe_spacing_no_warning(input0: &str, input1: &str) {
-        crate::test_support::verify_no_diags_matching(input0, input1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_multiple_pipes_on_one_line(input0: &str, input1: &str) {
-        crate::test_support::verify_no_diags_matching(input0, input1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn check_empty_source_produces_no_diagnostics(input0: &str) {
-        crate::test_support::verify_analyze_empty_source(input0);
-    }
-
     include!("tests_expectations_0.fixtures.rs");
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_correct_pipe_spacing_no_warning(input0: &str, input1: &str) {
-        verify_correct_pipe_spacing_no_warning(input0, input1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_multiple_pipes_on_one_line(input0: &str, input1: &str) {
-        verify_multiple_pipes_on_one_line(input0, input1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_empty_source_produces_no_diagnostics(input0: &str) {
-        check_empty_source_produces_no_diagnostics(input0);
-    }
 
     include!("tests_case_inputs.fixtures.rs");
     include!(concat!(
@@ -329,11 +299,8 @@ mod completion_tests {
     fn table_completions_from_schema() {
         let schema = test_schema();
         let items = get_completions(&ctx("us", false, false), &ScopeMap::new(), Some(&schema));
-        let users = crate::test_support::single_completion_of_kind(
-            &items,
-            CompletionKind::Table,
-            "users",
-        );
+        let users =
+            crate::test_support::single_completion_of_kind(&items, CompletionKind::Table, "users");
         assert!(users.detail.contains("3 columns"));
     }
 
@@ -613,18 +580,12 @@ mod schema_tests {
 
     #[test]
     fn default_cache_is_empty() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_empty());
-        assert_eq!(cache.table_count(), 0);
-        assert!(cache.table_names().is_empty());
-        assert!(cache.age().is_none());
+        crate::test_support::verify_cache_default_is_empty();
     }
 
     #[test]
     fn from_tables_populates_cache() {
-        let cache = test_schema();
-        assert!(!cache.is_empty());
-        assert_eq!(cache.table_count(), 2);
+        crate::test_support::verify_cache_from_tables(&test_schema());
     }
 
     #[test]
@@ -700,7 +661,13 @@ mod schema_tests {
     // ── ColumnInfo ─────────────────────────────────────────────────────
     #[test]
     fn type_description_pk_not_null() {
-        crate::test_support::verify_type_description("id", "uuid", false, true, "uuid (PK) NOT NULL");
+        crate::test_support::verify_type_description(
+            "id",
+            "uuid",
+            false,
+            true,
+            "uuid (PK) NOT NULL",
+        );
     }
 
     #[test]
@@ -710,12 +677,24 @@ mod schema_tests {
 
     #[test]
     fn type_description_not_null_no_pk() {
-        crate::test_support::verify_type_description("total", "numeric", false, false, "numeric NOT NULL");
+        crate::test_support::verify_type_description(
+            "total",
+            "numeric",
+            false,
+            false,
+            "numeric NOT NULL",
+        );
     }
 
     #[test]
     fn type_description_nullable_pk() {
-        crate::test_support::verify_type_description("weird", "integer", true, true, "integer (PK)");
+        crate::test_support::verify_type_description(
+            "weird",
+            "integer",
+            true,
+            true,
+            "integer (PK)",
+        );
     }
 
     include!("tests_schema_data_2.fixtures.rs");
@@ -884,11 +863,7 @@ mod parser_integration_tests {
 
     #[test]
     fn lex_tokens_parens() {
-        let tokens = lex_tokens("select(x)");
-        let opens = tokens_of_type(&tokens, token_types::OPEN_PAREN);
-        let closes = tokens_of_type(&tokens, token_types::CLOSE_PAREN);
-        assert_eq!(opens.len(), 1);
-        assert_eq!(closes.len(), 1);
+        crate::test_support::verify_lex_tokens_parens("select(x)", 1, 1);
     }
 
     #[test]
@@ -930,11 +905,7 @@ mod parser_integration_tests {
     // ── get_token_structure ───────────────────────────────────────────────
     #[test]
     fn token_structure_empty() {
-        let ts = get_token_structure("");
-        assert!(ts.pipe_positions.is_empty());
-        assert!(ts.lines_ending_open_paren.is_empty());
-        assert!(ts.lines_starting_close_paren.is_empty());
-        assert!(ts.comment_lines.is_empty());
+        crate::test_support::verify_token_structure("", &[], 0, &[], &[]);
     }
 
     #[test]
@@ -958,12 +929,13 @@ mod parser_integration_tests {
 
     #[test]
     fn token_structure_complex() {
-        let source = "-- query\nusers\n|> select(\n  users.id\n)\n|> limit(10)";
-        let ts = get_token_structure(source);
-        assert_eq!(ts.comment_lines, vec![0]);
-        assert_eq!(ts.pipe_positions.len(), 2);
-        assert_eq!(ts.lines_ending_open_paren, vec![2]);
-        assert_eq!(ts.lines_starting_close_paren, vec![4]);
+        crate::test_support::verify_token_structure(
+            "-- query\nusers\n|> select(\n  users.id\n)\n|> limit(10)",
+            &[0],
+            2,
+            &[2],
+            &[4],
+        );
     }
 
     #[test]

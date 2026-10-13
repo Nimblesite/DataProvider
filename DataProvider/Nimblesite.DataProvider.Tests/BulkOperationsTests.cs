@@ -8,43 +8,6 @@ namespace Nimblesite.DataProvider.Tests;
 /// </summary>
 public sealed partial class BulkOperationsTests
 {
-    private static DatabaseTable CreateTestTable() =>
-        new()
-        {
-            Schema = "public",
-            Name = "Products",
-            Columns = new List<DatabaseColumn>
-            {
-                ColumnTestData.Create(
-                    name: "Id",
-                    cSharpType: "Guid",
-                    isPrimaryKey: true,
-                    isIdentity: false
-                ),
-                ColumnTestData.Create(name: "Name", cSharpType: "string", isNullable: false),
-                ColumnTestData.Create(name: "Price", cSharpType: "decimal", isNullable: false),
-                ColumnTestData.Create(name: "Category", cSharpType: "string", isNullable: true),
-            }.AsReadOnly(),
-        };
-
-    private static DatabaseTable CreateTableWithIdentity() =>
-        new()
-        {
-            Schema = "public",
-            Name = "Orders",
-            Columns = new List<DatabaseColumn>
-            {
-                ColumnTestData.Create(
-                    name: "Id",
-                    cSharpType: "int",
-                    isPrimaryKey: true,
-                    isIdentity: true
-                ),
-                ColumnTestData.Create(name: "CustomerId", cSharpType: "Guid", isNullable: false),
-                ColumnTestData.Create(name: "Total", cSharpType: "decimal", isNullable: false),
-            }.AsReadOnly(),
-        };
-
     [Theory]
     // GenerateBulkInsertMethod_WithValidTable_ReturnsSuccess
     [MemberData(nameof(GenerateBulkInsertMethod_WithValidTable_ReturnsSuccess_CasesInlineCases))]
@@ -57,30 +20,26 @@ public sealed partial class BulkOperationsTests
         string caseValue1,
         string caseValue2,
         string caseValue3
-    )
-    {
-        // Arrange
-        var table = CreateTestTable();
+    ) => AssertBulkInsertFragments(caseValue0, caseValue1, caseValue2, caseValue3);
 
-        // Act
-        // Act
-        // Assert
-        // Act
-        // Assert
+    // Implements [CI-TEST-SHARED-SCENARIOS]: runs the bulk-insert generator
+    // against the shared test table and asserts every expected fragment.
+    private static void AssertBulkInsertFragments(params string[] expected) =>
         SqlFragments(
-            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
-            expected: [caseValue0, caseValue1, caseValue2, caseValue3]
+            read: () => DataAccessGenerator.GenerateBulkInsertMethod(CreateTestTable()),
+            expected: [.. expected]
         );
-    }
 
     [Fact]
-    public void GenerateBulkInsertMethod_WithNullTable_ReturnsError()
+    public void GenerateBulkInsertMethod_WithNullTable_ReturnsError() =>
+        AssertNullTableReturnsError(result: DataAccessGenerator.GenerateBulkInsertMethod(null!));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: one null-table error check shared by
+    // the bulk insert and bulk upsert generators.
+    private static void AssertNullTableReturnsError(
+        global::Outcome.Result<string, global::Nimblesite.Sql.Model.SqlError> result
+    )
     {
-        // Act
-        var result = DataAccessGenerator.GenerateBulkInsertMethod(null!);
-
-        // Assert
-
         var error = Expected<StringError>(actual: result).Value;
         Assert.Contains("table cannot be null", error.Message);
     }
@@ -114,21 +73,7 @@ public sealed partial class BulkOperationsTests
         string caseValue0,
         string caseValue1,
         string caseValue2
-    )
-    {
-        // Arrange
-        var table = CreateTestTable();
-
-        // Act
-        // Act
-        // Assert
-        // Act
-        // Assert
-        SqlFragments(
-            read: () => DataAccessGenerator.GenerateBulkInsertMethod(table),
-            expected: [caseValue0, caseValue1, caseValue2]
-        );
-    }
+    ) => AssertBulkInsertFragments(caseValue0, caseValue1, caseValue2);
 
     [Fact]
     public void GenerateBulkInsertMethod_WithCustomBatchSize_UsesBatchSize()
@@ -203,16 +148,8 @@ public sealed partial class BulkOperationsTests
     }
 
     [Fact]
-    public void GenerateBulkUpsertMethod_WithNullTable_ReturnsError()
-    {
-        // Act
-        var result = DataAccessGenerator.GenerateBulkUpsertMethod(null!);
-
-        // Assert
-
-        var error = Expected<StringError>(actual: result).Value;
-        Assert.Contains("table cannot be null", error.Message);
-    }
+    public void GenerateBulkUpsertMethod_WithNullTable_ReturnsError() =>
+        AssertNullTableReturnsError(result: DataAccessGenerator.GenerateBulkUpsertMethod(null!));
 
     [Fact]
     public void GenerateBulkUpsertMethod_WithNoPrimaryKey_ReturnsEmpty()
@@ -282,7 +219,7 @@ public sealed partial class BulkOperationsTests
         System.String scenario0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         // Arrange
         var table = CreateTestTable();

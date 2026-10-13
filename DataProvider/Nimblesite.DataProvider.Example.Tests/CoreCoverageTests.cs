@@ -147,7 +147,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         System.String scenario1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         await SetupDatabase().ConfigureAwait(false);
 
@@ -198,7 +198,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         System.String scenario1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         await SetupDatabase().ConfigureAwait(false);
 
@@ -329,7 +329,7 @@ public sealed partial class CoreCoverageTests : IDisposable
         string insertSql
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         await SetupDatabase().ConfigureAwait(false);
 
         await Assert
@@ -375,12 +375,8 @@ public sealed partial class CoreCoverageTests : IDisposable
     #region DbTransactionExtensions
 
     [Fact]
-    public async Task TransactionQuery_WithValidSql_ReturnsResults()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionQuery_WithValidSql_ReturnsResults() =>
+        await InTransaction(body: tx =>
             {
                 var ok = Ok(
                     actual: QueryStrings(
@@ -390,18 +386,12 @@ public sealed partial class CoreCoverageTests : IDisposable
                 );
                 Assert.Equal(2, ok.Value.Count);
                 Assert.Equal("Acme Corp", ok.Value[0]);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
-    public async Task TransactionQuery_WithParameters_ReturnsFilteredResults()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionQuery_WithParameters_ReturnsFilteredResults() =>
+        await InTransaction(body: tx =>
             {
                 var ok = Ok(read: () =>
                     tx.Query(
@@ -411,10 +401,8 @@ public sealed partial class CoreCoverageTests : IDisposable
                     )
                 );
                 Assert.Single(ok.Value);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
     public void TransactionQuery_WithNullTransaction_ReturnsError()
@@ -424,27 +412,17 @@ public sealed partial class CoreCoverageTests : IDisposable
     }
 
     [Fact]
-    public async Task TransactionQuery_WithEmptySql_ReturnsError()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionQuery_WithEmptySql_ReturnsError() =>
+        await InTransaction(body: tx =>
             {
                 var result = tx.Query<string>(sql: "");
                 _ = Error(actual: result);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
-    public async Task TransactionExecute_WithValidSql_ReturnsRowsAffected()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionExecute_WithValidSql_ReturnsRowsAffected() =>
+        await InTransaction(body: tx =>
             {
                 var ok = Ok(read: () =>
                     tx.Execute(
@@ -452,18 +430,12 @@ public sealed partial class CoreCoverageTests : IDisposable
                     )
                 );
                 Assert.Equal(1, ok.Value);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
-    public async Task TransactionExecute_WithParameters_ReturnsRowsAffected()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionExecute_WithParameters_ReturnsRowsAffected() =>
+        await InTransaction(body: tx =>
             {
                 var result = tx.Execute(
                     sql: "UPDATE Customer SET Phone = @phone WHERE CustomerName = @name",
@@ -474,10 +446,8 @@ public sealed partial class CoreCoverageTests : IDisposable
                     ]
                 );
                 _ = Ok(actual: result);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
     public void TransactionExecute_WithNullTransaction_ReturnsError()
@@ -487,42 +457,26 @@ public sealed partial class CoreCoverageTests : IDisposable
     }
 
     [Fact]
-    public async Task TransactionExecute_WithEmptySql_ReturnsError()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionExecute_WithEmptySql_ReturnsError() =>
+        await InTransaction(body: tx =>
             {
                 var result = tx.Execute(sql: "  ");
                 _ = Error(actual: result);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
-    public async Task TransactionScalar_WithValidSql_ReturnsValue()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionScalar_WithValidSql_ReturnsValue() =>
+        await InTransaction(body: tx =>
             {
                 var ok = Ok(read: () => tx.Scalar<object>(sql: "SELECT COUNT(*) FROM Customer"));
                 Assert.Equal(2L, ok.Value);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
-    public async Task TransactionScalar_WithParameters_ReturnsValue()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionScalar_WithParameters_ReturnsValue() =>
+        await InTransaction(body: tx =>
             {
                 var ok = Ok(read: () =>
                     tx.Scalar<object>(
@@ -531,10 +485,8 @@ public sealed partial class CoreCoverageTests : IDisposable
                     )
                 );
                 Assert.Equal(1L, ok.Value);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     [Fact]
     public void TransactionScalar_WithNullTransaction_ReturnsError()
@@ -544,19 +496,13 @@ public sealed partial class CoreCoverageTests : IDisposable
     }
 
     [Fact]
-    public async Task TransactionScalar_WithEmptySql_ReturnsError()
-    {
-        await SetupDatabase().ConfigureAwait(false);
-
-        await _connection
-            .Transact(async tx =>
+    public async Task TransactionScalar_WithEmptySql_ReturnsError() =>
+        await InTransaction(body: tx =>
             {
                 var result = tx.Scalar<object>(sql: "");
                 _ = Error(actual: result);
-                await Task.CompletedTask.ConfigureAwait(false);
             })
             .ConfigureAwait(false);
-    }
 
     #endregion
 
@@ -734,6 +680,22 @@ public sealed partial class CoreCoverageTests : IDisposable
         IDbTransaction transaction,
         string sql
     ) => transaction.Query(sql: sql, mapper: reader => reader.GetString(0));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: runs a synchronous body against a
+    // transaction created after the shared database setup, preserving the
+    // original commit/rollback lifetime for every transaction receiver test.
+    private async Task InTransaction(Action<IDbTransaction> body)
+    {
+        await SetupDatabase().ConfigureAwait(false);
+
+        await _connection
+            .Transact(async tx =>
+            {
+                body(obj: tx);
+                await Task.CompletedTask.ConfigureAwait(false);
+            })
+            .ConfigureAwait(false);
+    }
 
     // Implements [CI-TEST-SHARED-SCENARIOS]: unwraps the one-column projection value.
     internal static IReadOnlyList<string> QueryStringList(IDbTransaction transaction, string sql) =>

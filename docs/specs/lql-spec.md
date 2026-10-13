@@ -223,7 +223,9 @@ SQL rewriting shares quoted-token dispatch and preserves single-quote escapes, d
 
 ## [LQL-FSHARP-SHARED-SQL-ASSERTIONS]
 
-Named F# runtime scenarios use one transpile and case-insensitive assertion workflow, retaining every input and expected fragment in its original order.
+Twenty-three named F# runtime scenarios use one transpile and case-insensitive
+assertion workflow. The independent data table preserves all 23 queries, original
+case labels and 47 expected fragments in their original order.
 
 ## [LQL-SHARED-IDENTIFIER-END]
 
@@ -236,3 +238,69 @@ Repeated Rust test bodies run once per named input row. Each iteration retains t
 ### Shared ORDER BY column extraction [LQL-ORDER-SHARED-COLUMN-EXTRACTION]
 
 Explicit and implicit ORDER BY directions use the same ANTLR column extraction, preserving qualified identifiers and branch-specific error messages. The fallback checks DESC before ASC and retains suffix trimming and case-insensitive matching.
+
+### Shared WHERE token rendering [LQL-CONTEXT-WHERE-SHARED]
+
+All three dialects share token dispatch for comparisons, logical operators,
+parentheses and expression conditions. Each retains its own column formatter;
+unknown tokens retain the existing comment output.
+
+### Shared ANTLR error listener [LQL-PARSER-SHARED-ERROR-LISTENER]
+
+Lexer and parser callbacks share error collection and source-position formatting.
+Lexer symbols keep zero byte offsets; parser symbols keep their token offsets
+with the existing zero fallback. Lexer errors retain precedence during parsing.
+
+### Shared F# seed orders [LQL-FSHARP-SHARED-SEED-ORDERS]
+
+The original seven order rows feed one generated insert callback. Inserts remain
+sequential and deferred, with the same values, transaction and first-error return.
+The independent input table is excluded with the existing fixture data rule.
+
+### Shared F# database row counts [LQL-FSHARP-SHARED-ROW-COUNT]
+
+Four named integration cases share fresh database creation, query execution and
+row-count assertions. Additional customer-name assertions run before the database
+connection is disposed, as in the original case.
+
+### Shared F# parse error assertions [LQL-FSHARP-SHARED-PARSE-ERROR]
+
+Invalid and empty runtime queries share the same Result match. Their named test
+cases, inputs and branch-specific failure messages remain intact.
+
+### Shared parser exception construction [LQL-PARSER-SHARED-EXCEPTION-CONSTRUCTION]
+
+Unsupported AST branches share exception construction with the existing static
+source-position formatter. Every branch retains its error message, context and
+throw point; no new failure branch is introduced.
+
+### Shared compile-time F# cases [LQL-FSHARP-SHARED-COMPILE-TIME-CASES]
+
+Sixteen named SQL-fragment cases share one runner, preserving their original
+compile-time query types and 24 expected fragments. F# fixture exclusions cover
+only the independent query aliases and expectation rows, leaving database setup,
+query execution and every assertion analysed.
+
+### Shared clause formatting [LQL-FUNCTION-MAPPING-SHARED-CLAUSE-FORMAT]
+
+LIMIT and OFFSET use one invariant-culture format operation with each dialect's
+original syntax template and caller-supplied count.
+
+- **[LQL-FSHARP-SHARED-CLEAR-DATA]**: Clear the F# provider fixture tables through one sequential native SQLite command loop, in Orders/Users/Products/Customer dependency order, disposing each command before the next deletion.
+- **[LQL-FILE-FIXTURE-SHARED-SET-ASSERTION]**: Compare each dialect fixture set through one assertion, preserving exact set equality and both missing-file diagnostics.
+
+- **[LQL-POSTGRES-SHARED-BARE-QUOTING]**: Inline qualified identifiers reuse the existing bare-identifier quoting rule for both the prefix and tail, preserving uppercase ASCII detection and SQL literal handling.
+
+- **[LQL-FSHARP-SHARED-EXECUTION-CASES]**: Six named native SQLite execution scenarios share count/nonempty runners. Preserve both original exact row counts, every positive-result check, and each original computed-column or aggregate-column assertion. Each case seeds and disposes its own connection.
+
+- **[LQL-TEST-SHARED-DIALECT-RESULTS]**: Dialect E2E conversion outcomes reuse the existing shared success assertion and value extraction. Execute all three conversions before checking PostgreSQL, SQL Server and SQLite in their original order, retaining dialect failure messages.
+
+- **[LQL-AST-ARG-DEFAULTS]**: AST step factories share first-argument extraction and retain their existing per-step fallback values when no argument is supplied.
+
+- **[LQL-AST-ARG-MAPPING]**: AST step factories share projection of each ANTLR argument in order through the original mapper.
+
+- **[LQL-FSHARP-SHARED-NAMED-CASE]**: F# scenario runners share the original nonempty-label assertion before invoking each scenario body; preserve assertion order and native connection lifetimes.
+
+- **[LQL-PREDICATE-IN-SUBQUERY]**: LQL IN predicates retain nested pipeline-to-subquery rendering and qualified identifier handling.
+
+- **[LQL-PREDICATE-EXISTS-SUBQUERY]**: LQL EXISTS predicates retain nested pipeline-to-subquery rendering and their original parser error behavior.

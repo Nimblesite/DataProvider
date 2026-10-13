@@ -368,6 +368,13 @@ mod tests {
         }
     }
 
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Completes `provider` with an empty context and returns the items.
+    async fn complete_empty(provider: &dyn AiCompletionProvider) -> Vec<CompletionItem> {
+        let ctx = empty_context();
+        provider.complete(&ctx).await
+    }
+
     /// Spawns a one-shot HTTP server responding with `body` and returns its endpoint URL.
     async fn stub_endpoint(body: String) -> String {
         use tokio::{io::AsyncWriteExt, net::TcpListener};
@@ -541,9 +548,10 @@ mod tests {
             "",
         );
         let prompt = OllamaProvider::build_prompt(&ctx);
-        assert!(prompt.contains("line 1"));
-        assert!(prompt.contains("column 26"));
-        assert!(prompt.contains("users |> select(users.id)"));
+        crate::test_support::assert_contains_all(
+            &prompt,
+            &["line 1", "column 26", "users |> select(users.id)"],
+        );
         assert!(!prompt.contains("Database schema"));
     }
 
@@ -616,7 +624,11 @@ mod tests {
     // ── OllamaProvider::new ────────────────────────────────────────────
     #[test]
     fn ollama_provider_new_stores_fields() {
-        let config = ollama_config("http://localhost:11434/api/generate", "qwen2.5-coder:1.5b", 2000);
+        let config = ollama_config(
+            "http://localhost:11434/api/generate",
+            "qwen2.5-coder:1.5b",
+            2000,
+        );
         let provider = OllamaProvider::new(&config, "LQL reference text".to_string());
         assert_eq!(provider.endpoint, "http://localhost:11434/api/generate");
         assert_eq!(provider.model, "qwen2.5-coder:1.5b");
@@ -727,9 +739,7 @@ mod tests {
         // A plain HTTP service that returns non-JSON exercises the
         // response.json() error branch.
         let endpoint = stub_endpoint("not valid json at all".to_string()).await;
-        let provider = ollama_provider(endpoint);
-        let ctx = empty_context();
-        let items = provider.complete(&ctx).await;
+        let items = complete_empty(&ollama_provider(endpoint)).await;
         assert!(items.is_empty(), "non-JSON body must yield empty");
     }
 
@@ -738,9 +748,7 @@ mod tests {
         // Server returns valid JSON but no "response" field.
         let endpoint =
             stub_endpoint(r#"{"other_field": "no response key here"}"#.to_string()).await;
-        let provider = ollama_provider(endpoint);
-        let ctx = empty_context();
-        let items = provider.complete(&ctx).await;
+        let items = complete_empty(&ollama_provider(endpoint)).await;
         assert!(items.is_empty());
     }
 

@@ -498,10 +498,7 @@ public sealed partial class SqliteMigrationTests
                     logger: _logger
                 );
 
-                Assert.True(
-                    result is MigrationApplyResultOk,
-                    $"Migration {i + 1} failed: {(result as MigrationApplyResultError)?.Value}"
-                );
+                SqliteTestDb.AssertApplyOk(result: result);
 
                 // Second run should have 0 operations (schema already matches)
                 if (i == 1)
@@ -633,19 +630,30 @@ public sealed partial class SqliteMigrationTests
         });
     }
 
-    [Fact]
-    public void LqlDefault_NumericValues_PassThrough()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: the numeric, string, UUID, date and
+    // mixed default scenarios share one seed-then-assert workflow. Case names
+    // preserve the original fact labels; inputs and assertions are unchanged.
+    [Theory]
+    [MemberData(nameof(LqlDefaultSeedAndAssertCases))]
+    public void LqlDefault_SeedAndAssert(
+        string scenario,
+        Func<SchemaDefinition> fixture,
+        string insertSql,
+        Action<SqliteConnection> assert
+    )
     {
-        // Arrange
-        // Implements [MIG-TEST-SQLITE-LIFETIME].
+        Assert.False(string.IsNullOrEmpty(scenario));
         SqliteTestDb.WithDb(test: connection =>
         {
-            SeedAndInsert(
-                input0: connection,
-                input1: Fixture_LqlDefault_NumericValues_PassThrough_1,
-                value0: "INSERT INTO counters (id) VALUES (1)"
-            );
+            SeedAndInsert(input0: connection, input1: fixture, value0: insertSql);
+            assert(connection);
+        });
+    }
 
+    public static IEnumerable<object[]> LqlDefaultSeedAndAssertCases()
+    {
+        Func<SchemaDefinition> numeric = Fixture_LqlDefault_NumericValues_PassThrough_1;
+        Action<SqliteConnection> assertNumeric = connection =>
             AssertFirstRow(
                 connection: connection,
                 value0: "SELECT count, priority, rate FROM counters WHERE id = 1",
@@ -656,22 +664,16 @@ public sealed partial class SqliteMigrationTests
                     Assert.Equal(1.5, reader.GetDouble(2), 2);
                 }
             );
-        });
-    }
+        yield return
+        [
+            "LqlDefault_NumericValues_PassThrough",
+            numeric,
+            "INSERT INTO counters (id) VALUES (1)",
+            assertNumeric,
+        ];
 
-    [Fact]
-    public void LqlDefault_StringLiteral_PassThrough()
-    {
-        // Arrange
-        // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
-        {
-            SeedAndInsert(
-                input0: connection,
-                input1: Fixture_LqlDefault_StringLiteral_PassThrough_1,
-                value0: "INSERT INTO items (id) VALUES (1)"
-            );
-
+        Func<SchemaDefinition> stringLiteral = Fixture_LqlDefault_StringLiteral_PassThrough_1;
+        Action<SqliteConnection> assertStringLiteral = connection =>
             AssertFirstRow(
                 connection: connection,
                 value0: "SELECT status, category FROM items WHERE id = 1",
@@ -681,22 +683,16 @@ public sealed partial class SqliteMigrationTests
                     Assert.Equal("uncategorized", reader.GetString(1));
                 }
             );
-        });
-    }
+        yield return
+        [
+            "LqlDefault_StringLiteral_PassThrough",
+            stringLiteral,
+            "INSERT INTO items (id) VALUES (1)",
+            assertStringLiteral,
+        ];
 
-    [Fact]
-    public void LqlDefault_GenUuid_GeneratesValidUuidFormat()
-    {
-        // Arrange
-        // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
-        {
-            SeedAndInsert(
-                input0: connection,
-                input1: Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1,
-                value0: "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')"
-            );
-
+        Func<SchemaDefinition> genUuid = Fixture_LqlDefault_GenUuid_GeneratesValidUuidFormat_1;
+        Action<SqliteConnection> assertGenUuid = connection =>
             WithReader(
                 connection,
                 "SELECT id FROM records",
@@ -714,49 +710,38 @@ public sealed partial class SqliteMigrationTests
                         uuids.Add(uuid);
                     }
 
-                    // All UUIDs should be unique
                     Assert.Equal(3, uuids.Count);
                     Assert.Equal(3, uuids.Distinct().Count());
                 }
             );
-        });
-    }
+        yield return
+        [
+            "LqlDefault_GenUuid_GeneratesValidUuidFormat",
+            genUuid,
+            "INSERT INTO records (name) VALUES ('test1'), ('test2'), ('test3')",
+            assertGenUuid,
+        ];
 
-    [Fact]
-    public void LqlDefault_CurrentDate_ReturnsDateOnly()
-    {
-        // Arrange
-        // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
+        Func<SchemaDefinition> currentDate = Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1;
+        Action<SqliteConnection> assertCurrentDate = connection =>
         {
-            SeedAndInsert(
-                input0: connection,
-                input1: Fixture_LqlDefault_CurrentDate_ReturnsDateOnly_1,
-                value0: "INSERT INTO logs (id) VALUES (1)"
-            );
-
             var logDate = VerifySharedContinuation4(
                 configure0: command =>
                     command.CommandText = "SELECT log_date FROM logs WHERE id = 1",
                 input0: connection
             );
-            Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", logDate); // YYYY-MM-DD format
-        });
-    }
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", logDate);
+        };
+        yield return
+        [
+            "LqlDefault_CurrentDate_ReturnsDateOnly",
+            currentDate,
+            "INSERT INTO logs (id) VALUES (1)",
+            assertCurrentDate,
+        ];
 
-    [Fact]
-    public void LqlDefault_MixedDefaults_AllWorkTogether()
-    {
-        // Arrange - A complex table with multiple LQL defaults
-        // Implements [MIG-TEST-SQLITE-LIFETIME].
-        SqliteTestDb.WithDb(test: connection =>
-        {
-            SeedAndInsert(
-                input0: connection,
-                input1: Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1,
-                value0: "INSERT INTO orders DEFAULT VALUES"
-            );
-
+        Func<SchemaDefinition> mixed = Fixture_LqlDefault_MixedDefaults_AllWorkTogether_1;
+        Action<SqliteConnection> assertMixed = connection =>
             WithReader(
                 connection,
                 "SELECT id, status, quantity, is_urgent, created_at FROM orders",
@@ -770,14 +755,20 @@ public sealed partial class SqliteMigrationTests
                     var isUrgent = reader.GetInt64(3);
                     var createdAt = reader.GetString(4);
 
-                    Assert.Matches(@"^[0-9a-f-]{36}$", id); // UUID format
-                    Assert.Equal("pending", status); // String default
-                    Assert.Equal(1, quantity); // Numeric default
-                    Assert.Equal(0, isUrgent); // Boolean false = 0
-                    Assert.NotEmpty(createdAt); // Timestamp generated
+                    Assert.Matches(@"^[0-9a-f-]{36}$", id);
+                    Assert.Equal("pending", status);
+                    Assert.Equal(1, quantity);
+                    Assert.Equal(0, isUrgent);
+                    Assert.NotEmpty(createdAt);
                 }
             );
-        });
+        yield return
+        [
+            "LqlDefault_MixedDefaults_AllWorkTogether",
+            mixed,
+            "INSERT INTO orders DEFAULT VALUES",
+            assertMixed,
+        ];
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -801,10 +792,7 @@ public sealed partial class SqliteMigrationTests
             var result = SeedSchema(connection: connection, schema: schema, logger: _logger);
 
             // Assert — migration succeeded
-            Assert.True(
-                result is MigrationApplyResultOk,
-                $"SQLite vector fallback migration failed: {(result as MigrationApplyResultError)?.Value}"
-            );
+            SqliteTestDb.AssertApplyOk(result: result);
 
             // Assert — embedding column exists with BLOB affinity
             using var cmd = connection.CreateCommand();
@@ -931,9 +919,7 @@ public sealed partial class SqliteMigrationTests
             );
 
             // Assert - Should have drop old index + create new expression index
-            Assert.Equal(2, upgradeOps.Count);
-            Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-            Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
+            SchemaDiffAssertions.AssertDropAndCreateIndex(upgradeOps);
 
             // Apply the upgrade
             global::Tests.Shared.ResultAssertions.Ok(
@@ -1115,10 +1101,7 @@ public sealed partial class SqliteMigrationTests
         // Act
         var result = SeedSchema(connection: input1, schema: schema, logger: input2);
         // Assert - Migration succeeded
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
-        );
+        SqliteTestDb.AssertApplyOk(result: result);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

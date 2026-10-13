@@ -17,14 +17,14 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 /// </summary>
 public sealed partial class RlsLqlExhaustiveTests
 {
-    private static string Pg(string lql) =>
-        (Ok(actual: RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, "p"))).Value;
+    private static string Translate(string lql, RlsPlatform platform) =>
+        (Ok(actual: RlsPredicateTranspiler.Translate(lql, platform, "p"))).Value;
 
-    private static string Sl(string lql) =>
-        (Ok(actual: RlsPredicateTranspiler.Translate(lql, RlsPlatform.Sqlite, "p"))).Value;
+    private static string Pg(string lql) => Translate(lql, RlsPlatform.Postgres);
 
-    private static string Mssql(string lql) =>
-        (Ok(actual: RlsPredicateTranspiler.Translate(lql, RlsPlatform.SqlServer, "p"))).Value;
+    private static string Sl(string lql) => Translate(lql, RlsPlatform.Sqlite);
+
+    private static string Mssql(string lql) => Translate(lql, RlsPlatform.SqlServer);
 
     // ── 1. Literal predicates ────────────────────────────────────────
 

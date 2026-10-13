@@ -1,3 +1,5 @@
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
+
 namespace Nimblesite.Sync.Tests;
 
 public sealed partial class HashVerifierTests
@@ -21,10 +23,7 @@ public sealed partial class HashVerifierTests
             Fixture_ComputeBatchHash_SameEntries_SameHash_2(),
         };
 
-        var hash1 = HashVerifier.ComputeBatchHash(entries);
-        var hash2 = HashVerifier.ComputeBatchHash(entries);
-
-        Assert.Equal(hash1, hash2);
+        AssertBatchHashStable(entries);
     }
 
     [Fact]

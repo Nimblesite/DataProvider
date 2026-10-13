@@ -113,7 +113,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         > value0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseOperationCaseMatrix1(input0: _conn, value0: value0);
     }
 
@@ -299,7 +299,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         > value0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseOperationCaseMatrix2(input0: _conn, value0: value0);
     }
 
@@ -450,7 +450,7 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
         System.String scenario5
     )
     {
-        Assert.False(string.IsNullOrEmpty(scenarioName)); // Create and populate test table
+        NamedCase(caseName: scenarioName); // Create and populate test table
         DatabaseCommands.Execute(
             connection: _conn,
             configure: command => command.CommandText = scenario0
@@ -703,7 +703,11 @@ public sealed partial class PostgresRepositoryTests(PostgresContainerFixture fix
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private List<SyncLogEntry> FetchLog(long fromVersion) =>
-        [.. (Ok(read: () => PostgresSyncLogRepository.FetchChanges(_conn, fromVersion, 100))).Value];
+        [
+            .. (
+                Ok(read: () => PostgresSyncLogRepository.FetchChanges(_conn, fromVersion, 100))
+            ).Value,
+        ];
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private Outcome.Result<bool, SyncError> ApplyInsert(

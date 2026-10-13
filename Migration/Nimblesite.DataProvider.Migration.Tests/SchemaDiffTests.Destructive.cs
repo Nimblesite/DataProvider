@@ -18,55 +18,30 @@ public sealed partial class SchemaDiffTests
         Assert.Empty(collection: ops);
     }
 
-    [Fact]
-    public void Calculate_RemovedTable_DroppedWhenDestructiveAllowed()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: the three removal kinds share one
+    // destructive-drop workflow; case names preserve the original fact labels.
+    [Theory]
+    [MemberData(nameof(DestructiveRemovalCases))]
+    public void Calculate_Removal_DroppedWhenDestructiveAllowed(
+        string scenario,
+        SchemaDefinition current,
+        SchemaDefinition desired,
+        string removedName
+    )
     {
-        // Arrange
-        var current = Fixture_Calculate_RemovedTable_DroppedWhenDestructiveAllowed_1();
+        Assert.False(string.IsNullOrEmpty(scenario));
 
-        var desired = UsersSchema(name: "Desired");
-
-        // Act
-        var dropOp = SchemaDiffAssertions.DiffSingle<DropTableOperation>(
-            current: current,
-            desired: desired,
-            destructive: true
+        var op = Assert.Single(
+            SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true)
         );
-        Assert.Equal("obsolete", dropOp.TableName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedColumn_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = UsersSchema(name: "Current", oldField: true);
-
-        var desired = UsersSchema(name: "Desired");
-
-        // Act
-        var dropColOp = SchemaDiffAssertions.DiffSingle<DropColumnOperation>(
-            current: current,
-            desired: desired,
-            destructive: true
-        );
-        Assert.Equal("old_field", dropColOp.ColumnName);
-    }
-
-    [Fact]
-    public void Calculate_RemovedIndex_DroppedWhenDestructiveAllowed()
-    {
-        // Arrange
-        var current = UsersSchema(name: "Current", indexEmail: true);
-
-        var desired = UsersSchema(name: "Desired", email: true);
-
-        // Act
-        var dropIdxOp = SchemaDiffAssertions.DiffSingle<DropIndexOperation>(
-            current: current,
-            desired: desired,
-            destructive: true
-        );
-        Assert.Equal("idx_users_email", dropIdxOp.IndexName);
+        var actual = op switch
+        {
+            DropTableOperation drop => drop.TableName,
+            DropColumnOperation drop => drop.ColumnName,
+            DropIndexOperation drop => drop.IndexName,
+            _ => null,
+        };
+        Assert.Equal(removedName, actual);
     }
 
     [Fact]

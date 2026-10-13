@@ -190,7 +190,7 @@ mod tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn test_analyze_empty_source_cases() {
         for &(input0,) in named_cases(NAMED_CASES_1) {
-            verify_expanded_test_analyze_empty_source(input0);
+            crate::test_support::verify_analyze_empty_source(input0);
         }
     }
 
@@ -228,29 +228,11 @@ mod tests {
     }
 
     #[test]
-    fn test_pipe_with_tab_is_ok() {
-        verify_expanded_test_pipe_with_tab_is_ok(
-            "users\t|>\tselect(users.id)",
-            "Pipeline operator",
-        );
-    }
-
-    #[test]
-    fn test_pipe_at_start_of_line() {
-        verify_expanded_test_pipe_with_tab_is_ok("|> select(users.id)", "preceded by");
-    }
-
-    #[test]
-    fn test_pipe_at_end_of_line() {
-        verify_expanded_test_pipe_with_tab_is_ok("users |>", "followed by");
-    }
-
-    #[test]
-    fn test_multiple_pipes_on_one_line() {
-        verify_expanded_test_pipe_with_tab_is_ok(
-            "a |> filter(x) |> select(y)",
-            "Pipeline operator",
-        );
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_pipe_spacing_no_diagnostic_cases() {
+        crate::test_support::run_named_cases(NAMED_CASES_PIPE_SPACING, |(input0, input1)| {
+            crate::test_support::verify_no_diags_matching(input0, input1);
+        });
     }
 
     // ── unknown functions (via ANTLR tree) ──
@@ -327,16 +309,6 @@ mod tests {
             .find(|d| d.message.contains("preceded by"))
             .unwrap();
         assert_eq!(pipe_diag.line, 1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_test_pipe_with_tab_is_ok(input0: &str, input1: &str) {
-        crate::test_support::verify_no_diags_matching(input0, input1);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_test_analyze_empty_source(input0: &str) {
-        crate::test_support::verify_analyze_empty_source(input0);
     }
 
     include!("diagnostics_case_inputs.fixtures.rs");

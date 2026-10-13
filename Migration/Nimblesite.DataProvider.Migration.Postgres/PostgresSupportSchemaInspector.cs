@@ -136,8 +136,22 @@ internal static partial class PostgresSupportSchemaInspector
     )
     {
         var grants = new List<PostgresGrantDefinition>();
-        grants.AddRange(InspectSchemaGrants(connection, schemaName));
-        grants.AddRange(InspectTableGrants(connection, schemaName));
+        grants.AddRange(
+            InspectGrants(
+                connection: connection,
+                schemaName: schemaName,
+                catalogQuery: CatalogQuery_InspectSchemaGrants_1,
+                target: PostgresGrantTarget.Schema
+            )
+        );
+        grants.AddRange(
+            InspectGrants(
+                connection: connection,
+                schemaName: schemaName,
+                catalogQuery: CatalogQuery_InspectTableGrants_2,
+                target: PostgresGrantTarget.Table
+            )
+        );
         return grants.AsReadOnly();
     }
 
@@ -157,26 +171,17 @@ internal static partial class PostgresSupportSchemaInspector
             .ToList()
             .AsReadOnly();
 
-    private static ReadOnlyCollection<PostgresGrantDefinition> InspectSchemaGrants(
+    private static ReadOnlyCollection<PostgresGrantDefinition> InspectGrants(
         NpgsqlConnection connection,
-        string schemaName
+        string schemaName,
+        string catalogQuery,
+        PostgresGrantTarget target
     )
     {
         using var command = connection.CreateCommand();
-        command.CommandText = CatalogQuery_InspectSchemaGrants_1;
+        command.CommandText = catalogQuery;
         command.Parameters.AddWithValue("@schema", schemaName);
-        return ReadGrantRows(command, schemaName, PostgresGrantTarget.Schema, null);
-    }
-
-    private static ReadOnlyCollection<PostgresGrantDefinition> InspectTableGrants(
-        NpgsqlConnection connection,
-        string schemaName
-    )
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = CatalogQuery_InspectTableGrants_2;
-        command.Parameters.AddWithValue("@schema", schemaName);
-        return ReadGrantRows(command, schemaName, PostgresGrantTarget.Table, null);
+        return ReadGrantRows(command, schemaName, target, null);
     }
 
     private static ReadOnlyCollection<PostgresGrantDefinition> ReadGrantRows(

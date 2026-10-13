@@ -38,14 +38,12 @@ public sealed partial class SqliteTransactionE2ETests : IDisposable
 #pragma warning restore CA1031
     }
 
-    private void CreateSchema()
-    {
-        VerifyReusableWorkflow19(
-            configure0: command => command.CommandText = Data_CreateSchema_1,
-            configure1: command => command.CommandText = Data_CreateSchema_2,
-            input0: _connection
+    private void CreateSchema() =>
+        SqliteSchemaSetup.Apply(
+            connection: _connection,
+            command => command.CommandText = Data_CreateSchema_1,
+            command => command.CommandText = Data_CreateSchema_2
         );
-    }
 
     private static void AssertLongQueryValue(
         Result<IReadOnlyList<long>, SqlError> result,
@@ -418,19 +416,6 @@ public sealed partial class SqliteTransactionE2ETests : IDisposable
         _ = global::Tests.Shared.ResultAssertions.Error(actual: emptyQuery);
 
         VerifyReusableWorkflow22(input0: tx, value0: "  ", value1: "");
-    }
-
-    // Implements [CI-TEST-SHARED-SCENARIOS].
-    internal static void VerifyReusableWorkflow19(
-        SqliteConnection input0,
-        global::System.Action<global::System.Data.Common.DbCommand> configure0,
-        global::System.Action<global::System.Data.Common.DbCommand> configure1
-    )
-    {
-        DatabaseCommands.Execute(connection: input0, configure: configure0);
-
-        // Seed inventory
-        DatabaseCommands.Execute(connection: input0, configure: configure1);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

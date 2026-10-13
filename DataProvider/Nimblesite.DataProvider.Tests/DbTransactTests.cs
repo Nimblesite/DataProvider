@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 #pragma warning disable CS1998 // This async method lacks 'await' operators and will run synchronously
 
 namespace Nimblesite.DataProvider.Tests;
@@ -154,7 +155,7 @@ public sealed partial class DbTransactTests : IDisposable
     [MemberData(nameof(Transact_SqliteConnection_ThrowsOnNullBody_ContextCasesData))]
     public Task Transact_SqliteConnection_ThrowsOnNullBody_ContextCases(string caseName)
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         return ExerciseProjectionCaseMatrix2(input0: _connection);
     }
 

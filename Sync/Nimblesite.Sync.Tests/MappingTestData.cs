@@ -52,4 +52,17 @@ internal static class MappingTestData
                 logger: logger
             )
         );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    internal static MappingSuccess ExpectNullMappedPayload(
+        Func<TableMapping> mapping,
+        Func<SyncLogEntry> entry,
+        ILogger logger
+    )
+    {
+        var config = Strict(mappings: [mapping()]);
+        var success = Expected<MappingSuccess>(entry: entry(), config: config, logger: logger);
+        Assert.Null(success.Entries[0].MappedPayload);
+        return success;
+    }
 }

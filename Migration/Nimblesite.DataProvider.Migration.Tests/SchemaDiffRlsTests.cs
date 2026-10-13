@@ -1,5 +1,3 @@
-using static global::Tests.Shared.ResultAssertions;
-
 // Implements [MIG-TEST-SCHEMA-FIXTURES].
 namespace Nimblesite.DataProvider.Migration.Tests;
 
@@ -24,9 +22,7 @@ public sealed partial class SchemaDiffRlsTests
             rls: new RlsPolicySetDefinition { Policies = [denied] },
             schema: "main"
         );
-        var ops = Assert
-            .IsType<OperationsResultOk>(SchemaDiff.Calculate(current: current, desired: desired))
-            .Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
         Assert.IsType<ReplaceRlsPolicyOperation>(Assert.Single(ops));
     }
 
@@ -38,7 +34,7 @@ public sealed partial class SchemaDiffRlsTests
             Fixture_Diff_NewTableWithRls_EmitsCreateTableThenEnableThenPolicy_1()
         );
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.IsType<CreateTableOperation>(ops[0]);
         Assert.Contains(ops, o => o is EnableRlsOperation);
@@ -58,7 +54,7 @@ public sealed partial class SchemaDiffRlsTests
             Fixture_Diff_ExistingTableNoRls_DesiredAddsPolicy_EmitsEnableAndCreate_1()
         );
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.Contains(ops, o => o is EnableRlsOperation);
         Assert.Contains(ops, o => o is CreateRlsPolicyOperation);
@@ -71,7 +67,7 @@ public sealed partial class SchemaDiffRlsTests
         var current = WithRls(new RlsPolicySetDefinition { Policies = [policy] });
         var desired = WithRls(new RlsPolicySetDefinition { Policies = [policy] });
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.DoesNotContain(ops, o => o is EnableRlsOperation);
         Assert.DoesNotContain(ops, o => o is CreateRlsPolicyOperation);
@@ -84,7 +80,7 @@ public sealed partial class SchemaDiffRlsTests
         var current = WithRls(Dataset_Diff_OrphanPolicy_AllowDestructiveFalse_NoDrop_1());
         var desired = WithRls(new RlsPolicySetDefinition { Policies = [] });
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.DoesNotContain(ops, o => o is DropRlsPolicyOperation);
     }
@@ -95,11 +91,9 @@ public sealed partial class SchemaDiffRlsTests
         var current = WithRls(Dataset_Diff_OrphanPolicy_AllowDestructiveTrue_EmitsDrop_1());
         var desired = WithRls(new RlsPolicySetDefinition { Policies = [] });
 
-        var ops = (
-            Ok(actual: SchemaDiff.Calculate(current, desired, allowDestructive: true))
-        ).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
 
-        Assert.Contains(ops, o => o is DropRlsPolicyOperation drop && drop.PolicyName == "orphan");
+        SchemaDiffAssertions.AssertDropsRlsPolicy(ops, "orphan");
     }
 
     [Fact]
@@ -108,9 +102,7 @@ public sealed partial class SchemaDiffRlsTests
         var current = WithRls(new RlsPolicySetDefinition { Enabled = true });
         var desired = WithRls(new RlsPolicySetDefinition { Enabled = false });
 
-        var ops = (
-            Ok(actual: SchemaDiff.Calculate(current, desired, allowDestructive: true))
-        ).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired, destructive: true);
 
         Assert.Contains(ops, o => o is DisableRlsOperation);
     }
@@ -121,7 +113,7 @@ public sealed partial class SchemaDiffRlsTests
         var current = WithRls(new RlsPolicySetDefinition { Enabled = true });
         var desired = WithRls(new RlsPolicySetDefinition { Enabled = false });
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         Assert.DoesNotContain(ops, o => o is DisableRlsOperation);
     }
@@ -135,7 +127,7 @@ public sealed partial class SchemaDiffRlsTests
             Dataset_Diff_AddSecondPolicy_OnlyEmitsCreateForNewPolicy_1(existing: existing)
         );
 
-        var ops = (Ok(actual: SchemaDiff.Calculate(current, desired))).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desired);
 
         var creates = ops.OfType<CreateRlsPolicyOperation>().ToList();
         Assert.Single(creates);

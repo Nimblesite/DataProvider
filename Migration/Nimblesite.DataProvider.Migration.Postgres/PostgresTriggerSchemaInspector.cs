@@ -24,9 +24,12 @@ internal static partial class PostgresTriggerSchemaInspector
             connection: connection,
             configure: command =>
             {
-                command.CommandText = CatalogQuery_Inspect_1;
-                command.Parameters.AddWithValue("@schema", schemaName);
-                command.Parameters.AddWithValue("@table", tableName);
+                PostgresCatalogQuery.Configure(
+                    command: command,
+                    sql: CatalogQuery_Inspect_1,
+                    schema: schemaName,
+                    table: tableName
+                );
                 command.Parameters.AddWithValue(
                     "@managedPattern",
                     $"{TriggerDdlSupport.ManagedTriggerPrefix.Replace("_", "\\_", StringComparison.Ordinal)}%"

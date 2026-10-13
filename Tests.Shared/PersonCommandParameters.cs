@@ -1,4 +1,5 @@
 using System.Data.Common;
+
 namespace Tests.Shared;
 
 // Implements [SYNC-TEST-PERSON-PARAMETERS].

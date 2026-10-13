@@ -41,62 +41,22 @@ let private verifyContains (lql: string) (expected: string list) : unit =
     for needle in expected do
         assertContainsCi needle sql
 
+// Implements [LQL-FSHARP-SHARED-NAMED-CASE].
+let internal verifyNamedCase (scenario: string) (verify: unit -> unit) : unit =
+    Assert.False(String.IsNullOrEmpty(scenario))
+    verify()
+
 [<Collection("TypeProvider")>]
 type RuntimeSelectTests() =
 
-    [<Fact>]
-    member _.``Runtime: select * generates SELECT *``() =
-        verifyContains "Customer |> select(*)" [ "SELECT"; "CUSTOMER" ]
-
-    [<Fact>]
-    member _.``Runtime: select named columns``() =
-        verifyContains "Users |> select(Users.Id, Users.Name, Users.Email)" [ "SELECT"; "ID"; "NAME"; "EMAIL" ]
-
-    [<Fact>]
-    member _.``Runtime: select with column alias``() =
-        verifyContains "Users |> select(Users.Id, Users.Name as username)" [ "AS" ]
-
-    [<Fact>]
-    member _.``Runtime: select multiple tables produces qualified columns``() =
-        verifyContains "Users |> select(Users.Id, Users.Name)" [ "USERS" ]
-
-[<Collection("TypeProvider")>]
-type RuntimeFilterTests() =
-
-    [<Fact>]
-    member _.``Runtime: simple filter generates WHERE``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18) |> select(Users.Name)" [ "WHERE"; ">" ]
-
-    [<Fact>]
-    member _.``Runtime: filter with AND``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18 and row.Users.Status = 'active') |> select(*)" [ "WHERE"; "AND" ]
-
-    [<Fact>]
-    member _.``Runtime: filter with OR``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age < 18 or row.Users.Role = 'admin') |> select(*)" [ "WHERE"; "OR" ]
-
-    [<Fact>]
-    member _.``Runtime: filter with equality on string literal``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Status = 'active') |> select(*)" [ "WHERE"; "ACTIVE" ]
-
-    [<Fact>]
-    member _.``Runtime: filter with less-than-or-equal``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age <= 65) |> select(*)" [ "WHERE" ]
-
-    [<Fact>]
-    member _.``Runtime: filter with greater-than-or-equal``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age >= 21) |> select(*)" [ "WHERE" ]
+    // Implements [LQL-FSHARP-SHARED-SQL-ASSERTIONS].
+    [<Theory>]
+    [<MemberData("RuntimeCases", MemberType = typeof<Nimblesite.Lql.TypeProvider.FSharp.Tests.Data.TestDataSeeder>)>]
+    member _.``Runtime: named SQL fragment scenarios``(scenario: string, lql: string, expected: string array) =
+        verifyNamedCase scenario (fun () -> verifyContains lql (Array.toList expected))
 
 [<Collection("TypeProvider")>]
 type RuntimeJoinTests() =
-
-    [<Fact>]
-    member _.``Runtime: inner join``() =
-        verifyContains "Users |> join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)" [ "JOIN"; "ON" ]
-
-    [<Fact>]
-    member _.``Runtime: left join``() =
-        verifyContains "Users |> left_join(Orders, on = Users.Id = Orders.UserId) |> select(Users.Name, Orders.Total)" [ "LEFT"; "JOIN" ]
 
     [<Fact>]
     member _.``Runtime: multiple joins chained``() =
@@ -107,44 +67,6 @@ type RuntimeJoinTests() =
         let joinCount =
             upper.Split([| "JOIN" |], System.StringSplitOptions.None).Length - 1
         Assert.True(joinCount >= 2, sprintf "Expected at least 2 JOINs, got SQL: %s" sql)
-
-[<Collection("TypeProvider")>]
-type RuntimeAggregationTests() =
-
-    [<Fact>]
-    member _.``Runtime: group by``() =
-        verifyContains "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as order_count)" [ "GROUP BY"; "COUNT" ]
-
-    [<Fact>]
-    member _.``Runtime: group by with sum and avg``() =
-        verifyContains "Orders |> group_by(Orders.Status) |> select(Orders.Status, sum(Orders.Total) as total_sum, avg(Orders.Total) as avg_total)" [ "GROUP BY"; "SUM"; "AVG" ]
-
-    [<Fact>]
-    member _.``Runtime: having clause``() =
-        verifyContains "Orders |> group_by(Orders.UserId) |> having(fn(g) => count(*) > 5) |> select(Orders.UserId, count(*) as cnt)" [ "HAVING" ]
-
-    [<Fact>]
-    member _.``Runtime: count star``() =
-        verifyContains "Users |> select(count(*) as total)" [ "COUNT" ]
-
-[<Collection("TypeProvider")>]
-type RuntimeOrderingTests() =
-
-    [<Fact>]
-    member _.``Runtime: order by ascending``() =
-        verifyContains "Users |> order_by(Users.Name asc) |> select(*)" [ "ORDER BY" ]
-
-    [<Fact>]
-    member _.``Runtime: order by descending``() =
-        verifyContains "Users |> order_by(Users.CreatedAt desc) |> select(*)" [ "ORDER BY"; "DESC" ]
-
-    [<Fact>]
-    member _.``Runtime: limit``() =
-        verifyContains "Users |> order_by(Users.Id) |> limit(10) |> select(*)" [ "LIMIT" ]
-
-    [<Fact>]
-    member _.``Runtime: limit with offset``() =
-        verifyContains "Users |> order_by(Users.Id) |> limit(10) |> offset(20) |> select(*)" [ "LIMIT"; "OFFSET" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeArithmeticTests() =
@@ -165,21 +87,6 @@ type RuntimeArithmeticTests() =
     member _.``Runtime: division``() =
         let sql = transpile "Orders |> select(Orders.Total / Orders.Quantity as unit_price)"
         Assert.Contains("/", sql)
-
-[<Collection("TypeProvider")>]
-type RuntimeComplexPipelineTests() =
-
-    [<Fact>]
-    member _.``Runtime: filter then select then order then limit``() =
-        verifyContains "Users |> filter(fn(row) => row.Users.Age > 18) |> order_by(Users.Name asc) |> limit(50) |> select(Users.Id, Users.Name)" [ "WHERE"; "ORDER BY"; "LIMIT" ]
-
-    [<Fact>]
-    member _.``Runtime: join + filter + group + having + order``() =
-        verifyContains "Users |> join(Orders, on = Users.Id = Orders.UserId) |> filter(fn(row) => row.Orders.Status = 'paid') |> group_by(Users.Id) |> having(fn(g) => sum(Orders.Total) > 100) |> order_by(Users.Id asc) |> select(Users.Id, sum(Orders.Total) as revenue)" [ "JOIN"; "WHERE"; "GROUP BY"; "HAVING"; "ORDER BY" ]
-
-    [<Fact>]
-    member _.``Runtime: group by with multiple aggregates``() =
-        verifyContains "Orders |> group_by(Orders.UserId) |> select(Orders.UserId, count(*) as orders, sum(Orders.Total) as revenue, avg(Orders.Total) as avg_order)" [ "GROUP BY"; "COUNT"; "SUM"; "AVG" ]
 
 [<Collection("TypeProvider")>]
 type RuntimeDistinctAndPredicateTests() =
@@ -223,23 +130,22 @@ type RuntimeSubqueryTests() =
         let expected = File.ReadAllText(path ".sql").Trim()
         Assert.Equal(expected, File.ReadAllText(path ".lql") |> transpile)
 
+// Implements [LQL-FSHARP-SHARED-PARSE-ERROR].
+let private verifyParseError (input: string) (expectedFailure: string) : unit =
+    let result = LqlStatementConverter.ToStatement(input)
+    match result with
+    | :? Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> -> ()
+    | :? Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> ->
+        failwith expectedFailure
+    | _ -> failwith "Unexpected result type"
+
 [<Collection("TypeProvider")>]
 type RuntimeParseErrorTests() =
 
     [<Fact>]
     member _.``Runtime: invalid LQL returns parse error``() =
-        let result = LqlStatementConverter.ToStatement("this is not valid lql @@@")
-        match result with
-        | :? Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> -> ()
-        | :? Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> ->
-            failwith "Expected parse error for invalid LQL"
-        | _ -> failwith "Unexpected result type"
+        verifyParseError "this is not valid lql @@@" "Expected parse error for invalid LQL"
 
     [<Fact>]
     member _.``Runtime: empty input returns parse error``() =
-        let result = LqlStatementConverter.ToStatement("")
-        match result with
-        | :? Result<LqlStatement, SqlError>.Error<LqlStatement, SqlError> -> ()
-        | :? Result<LqlStatement, SqlError>.Ok<LqlStatement, SqlError> ->
-            failwith "Expected parse error for empty input"
-        | _ -> failwith "Unexpected result type"
+        verifyParseError "" "Expected parse error for empty input"

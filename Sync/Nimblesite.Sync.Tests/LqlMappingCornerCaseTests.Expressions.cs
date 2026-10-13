@@ -1,4 +1,5 @@
 using System.Text.Json;
+using static global::Tests.Shared.ResultAssertions;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -28,7 +29,7 @@ public sealed partial class LqlMappingCornerCaseTests
         string expected
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         LqlExpressionAssertions.EvaluatesTo(json: json, expression: expression, expected: expected);
     }
 
@@ -87,7 +88,7 @@ public sealed partial class LqlMappingCornerCaseTests
         global::System.Object value2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseTypedCaseMatrix1(value0: value0, value1: value1, value2: value2);
     }
 

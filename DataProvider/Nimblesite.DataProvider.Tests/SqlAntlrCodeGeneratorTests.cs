@@ -10,17 +10,7 @@ namespace Nimblesite.DataProvider.Tests;
 public sealed partial class SqlAntlrCodeGeneratorTests
 {
     private static readonly IReadOnlyList<DatabaseColumn> GroupColumns =
-    [
-        ColumnTestData.Create(
-            name: "OrderId",
-            sqlType: "INTEGER",
-            cSharpType: "int",
-            isPrimaryKey: true
-        ),
-        ColumnTestData.Create(name: "OrderDate", sqlType: "TEXT", cSharpType: "string"),
-        ColumnTestData.Create(name: "LineId", sqlType: "INTEGER", cSharpType: "int"),
-        ColumnTestData.Create(name: "LineQty", sqlType: "INTEGER", cSharpType: "int"),
-    ];
+        CodeGenerationColumnSets.GroupColumns;
 
     private static SelectStatement MakeStatement(params string[] paramNames) =>
         new() { Parameters = paramNames.Select(n => new ParameterInfo(n)).ToFrozenSet() };
@@ -66,7 +56,7 @@ public sealed partial class SqlAntlrCodeGeneratorTests
         System.String scenario1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         global::Tests.Shared.ResultAssertions.Error(
             actual: SqlAntlrCodeGenerator.GenerateCodeWithMetadata(

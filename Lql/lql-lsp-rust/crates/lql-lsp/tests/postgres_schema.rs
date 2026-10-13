@@ -43,12 +43,49 @@ async fn seed_postgres(conn_str: &str, ddl: &str) {
     let _ = handle.await;
 }
 
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Asserts `table` has a column `name` with the given primary-key and
+/// nullability flags.
+fn assert_column_flags(
+    table: &lql_analyzer::TableInfo,
+    name: &str,
+    is_primary_key: bool,
+    is_nullable: bool,
+) {
+    let column = table
+        .columns
+        .iter()
+        .find(|c| c.name == name)
+        .expect("column missing");
+    assert_eq!(column.is_primary_key, is_primary_key, "{name} PK mismatch");
+    assert_eq!(
+        column.is_nullable, is_nullable,
+        "{name} nullability mismatch"
+    );
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Seeds `conn_str` with `ddl`, then fetches the schema — through the
+/// dispatch path when `dispatch` is set, otherwise the Postgres path.
+async fn seeded_schema(conn_str: &str, ddl: &str, dispatch: bool) -> lql_analyzer::SchemaCache {
+    seed_postgres(conn_str, ddl).await;
+    if dispatch {
+        lql_lsp::db::fetch_schema(conn_str)
+            .await
+            .expect("dispatch must succeed")
+    } else {
+        lql_lsp::db::fetch_postgres_schema(conn_str)
+            .await
+            .expect("fetch_postgres_schema must succeed against live DB")
+    }
+}
+
 #[tokio::test]
 async fn fetch_postgres_schema_returns_seeded_tables() {
     let (container, conn_str) = start_postgres().await;
 
     // Seed a known schema using tokio-postgres directly.
-    seed_postgres(
+    let schema = seeded_schema(
         &conn_str,
         "CREATE TABLE pg_test_users (
                 id UUID PRIMARY KEY NOT NULL,
@@ -60,13 +97,9 @@ async fn fetch_postgres_schema_returns_seeded_tables() {
                 user_id UUID NOT NULL,
                 total NUMERIC(10,2) NOT NULL
             );",
+        false,
     )
     .await;
-
-    // Now exercise fetch_postgres_schema against the seeded DB.
-    let schema = lql_lsp::db::fetch_postgres_schema(&conn_str)
-        .await
-        .expect("fetch_postgres_schema must succeed against live DB");
 
     assert!(
         schema.get_table("pg_test_users").is_some(),
@@ -78,21 +111,8 @@ async fn fetch_postgres_schema_returns_seeded_tables() {
     );
 
     let users = schema.get_table("pg_test_users").unwrap();
-    let id_col = users
-        .columns
-        .iter()
-        .find(|c| c.name == "id")
-        .expect("id column missing");
-    assert!(id_col.is_primary_key, "id must be marked PK");
-    assert!(!id_col.is_nullable, "id must be NOT NULL");
-
-    let email_col = users
-        .columns
-        .iter()
-        .find(|c| c.name == "email")
-        .expect("email column missing");
-    assert!(email_col.is_nullable, "email must be nullable");
-    assert!(!email_col.is_primary_key);
+    assert_column_flags(users, "id", true, false);
+    assert_column_flags(users, "email", false, true);
 
     // Container drops here, stopping the postgres instance.
     drop(container);
@@ -106,15 +126,12 @@ async fn fetch_schema_dispatches_to_postgres_for_libpq_uri() {
     let (container, conn_str) = start_postgres().await;
 
     // Seed something so the schema is non-empty.
-    seed_postgres(
+    let schema = seeded_schema(
         &conn_str,
         "CREATE TABLE dispatch_pg_test (id UUID PRIMARY KEY NOT NULL);",
+        true,
     )
     .await;
-
-    let schema = lql_lsp::db::fetch_schema(&conn_str)
-        .await
-        .expect("dispatch must succeed");
     assert!(schema.get_table("dispatch_pg_test").is_some());
 
     drop(container);

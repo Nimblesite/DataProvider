@@ -1,8 +1,8 @@
 // Implements [CI-TEST-SHARED-COMMAND-PARAMETERS].
 // Implements [CI-TEST-SHARED-COMMAND].
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging;
 using Tests.Shared;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.Tests;
 
@@ -10,25 +10,19 @@ namespace Nimblesite.Sync.Tests;
 /// Real end-to-end integration tests syncing between two SQLite databases.
 /// No mocks - actual data flowing between server and client DBs.
 /// </summary>
-public sealed partial class SyncIntegrationTests : IDisposable
+public sealed partial class SyncIntegrationTests : DualSqliteSyncTestBase
 {
-    private static readonly ILogger Logger = NullLogger.Instance;
-    private readonly string _serverDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
-        "syncintegration_server"
-    );
-    private readonly string _clientDbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
-        "syncintegration_client"
-    );
-    private readonly SqliteConnection _serverDb;
-    private readonly SqliteConnection _clientDb;
     private const string ServerOrigin = "server-origin-001";
     private const string ClientOrigin = "client-origin-001";
 
     public SyncIntegrationTests()
-    {
-        _serverDb = CreateSyncDatabase(ServerOrigin, _serverDbPath);
-        _clientDb = CreateSyncDatabase(ClientOrigin, _clientDbPath);
-    }
+        : base(
+            serverPath: global::Tests.Shared.TempSqliteDatabase.PathFor("syncintegration_server"),
+            clientPath: global::Tests.Shared.TempSqliteDatabase.PathFor("syncintegration_client"),
+            serverOrigin: ServerOrigin,
+            clientOrigin: ClientOrigin,
+            createSql: SqlData_CreateSyncDatabase_1
+        ) { }
 
     [Fact]
     public void PullChanges_ServerHasNewRecords_ClientReceivesThem()
@@ -204,77 +198,6 @@ public sealed partial class SyncIntegrationTests : IDisposable
     }
 
     // === Helper Methods ===
-
-    private static SqliteConnection CreateSyncDatabase(string originId, string dbPath)
-    {
-        var conn = VerifyReusableWorkflow10(
-            configure0: command =>
-                command.CommandText = SqlData_CreateSyncDatabase_1(originId: originId),
-            input0: dbPath
-        );
-
-        return conn;
-    }
-
-    private static void ExecutePerson(SqliteConnection db, string sql, string id, string name)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd => cmd.CommandText = sql,
-            parameters: () => [("$id", id), ("$name", name)]
-        );
-    }
-
-    internal static void InsertPerson(SqliteConnection db, string id, string name) =>
-        ExecutePerson(
-            db: db,
-            sql: "INSERT INTO Person (Id, Name) VALUES ($id, $name)",
-            id: id,
-            name: name
-        );
-
-    private static void UpdatePerson(SqliteConnection db, string id, string name) =>
-        ExecutePerson(db: db, sql: "UPDATE Person SET Name = $name WHERE Id = $id", id: id, name: name);
-
-    private static void DeletePerson(SqliteConnection db, string id)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = $id",
-            parameters: () => [("$id", id)]
-        );
-    }
-
-    private static string? GetName(SqliteConnection db, string table, string id) =>
-        global::Tests.Shared.DatabaseCommands.Scalar(
-                connection: db,
-                configure: command =>
-                    command.CommandText = $"SELECT Name FROM {table} WHERE Id = $id",
-                parameters: () => [("$id", id)]
-            ) as string;
-
-    private static string? GetPersonName(SqliteConnection db, string id) =>
-        GetName(db, "Person", id);
-
-    internal static void InsertParent(SqliteConnection db, string id, string name) =>
-        ExecutePerson(db: db, sql: "INSERT INTO Parent (Id, Name) VALUES ($id, $name)", id: id, name: name);
-
-    private static string? GetParentName(SqliteConnection db, string id) =>
-        GetName(db, "Parent", id);
-
-    internal static void InsertChild(SqliteConnection db, string id, string parentId, string name)
-    {
-        DatabaseCommands.Execute(
-            connection: db,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO Child (Id, ParentId, Name) VALUES ($id, $parentId, $name)",
-            parameters: () => [("$id", id), ("$parentId", parentId), ("$name", name)]
-        );
-    }
-
-    private static string? GetChildName(SqliteConnection db, string id) =>
-        GetName(db, "Child", id);
 
     private static int GetSyncLogCount(SqliteConnection db)
     {
@@ -478,14 +401,6 @@ public sealed partial class SyncIntegrationTests : IDisposable
         }
 
         return HashVerifier.ComputeDatabaseHash(["Person"], _ => rows);
-    }
-
-    public void Dispose()
-    {
-        _serverDb.Dispose();
-        _clientDb.Dispose();
-        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _serverDbPath);
-        global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: _clientDbPath);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

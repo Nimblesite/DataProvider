@@ -142,18 +142,12 @@ mod tests {
 
     #[test]
     fn test_default_is_empty() {
-        let cache = SchemaCache::default();
-        assert!(cache.is_empty());
-        assert_eq!(cache.table_count(), 0);
-        assert!(cache.table_names().is_empty());
-        assert!(cache.age().is_none());
+        crate::test_support::verify_cache_default_is_empty();
     }
 
     #[test]
     fn test_from_tables() {
-        let cache = sample_schema();
-        assert!(!cache.is_empty());
-        assert_eq!(cache.table_count(), 2);
+        crate::test_support::verify_cache_from_tables(&sample_schema());
     }
 
     #[test]

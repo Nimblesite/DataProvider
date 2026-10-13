@@ -3,6 +3,7 @@ using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
 using Outcome;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
@@ -94,7 +95,7 @@ public sealed partial class LqlFnCallInLambdaTests
         System.String scenario3
     )
     {
-        Assert.False(string.IsNullOrEmpty(scenarioName));
+        NamedCase(caseName: scenarioName);
         foreach (var sql in ToAllDialects(scenario0))
         {
             // Outer fn is emitted via ProcessFnCallExprToSql (lowercase preserved).

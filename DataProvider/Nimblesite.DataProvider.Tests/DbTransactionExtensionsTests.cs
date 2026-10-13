@@ -128,38 +128,38 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     {
         SqliteTransaction? nullTransaction = null;
 
-        var result = nullTransaction!.Query(
-            "SELECT * FROM TestTable",
-            null,
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            nullTransaction!.Query(
+                "SELECT * FROM TestTable",
+                null,
+                reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+            )
         );
-
-        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
-        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Query_WithNullSql_ReturnsError()
     {
-        var result = _transaction.Query(
-            null!,
-            null,
-            reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            _transaction.Query(
+                null!,
+                null,
+                reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+            )
         );
-
-        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
-        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Query_WithEmptySql_ReturnsError()
     {
-        global::Tests.Shared.ResultAssertions.Error(
-            actual: _transaction.Query(
-                "   ",
-                null,
-                reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
-            )
+        ExtensionTestCases.ExpectQueryError<TestRecord>(
+            sql: "   ",
+            query: sql =>
+                _transaction.Query(
+                    sql,
+                    null,
+                    reader => new TestRecord(reader.GetString(0), reader.GetInt32(1))
+                )
         );
     }
 
@@ -185,34 +185,25 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     {
         SqliteTransaction? nullTransaction = null;
 
-        var result = nullTransaction!.Execute(
-            "INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)"
+        ExtensionTestCases.AssertErrorMentionsNull<int>(
+            nullTransaction!.Execute("INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)")
         );
-
-        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
-        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Execute_WithNullSql_ReturnsError()
     {
-        var result = _transaction.Execute(null!);
-
-        var err = global::Tests.Shared.ResultAssertions.Error(actual: result).Value;
-        Assert.Contains("null", err.Message, StringComparison.OrdinalIgnoreCase);
+        ExtensionTestCases.AssertErrorMentionsNull<int>(_transaction.Execute(null!));
     }
 
     // Implements [CI-TEST-SHARED-CASE-MATRIX].
     [Theory]
     [MemberData(nameof(Execute_WithEmptySql_ReturnsError_ContextCasesData))]
     public void Execute_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
-        ExtensionTestCases.RunCase(
+        ExtensionTestCases.RunExecuteErrorCase(
             caseName: caseName,
-            caseBody: () =>
-                ExtensionTestCases.ExpectExecuteError(
-                    sql: value0,
-                    execute: sql => _transaction.Execute(sql)
-                )
+            sql: value0,
+            execute: sql => _transaction.Execute(sql)
         );
 
     [Fact]
@@ -231,30 +222,25 @@ public sealed partial class DbTransactionExtensionsTests : IDisposable
     {
         SqliteTransaction? nullTransaction = null;
 
-        var result = nullTransaction!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1");
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(
+            nullTransaction!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1")
+        );
     }
 
     [Fact]
     public void Scalar_WithNullSql_ReturnsError()
     {
-        var result = _transaction.Scalar<string>(null!);
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(_transaction.Scalar<string>(null!));
     }
 
     // Implements [CI-TEST-SHARED-CASE-MATRIX].
     [Theory]
     [MemberData(nameof(Scalar_WithEmptySql_ReturnsError_ContextCasesData))]
     public void Scalar_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
-        ExtensionTestCases.RunCase(
+        ExtensionTestCases.RunScalarNotOkCase<string?>(
             caseName: caseName,
-            caseBody: () =>
-                ExtensionTestCases.ExpectScalarNotOk<string?>(
-                    sql: value0,
-                    scalar: sql => _transaction.Scalar<string>(sql)
-                )
+            sql: value0,
+            scalar: sql => _transaction.Scalar<string>(sql)
         );
 
     [Fact]

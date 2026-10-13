@@ -1,33 +1,31 @@
-using System.CommandLine;
+using Nimblesite.Cli.Shared;
 
 namespace DataProvider;
 
 /// <summary>
-/// Unified DataProvider codegen tool. <see cref="Main"/> builds a
-/// <see cref="RootCommand"/> containing one subcommand per supported
-/// platform (<c>postgres</c>, <c>sqlite</c>) and dispatches. Every platform
-/// subcommand is authored in its own file (<see cref="PostgresCli"/>,
-/// <see cref="SqliteCli"/>) to keep this entry point under 50 lines per the
-/// plan.
+/// Unified DataProvider codegen tool. Delegates root command construction and
+/// dispatch to <see cref="CommandDispatch"/>. Every platform subcommand is
+/// authored in its own file (<see cref="PostgresCli"/>, <see cref="SqliteCli"/>,
+/// <see cref="SqlServerCli"/>).
 /// </summary>
 internal static class Program
 {
     /// <summary>
     /// Entry point. Wires every platform's subcommand onto a single
-    /// <see cref="RootCommand"/> and dispatches.
+    /// root command and dispatches.
     /// </summary>
-    public static Task<int> Main(string[] args)
-    {
-        var root = new RootCommand(
-            "DataProvider codegen tool. Generates type-safe data access code "
-                + "from a live database. Pick a platform subcommand: postgres | sqlite | sqlserver."
-        )
-        {
-            PostgresCli.BuildCommand(),
-            SqliteCli.BuildCommand(),
-            SqlServerCli.BuildCommand(),
-        };
-
-        return root.InvokeAsync(args);
-    }
+    /// <param name="args">Command line arguments.</param>
+    /// <returns>Exit code.</returns>
+    public static Task<int> Main(string[] args) =>
+        CommandDispatch.Run(
+            description: "DataProvider codegen tool. Generates type-safe data access code "
+                + "from a live database. Pick a platform subcommand: postgres | sqlite | sqlserver.",
+            args: args,
+            commandFactories:
+            [
+                PostgresCli.BuildCommand,
+                SqliteCli.BuildCommand,
+                SqlServerCli.BuildCommand,
+            ]
+        );
 }

@@ -202,7 +202,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         string value4
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix1(value2: value2, value3: value3, value4: value4);
     }
 
@@ -359,7 +359,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         global::System.Func<global::Nimblesite.Sql.Model.SqlError, global::System.String> value2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix3(value0: value0, value1: value1, value2: value2);
     }
 
@@ -602,7 +602,7 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         string value3
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix2(value1: value1, value2: value2, value3: value3);
     }
 
@@ -866,12 +866,10 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         var close = WhereCondition.CloseParen();
         var expr = WhereCondition.FromExpression("1 = 1");
 
-        Assert.NotNull(comparison);
-        Assert.NotNull(and);
-        Assert.NotNull(or);
-        Assert.NotNull(open);
-        Assert.NotNull(close);
-        Assert.NotNull(expr);
+        Assert.All(
+            [comparison, and, or, open, close, expr],
+            value => Assert.NotNull(@object: value)
+        );
     }
 
     [Fact]
@@ -883,11 +881,10 @@ public sealed partial class SqlModelCoverageTests : IDisposable
         var wildcardWithTable = ColumnInfo.Wildcard("t");
         var expression = ColumnInfo.FromExpression("COUNT(*)");
 
-        Assert.NotNull(named);
-        Assert.NotNull(namedWithAlias);
-        Assert.NotNull(wildcard);
-        Assert.NotNull(wildcardWithTable);
-        Assert.NotNull(expression);
+        Assert.All(
+            [named, namedWithAlias, wildcard, wildcardWithTable, expression],
+            value => Assert.NotNull(@object: value)
+        );
     }
 
     private async Task SetupDatabase()

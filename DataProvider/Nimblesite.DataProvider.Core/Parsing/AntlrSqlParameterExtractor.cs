@@ -70,7 +70,15 @@ public static class AntlrSqlParameterExtractor
             parameters.Add(paramName);
     }
 
-    private static bool IsValidParameterName(string name)
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="name"/> is a valid
+    /// SQL parameter identifier (starts with a letter or underscore, followed
+    /// by letters, digits or underscores only). Shared with dialect parsers
+    /// that scan raw token streams for grammar-invisible parameters.
+    /// </summary>
+    /// <param name="name">The candidate parameter name.</param>
+    /// <returns><see langword="true"/> when the name is a valid identifier.</returns>
+    internal static bool IsValidParameterName(string name)
     {
         if (string.IsNullOrEmpty(name))
             return false;

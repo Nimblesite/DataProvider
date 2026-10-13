@@ -34,17 +34,8 @@ internal static partial class PostgresCli
     /// </summary>
     public static Command BuildCommand()
     {
-        var projectDir = CliOptions.Required<DirectoryInfo>(
-            name: "--project-dir",
-            description: "Project directory containing sql files and DataProvider.json"
-        );
-        var config = CliOptions.Required<FileInfo>(
-            name: "--config",
-            description: "Path to DataProvider.json"
-        );
-        var outDir = CliOptions.Required<DirectoryInfo>(
-            name: "--out",
-            description: "Output directory for generated .g.cs files"
+        var (projectDir, config, outDir) = CliOptions.CommonRequiredOptions(
+            projectDirDescription: "Project directory containing sql files and DataProvider.json"
         );
         var offline = new Option<bool>(
             "--offline",
@@ -99,14 +90,12 @@ internal static partial class PostgresCli
     {
         try
         {
-            if (!configFile.Exists)
+            if (!CliFileSystem.EnsureConfigExists(configFile))
             {
-                Console.WriteLine($"❌ Config not found: {configFile.FullName}");
                 return 1;
             }
 
-            if (!outDir.Exists)
-                outDir.Create();
+            CliFileSystem.EnsureDirectory(outDir);
 
             var cfgText = await File.ReadAllTextAsync(configFile.FullName).ConfigureAwait(false);
             var cfg = JsonSerializer.Deserialize<PostgresDataProviderConfig>(cfgText, JsonOptions);

@@ -31,11 +31,7 @@ public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixtur
         Migrate(connection, ForeignKeySchema(hasReferenceColumn: false));
         var desired = ForeignKeySchema(hasReferenceColumn: true);
 
-        Migrate(connection, desired);
-
-        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertForeignKeyConverged(connection, desired);
     }
 
     [Fact]
@@ -51,11 +47,7 @@ public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixtur
         );
         Apply(connection, [addedColumn]);
 
-        Migrate(connection, desired);
-
-        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertForeignKeyConverged(connection, desired);
     }
 
     [Fact]
@@ -73,8 +65,7 @@ public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixtur
         var policy = Inspect(connection).Tables.Single().RowLevelSecurity?.Policies.Single();
         Assert.Contains("IS NULL", policy?.UsingSql);
         Assert.Contains("IS NULL", policy?.WithCheckSql);
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired));
+        AssertConverged(connection, desired);
     }
 
     [Fact]
@@ -97,8 +88,7 @@ public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixtur
         Assert.Equal(2, foreignKeys.Count);
         Assert.Contains(foreignKeys, fk => fk.Columns.Single() == "kept_a_id");
         Assert.Contains(foreignKeys, fk => fk.Columns.Single() == "kept_b_id");
-        AssertNoDrift(connection, desired);
-        Assert.Empty(Migrate(connection, desired, destructive: true));
+        AssertConverged(connection, desired, destructive: true);
     }
 
     private static SchemaDefinition CleanupSchema(bool includeObsolete)
@@ -183,8 +173,27 @@ public sealed partial class PostgresUpgradeBlockersTests(PostgresContainerFixtur
             PostgresDdlGenerator.Generate,
             destructive ? MigrationOptions.Destructive : MigrationOptions.Default
         );
-        var failure = result is MigrationApplyResultError error ? error.Value.ToString() : "";
-        Assert.True(result is MigrationApplyResultOk, $"Migration failed: {failure}");
+        SqliteTestDb.AssertApplyOk(result: result);
+    }
+
+    private static void AssertForeignKeyConverged(
+        NpgsqlConnection connection,
+        SchemaDefinition desired
+    )
+    {
+        Migrate(connection, desired);
+        Assert.Single(Inspect(connection).Tables.Single(t => t.Name == "children").ForeignKeys);
+        AssertConverged(connection, desired);
+    }
+
+    private static void AssertConverged(
+        NpgsqlConnection connection,
+        SchemaDefinition desired,
+        bool destructive = false
+    )
+    {
+        AssertNoDrift(connection, desired);
+        Assert.Empty(Migrate(connection, desired, destructive));
     }
 
     private static ImmutableArray<string> VerifyMismatches(

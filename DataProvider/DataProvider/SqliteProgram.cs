@@ -20,43 +20,18 @@ internal static class SqliteCli
 
     public static Command BuildCommand()
     {
-        var projectDir = CliOptions.Required<DirectoryInfo>(
-            name: "--project-dir",
-            description: "Project directory containing sql, grouping, and DataProvider.json"
-        );
-        var config = CliOptions.Required<FileInfo>(
-            name: "--config",
-            description: "Path to DataProvider.json"
-        );
-        var outDir = CliOptions.Required<DirectoryInfo>(
-            name: "--out",
-            description: "Output directory for generated .g.cs files"
-        );
         var connectionTypeOpt = new Option<string>(
             "--connection-type",
             getDefaultValue: () => "SqliteConnection",
             description: "Database connection type for generated code (e.g., SqliteConnection, NpgsqlConnection)"
         );
-        var cmd = new Command("sqlite", "Generate type-safe SQLite data access code")
-        {
-            projectDir,
-            config,
-            outDir,
-            connectionTypeOpt,
-        };
-        cmd.SetHandler(
-            async (DirectoryInfo proj, FileInfo cfg, DirectoryInfo output, string connType) =>
-            {
-                var exit = await RunAsync(proj, cfg, output, connectionType: connType)
-                    .ConfigureAwait(false);
-                Environment.Exit(exit);
-            },
-            projectDir,
-            config,
-            outDir,
-            connectionTypeOpt
+        return CliOptions.BuildPlatformCommand(
+            name: "sqlite",
+            description: "Generate type-safe SQLite data access code",
+            projectDirDescription: "Project directory containing sql, grouping, and DataProvider.json",
+            extraOption: connectionTypeOpt,
+            runAsync: RunAsync
         );
-        return cmd;
     }
 
     public static async Task<int> RunAsync(
@@ -68,14 +43,12 @@ internal static class SqliteCli
     {
         try
         {
-            if (!configFile.Exists)
+            if (!CliFileSystem.EnsureConfigExists(configFile))
             {
-                Console.WriteLine($"❌ Config not found: {configFile.FullName}");
                 return 1;
             }
 
-            if (!outDir.Exists)
-                outDir.Create();
+            CliFileSystem.EnsureDirectory(outDir);
 
             var cfgText = await File.ReadAllTextAsync(configFile.FullName).ConfigureAwait(false);
             var cfg = JsonSerializer.Deserialize<SourceGeneratorDataProviderConfiguration>(

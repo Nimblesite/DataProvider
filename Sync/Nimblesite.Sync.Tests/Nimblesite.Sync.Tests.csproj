@@ -61,5 +61,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/ResultAssertions.cs" Link="Shared/ResultAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/SyncFixtureSqliteHelpers.cs"
+      Link="Shared/SyncFixtureSqliteHelpers.cs"
+    />
   </ItemGroup>
 </Project>

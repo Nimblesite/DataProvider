@@ -79,8 +79,8 @@ public static class SqliteDdlGenerator
         {
             var fkCols = string.Join(", ", fk.Columns.Select(c => $"[{c}]"));
             var refCols = string.Join(", ", fk.ReferencedColumns.Select(c => $"[{c}]"));
-            var onDelete = ForeignKeyActionToSql(fk.OnDelete);
-            var onUpdate = ForeignKeyActionToSql(fk.OnUpdate);
+            var onDelete = ForeignKeyActionSql.ToSql(fk.OnDelete);
+            var onUpdate = ForeignKeyActionSql.ToSql(fk.OnUpdate);
 
             columnDefs.Add(
                 $"FOREIGN KEY ({fkCols}) REFERENCES [{fk.ReferencedTable}] ({refCols}) ON DELETE {onDelete} ON UPDATE {onUpdate}"
@@ -213,16 +213,5 @@ public static class SqliteDdlGenerator
             UuidType => "TEXT",
 
             _ => "TEXT",
-        };
-
-    private static string ForeignKeyActionToSql(ForeignKeyAction action) =>
-        action switch
-        {
-            ForeignKeyAction.NoAction => "NO ACTION",
-            ForeignKeyAction.Cascade => "CASCADE",
-            ForeignKeyAction.SetNull => "SET NULL",
-            ForeignKeyAction.SetDefault => "SET DEFAULT",
-            ForeignKeyAction.Restrict => "RESTRICT",
-            _ => "NO ACTION",
         };
 }

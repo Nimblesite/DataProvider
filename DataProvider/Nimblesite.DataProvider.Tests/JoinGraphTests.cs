@@ -1,3 +1,5 @@
+using static global::Tests.Shared.RowAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 public partial class JoinGraphTests
@@ -52,9 +54,11 @@ public partial class JoinGraphTests
         Assert.Equal(3, relationships.Count);
 
         // Verify all relationships are stored
-        Assert.Contains(relationships, r => r.LeftTable == "Users" && r.RightTable == "Posts");
-        Assert.Contains(relationships, r => r.LeftTable == "Posts" && r.RightTable == "Comments");
-        Assert.Contains(relationships, r => r.LeftTable == "Users" && r.RightTable == "Profiles");
+        ContainsAll(
+            rows: relationships,
+            projection: r => (r.LeftTable, r.RightTable),
+            expected: [("Users", "Posts"), ("Posts", "Comments"), ("Users", "Profiles")]
+        );
     }
 
     [Fact]

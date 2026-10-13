@@ -78,15 +78,14 @@ public static class PostgresChangeApplier
         ILogger logger
     )
     {
-        if (entry.Payload is null)
+        var payloadError = ParsePayload(
+            entry: entry,
+            operation: "Insert",
+            payload: out var payload
+        );
+        if (payloadError is not null)
         {
-            return new BoolSyncError(new SyncErrorDatabase("Insert requires payload"));
-        }
-
-        var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.Payload);
-        if (payload is null || payload.Count == 0)
-        {
-            return new BoolSyncError(new SyncErrorDatabase("Invalid payload format"));
+            return payloadError;
         }
 
         // PostgreSQL lowercases unquoted identifiers, so we lowercase column and table names
@@ -126,15 +125,14 @@ public static class PostgresChangeApplier
         ILogger logger
     )
     {
-        if (entry.Payload is null)
+        var payloadError = ParsePayload(
+            entry: entry,
+            operation: "Update",
+            payload: out var payload
+        );
+        if (payloadError is not null)
         {
-            return new BoolSyncError(new SyncErrorDatabase("Update requires payload"));
-        }
-
-        var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.Payload);
-        if (payload is null || payload.Count == 0)
-        {
-            return new BoolSyncError(new SyncErrorDatabase("Invalid payload format"));
+            return payloadError;
         }
 
         var pkParts = TryParsePk(entry, out var pkError);
@@ -205,6 +203,30 @@ public static class PostgresChangeApplier
         cmd.ExecuteNonQuery();
         logger.LogDebug("POSTGRES APPLY: Delete successful for {Table}", entry.TableName);
         return new BoolSyncOk(true);
+    }
+
+    // Shared payload deserialization prologue for ApplyInsert/ApplyUpdate.
+    private static BoolSyncResult? ParsePayload(
+        SyncLogEntry entry,
+        string operation,
+        out Dictionary<string, JsonElement> payload
+    )
+    {
+        if (entry.Payload is null)
+        {
+            payload = [];
+            return new BoolSyncError(new SyncErrorDatabase($"{operation} requires payload"));
+        }
+
+        var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.Payload);
+        if (parsed is null || parsed.Count == 0)
+        {
+            payload = [];
+            return new BoolSyncError(new SyncErrorDatabase("Invalid payload format"));
+        }
+
+        payload = parsed;
+        return null;
     }
 
     // Shared PK-JSON parse+validate prologue for ApplyUpdate/ApplyDelete.

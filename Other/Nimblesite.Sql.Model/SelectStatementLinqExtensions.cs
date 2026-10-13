@@ -395,41 +395,30 @@ public static class SelectStatementLinqExtensions
         }
     }
 
+    // Implements [DP-SQL-MODEL-SHARED-LIKE-PREDICATES].
     private static void ProcessMethodCall(
         MethodCallExpression method,
         List<WhereCondition> conditions
     )
     {
-        // Handle common string methods
-        if (method.Method.Name == "Contains" && method.Object != null)
+        var prefix = method.Method.Name switch
         {
-            var columnName = SelectStatementVisitor.ExtractColumnName(method.Object);
-            var value = SelectStatementVisitor.ExtractValue(method.Arguments[0]);
-            if (columnName != null && value != null)
-            {
-                conditions.Add(
-                    WhereCondition.Comparison(
-                        ColumnInfo.Named(columnName),
-                        ComparisonOperator.Like,
-                        $"%{value}%"
-                    )
-                );
-            }
-        }
-        else if (method.Method.Name == "StartsWith" && method.Object != null)
-        {
-            var columnName = SelectStatementVisitor.ExtractColumnName(method.Object);
-            var value = SelectStatementVisitor.ExtractValue(method.Arguments[0]);
-            if (columnName != null && value != null)
-            {
-                conditions.Add(
-                    WhereCondition.Comparison(
-                        ColumnInfo.Named(columnName),
-                        ComparisonOperator.Like,
-                        $"{value}%"
-                    )
-                );
-            }
-        }
+            "Contains" => "%",
+            "StartsWith" => "",
+            _ => null,
+        };
+        if (prefix is null || method.Object is null)
+            return;
+
+        var columnName = SelectStatementVisitor.ExtractColumnName(expression: method.Object);
+        var value = SelectStatementVisitor.ExtractValue(expression: method.Arguments[0]);
+        if (columnName is not null && value is not null)
+            conditions.Add(
+                WhereCondition.Comparison(
+                    left: ColumnInfo.Named(name: columnName),
+                    @operator: ComparisonOperator.Like,
+                    right: $"{prefix}{value}%"
+                )
+            );
     }
 }

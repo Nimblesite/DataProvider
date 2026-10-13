@@ -60,6 +60,7 @@
       Include="../../Tests.Shared/ExtensionTestCases.cs"
       Link="Shared/ExtensionTestCases.cs"
     />
+    <Compile Include="../../Tests.Shared/SqliteSchemaSetup.cs" Link="Shared/SqliteSchemaSetup.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile
@@ -74,6 +75,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile Include="../../Tests.Shared/RowAssertions.cs" Link="Shared/RowAssertions.cs" />
     <Compile
       Include="../../Tests.Shared/TempSqliteDatabase.cs"
       Link="Shared/TempSqliteDatabase.cs"

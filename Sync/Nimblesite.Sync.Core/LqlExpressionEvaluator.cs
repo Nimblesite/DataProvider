@@ -36,9 +36,7 @@ internal static partial class LqlExpressionEvaluator
         var match = FunctionCallRegex().Match(expression);
         if (match.Success)
         {
-            var functionName = match.Groups[1].Value.ToLowerInvariant();
-            var argsString = match.Groups[2].Value;
-            var args = ParseArguments(argsString);
+            var (functionName, args) = ParseFunctionCall(match: match);
             return EvaluateFunction(functionName, args, source);
         }
 
@@ -67,9 +65,7 @@ internal static partial class LqlExpressionEvaluator
             var match = FunctionCallRegex().Match(funcPart);
             if (match.Success)
             {
-                var functionName = match.Groups[1].Value.ToLowerInvariant();
-                var argsString = match.Groups[2].Value;
-                var args = ParseArguments(argsString);
+                var (functionName, args) = ParseFunctionCall(match: match);
 
                 // Prepend the piped value as first argument
                 var allArgs = new List<string> { value?.ToString() ?? "" };
@@ -151,9 +147,9 @@ internal static partial class LqlExpressionEvaluator
     /// </summary>
     private static string? EvaluateDateFormat(List<string> values)
     {
-        if (values.Count < 2 || string.IsNullOrEmpty(values[0]))
+        if (HasNoValue(values: values))
         {
-            return values.Count > 0 ? values[0] : null;
+            return FirstOrNull(values: values);
         }
 
         // Parse as DateTimeOffset to preserve the original timezone/UTC
@@ -179,9 +175,9 @@ internal static partial class LqlExpressionEvaluator
     /// </summary>
     private static string? EvaluateReplace(List<string> values)
     {
-        if (values.Count < 3 || string.IsNullOrEmpty(values[0]))
+        if (HasNoValue(values: values, minimumCount: 3))
         {
-            return values.Count > 0 ? values[0] : null;
+            return FirstOrNull(values: values);
         }
 
         var search = values[1].Trim('\'', '"');
@@ -192,29 +188,23 @@ internal static partial class LqlExpressionEvaluator
     /// <summary>
     /// Evaluates left(value, length).
     /// </summary>
-    private static string? EvaluateLeft(List<string> values)
-    {
-        if (values.Count < 2 || string.IsNullOrEmpty(values[0]))
-        {
-            return values.Count > 0 ? values[0] : null;
-        }
-
-        if (!int.TryParse(values[1], out var length))
-        {
-            return values[0];
-        }
-
-        return values[0].Length > length ? values[0][..length] : values[0];
-    }
+    private static string? EvaluateLeft(List<string> values) =>
+        EvaluateSide(values: values, take: static (value, length) => value[..length]);
 
     /// <summary>
     /// Evaluates right(value, length).
     /// </summary>
-    private static string? EvaluateRight(List<string> values)
+    private static string? EvaluateRight(List<string> values) =>
+        EvaluateSide(values: values, take: static (value, length) => value[^length..]);
+
+    /// <summary>
+    /// Applies a left- or right-take operation after validating arguments.
+    /// </summary>
+    private static string? EvaluateSide(List<string> values, Func<string, int, string> take)
     {
-        if (values.Count < 2 || string.IsNullOrEmpty(values[0]))
+        if (HasNoValue(values: values))
         {
-            return values.Count > 0 ? values[0] : null;
+            return FirstOrNull(values: values);
         }
 
         if (!int.TryParse(values[1], out var length))
@@ -222,8 +212,19 @@ internal static partial class LqlExpressionEvaluator
             return values[0];
         }
 
-        return values[0].Length > length ? values[0][^length..] : values[0];
+        return values[0].Length > length ? take(arg1: values[0], arg2: length) : values[0];
     }
+
+    /// <summary>
+    /// Returns true when the argument list is too short or its first value is empty.
+    /// </summary>
+    private static bool HasNoValue(List<string> values, int minimumCount = 2) =>
+        values.Count < minimumCount || string.IsNullOrEmpty(values[0]);
+
+    /// <summary>
+    /// Returns the first value when present, otherwise null.
+    /// </summary>
+    private static string? FirstOrNull(List<string> values) => values.Count > 0 ? values[0] : null;
 
     /// <summary>
     /// Resolves an argument - either a literal string, numeric literal, or column reference.
@@ -290,6 +291,12 @@ internal static partial class LqlExpressionEvaluator
             JsonValueKind.Null => null,
             _ => element.GetRawText(),
         };
+
+    /// <summary>
+    /// Extracts the lower-cased function name and parsed arguments from a match.
+    /// </summary>
+    private static (string FunctionName, List<string> Args) ParseFunctionCall(Match match) =>
+        (match.Groups[1].Value.ToLowerInvariant(), ParseArguments(match.Groups[2].Value));
 
     /// <summary>
     /// Parses function arguments, handling quoted strings and nested calls.

@@ -380,19 +380,11 @@ mod tests {
     }
 
     #[test]
-    fn test_build_scope_table_reference() {
-        crate::test_support::verify_scope_has_table("users |> select(users.id)", "users");
-    }
-
-    #[test]
-    fn test_build_scope_table_in_join() {
-        crate::test_support::verify_scope_has_table(
-            "users |> join(orders, on = users.id = orders.user_id)",
-            "users",
-        );
-        // Note: 'orders' inside join args may or may not be detected depending
-        // on ANTLR grammar parse of the arg list.
-        // We just verify the function doesn't panic on join syntax.
+    // Implements [LQL-RUST-NAMED-CASE-MATRICES].
+    fn test_build_scope_table_cases() {
+        crate::test_support::run_named_cases(NAMED_CASES_SCOPE_TABLE, |(input0, input1)| {
+            crate::test_support::verify_scope_has_table(input0, input1);
+        });
     }
 
     #[test]
@@ -419,28 +411,6 @@ mod tests {
     }
 
     // ── collect_tables_from_pipe / collect_tables_from_args (via build_scope) ──
-
-    #[test]
-    fn test_build_scope_join_does_not_panic() {
-        // join(orders, on = ...) — the grammar routes "orders" through
-        // columnAlias, not bare expr, so it may not be detected as a table.
-        // This test ensures the table-collection code runs without panic.
-        crate::test_support::verify_scope_has_table(
-            "users |> join(orders, on = users.id = orders.user_id) |> select(users.id)",
-            "users",
-        );
-    }
-
-    #[test]
-    fn test_build_scope_nested_pipe_in_union_arg() {
-        // Union with a nested pipe expression in its argument list.
-        // This exercises collect_tables_from_args -> pipeExpr branch.
-        crate::test_support::verify_scope_has_table(
-            "users |> union(orders |> select(orders.id))",
-            "users",
-        );
-        // orders may or may not be detected depending on grammar routing
-    }
 
     #[test]
     fn test_build_scope_let_with_select() {

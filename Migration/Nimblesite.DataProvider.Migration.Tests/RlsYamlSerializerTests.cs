@@ -19,11 +19,8 @@ public sealed partial class RlsYamlSerializerTests
 
         Assert.Single(deserialized.Tables);
         var table = deserialized.Tables[0];
-        Assert.NotNull(table.RowLevelSecurity);
-        Assert.True(table.RowLevelSecurity!.Enabled);
-        Assert.Single(table.RowLevelSecurity.Policies);
 
-        var policy = table.RowLevelSecurity.Policies[0];
+        var policy = RlsAssertions.EnabledWithSinglePolicy(table).Policies[0];
         Assert.Equal("owner_isolation", policy.Name);
         Assert.True(policy.IsPermissive);
         Assert.Single(policy.Operations);

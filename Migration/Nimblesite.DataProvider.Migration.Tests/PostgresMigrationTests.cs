@@ -34,10 +34,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var result = Apply(operations: ops);
 
         // Assert
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
 
         // Verify table exists
         // Verify table exists
@@ -283,10 +280,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
             var result = CalculateAndApplySchemaChanges(input0: currentSchema, input1: schema);
 
             // Both runs should succeed - IF NOT EXISTS handles already-existing index
-            Assert.True(
-                result is MigrationApplyResultOk,
-                $"Migration {i + 1} failed: {(result as MigrationApplyResultError)?.Value}"
-            );
+            PostgresTestDb.AssertApplyResult(apply: result);
         }
 
         // Verify expression index exists and is functional
@@ -438,74 +432,76 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         Assert.All(uuids, id => Assert.NotEqual(Guid.Empty, id));
     }
 
-    [Fact]
-    public void LqlDefault_BooleanTrue_GeneratesCorrectValue()
+    // Implements [CI-TEST-SHARED-CASE-MATRIX]: boolean, numeric and string
+    // literal defaults share one insert-then-read workflow. Case names preserve
+    // the original fact labels; inputs and assertions are unchanged.
+    [Theory]
+    [MemberData(nameof(LqlDefaultFirstRowCases))]
+    public void LqlDefault_FirstRow(
+        string scenario,
+        Func<SchemaDefinition> fixture,
+        string insertSql,
+        string selectSql,
+        Action<System.Data.Common.DbDataReader> assert
+    )
     {
-        // Arrange
+        Assert.False(string.IsNullOrEmpty(scenario));
         VerifySharedContinuation3(
-            configure0: command =>
-                command.CommandText =
-                    "INSERT INTO flags (id) VALUES ('11111111-1111-1111-1111-111111111111')",
-            input0: Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1
+            configure0: command => command.CommandText = insertSql,
+            input0: fixture
         );
+        PostgresTestDb.WithFirstRow(Connection, selectSql, assert);
+    }
 
-        // Verify defaults
-        PostgresTestDb.WithFirstRow(
-            Connection,
+    public static IEnumerable<object[]> LqlDefaultFirstRowCases()
+    {
+        Func<SchemaDefinition> booleanTrue = Fixture_LqlDefault_BooleanTrue_GeneratesCorrectValue_1;
+        Action<System.Data.Common.DbDataReader> assertBooleanTrue = reader =>
+        {
+            Assert.True(reader.GetBoolean(0));
+            Assert.False(reader.GetBoolean(1));
+        };
+        yield return
+        [
+            "LqlDefault_BooleanTrue_GeneratesCorrectValue",
+            booleanTrue,
+            "INSERT INTO flags (id) VALUES ('11111111-1111-1111-1111-111111111111')",
             "SELECT is_active, is_deleted FROM flags",
-            reader =>
-            {
-                Assert.True(reader.GetBoolean(0)); // is_active = true
-                Assert.False(reader.GetBoolean(1)); // is_deleted = false
-            }
-        );
-    }
+            assertBooleanTrue,
+        ];
 
-    [Fact]
-    public void LqlDefault_NumericLiterals_GeneratesCorrectValues()
-    {
-        // Arrange - Test integer and decimal defaults
-        VerifySharedContinuation3(
-            configure0: command =>
-                command.CommandText =
-                    "INSERT INTO counters (id) VALUES ('11111111-1111-1111-1111-111111111111')",
-            input0: Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1
-        );
-
-        // Verify defaults
-        PostgresTestDb.WithFirstRow(
-            Connection,
+        Func<SchemaDefinition> numeric =
+            Fixture_LqlDefault_NumericLiterals_GeneratesCorrectValues_1;
+        Action<System.Data.Common.DbDataReader> assertNumeric = reader =>
+        {
+            Assert.Equal(0, reader.GetInt32(0));
+            Assert.Equal(100m, reader.GetDecimal(1));
+            Assert.Equal(0.5, reader.GetDouble(2), 2);
+        };
+        yield return
+        [
+            "LqlDefault_NumericLiterals_GeneratesCorrectValues",
+            numeric,
+            "INSERT INTO counters (id) VALUES ('11111111-1111-1111-1111-111111111111')",
             "SELECT count, score, rate FROM counters",
-            reader =>
-            {
-                Assert.Equal(0, reader.GetInt32(0));
-                Assert.Equal(100m, reader.GetDecimal(1));
-                Assert.Equal(0.5, reader.GetDouble(2), 2);
-            }
-        );
-    }
+            assertNumeric,
+        ];
 
-    [Fact]
-    public void LqlDefault_StringLiteral_GeneratesCorrectValue()
-    {
-        // Arrange - Test string literal default with single quotes
-        VerifySharedContinuation3(
-            configure0: command =>
-                command.CommandText =
-                    "INSERT INTO statuses (id) VALUES ('11111111-1111-1111-1111-111111111111')",
-            input0: Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1
-        );
-
-        // Verify defaults
-        PostgresTestDb.WithFirstRow(
-            Connection,
+        Func<SchemaDefinition> stringLiteral =
+            Fixture_LqlDefault_StringLiteral_GeneratesCorrectValue_1;
+        Action<System.Data.Common.DbDataReader> assertStringLiteral = reader =>
+        {
+            Assert.Equal("pending", reader.GetString(0));
+            Assert.Equal("default", reader.GetString(1));
+        };
+        yield return
+        [
+            "LqlDefault_StringLiteral_GeneratesCorrectValue",
+            stringLiteral,
+            "INSERT INTO statuses (id) VALUES ('11111111-1111-1111-1111-111111111111')",
             "SELECT status, category FROM statuses",
-            reader =>
-            {
-                Assert.Equal("pending", reader.GetString(0));
-                Assert.Equal("default", reader.GetString(1));
-            }
-        );
+            assertStringLiteral,
+        ];
     }
 
     [Fact]
@@ -564,10 +560,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var result = Apply(operations: operations);
 
         // Assert — migration succeeded
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Vector migration failed: {(result as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
 
         // Assert — documents table exists
         var inspected = InspectPublic();
@@ -641,10 +634,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var result = Apply(operations: operations);
 
         // Assert
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Large-dim vector migration failed: {(result as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
 
         Assert.Equal(
             "vector(3072)",
@@ -694,9 +684,11 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition input1
     )
     {
-        var operations = (
-            (OperationsResultOk)SchemaDiff.Calculate(input0, input1, logger: Logger)
-        ).Value;
+        var operations = SchemaDiffAssertions.Diff(
+            current: input0,
+            desired: input1,
+            logger: Logger
+        );
 
         var result = Apply(operations: operations);
 
@@ -709,9 +701,11 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
     )
     {
         var emptySchema = InspectPublic();
-        var v1Ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(emptySchema, input0, logger: Logger)
-        ).Value;
+        var v1Ops = SchemaDiffAssertions.Diff(
+            current: emptySchema,
+            desired: input0,
+            logger: Logger
+        );
 
         return v1Ops;
     }
@@ -784,10 +778,7 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         var result = CalculateAndApplySchemaChanges(input0: input0, input1: input1);
 
         // Assert
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Migration failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
@@ -800,17 +791,12 @@ public sealed partial class PostgresMigrationTests(PostgresContainerFixture fixt
         ).Value;
 
         // Assert - Should have drop old index + create new expression index
-        Assert.Equal(2, upgradeOps.Count);
-        Assert.Contains(upgradeOps, op => op is DropIndexOperation);
-        Assert.Contains(upgradeOps, op => op is CreateIndexOperation);
+        SchemaDiffAssertions.AssertDropAndCreateIndex(upgradeOps);
 
         // Apply the upgrade
         var result = Apply(operations: upgradeOps, options: MigrationOptions.Destructive);
 
-        Assert.True(
-            result is MigrationApplyResultOk,
-            $"Upgrade failed: {(result is MigrationApplyResultError failure ? failure.Value : null)}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

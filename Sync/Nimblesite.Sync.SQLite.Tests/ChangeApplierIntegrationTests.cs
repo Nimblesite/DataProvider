@@ -62,7 +62,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         Func<SyncLogEntry> input0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseCaseMatrix1(input0: input0, input1: _db);
     }
 
@@ -123,7 +123,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         System.Int64 scenario2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         // Arrange
         VerifyReusableWorkflow12(
@@ -165,7 +165,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         global::System.Func<global::Nimblesite.Sync.Core.SyncLogEntry> scenario0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         // Arrange
         VerifyReusableWorkflow9(input0: scenario0, input1: ApplyChangeAndAssertSuccess);
@@ -203,7 +203,7 @@ public sealed partial class ChangeApplierIntegrationTests : IDisposable
         System.Int64 scenario3
     )
     {
-        Assert.False(string.IsNullOrEmpty(scenarioName)); // Arrange - Create table with boolean-like column
+        NamedCase(caseName: scenarioName); // Arrange - Create table with boolean-like column
         DatabaseCommands.Execute(
             connection: _db,
             configure: command =>

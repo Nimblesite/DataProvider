@@ -22,16 +22,10 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
 {
     protected override string DatabaseName => "rls_lql_e2e";
 
-    protected override void OnDatabaseCreated() => BootstrapRolesAndGucReaders(Connection);
-
-    /// <summary>
-    /// Phase 1 bootstrap: roles + GUC reader fns. Does NOT include is_member()
-    /// which depends on tenant_members existing (created by DP migrate).
-    /// </summary>
-    private static void BootstrapRolesAndGucReaders(NpgsqlConnection conn)
-    {
-        PostgresTestDb.Exec(conn, Data_BootstrapRolesAndGucReaders_1);
-    }
+    // Phase 1 bootstrap: roles + GUC reader fns. Does NOT include is_member(),
+    // which depends on tenant_members existing (created by DP migrate).
+    protected override void OnDatabaseCreated() =>
+        PostgresTestDb.Exec(Connection, Data_BootstrapRolesAndGucReaders_1);
 
     /// <summary>
     /// Phase 2 bootstrap (after DP creates tenant_members): SECURITY DEFINER
@@ -366,10 +360,12 @@ public sealed partial class PostgresLqlOnlyE2ETests(PostgresContainerFixture fix
             ],
         };
         var current = PostgresTestDb.Inspect(Connection, Logger);
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, depleted, allowDestructive: true, logger: Logger)
-        ).Value;
+        var ops = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: depleted,
+            destructive: true,
+            logger: Logger
+        );
 
         global::Tests.Shared.ResultAssertions.Ok(
             actual: PostgresTestDb.TryApply(

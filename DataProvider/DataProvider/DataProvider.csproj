@@ -42,4 +42,10 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.3" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile
+      Include="../../Other/Nimblesite.Cli.Shared/CommandDispatch.cs"
+      Link="CommandDispatch.cs"
+    />
+  </ItemGroup>
 </Project>

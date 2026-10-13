@@ -1,3 +1,6 @@
+using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.RowAssertions;
+
 namespace Nimblesite.DataProvider.Tests;
 
 /// <summary>
@@ -115,7 +118,7 @@ public sealed partial class SchemaTypesTests
         string value4
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix1(
             input0: VerifyReusableWorkflow7,
             input1: input1,
@@ -230,8 +233,7 @@ public sealed partial class SchemaTypesTests
     {
         // Assert
         Assert.Equal(2, input0.Count);
-        Assert.Contains(input0, c => c.Name == value1);
-        Assert.Contains(input0, c => c.Name == value2);
+        ContainsAll(rows: input0, projection: c => c.Name, expected: [value1, value2]);
         Assert.DoesNotContain(input0, c => c.Name == value3);
         Assert.DoesNotContain(input0, c => c.Name == value4);
     }

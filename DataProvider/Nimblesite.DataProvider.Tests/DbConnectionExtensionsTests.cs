@@ -28,60 +28,43 @@ public sealed partial class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var error = (
-            Error(read: () =>
-                nullConnection!.Query(
-                    "SELECT * FROM TestTable",
-                    null,
-                    reader => new TestRecord
-                    {
-                        Name = reader.GetString(1),
-                        Value = reader.GetInt32(2),
-                    }
-                )
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            nullConnection!.Query(
+                "SELECT * FROM TestTable",
+                null,
+                reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
             )
-        ).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
+        );
     }
 
     [Fact]
     public void Query_WithNullSql_ReturnsError()
     {
-        var error = (
-            Error(read: () =>
-                _connection.Query(
-                    null!,
-                    null,
-                    reader => new TestRecord
-                    {
-                        Name = reader.GetString(1),
-                        Value = reader.GetInt32(2),
-                    }
-                )
+        ExtensionTestCases.AssertErrorMentionsNull<IReadOnlyList<TestRecord>>(
+            _connection.Query(
+                null!,
+                null,
+                reader => new TestRecord { Name = reader.GetString(1), Value = reader.GetInt32(2) }
             )
-        ).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
+        );
     }
 
     // Implements [CI-TEST-SHARED-CASE-MATRIX].
     [Theory]
     [MemberData(nameof(Query_WithEmptySql_ReturnsError_CasesData))]
     public void Query_WithEmptySql_ReturnsError_Cases(string caseName, string value0) =>
-        ExtensionTestCases.RunCase(
+        ExtensionTestCases.RunQueryErrorCase<TestRecord>(
             caseName: caseName,
-            caseBody: () =>
-                ExtensionTestCases.ExpectQueryError<TestRecord>(
-                    sql: value0,
-                    query: sql =>
-                        _connection.Query(
-                            sql,
-                            null,
-                            reader => new TestRecord
-                            {
-                                Name = reader.GetString(1),
-                                Value = reader.GetInt32(2),
-                            }
-                        )
+            sql: value0,
+            query: sql =>
+                _connection.Query(
+                    sql,
+                    null,
+                    reader => new TestRecord
+                    {
+                        Name = reader.GetString(1),
+                        Value = reader.GetInt32(2),
+                    }
                 )
         );
 
@@ -132,34 +115,25 @@ public sealed partial class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var result = nullConnection!.Execute(
-            "INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)"
+        ExtensionTestCases.AssertErrorMentionsNull<int>(
+            nullConnection!.Execute("INSERT INTO TestTable (Name, Value) VALUES ('Test', 100)")
         );
-
-        var error = Expected<IntError>(actual: result).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Execute_WithNullSql_ReturnsError()
     {
-        var result = _connection.Execute(null!);
-
-        var error = Expected<IntError>(actual: result).Value;
-        Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
+        ExtensionTestCases.AssertErrorMentionsNull<int>(_connection.Execute(null!));
     }
 
     // Implements [CI-TEST-SHARED-CASE-MATRIX].
     [Theory]
     [MemberData(nameof(Execute_WithEmptySql_ReturnsError_ContextCasesData))]
     public void Execute_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
-        ExtensionTestCases.RunCase(
+        ExtensionTestCases.RunExecuteErrorCase(
             caseName: caseName,
-            caseBody: () =>
-                ExtensionTestCases.ExpectExecuteError(
-                    sql: value0,
-                    execute: sql => _connection.Execute(sql)
-                )
+            sql: value0,
+            execute: sql => _connection.Execute(sql)
         );
 
     [Fact]
@@ -179,30 +153,25 @@ public sealed partial class DbConnectionExtensionsTests : IDisposable
     {
         SqliteConnection? nullConnection = null;
 
-        var result = nullConnection!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1");
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(
+            nullConnection!.Scalar<string>("SELECT Name FROM TestTable LIMIT 1")
+        );
     }
 
     [Fact]
     public void Scalar_WithNullSql_ReturnsError()
     {
-        var result = _connection.Scalar<string>(null!);
-
-        Assert.False(result is NullableStringOk);
+        ExtensionTestCases.AssertScalarNotOk<string?>(_connection.Scalar<string>(null!));
     }
 
     // Implements [CI-TEST-SHARED-CASE-MATRIX].
     [Theory]
     [MemberData(nameof(Scalar_WithEmptySql_ReturnsError_ContextCasesData))]
     public void Scalar_WithEmptySql_ReturnsError_ContextCases(string caseName, string value0) =>
-        ExtensionTestCases.RunCase(
+        ExtensionTestCases.RunScalarNotOkCase<string?>(
             caseName: caseName,
-            caseBody: () =>
-                ExtensionTestCases.ExpectScalarNotOk<string?>(
-                    sql: value0,
-                    scalar: sql => _connection.Scalar<string>(sql)
-                )
+            sql: value0,
+            scalar: sql => _connection.Scalar<string>(sql)
         );
 
     [Fact]

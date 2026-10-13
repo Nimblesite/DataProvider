@@ -1,6 +1,7 @@
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.SQLite;
 using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 using ClientFailure = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
     Nimblesite.Sync.Core.SyncError
@@ -35,8 +36,7 @@ public sealed partial class SqliteExtensionIntegrationTests
         var result = _db.GetAllSyncClients();
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SyncClientListOk>(actual: result);
-        Assert.Empty((Ok(actual: result)).Value);
+        EmptyList(actual: result);
     }
 
     [Fact]

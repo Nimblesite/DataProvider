@@ -33,17 +33,14 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
             input0: Dataset_Calculate_TableCheckConstraintExpressionChanged_DropsAndReadds_2,
             input1: current
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<DropCheckConstraintOperation>(
             ops,
-            op =>
-                op is DropCheckConstraintOperation drop
-                && drop.ConstraintName == "usage_events_kind_check"
+            drop => drop.ConstraintName == "usage_events_kind_check"
         );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<AddCheckConstraintOperation>(
             ops,
-            op =>
-                op is AddCheckConstraintOperation add
-                && add.CheckConstraint.Name == "usage_events_kind_check"
+            add =>
+                add.CheckConstraint.Name == "usage_events_kind_check"
                 && add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
         );
     }
@@ -95,11 +92,9 @@ public sealed partial class SchemaDiffCheckConstraintIssue57Tests
             logger: NullLogger.Instance
         );
         Assert.Contains(ops, op => op is DropCheckConstraintOperation);
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<AddCheckConstraintOperation>(
             ops,
-            op =>
-                op is AddCheckConstraintOperation add
-                && add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
+            add => add.CheckConstraint.Expression.Contains("llm_request", StringComparison.Ordinal)
         );
     }
 

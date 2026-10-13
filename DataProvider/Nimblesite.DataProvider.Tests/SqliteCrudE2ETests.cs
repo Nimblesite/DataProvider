@@ -37,38 +37,26 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
         var patient2Id = Guid.NewGuid().ToString();
         var patient3Id = Guid.NewGuid().ToString();
 
-        var insert1 = ExecuteParameters(
-            connection: _connection,
-            sql: "INSERT INTO Patients (Id, Name, Age, Email, IsActive) VALUES (@id, @name, @age, @email, 1)",
-            values:
-            [
-                ("@id", patient1Id),
-                ("@name", "Alice Smith"),
-                ("@age", 30),
-                ("@email", "alice@example.com"),
-            ]
+        var insert1 = InsertPatient(
+            id: patient1Id,
+            name: "Alice Smith",
+            age: 30,
+            email: "alice@example.com",
+            isActive: 1
         );
-        var insert2 = ExecuteParameters(
-            connection: _connection,
-            sql: "INSERT INTO Patients (Id, Name, Age, Email, IsActive) VALUES (@id, @name, @age, @email, 1)",
-            values:
-            [
-                ("@id", patient2Id),
-                ("@name", "Bob Jones"),
-                ("@age", 45),
-                ("@email", "bob@example.com"),
-            ]
+        var insert2 = InsertPatient(
+            id: patient2Id,
+            name: "Bob Jones",
+            age: 45,
+            email: "bob@example.com",
+            isActive: 1
         );
-        var insert3 = ExecuteParameters(
-            connection: _connection,
-            sql: "INSERT INTO Patients (Id, Name, Age, Email, IsActive) VALUES (@id, @name, @age, @email, 0)",
-            values:
-            [
-                ("@id", patient3Id),
-                ("@name", "Charlie Brown"),
-                ("@age", 60),
-                ("@email", DBNull.Value),
-            ]
+        var insert3 = InsertPatient(
+            id: patient3Id,
+            name: "Charlie Brown",
+            age: 60,
+            email: DBNull.Value,
+            isActive: 0
         );
 
         // Verify inserts succeeded
@@ -166,22 +154,14 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
         // Insert multiple appointments
         var apt1Id = Guid.NewGuid().ToString();
         var apt2Id = Guid.NewGuid().ToString();
-        var apt3Id = VerifyReusableWorkflow9(
-            input0: ExecuteParameters,
-            input1: apt1Id,
-            input2: patientId,
-            value0: "INSERT INTO Appointments (Id, PatientId, AppointmentDate, Notes) VALUES (@id, @pid, @date, @notes)",
-            value3: "@date",
-            value4: "2026-01-15",
-            value5: "@notes",
-            value6: "Annual checkup"
-        );
+        var apt3Id = Guid.NewGuid().ToString();
         InsertAppointment(
-            id: apt2Id,
+            id: apt1Id,
             patientId: patientId,
-            date: "2026-02-20",
-            notes: "Follow-up"
+            date: "2026-01-15",
+            notes: "Annual checkup"
         );
+        InsertAppointment(id: apt2Id, patientId: patientId, date: "2026-02-20", notes: "Follow-up");
         InsertAppointment(
             id: apt3Id,
             patientId: patientId,
@@ -191,16 +171,8 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
 
         // Insert medications
         var med1Id = Guid.NewGuid().ToString();
-        var med2Id = VerifyReusableWorkflow9(
-            input0: ExecuteParameters,
-            input1: med1Id,
-            input2: patientId,
-            value0: "INSERT INTO Medications (Id, PatientId, DrugName, Dosage) VALUES (@id, @pid, @drug, @dosage)",
-            value3: "@drug",
-            value4: "Aspirin",
-            value5: "@dosage",
-            value6: "100mg daily"
-        );
+        var med2Id = Guid.NewGuid().ToString();
+        InsertMedication(id: med1Id, patientId: patientId, drug: "Aspirin", dosage: "100mg daily");
         InsertMedication(
             id: med2Id,
             patientId: patientId,
@@ -255,17 +227,12 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
     {
         // Insert data with various SQLite types
         var id = Guid.NewGuid().ToString();
-        ExecuteParameters(
-            connection: _connection,
-            sql: "INSERT INTO Patients (Id, Name, Age, Email, IsActive) VALUES (@id, @name, @age, @email, @active)",
-            values:
-            [
-                ("@id", id),
-                ("@name", "Test O'Brien"),
-                ("@age", 25),
-                ("@email", "test@example.com"),
-                ("@active", 1),
-            ]
+        InsertPatient(
+            id: id,
+            name: "Test O'Brien",
+            age: 25,
+            email: "test@example.com",
+            isActive: 1
         );
 
         // Query with string parameter containing special characters
@@ -375,6 +342,27 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
+    private Outcome.Result<int, SqlError> InsertPatient(
+        string id,
+        string name,
+        int age,
+        object? email,
+        int isActive
+    ) =>
+        ExecuteParameters(
+            connection: _connection,
+            sql: "INSERT INTO Patients (Id, Name, Age, Email, IsActive) VALUES (@id, @name, @age, @email, @active)",
+            values:
+            [
+                ("@id", id),
+                ("@name", name),
+                ("@age", age),
+                ("@email", email),
+                ("@active", isActive),
+            ]
+        );
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
     private void InsertAppointment(string id, string patientId, string date, string notes) =>
         ExecuteParameters(
             connection: _connection,
@@ -416,32 +404,5 @@ public sealed partial class SqliteCrudE2ETests : IDisposable
             )
         );
         Assert.Equal(value3, updatedAgeOk.Value[0]);
-    }
-
-    // Implements [CI-TEST-SHARED-SCENARIOS].
-    private string VerifyReusableWorkflow9(
-        Func<
-            SqliteConnection,
-            string,
-            ImmutableArray<(string Name, object? Value)>,
-            Result<int, Sql.Model.SqlError>
-        > input0,
-        string input1,
-        string input2,
-        string value0,
-        string value3,
-        string value4,
-        string value5,
-        string value6
-    )
-    {
-        var apt3Id = Guid.NewGuid().ToString();
-        input0(
-            arg1: _connection,
-            arg2: value0,
-            arg3: [("@id", input1), ("@pid", input2), (value3, value4), (value5, value6)]
-        );
-
-        return apt3Id;
     }
 }

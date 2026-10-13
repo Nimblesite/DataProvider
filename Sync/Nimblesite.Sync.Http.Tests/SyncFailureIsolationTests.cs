@@ -11,31 +11,17 @@ namespace Nimblesite.Sync.Http.Tests;
 /// These tests MUST FAIL until the underlying issues are fixed.
 /// Based on sync errors: Connection timeout, Version mismatch, Pending stuck state.
 /// </summary>
-public sealed partial class SyncFailureIsolationTests : IDisposable
+public sealed partial class SyncFailureIsolationTests : HttpSqliteSyncTestFixture
 {
-    private readonly string _serverDbPath;
-    private readonly SqliteConnection _serverConn;
-    private readonly string _clientDbPath;
-    private readonly SqliteConnection _clientConn;
-    private readonly string _serverOriginId = Guid.NewGuid().ToString();
-    private readonly string _clientOriginId = Guid.NewGuid().ToString();
-    private readonly ILogger _logger = NullLogger.Instance;
-
     /// <summary>
     /// Initializes test databases.
     /// </summary>
     public SyncFailureIsolationTests()
-    {
-        (_serverDbPath, _serverConn) = global::Tests.Shared.TempSqliteDatabase.Create(
-            "sync_fail_server"
-        );
-        InitializeDatabase(_serverConn, _serverOriginId);
-
-        (_clientDbPath, _clientConn) = global::Tests.Shared.TempSqliteDatabase.Create(
-            "sync_fail_client"
-        );
-        InitializeDatabase(_clientConn, _clientOriginId);
-    }
+        : base(
+            serverName: "sync_fail_server",
+            clientName: "sync_fail_client",
+            initialize: InitializeDatabase
+        ) { }
 
     private static void InitializeDatabase(SqliteConnection conn, string originId)
     {
@@ -48,19 +34,6 @@ public sealed partial class SyncFailureIsolationTests : IDisposable
         TriggerGenerator.CreateTriggers(conn, "fhir_Encounter", NullLogger.Instance);
         TriggerGenerator.CreateTriggers(conn, "fhir_Practitioner", NullLogger.Instance);
         TriggerGenerator.CreateTriggers(conn, "fhir_Appointment", NullLogger.Instance);
-    }
-
-    /// <summary>
-    /// Disposes test resources.
-    /// </summary>
-    public void Dispose()
-    {
-        global::Nimblesite.Sync.Http.Tests.HttpSyncE2ETests.VerifyReusableWorkflow3(
-            input0: _serverConn,
-            input1: _clientConn,
-            input2: _serverDbPath,
-            input3: _clientDbPath
-        );
     }
 
     #region Connection Timeout Tests (sync-004: Encounter enc-101)

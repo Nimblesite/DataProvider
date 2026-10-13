@@ -141,24 +141,27 @@ internal static class SchemaYamlReader
         };
     }
 
-    private static PrimaryKeyDefinition ReadPrimaryKey(YamlNode node)
-    {
-        var map = AsMapping(node);
-        return new PrimaryKeyDefinition
-        {
-            Name = ReadString(map, "name"),
-            Columns = ReadStringList(map, "columns"),
-        };
-    }
+    private static PrimaryKeyDefinition ReadPrimaryKey(YamlNode node) =>
+        ReadNamedColumns(
+            node,
+            (name, columns) => new PrimaryKeyDefinition { Name = name, Columns = columns }
+        );
 
-    private static UniqueConstraintDefinition ReadUniqueConstraint(YamlNode node)
+    private static UniqueConstraintDefinition ReadUniqueConstraint(YamlNode node) =>
+        ReadNamedColumns(
+            node,
+            (name, columns) => new UniqueConstraintDefinition { Name = name, Columns = columns }
+        );
+
+    // Implements [MIG-AOT-YAML]: primary keys and unique constraints share the
+    // same optional name plus column list mapping.
+    private static T ReadNamedColumns<T>(
+        YamlNode node,
+        Func<string?, IReadOnlyList<string>, T> create
+    )
     {
         var map = AsMapping(node);
-        return new UniqueConstraintDefinition
-        {
-            Name = ReadString(map, "name"),
-            Columns = ReadStringList(map, "columns"),
-        };
+        return create(ReadString(map, "name"), ReadStringList(map, "columns"));
     }
 
     private static CheckConstraintDefinition ReadCheckConstraint(YamlNode node)
@@ -262,9 +265,12 @@ internal static class SchemaYamlReader
             : new TextType();
 
     private static ForeignKeyAction ReadForeignKeyAction(YamlMappingNode map, string key) =>
-        FindValue(map, key) is YamlScalarNode { Value: { } v }
-            ? SchemaYamlScalars.ParseForeignKeyAction(v)
-            : ForeignKeyAction.NoAction;
+        ReadScalar(
+            map: map,
+            key: key,
+            parse: SchemaYamlScalars.ParseForeignKeyAction,
+            fallback: ForeignKeyAction.NoAction
+        );
 
     private static RlsOperation ReadRlsOperationNode(YamlNode node) =>
         node is YamlScalarNode { Value: { } v }
@@ -272,9 +278,20 @@ internal static class SchemaYamlReader
             : RlsOperation.All;
 
     private static PostgresGrantTarget ReadGrantTarget(YamlMappingNode map, string key) =>
-        FindValue(map, key) is YamlScalarNode { Value: { } v }
-            ? SchemaYamlScalars.ParseGrantTarget(v)
-            : PostgresGrantTarget.Table;
+        ReadScalar(
+            map: map,
+            key: key,
+            parse: SchemaYamlScalars.ParseGrantTarget,
+            fallback: PostgresGrantTarget.Table
+        );
+
+    // Implements [MIG-AOT-YAML]: shared scalar decode with a typed fallback.
+    private static T ReadScalar<T>(
+        YamlMappingNode map,
+        string key,
+        Func<string, T> parse,
+        T fallback
+    ) => FindValue(map, key) is YamlScalarNode { Value: { } v } ? parse(v) : fallback;
 
     private static YamlMappingNode AsMapping(YamlNode node) =>
         node as YamlMappingNode ?? new YamlMappingNode();

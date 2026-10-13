@@ -83,7 +83,8 @@ public static class PostgresTriggerGenerator
         string tableName,
         ILogger logger
     ) =>
-        TriggerGenerationWorkflow.Create<NpgsqlException>(
+        TriggerGenerationWorkflow.Create<NpgsqlConnection, NpgsqlException>(
+            connection: connection,
             tableName: tableName,
             generate: () =>
                 GenerateTriggersFromSchema(
@@ -91,12 +92,7 @@ public static class PostgresTriggerGenerator
                     tableName: tableName,
                     logger: logger
                 ),
-            execute: sql =>
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = sql;
-                cmd.ExecuteNonQuery();
-            },
+            configure: (command, sql) => command.CommandText = sql,
             logger: logger
         );
 

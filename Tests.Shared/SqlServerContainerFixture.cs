@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
+
 namespace Nimblesite.TestSupport;
 
 public sealed record SqlServerContainerFixture : IAsyncLifetime

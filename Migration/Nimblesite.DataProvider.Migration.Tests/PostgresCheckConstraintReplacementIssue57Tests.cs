@@ -40,11 +40,9 @@ public sealed partial class PostgresCheckConstraintReplacementIssue57Tests(
                 value0: "input_tokens",
                 value1: "llm_input_tokens"
             );
-            Assert.Contains(
+            SchemaDiffAssertions.AssertContainsOperation<DropCheckConstraintOperation>(
                 upgrade,
-                op =>
-                    op is DropCheckConstraintOperation drop
-                    && drop.ConstraintName == "usage_events_kind_check"
+                drop => drop.ConstraintName == "usage_events_kind_check"
             );
             Assert.Contains(upgrade, op => op is AddCheckConstraintOperation);
 

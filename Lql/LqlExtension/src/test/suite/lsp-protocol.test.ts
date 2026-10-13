@@ -908,8 +908,6 @@ suite("LSP Protocol E2E Tests", function () {
   });
 
   test("should publish clean diagnostics for valid files", async function () {
-    const notifications = await openInvalidFixture("simple_select.lql", "file:///test/valid.lql");
-
     await assertFixtureHasNoSeverityOneErrors(
       "simple_select.lql",
       "file:///test/valid.lql",

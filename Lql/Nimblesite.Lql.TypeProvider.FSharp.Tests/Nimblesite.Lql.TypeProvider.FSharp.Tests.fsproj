@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <Compile Include="RuntimeTranspilerTests.fs" />
+    <Compile Include="Fixtures/TypeProviderQueries.Fixtures.fs" />
+    <Compile Include="Fixtures/TypeProviderInputs.Fixtures.fs" />
     <Compile Include="TypeProviderE2ETests.fs" />
   </ItemGroup>
 

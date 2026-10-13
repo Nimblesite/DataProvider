@@ -156,16 +156,14 @@ public sealed partial class PostgresDeclarativeTriggerE2ETests(PostgresContainer
     private void ApplyGuardSchema() =>
         PostgresTestDb.ApplySchema(Connection, SchemaYamlSerializer.FromYaml(GuardYaml), Logger);
 
-    private void InsertMember(Guid id, Guid tenantId, string role)
-    {
-        DatabaseCommands.Execute(
-            connection: Connection,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO \"public\".\"tenant_members\"(id, tenant_id, role) VALUES (@i, @t, @r)",
-            parameters: () => [("@i", id), ("@t", tenantId), ("@r", role)]
+    private void InsertMember(Guid id, Guid tenantId, string role) =>
+        PostgresTestDb.Insert(
+            Connection,
+            "INSERT INTO \"public\".\"tenant_members\"(id, tenant_id, role) VALUES (@i, @t, @r)",
+            ("@i", id),
+            ("@t", tenantId),
+            ("@r", role)
         );
-    }
 
     private void DeleteMember(Guid id) =>
         ExecuteById(sql: "DELETE FROM \"public\".\"tenant_members\" WHERE id = @i", id: id);

@@ -2,6 +2,7 @@ using Nimblesite.Lql.Postgres;
 using Nimblesite.Lql.SQLite;
 using Nimblesite.Lql.SqlServer;
 using Nimblesite.Sql.Model;
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 using LqlStatementError = Outcome.Result<
     Nimblesite.Lql.Core.LqlStatement,
@@ -34,7 +35,7 @@ public partial class LqlErrorHandlingTests
         System.String scenario0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         var position = SyntaxError(lqlCode: scenario0);
         Assert.True(position.Line > 0);
@@ -46,7 +47,7 @@ public partial class LqlErrorHandlingTests
     [MemberData(nameof(MissingPipeOperator_ShouldReturnError_CasesData))]
     public void MissingPipeOperator_ShouldReturnError_Cases(string caseName, string lqlCode)
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         SyntaxError(lqlCode: lqlCode);
     }
 

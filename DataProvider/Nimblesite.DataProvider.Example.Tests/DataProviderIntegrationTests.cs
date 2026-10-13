@@ -135,17 +135,8 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var invoices = await VerifyReusableWorkflow6(input0: SetupTestDatabase, input1: _connection)
             .ConfigureAwait(false);
 
-        Assert.Equal(3, invoices.Count);
-
         // Verify grouping is working correctly
-        var firstInvoice = invoices[0];
-        Assert.Equal(2, firstInvoice.InvoiceLines.Count);
-
-        var secondInvoice = invoices[1];
-        Assert.Equal(2, secondInvoice.InvoiceLines.Count);
-
-        var thirdInvoice = invoices[2];
-        Assert.Equal(2, thirdInvoice.InvoiceLines.Count);
+        AssertGroupCounts(invoices, invoice => invoice.InvoiceLines, [2, 2, 2]);
     }
 
     [Fact]
@@ -158,15 +149,7 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
             )
             .ConfigureAwait(false);
 
-        Assert.Equal(2, customers.Count);
-
-        // First customer should have 2 addresses
-        var firstCustomer = customers[0];
-        Assert.Equal(2, firstCustomer.Addresss.Count);
-
-        // Second customer should have 1 address
-        var secondCustomer = customers[1];
-        Assert.Single(secondCustomer.Addresss);
+        AssertGroupCounts(customers, customer => customer.Addresss, [2, 1]);
     }
 
     [Fact]
@@ -311,15 +294,47 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         );
     }
 
+    // Implements [CI-TEST-SHARED-SCENARIOS]: one record projection shared by
+    // every entity query, keeping the original ToSQLite conversion.
+    private IReadOnlyList<T> Query<T>(
+        IQueryable<T> query,
+        Func<global::System.Data.IDataReader, T> mapper
+    ) =>
+        Ok(actual: _connection.GetRecords(query.ToSqlStatement(), s => s.ToSQLite(), mapper)).Value;
+
     private IReadOnlyList<Customer> QueryCustomers(IQueryable<Customer> query) =>
-        Ok(
-            actual: _connection.GetRecords(query.ToSqlStatement(), s => s.ToSQLite(), MapCustomer)
-        ).Value;
+        Query(query: query, mapper: MapCustomer);
 
     private IReadOnlyList<Order> QueryOrders(IQueryable<Order> query) =>
-        Ok(
-            actual: _connection.GetRecords(query.ToSqlStatement(), s => s.ToSQLite(), MapOrder)
-        ).Value;
+        Query(query: query, mapper: MapOrder);
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: ordered projections shared by the
+    // predicate-builder E2E assertions.
+    private IReadOnlyList<Customer> QueryCustomersOrdered(
+        System.Linq.Expressions.Expression<Func<Customer, bool>> predicate
+    ) =>
+        QueryCustomers(
+            SelectStatement.From<Customer>("Customer").Where(predicate).OrderBy(c => c.CustomerName)
+        );
+
+    private IReadOnlyList<Order> QueryOrdersOrdered(
+        System.Linq.Expressions.Expression<Func<Order, bool>> predicate
+    ) => QueryOrders(SelectStatement.From<Order>("Orders").Where(predicate).OrderBy(o => o.Id));
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: asserts each parent has the expected
+    // number of children, preserving the per-position count assertions.
+    private static void AssertGroupCounts<TParent, TChild>(
+        IReadOnlyList<TParent> parents,
+        Func<TParent, IReadOnlyList<TChild>> children,
+        int[] expectedCounts
+    )
+    {
+        Assert.Equal(expectedCounts.Length, parents.Count);
+        for (var i = 0; i < expectedCounts.Length; i++)
+        {
+            Assert.Equal(expectedCounts[i], children(parents[i]).Count);
+        }
+    }
 
     // Implements [CI-TEST-SHARED-RESULT].
     private static TEntity Success<TEntity>(Outcome.Result<TEntity, SqlError> result) =>
@@ -402,13 +417,9 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         var predicate = PredicateBuilder.False<Customer>();
         predicate = predicate.Or(c => c.CustomerName == "Acme Corp");
         predicate = predicate.Or(c => c.CustomerName == "Tech Solutions");
-        var query = SelectStatement
-            .From<Customer>("Customer")
-            .Where(predicate)
-            .OrderBy(c => c.CustomerName);
 
         // Act
-        var customers = QueryCustomers(query);
+        var customers = QueryCustomersOrdered(predicate: predicate);
         Assert.Equal(2, customers.Count);
         Assert.Equal("Acme Corp", customers[0].CustomerName);
         Assert.Equal("Tech Solutions", customers[1].CustomerName);
@@ -490,11 +501,7 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         predicate = predicate.And(c => c.Email != null);
         predicate = predicate.And(c => c.CustomerName != null);
 
-        var query = SelectStatement
-            .From<Customer>("Customer")
-            .Where(predicate)
-            .OrderBy(c => c.CustomerName);
-        var customers = QueryCustomers(query);
+        var customers = QueryCustomersOrdered(predicate: predicate);
         Assert.Equal(2, customers.Count); // Both customers have email and are in range
     }
 
@@ -578,8 +585,7 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         // Add minimum amount filter with AND
         predicate = predicate.And(o => o.TotalAmount > 0);
 
-        var query = SelectStatement.From<Order>("Orders").Where(predicate).OrderBy(o => o.Id);
-        var orders = QueryOrders(query);
+        var orders = QueryOrdersOrdered(predicate: predicate);
         Assert.Equal(2, orders.Count); // Both orders match the criteria
         Assert.Equal("Completed", orders[0].Status);
         Assert.Equal("Processing", orders[1].Status);
@@ -730,7 +736,7 @@ public sealed partial class DataProviderIntegrationTests : IDisposable
         global::System.String value4
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseContextualCaseMatrix1(value2: value2, value3: value3, value4: value4);
     }
 

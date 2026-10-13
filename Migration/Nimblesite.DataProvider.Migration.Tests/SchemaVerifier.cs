@@ -221,8 +221,8 @@ public static partial class SchemaVerifier
 
         Assert.Equal(expected.ReferencedTable, refTable);
         Assert.Equal(expected.ReferencedColumns[0], refColumn);
-        Assert.Equal(ForeignKeyActionToString(expected.OnDelete), deleteRule);
-        Assert.Equal(ForeignKeyActionToString(expected.OnUpdate), updateRule);
+        Assert.Equal(ForeignKeyActionSql.ToSql(expected.OnDelete), deleteRule);
+        Assert.Equal(ForeignKeyActionSql.ToSql(expected.OnUpdate), updateRule);
     }
 
     /// <summary>
@@ -554,17 +554,6 @@ public static partial class SchemaVerifier
             ) as string;
     }
 
-    private static string ForeignKeyActionToString(ForeignKeyAction action) =>
-        action switch
-        {
-            ForeignKeyAction.NoAction => "NO ACTION",
-            ForeignKeyAction.Cascade => "CASCADE",
-            ForeignKeyAction.SetNull => "SET NULL",
-            ForeignKeyAction.SetDefault => "SET DEFAULT",
-            ForeignKeyAction.Restrict => "RESTRICT",
-            _ => "NO ACTION",
-        };
-
     private sealed record ColumnInfo(
         string Name,
         string Type,
@@ -618,15 +607,6 @@ public static partial class SchemaVerifier
             input3: input3
         );
 
-        var actualColumns = new List<string>();
-        using (var reader = input0.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                actualColumns.Add(reader.GetString(0));
-            }
-        }
-
-        return actualColumns;
+        return DatabaseCommands.ReadStrings(command: input0);
     }
 }

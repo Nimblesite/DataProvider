@@ -325,7 +325,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DESLOP_VERSION: '0.36.0'
+      DESLOP_VERSION: '0.37.0'
     steps:
       - uses: actions/checkout@v4
       - name: Install Deslop

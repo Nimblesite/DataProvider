@@ -1,4 +1,3 @@
-using Testcontainers.PostgreSql;
 // Shared across all *.Tests projects via Compile Include from /DataProvider/Tests.Shared/.
 // This file exists ONCE on disk; each test assembly links it so the fixture lives once
 // per test-assembly run (xUnit collection fixture lifetime).
@@ -8,6 +7,7 @@ using Testcontainers.PostgreSql;
 // of one container per test method, which was burning ~3s per test on container churn.
 
 using System.Text;
+using Testcontainers.PostgreSql;
 
 namespace Nimblesite.TestSupport;
 

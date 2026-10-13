@@ -13,13 +13,6 @@ namespace Nimblesite.Sync.SQLite;
 public static class MappingRepository
 {
     /// <summary>
-    /// Maps the current reader row to a MappingStateEntry.
-    /// </summary>
-    private static MappingStateEntry ReadMappingState(
-        global::System.Data.Common.DbDataReader reader
-    ) => new(reader.GetString(0), reader.GetInt64(1), reader.GetString(2), reader.GetInt64(3));
-
-    /// <summary>
     /// Gets mapping state by ID.
     /// </summary>
     /// <param name="connection">SQLite connection.</param>
@@ -50,7 +43,7 @@ public static class MappingRepository
                 return new MappingStateListOk(
                     SyncCommandExecution.ReadRows<MappingStateEntry>(
                         command: cmd,
-                        read: row => ReadMappingState(row)
+                        read: row => MappingStateRepository.ReadMappingStateEntry(reader: row)
                     )
                 );
             },

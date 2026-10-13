@@ -123,7 +123,7 @@ mod tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn test_parse_filter_cases() {
         for &(input0,) in named_cases(NAMED_CASES_2) {
-            verify_expanded_test_parse_filter(input0);
+            verify_expanded_parse_ok(input0);
         }
     }
 
@@ -131,7 +131,7 @@ mod tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn test_parse_let_binding_cases() {
         for &(input0,) in named_cases(NAMED_CASES_3) {
-            verify_expanded_test_parse_filter(input0);
+            verify_expanded_parse_ok(input0);
         }
     }
 
@@ -139,13 +139,13 @@ mod tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn test_parse_aggregation_cases() {
         for &(input0,) in named_cases(NAMED_CASES_1) {
-            verify_expanded_test_parse_aggregation(input0);
+            verify_expanded_parse_ok(input0);
         }
     }
 
     #[test]
     fn test_parse_window_function() {
-        verify_expanded_test_parse_window_function("orders |> select(row_number() over (partition by orders.user_id order by orders.total desc))");
+        verify_expanded_parse_ok("orders |> select(row_number() over (partition by orders.user_id order by orders.total desc))");
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
     // Implements [LQL-RUST-NAMED-CASE-MATRICES].
     fn test_parse_left_join_cases() {
         for &(input0,) in named_cases(NAMED_CASES_5) {
-            verify_expanded_test_parse_window_function(input0);
+            verify_expanded_parse_ok(input0);
         }
     }
 
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_parse_chained_pipeline() {
-        verify_expanded_test_parse_window_function("users |> filter(fn(r) => r.users.active = true) |> order_by(users.name asc) |> limit(50) |> offset(100)");
+        verify_expanded_parse_ok("users |> filter(fn(r) => r.users.active = true) |> order_by(users.name asc) |> limit(50) |> offset(100)");
     }
 
     #[test]
@@ -202,15 +202,8 @@ mod tests {
     }
 
     // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_test_parse_filter(input0: &str) {
+    fn verify_expanded_parse_ok(input0: &str) {
         let result = parse_lql(input0);
-        assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_test_parse_aggregation(input0: &str) {
-        let source = input0;
-        let result = parse_lql(source);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
@@ -219,12 +212,6 @@ mod tests {
         let result = parse_lql(input0);
         // Should have errors but not panic
         assert!(!result.errors.is_empty());
-    }
-
-    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
-    fn verify_expanded_test_parse_window_function(input0: &str) {
-        let result = parse_lql(input0);
-        assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
     include!("lib_case_inputs.fixtures.rs");

@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.Sync.Tests;
 
 public sealed partial class ConflictResolverTests
@@ -47,7 +49,7 @@ public sealed partial class ConflictResolverTests
         global::Nimblesite.Sync.Core.ConflictStrategy value4
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix1(
             input0: VerifyReusableWorkflow5,
             input1: VerifySharedChecks7,
@@ -157,10 +159,7 @@ public sealed partial class ConflictResolverTests
         ConflictStrategy strategy
     )
     {
-        var (local, remote) = VerifySharedChecks7(
-            value4: localTimestamp,
-            value9: remoteTimestamp
-        );
+        var (local, remote) = VerifySharedChecks7(value4: localTimestamp, value9: remoteTimestamp);
         var result = ConflictResolver.Resolve(local, remote, strategy);
         Assert.Equal(local, result.Winner);
         return result;

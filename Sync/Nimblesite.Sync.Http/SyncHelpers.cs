@@ -115,103 +115,99 @@ public static class SyncHelpers
         long fromVersion,
         int batchSize,
         ILogger logger
-    )
-    {
-        return WithConnection(
-            create: () => new SqliteConnection(connectionString),
-            run: conn =>
-            {
-                return SQLite
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                SQLite
                     .SyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
-            }
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])
         );
-    }
 
     private static List<SyncLogEntry> FetchChangesFromPostgres(
         string connectionString,
         long fromVersion,
         int batchSize,
         ILogger logger
-    )
-    {
-        return WithConnection(
-            create: () => new NpgsqlConnection(connectionString),
-            run: conn =>
-            {
-                return Postgres
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                Postgres
                     .PostgresSyncLogRepository.FetchChanges(conn, fromVersion, batchSize)
-                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => []);
-            }
+                    .Match<List<SyncLogEntry>>(ok => [.. ok], _ => [])
         );
-    }
 
     private static int ApplyChangesToSqlite(
         string connectionString,
         List<SyncLogEntryDto> changes,
         string originId,
         ILogger logger
-    )
-    {
-        return WithConnection(
-            create: () => new SqliteConnection(connectionString),
-            run: conn =>
-            {
-                SQLite.SyncSessionManager.EnableSuppression(conn);
-
-                try
-                {
-                    return ApplyChangesCore(
-                        changes: changes,
-                        originId: originId,
-                        applyChange: entry =>
-                            SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
-                                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
-                                {
-                                    Value: true
-                                }
-                    );
-                }
-                finally
-                {
-                    SQLite.SyncSessionManager.DisableSuppression(conn);
-                }
-            }
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                WithSuppression(
+                    connection: conn,
+                    enable: SQLite.SyncSessionManager.EnableSuppression,
+                    disable: SQLite.SyncSessionManager.DisableSuppression,
+                    run: () =>
+                        ApplyChangesCore(
+                            changes: changes,
+                            originId: originId,
+                            applyChange: entry =>
+                                SQLite.ChangeApplierSQLite.ApplyChange(conn, entry)
+                                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                    {
+                                        Value: true
+                                    }
+                        )
+                )
         );
-    }
 
     private static int ApplyChangesToPostgres(
         string connectionString,
         List<SyncLogEntryDto> changes,
         string originId,
         ILogger logger
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                WithSuppression(
+                    connection: conn,
+                    enable: Postgres.PostgresSyncSession.EnableSuppression,
+                    disable: Postgres.PostgresSyncSession.DisableSuppression,
+                    run: () =>
+                        ApplyChangesCore(
+                            changes: changes,
+                            originId: originId,
+                            applyChange: entry =>
+                                Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
+                                    is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
+                                    {
+                                        Value: true
+                                    }
+                        )
+                )
+        );
+
+    private static TResult WithSuppression<TConnection, TResult>(
+        TConnection connection,
+        Func<TConnection, object?> enable,
+        Func<TConnection, object?> disable,
+        Func<TResult> run
     )
     {
-        return WithConnection(
-            create: () => new NpgsqlConnection(connectionString),
-            run: conn =>
-            {
-                Postgres.PostgresSyncSession.EnableSuppression(conn);
-
-                try
-                {
-                    return ApplyChangesCore(
-                        changes: changes,
-                        originId: originId,
-                        applyChange: entry =>
-                            Postgres.PostgresChangeApplier.ApplyChange(conn, entry, logger)
-                                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
-                                {
-                                    Value: true
-                                }
-                    );
-                }
-                finally
-                {
-                    Postgres.PostgresSyncSession.DisableSuppression(conn);
-                }
-            }
-        );
+        _ = enable(connection);
+        try
+        {
+            return run();
+        }
+        finally
+        {
+            _ = disable(connection);
+        }
     }
 
     private static int ApplyChangesCore(
@@ -248,68 +244,46 @@ public static class SyncHelpers
         string connectionString,
         SyncClient client,
         ILogger logger
-    )
-    {
-        return WithConnection(
-            create: () => new SqliteConnection(connectionString),
-            run: conn =>
-            {
-                var result = SQLite.SyncClientRepository.Upsert(conn, client);
-                return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
-            }
+    ) =>
+        WithSqlite(
+            connectionString,
+            conn =>
+                SQLite.SyncClientRepository.Upsert(conn, client)
+                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
         );
-    }
 
     private static bool UpsertClientPostgres(
         string connectionString,
         SyncClient client,
         ILogger logger
-    )
-    {
-        return WithConnection(
-            create: () => new NpgsqlConnection(connectionString),
-            run: conn =>
-            {
-                var result = Postgres.PostgresSyncClientRepository.Upsert(conn, client);
-                return result is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>;
-            }
+    ) =>
+        WithPostgres(
+            connectionString,
+            conn =>
+                Postgres.PostgresSyncClientRepository.Upsert(conn, client)
+                is Outcome.Result<bool, SyncError>.Ok<bool, SyncError>
         );
-    }
 
-    private static long GetMaxVersionSqlite(string connectionString, ILogger logger)
-    {
-        return WithConnection(
-            create: () => new SqliteConnection(connectionString),
-            run: conn =>
-            {
-                return SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0);
-            }
+    private static long GetMaxVersionSqlite(string connectionString, ILogger logger) =>
+        WithSqlite(
+            connectionString,
+            conn => SQLite.SyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0)
         );
-    }
 
-    private static long GetMaxVersionPostgres(string connectionString, ILogger logger)
-    {
-        return WithConnection(
-            create: () => new NpgsqlConnection(connectionString),
-            run: conn =>
-            {
-                return Postgres
-                    .PostgresSyncLogRepository.GetMaxVersion(conn)
-                    .Match(ok => ok, _ => 0);
-            }
+    private static long GetMaxVersionPostgres(string connectionString, ILogger logger) =>
+        WithPostgres(
+            connectionString,
+            conn => Postgres.PostgresSyncLogRepository.GetMaxVersion(conn).Match(ok => ok, _ => 0)
         );
-    }
 
-    private static T WithSqlServer<T>(string connectionString, Func<SqlConnection, T> run)
-    {
-        return WithConnection(
-            create: () => new SqlConnection(connectionString),
-            run: connection =>
-            {
-                return run(connection);
-            }
-        );
-    }
+    private static T WithSqlite<T>(string connectionString, Func<SqliteConnection, T> run) =>
+        WithConnection(create: () => new SqliteConnection(connectionString), run: run);
+
+    private static T WithPostgres<T>(string connectionString, Func<NpgsqlConnection, T> run) =>
+        WithConnection(create: () => new NpgsqlConnection(connectionString), run: run);
+
+    private static T WithSqlServer<T>(string connectionString, Func<SqlConnection, T> run) =>
+        WithConnection(create: () => new SqlConnection(connectionString), run: run);
 
     private static int ApplyChangesToSqlServer(
         string connectionString,

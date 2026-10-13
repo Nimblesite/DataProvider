@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -11,19 +12,10 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Each test maps to specific spec sections to prove the implementation is correct.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed partial class SpecConformanceTests : IDisposable
+public sealed partial class SpecConformanceTests : SqliteSyncTestBase
 {
-    private readonly SqliteConnection _db;
-    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
-        "specconformancetests"
-    );
-    private readonly string _originId = Guid.NewGuid().ToString();
-
     public SpecConformanceTests()
-    {
-        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
-        CreatePersonTable();
-    }
+        : base(name: "specconformancetests", createSchema: CreatePersonTable) { }
 
     #region Section 4: Primary Key Requirements
 
@@ -522,10 +514,7 @@ public sealed partial class SpecConformanceTests : IDisposable
 
         // Act
         var hash1 = HashVerifier.ComputeBatchHash(entries);
-        var hash2 = HashVerifier.ComputeBatchHash(entries);
-
-        // Assert
-        Assert.Equal(hash1, hash2);
+        AssertBatchHashStable(entries);
         Assert.Equal(64, hash1.Length);
     }
 
@@ -598,7 +587,11 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     #region Helpers
 
-    private void CreatePersonTable() => ExecuteSql(Data_CreatePersonTable_1);
+    private static void CreatePersonTable(SqliteConnection db) =>
+        DatabaseCommands.Execute(
+            connection: db,
+            configure: command => command.CommandText = Data_CreatePersonTable_1
+        );
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Security",
@@ -610,26 +603,13 @@ public sealed partial class SpecConformanceTests : IDisposable
         DatabaseCommands.Execute(connection: _db, configure: command => command.CommandText = sql);
     }
 
-    private List<SyncLogEntry> FetchAllChanges()
-    {
-        var result = SyncLogRepository.FetchChanges(_db, 0, 1000);
-        Assert.IsType<SyncLogListOk>(result);
-        return [.. (Ok(actual: result)).Value];
-    }
+    private List<SyncLogEntry> FetchAllChanges() => FetchSqliteChanges(_db, 0, 1000);
 
     [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")]
     private static partial Regex Iso8601UtcRegex();
 
     [GeneratedRegex(@"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
     private static partial Regex UuidRegex();
-
-    public void Dispose()
-    {
-        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
-            input0: _db,
-            input1: _dbPath
-        );
-    }
 
     #endregion
     // Implements [CI-TEST-SHARED-SCENARIOS].
@@ -699,10 +679,16 @@ public sealed partial class SpecConformanceTests : IDisposable
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     // Implements [CI-TEST-SHARED-SCENARIOS].
-internal static List<SyncLogEntry> VerifySyncLoopWorkflow3(Func<Action<string>, Func<List<SyncLogEntry>>, string, string, List<SyncLogEntry>> input0, Action<string> input1, Func<List<SyncLogEntry>> input2, string value0, string value1)
-{
-    var changes = input0(input1, input2, value0, value1);
-    Assert.Equal(3, changes.Count);
-    return changes;
-}
+    internal static List<SyncLogEntry> VerifySyncLoopWorkflow3(
+        Func<Action<string>, Func<List<SyncLogEntry>>, string, string, List<SyncLogEntry>> input0,
+        Action<string> input1,
+        Func<List<SyncLogEntry>> input2,
+        string value0,
+        string value1
+    )
+    {
+        var changes = input0(input1, input2, value0, value1);
+        Assert.Equal(3, changes.Count);
+        return changes;
+    }
 }

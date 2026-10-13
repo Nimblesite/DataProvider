@@ -276,7 +276,7 @@ public sealed partial class HttpEndpointWithDatabaseTests : IDisposable
         global::Nimblesite.Sync.Core.SyncOperation value2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix1(
             input0: InsertAndFetchLogEntries,
             value0: value0,

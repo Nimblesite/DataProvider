@@ -24,29 +24,14 @@ public sealed partial class QueryBuilderE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        DatabaseCommands.Execute(
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
             connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2,
+            command => command.CommandText = Data_CreateSchemaAndSeed_3,
+            command => command.CommandText = Data_CreateSchemaAndSeed_4
         );
-
-        // Seed products (test-only constant SQL, not user input)
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
-        );
-
-        // Seed categories
-        using var catCmd = _connection.CreateCommand();
-        catCmd.CommandText = Data_CreateSchemaAndSeed_3;
-        catCmd.ExecuteNonQuery();
-
-        // Seed suppliers
-        using var supCmd = _connection.CreateCommand();
-        supCmd.CommandText = Data_CreateSchemaAndSeed_4;
-        supCmd.ExecuteNonQuery();
-    }
 
     [Fact]
     public void SelectStatementBuilder_WhereOrderByLimit_ExecutesCorrectly()

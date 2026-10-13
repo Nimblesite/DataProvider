@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using StringSyncError = Outcome.Result<string, Nimblesite.Sync.Core.SyncError>.Error<
@@ -108,6 +109,30 @@ internal static class TriggerGenerationWorkflow
             ),
         };
     }
+
+    // Implements [SYNC-TRIGGER-SHARED-GENERATION].
+    internal static BoolSyncResult Create<TConnection, TException>(
+        TConnection connection,
+        string tableName,
+        Func<StringSyncResult> generate,
+        Action<DbCommand, string> configure,
+        ILogger logger,
+        Func<BoolSyncResult>? prepare = null
+    )
+        where TConnection : DbConnection
+        where TException : Exception =>
+        Create<TException>(
+            tableName: tableName,
+            generate: generate,
+            execute: sql =>
+            {
+                using var command = connection.CreateCommand();
+                configure(arg1: command, arg2: sql);
+                command.ExecuteNonQuery();
+            },
+            logger: logger,
+            prepare: prepare
+        );
 
     private static BoolSyncResult ExecuteCreate<TException>(
         string tableName,

@@ -351,3 +351,5 @@ CLI commands share required option construction, preserving names, descriptions,
 ## [DP-CLI-SHARED-XML-DOC]
 
 Generated PostgreSQL overload documentation shares one emitter while retaining source text and parameter ordering.
+
+- **[DP-CLI-SHARED-FILE-GUARDS]**: Code generation commands share configuration-file validation and output-directory creation, preserving the original missing-file message and creation timing.

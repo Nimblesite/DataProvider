@@ -13,35 +13,7 @@ namespace Nimblesite.DataProvider.Tests;
 public partial class CustomCodeGenerationTests
 {
     private static readonly List<DatabaseColumn> TestColumns =
-    [
-        ColumnTestData.Create(
-            name: "Id",
-            cSharpType: "int",
-            sqlType: "INTEGER",
-            isNullable: false,
-            isPrimaryKey: true,
-            isIdentity: true,
-            isComputed: false
-        ),
-        ColumnTestData.Create(
-            name: "Name",
-            cSharpType: "string",
-            sqlType: "TEXT",
-            isNullable: false,
-            isPrimaryKey: false,
-            isIdentity: false,
-            isComputed: false
-        ),
-        ColumnTestData.Create(
-            name: "Email",
-            cSharpType: "string?",
-            sqlType: "TEXT",
-            isNullable: true,
-            isPrimaryKey: false,
-            isIdentity: false,
-            isComputed: false
-        ),
-    ];
+        CodeGenerationColumnSets.RepositoryTestColumns;
 
     private static readonly SelectStatement TestStatement = new()
     {
@@ -323,6 +295,18 @@ internal sealed class RepositoryPatternTableOperationGenerator : ITableOperation
         var repositoryInterface = $"I{table.Name}Repository";
         var repositoryClass = $"{table.Name}Repository";
 
+        // Implements [CI-TEST-SHARED-SCENARIOS]: one reader projection shared by
+        // the GetById and GetAll templates; the indent keeps the emitted
+        // whitespace byte-identical per call site.
+        static string ReadProjection(IReadOnlyList<DatabaseColumn> columns, string indent) =>
+            string.Join(
+                ",\n",
+                columns.Select(
+                    (c, i) =>
+                        $"{indent}reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"
+                )
+            );
+
         var code =
             $@"using Microsoft.Data.Sqlite;
 
@@ -361,7 +345,7 @@ public class {repositoryClass} : {repositoryInterface}
         if (!await reader.ReadAsync()) return null;
         
         return new {entityName}(
-{string.Join(",\n", table.Columns.Select((c, i) => $"            reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"))}
+{ReadProjection(table.Columns, "            ")}
         );
     }}
     
@@ -378,7 +362,7 @@ public class {repositoryClass} : {repositoryInterface}
         while (await reader.ReadAsync())
         {{
             results.Add(new {entityName}(
-{string.Join(",\n", table.Columns.Select((c, i) => $"                reader.IsDBNull({i}) ? {(c.IsNullable ? "null" : $"default({c.CSharpType})")} : ({c.CSharpType})reader.GetValue({i})"))}
+{ReadProjection(table.Columns, "                ")}
             ));
         }}
         
@@ -404,18 +388,13 @@ public record {entityName}(
         var columnNames = string.Join(", ", insertableColumns.Select(c => c.Name));
         var parameterNames = string.Join(", ", insertableColumns.Select(c => $"@{c.Name}"));
 
-        return $@"    public async Task<{entityName}> CreateAsync({entityName} entity)
-    {{
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
-
-        var sql = ""INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})"";
-        using var command = new SqliteCommand(sql, connection);
-{string.Join("\n", insertableColumns.Select(c => $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"))}
-
-        await command.ExecuteNonQueryAsync();
-        return entity;
-    }}";
+        return GenerateRepositoryMethod(
+            entityName: entityName,
+            methodName: "CreateAsync",
+            sqlExpression: $"\"\"INSERT INTO {table.Name} ({columnNames}) VALUES ({parameterNames})\"\"",
+            bindColumns: insertableColumns,
+            gap: ""
+        );
     }
 
     private static string GenerateRepositoryUpdateMethod(DatabaseTable table, string entityName)
@@ -428,15 +407,39 @@ public record {entityName}(
             primaryKeyColumns.Select(c => $"{c.Name} = @{c.Name}")
         );
 
-        return $@"    public async Task<{entityName}> UpdateAsync({entityName} entity)
+        return GenerateRepositoryMethod(
+            entityName: entityName,
+            methodName: "UpdateAsync",
+            sqlExpression: $"\"\"UPDATE {table.Name} SET {setClause} WHERE {whereClause}\"\"",
+            bindColumns: table.Columns,
+            gap: "        "
+        );
+    }
+
+    private static string GenerateRepositoryMethod(
+        string entityName,
+        string methodName,
+        string sqlExpression,
+        IReadOnlyList<DatabaseColumn> bindColumns,
+        string gap
+    )
+    {
+        var bindings = string.Join(
+            "\n",
+            bindColumns.Select(c =>
+                $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"
+            )
+        );
+
+        return $@"    public async Task<{entityName}> {methodName}({entityName} entity)
     {{
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        
-        var sql = ""UPDATE {table.Name} SET {setClause} WHERE {whereClause}"";
+{gap}
+        var sql = {sqlExpression};
         using var command = new SqliteCommand(sql, connection);
-{string.Join("\n", table.Columns.Select(c => $"        command.Parameters.AddWithValue(\"@{c.Name}\", entity.{c.Name});"))}
-        
+{bindings}
+{gap}
         await command.ExecuteNonQueryAsync();
         return entity;
     }}";
@@ -472,7 +475,7 @@ public partial class NonQueryCodeGenerationTests
         bool assertNoAddWithValue
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
 
         var code = SqlFragments(
             read: () =>

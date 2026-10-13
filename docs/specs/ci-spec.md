@@ -187,3 +187,23 @@ retaining each scenario's original primary-key substring.
 
 Test projects declare common namespace imports and identical result aliases once.
 File-specific imports and aliases with differing targets retain their local scope.
+
+### Shared named case assertion [CI-TEST-SHARED-NAMED-CASE]
+
+Parameterized test runners share the same nonempty case-label assertion. Each
+original assertion still executes before its scenario; input and result checks
+remain in their existing runners.
+
+- **[CI-TEST-SHARED-ROW-ASSERTIONS]**: Database tests share typed projected row-presence assertions. Each original expected row value still requires an independently matching row.
+
+- **[SYNC-TEST-SHARED-SCENARIOS]**: Sync HTTP integration scenarios share their existing PostgreSQL or dual-SQLite fixture lifecycle, schema/origin setup and cleanup. Retain each scenario database name, independent resources, setup errors and native disposal order.
+
+- **[CI-TEST-SHARED-READ-FIRST-ROW]**: Native database test commands share execution and the original first-row read assertion, retaining caller ownership of reader disposal.
+
+- **[CI-TEST-SHARED-READ-COLUMN]**: Native reader tests share iteration through every result row with a typed caller projection and original row order.
+
+- **[SYNC-TEST-SHARED-SQLITE-HELPERS]**: Sync SQLite tests share native inserts, updates, deletes and name lookups while retaining each schema shape and original parameter names and values.
+
+- **[MIG-TEST-SHARED-ASSERTIONS]**: Migration SQL tests share exact ordinal prefix and fragment assertions without removing an original expectation.
+
+- **[CI-CLI-SHARED-DISPATCH]**: DataProvider and LQL CLI entry points share native root command construction and dispatch. Preserve descriptions, argument arrays, exit codes and the original ordered build/add sequence for every platform subcommand.

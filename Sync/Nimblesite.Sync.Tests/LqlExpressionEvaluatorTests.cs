@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 using static Nimblesite.Sync.Tests.MappingTestData;
 
@@ -26,7 +27,7 @@ public sealed partial class LqlExpressionEvaluatorTests
         System.String scenario4
     )
     {
-        Assert.False(string.IsNullOrEmpty(scenarioName));
+        NamedCase(caseName: scenarioName);
         var success = VerifySharedContinuation1(
             input0: scenario1,
             value0: scenario2,

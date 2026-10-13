@@ -32,117 +32,98 @@ public sealed partial class CliEndToEndTests : IDisposable
     }
 
     /// <summary>
-    /// Tests simple LQL to SQLite conversion with console output
+    /// Tests every input-file workflow: console transpilation, validation mode,
+    /// and error handling for missing or empty files. Each case carries its own
+    /// original test name, input, expected exit code, and output expectations.
     /// </summary>
-    [Fact]
-    public async Task TranspileSimpleSelect_ToConsole_ReturnsCorrectSQL()
+    /// <param name="caseName">Original test name for the scenario.</param>
+    /// <param name="inputContent">Content written to the temporary input file.</param>
+    /// <param name="createInputFile">Whether the input file exists at all.</param>
+    /// <param name="extraArgs">Additional CLI arguments appended after the input option.</param>
+    /// <param name="expectedExitCode">Expected process exit code.</param>
+    /// <param name="expectedFragments">Fragments that must appear in the CLI output.</param>
+    /// <param name="forbiddenFragments">Fragments that must not appear in the CLI output.</param>
+    [Theory]
+    [MemberData(nameof(InputFileWorkflowCases))]
+    public async Task InputFileWorkflow_ReportsExpectedExitCodeAndOutput(
+        string caseName,
+        string inputContent,
+        bool createInputFile,
+        string[] extraArgs,
+        int expectedExitCode,
+        string[] expectedFragments,
+        string[] forbiddenFragments
+    )
     {
+        Assert.False(string.IsNullOrEmpty(caseName));
+
         // Arrange
-        var inputFile = CreateTempFile("users |> select(users.id, users.name, users.email)");
+        var inputFile = createInputFile
+            ? CreateTempFile(inputContent)
+            : Path.Combine(_tempDirectory, "nonexistent.lql");
 
         // Act
-        var result = await RunCliAsync("--input", inputFile);
+        var result = await RunCliAsync(["--input", inputFile, .. extraArgs]);
 
         // Assert
-        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(expectedExitCode, result.ExitCode);
 
-        Assert.Contains("SELECT users.id, users.name, users.email FROM users", result.Output);
+        foreach (var fragment in expectedFragments)
+        {
+            Assert.Contains(fragment, result.Output);
+        }
 
-        Assert.Contains("Generated SQLite SQL:", result.Output);
+        foreach (var forbidden in forbiddenFragments)
+        {
+            Assert.DoesNotContain(forbidden, result.Output);
+        }
     }
 
     /// <summary>
-    /// Tests LQL to SQLite conversion with file output
+    /// Tests file-output workflows, including creating missing output
+    /// directories, and verifies the exact SQL that is written.
     /// </summary>
-    [Fact]
-    public async Task TranspileSimpleSelect_ToFile_CreatesCorrectSQLFile()
+    /// <param name="caseName">Original test name for the scenario.</param>
+    /// <param name="lql">LQL input written to the temporary input file.</param>
+    /// <param name="createOutputSubdirectory">Whether the output directory is nested.</param>
+    /// <param name="outputSubdirectory">Name of the nested output directory.</param>
+    /// <param name="assertWrittenMessage">Whether the CLI must report the written file.</param>
+    /// <param name="expectedFileContent">Exact SQL expected in the written file.</param>
+    [Theory]
+    [MemberData(nameof(FileOutputWorkflowCases))]
+    public async Task FileOutputWorkflow_WritesExpectedSQLFile(
+        string caseName,
+        string lql,
+        bool createOutputSubdirectory,
+        string outputSubdirectory,
+        bool assertWrittenMessage,
+        string expectedFileContent
+    )
     {
+        Assert.False(string.IsNullOrEmpty(caseName));
+
         // Arrange
-        var inputFile = CreateTempFile("users |> select(users.id, users.name, users.email)");
-        var outputFile = Path.Combine(_tempDirectory, "output.sql");
+        var inputFile = CreateTempFile(lql);
+        var outputDirectory = createOutputSubdirectory
+            ? Path.Combine(_tempDirectory, outputSubdirectory)
+            : _tempDirectory;
+        var outputFile = Path.Combine(outputDirectory, "output.sql");
 
         // Act
         var result = await RunCliAsync("--input", inputFile, "--output", outputFile);
 
         // Assert
         Assert.Equal(0, result.ExitCode);
-        Assert.Contains($"SQLite SQL written to: {outputFile}", result.Output);
+
+        if (assertWrittenMessage)
+        {
+            Assert.Contains($"SQLite SQL written to: {outputFile}", result.Output);
+        }
+
         Assert.True(File.Exists(outputFile));
 
         var sqlContent = await File.ReadAllTextAsync(outputFile);
-        Assert.Equal("SELECT users.id, users.name, users.email FROM users", sqlContent);
-    }
-
-    /// <summary>
-    /// Tests LQL validation mode
-    /// </summary>
-    [Fact]
-    public async Task ValidateMode_WithValidLQL_ReturnsSuccess()
-    {
-        // Arrange
-        var inputFile = CreateTempFile("users |> select(users.id, users.name)");
-
-        // Act
-        var result = await RunCliAsync("--input", inputFile, "--validate");
-
-        // Assert
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains("LQL syntax is valid", result.Output);
-        Assert.DoesNotContain("Generated SQLite SQL:", result.Output);
-    }
-
-    /// <summary>
-    /// Tests complex LQL with filtering
-    /// </summary>
-    [Fact]
-    public async Task TranspileWithFilter_ToConsole_ReturnsCorrectSQL()
-    {
-        // Arrange
-        var lql = Data_TranspileWithFilter_ToConsole_ReturnsCorrectSQL_1;
-        var inputFile = CreateTempFile(lql);
-
-        // Act
-        var result = await RunCliAsync("--input", inputFile);
-
-        // Assert
-        Assert.Equal(0, result.ExitCode);
-        var expectedSQL =
-            "SELECT employees.id, employees.name, employees.salary FROM employees WHERE employees.salary > 50000 AND employees.salary < 100000";
-        Assert.Contains(expectedSQL, result.Output);
-    }
-
-    /// <summary>
-    /// Tests error handling for non-existent input file
-    /// </summary>
-    [Fact]
-    public async Task NonExistentInputFile_ReturnsError()
-    {
-        // Arrange
-        var nonExistentFile = Path.Combine(_tempDirectory, "nonexistent.lql");
-
-        // Act
-        var result = await RunCliAsync("--input", nonExistentFile);
-
-        // Assert
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("does not exist", result.Output);
-    }
-
-    /// <summary>
-    /// Tests error handling for empty input file
-    /// </summary>
-    [Fact]
-    public async Task EmptyInputFile_ReturnsError()
-    {
-        // Arrange
-        var inputFile = CreateTempFile("");
-
-        // Act
-        var result = await RunCliAsync("--input", inputFile);
-
-        // Assert
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("is empty", result.Output);
+        Assert.Equal(expectedFileContent, sqlContent);
     }
 
     /// <summary>
@@ -174,48 +155,6 @@ public sealed partial class CliEndToEndTests : IDisposable
         // Assert
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("Option '--input' is required", result.Output);
-    }
-
-    /// <summary>
-    /// Tests aggregation query
-    /// </summary>
-    [Fact]
-    public async Task TranspileAggregation_ToConsole_ReturnsCorrectSQL()
-    {
-        // Arrange - This is based on the test data files
-        var lql = Data_TranspileAggregation_ToConsole_ReturnsCorrectSQL_1;
-        var inputFile = CreateTempFile(lql);
-
-        // Act
-        var result = await RunCliAsync("--input", inputFile);
-
-        // Assert
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains("SELECT", result.Output);
-        Assert.Contains("FROM orders", result.Output);
-        Assert.Contains("GROUP BY", result.Output);
-    }
-
-    /// <summary>
-    /// Tests that output file is created in correct directory
-    /// </summary>
-    [Fact]
-    public async Task OutputFileInSubdirectory_CreatesDirectoryAndFile()
-    {
-        // Arrange
-        var inputFile = CreateTempFile("users |> select(users.id)");
-        var subDir = Path.Combine(_tempDirectory, "subdir");
-        var outputFile = Path.Combine(subDir, "output.sql");
-
-        // Act
-        var result = await RunCliAsync("--input", inputFile, "--output", outputFile);
-
-        // Assert
-        Assert.Equal(0, result.ExitCode);
-        Assert.True(File.Exists(outputFile));
-
-        var sqlContent = await File.ReadAllTextAsync(outputFile);
-        Assert.Equal("SELECT users.id FROM users", sqlContent);
     }
 
     /// <summary>
@@ -259,17 +198,8 @@ public sealed partial class CliEndToEndTests : IDisposable
         var outputBuilder = new StringBuilder();
         var errorBuilder = new StringBuilder();
 
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data != null)
-                outputBuilder.AppendLine(e.Data);
-        };
-
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data != null)
-                errorBuilder.AppendLine(e.Data);
-        };
+        process.OutputDataReceived += AppendLineTo(outputBuilder);
+        process.ErrorDataReceived += AppendLineTo(errorBuilder);
 
         process.Start();
         process.BeginOutputReadLine();
@@ -284,6 +214,13 @@ public sealed partial class CliEndToEndTests : IDisposable
         var combinedOutput = string.IsNullOrEmpty(error) ? output : $"{output}\n{error}";
 
         return new ProcessResult(process.ExitCode, combinedOutput.Trim());
+
+        static DataReceivedEventHandler AppendLineTo(StringBuilder builder) =>
+            (_, e) =>
+            {
+                if (e.Data != null)
+                    builder.AppendLine(e.Data);
+            };
     }
 
     /// <summary>

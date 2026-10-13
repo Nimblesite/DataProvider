@@ -55,20 +55,6 @@ global using SyncClientResult = Outcome.Result<
     Nimblesite.Sync.Core.SyncClient?,
     Nimblesite.Sync.Core.SyncError
 >;
-global using SyncLogListError = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Error<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->;
-global using SyncLogListOk = Outcome.Result<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->.Ok<
-    System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
-    Nimblesite.Sync.Core.SyncError
->;
 global using SyncLogListResult = Outcome.Result<
     System.Collections.Generic.IReadOnlyList<Nimblesite.Sync.Core.SyncLogEntry>,
     Nimblesite.Sync.Core.SyncError

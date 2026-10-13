@@ -99,18 +99,16 @@ public sealed partial class PostgresDropConstraintBackedIndexTests(PostgresConta
                 IndexName: ConstraintName,
             };
 
-    private static bool ConstraintExists(NpgsqlConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = Data_ConstraintExists_1;
-        AddObjectParameters(command);
-        return command.ExecuteScalar() is bool exists && exists;
-    }
+    private static bool ConstraintExists(NpgsqlConnection connection) =>
+        ObjectExists(connection, Data_ConstraintExists_1);
 
-    private static bool IndexExists(NpgsqlConnection connection)
+    private static bool IndexExists(NpgsqlConnection connection) =>
+        ObjectExists(connection, Data_IndexExists_1);
+
+    private static bool ObjectExists(NpgsqlConnection connection, string sql)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = Data_IndexExists_1;
+        command.CommandText = sql;
         AddObjectParameters(command);
         return command.ExecuteScalar() is bool exists && exists;
     }

@@ -20,10 +20,7 @@ public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture 
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appAdmin)} NOLOGIN");
         PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q("test")}");
         PostgresTestDb.Exec(connection, $"GRANT {Q(owner)} TO {Q(migrate)}");
-        PostgresTestDb.Exec(
-            connection,
-            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
-        );
+        GrantConnect(connection, migrate);
         PostgresTestDb.Exec(connection, $"CREATE SCHEMA {Q(schema)} AUTHORIZATION {Q(owner)}");
         PostgresTestDb.Exec(
             connection,
@@ -53,10 +50,7 @@ public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture 
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(owner)} NOLOGIN");
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(migrate)} LOGIN PASSWORD 'test'");
         PostgresTestDb.Exec(connection, $"CREATE ROLE {Q(appUser)} NOLOGIN");
-        PostgresTestDb.Exec(
-            connection,
-            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(migrate)}"
-        );
+        GrantConnect(connection, migrate);
         using var migrateConnection = OpenRoleConnection(connection, migrate);
 
         var result = PostgresTestDb.TryApply(
@@ -75,6 +69,12 @@ public sealed partial class PostgresGrantRunAsE2ETests(PostgresContainerFixture 
         Assert.Contains("MIG-E-PG-GRANT-RUN-AS-MISSING-MEMBERSHIP", error.Message);
         Assert.Contains($"GRANT \"{owner}\" TO \"{migrate}\"", error.Message);
     }
+
+    private static void GrantConnect(NpgsqlConnection connection, string role) =>
+        PostgresTestDb.Exec(
+            connection,
+            $"GRANT CONNECT ON DATABASE {Q(connection.Database)} TO {Q(role)}"
+        );
 
     private static (string Suffix, string Owner, string Migrate, string AppUser) NewGrantRoles()
     {

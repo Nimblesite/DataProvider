@@ -31,14 +31,7 @@ public static partial class MappingStateRepository
                 using var reader = command.ExecuteReader();
                 if (reader.Read())
                 {
-                    return new MappingStateOk(
-                        new MappingStateEntry(
-                            reader.GetString(0),
-                            reader.GetInt64(1),
-                            reader.GetString(2),
-                            reader.GetInt64(3)
-                        )
-                    );
+                    return new MappingStateOk(ReadMappingStateEntry(reader: reader));
                 }
 
                 return new MappingStateOk(null);
@@ -72,14 +65,7 @@ public static partial class MappingStateRepository
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                states.Add(
-                    new MappingStateEntry(
-                        reader.GetString(0),
-                        reader.GetInt64(1),
-                        reader.GetString(2),
-                        reader.GetInt64(3)
-                    )
-                );
+                states.Add(ReadMappingStateEntry(reader: reader));
             }
 
             return new MappingStateListOk(states);
@@ -253,22 +239,26 @@ public static partial class MappingStateRepository
         );
     }
 
+    internal static MappingStateEntry ReadMappingStateEntry(
+        global::System.Data.Common.DbDataReader reader
+    ) => new(reader.GetString(0), reader.GetInt64(1), reader.GetString(2), reader.GetInt64(3));
+
     // Implements [SYNC-REPOSITORY-SHARED-WRITES].
     internal static BoolSyncResult WriteMappingState(
         SqliteConnection connection,
         MappingStateEntry state,
         Action<global::System.Data.Common.DbCommand> setSql
     ) =>
-        SyncCommandExecution.Write<SqliteException>(
+        WriteUpsert(
             connection: connection,
             setSql: setSql,
-            parameters: () =>
-                [
-                    ("@mappingId", state.MappingId),
-                    ("@version", state.LastSyncedVersion),
-                    ("@timestamp", state.LastSyncTimestamp),
-                    ("@records", state.RecordsSynced),
-                ],
+            parameters:
+            [
+                ("@mappingId", state.MappingId),
+                ("@version", state.LastSyncedVersion),
+                ("@timestamp", state.LastSyncTimestamp),
+                ("@records", state.RecordsSynced),
+            ],
             failurePrefix: "Failed to upsert mapping state"
         );
 
@@ -278,16 +268,29 @@ public static partial class MappingStateRepository
         RecordHashEntry entry,
         Action<global::System.Data.Common.DbCommand> setSql
     ) =>
+        WriteUpsert(
+            connection: connection,
+            setSql: setSql,
+            parameters:
+            [
+                ("@mappingId", entry.MappingId),
+                ("@sourcePk", entry.SourcePk),
+                ("@hash", entry.PayloadHash),
+                ("@syncedAt", entry.SyncedAt),
+            ],
+            failurePrefix: "Failed to upsert record hash"
+        );
+
+    private static BoolSyncResult WriteUpsert(
+        SqliteConnection connection,
+        Action<global::System.Data.Common.DbCommand> setSql,
+        (string Name, object Value)[] parameters,
+        string failurePrefix
+    ) =>
         SyncCommandExecution.Write<SqliteException>(
             connection: connection,
             setSql: setSql,
-            parameters: () =>
-                [
-                    ("@mappingId", entry.MappingId),
-                    ("@sourcePk", entry.SourcePk),
-                    ("@hash", entry.PayloadHash),
-                    ("@syncedAt", entry.SyncedAt),
-                ],
-            failurePrefix: "Failed to upsert record hash"
+            parameters: () => [.. parameters],
+            failurePrefix: failurePrefix
         );
 }

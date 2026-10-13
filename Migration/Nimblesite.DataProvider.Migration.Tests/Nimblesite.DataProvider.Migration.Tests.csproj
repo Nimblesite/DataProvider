@@ -64,6 +64,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Tests.Shared/StringAssertions.cs" Link="Shared/StringAssertions.cs" />
+    <Compile
+      Include="../../Tests.Shared/MigrationAssertions.cs"
+      Link="Shared/MigrationAssertions.cs"
+    />
   </ItemGroup>
   <ItemGroup>
     <Compile

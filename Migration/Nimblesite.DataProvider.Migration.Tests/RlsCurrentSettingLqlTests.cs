@@ -76,16 +76,12 @@ public sealed partial class RlsCurrentSettingLqlTests
             Data_Translate_CurrentSetting_ExistsPipeline_RewritesSettingsAfterLqlTranspile_1
         );
 
-        Assert.StartsWith("EXISTS (", sql, StringComparison.Ordinal);
-        ContainsAll(
-            actual: sql,
-            expected:
-            [
-                "FROM tenant_members",
-                "current_setting('app.tenant_id', true)::uuid",
-                "current_setting('app.user_id', true)::uuid",
-            ],
-            comparison: StringComparison.Ordinal
+        MigrationAssertions.AssertSqlContains(
+            sql,
+            "EXISTS (",
+            "FROM tenant_members",
+            "current_setting('app.tenant_id', true)::uuid",
+            "current_setting('app.user_id', true)::uuid"
         );
         Assert.DoesNotContain("__RLS_CURRENT_SETTING_", sql, StringComparison.Ordinal);
     }

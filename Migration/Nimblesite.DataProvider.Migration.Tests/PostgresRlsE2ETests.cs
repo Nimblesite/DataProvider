@@ -152,10 +152,8 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         var inspected = PostgresTestDb.Inspect(Connection, Logger);
 
         var table = inspected.Tables.Single(t => t.Name == "documents");
-        Assert.NotNull(table.RowLevelSecurity);
-        Assert.True(table.RowLevelSecurity!.Enabled);
-        Assert.Single(table.RowLevelSecurity.Policies);
-        Assert.Equal("owner_isolation", table.RowLevelSecurity.Policies[0].Name);
+        var rls = RlsAssertions.EnabledWithSinglePolicy(table);
+        Assert.Equal("owner_isolation", rls.Policies[0].Name);
     }
 
     [Fact]
@@ -175,9 +173,7 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
             ],
         };
 
-        var ops = (
-            (OperationsResultOk)SchemaDiff.Calculate(current, desiredPlus, logger: Logger)
-        ).Value;
+        var ops = SchemaDiffAssertions.Diff(current: current, desired: desiredPlus, logger: Logger);
 
         var creates = ops.OfType<CreateRlsPolicyOperation>().ToList();
         Assert.Single(creates);
@@ -201,15 +197,14 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
             ],
         };
 
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, desiredEmpty, allowDestructive: true, logger: Logger)
-        ).Value;
-
-        Assert.Contains(
-            ops,
-            o => o is DropRlsPolicyOperation drop && drop.PolicyName == "owner_isolation"
+        var ops = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: desiredEmpty,
+            destructive: true,
+            logger: Logger
         );
+
+        SchemaDiffAssertions.AssertDropsRlsPolicy(ops, "owner_isolation");
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
@@ -250,16 +245,14 @@ public sealed partial class PostgresRlsE2ETests(PostgresContainerFixture fixture
         cmd.ExecuteNonQuery();
     }
 
-    private void InsertDocument(Guid id, Guid groupId, string title)
-    {
-        DatabaseCommands.Execute(
-            connection: Connection,
-            configure: cmd =>
-                cmd.CommandText =
-                    "INSERT INTO \"public\".\"documents\"(id, group_id, title) VALUES (@id, @group, @title)",
-            parameters: () => [("@id", id), ("@group", groupId), ("@title", title)]
+    private void InsertDocument(Guid id, Guid groupId, string title) =>
+        PostgresTestDb.Insert(
+            Connection,
+            "INSERT INTO \"public\".\"documents\"(id, group_id, title) VALUES (@id, @group, @title)",
+            ("@id", id),
+            ("@group", groupId),
+            ("@title", title)
         );
-    }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     internal static void VerifyReusableWorkflow16(

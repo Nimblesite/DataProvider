@@ -13,28 +13,8 @@ namespace Nimblesite.Sync.Http.Tests;
 [Collection(PostgresTestSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixture)
-    : IAsyncLifetime
+    : PostgresSyncTestFixture(fixture: fixture, databaseName: "syncdb")
 {
-    private string _postgresConnectionString = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-    private readonly List<string> _sqliteDbPaths = [];
-
-    public async Task InitializeAsync()
-    {
-        _postgresConnectionString = await fixture
-            .CreateDatabaseConnectionStringAsync("syncdb")
-            .ConfigureAwait(false);
-    }
-
-    public Task DisposeAsync()
-    {
-        foreach (var dbPath in _sqliteDbPaths)
-        {
-            global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: dbPath);
-        }
-        return Task.CompletedTask;
-    }
-
     /// <summary>
     /// Creates a fresh SQLite file database with sync schema and triggers.
     /// </summary>
@@ -61,31 +41,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
     /// <summary>
     /// Creates PostgreSQL database with sync schema (lowercase table for cross-db compat).
     /// </summary>
-    private NpgsqlConnection CreatePostgresDb(string originId)
-    {
-        var conn = new NpgsqlConnection(_postgresConnectionString);
-        conn.Open();
-
-        // Create sync schema
-        var schemaResult = PostgresSyncSchema.CreateSchema(conn);
-        if (schemaResult is not BoolSyncOk)
-        {
-            throw Dataset_CreatePostgresDb_1(schemaResult: schemaResult);
-        }
-
-        var originResult = PostgresSyncSchema.SetOriginId(conn, originId);
-        if (originResult is not BoolSyncOk)
-        {
-            throw new InvalidOperationException($"Failed to set origin ID: {originResult}");
-        }
-
-        // Create test table - lowercase for PostgreSQL compatibility
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_CreatePostgresDb_1;
-        cmd.ExecuteNonQuery();
-
-        return conn;
-    }
+    private NpgsqlConnection CreatePostgresDb(string originId) =>
+        CreatePostgresSyncDatabase(originId: originId, createTableSql: Data_CreatePostgresDb_1);
 
     /// <summary>Runs a scalar query and returns its value as a string.</summary>
     internal static string? ScalarString(

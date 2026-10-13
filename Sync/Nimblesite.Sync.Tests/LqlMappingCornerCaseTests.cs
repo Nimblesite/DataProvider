@@ -20,6 +20,7 @@ public sealed partial class LqlMappingCornerCaseTests
     public void MappingEngine_NullPayload_ReturnsNullMappedPayload()
     {
         _ = ExpectNullMappedPayload(
+            logger: _logger,
             mapping: Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_1,
             entry: Fixture_MappingEngine_NullPayload_ReturnsNullMappedPayload_2
         );
@@ -184,18 +185,6 @@ public sealed partial class LqlMappingCornerCaseTests
     }
 
     #endregion
-
-    // Implements [CI-TEST-SHARED-SCENARIOS].
-    private MappingSuccess ExpectNullMappedPayload(
-        Func<TableMapping> mapping,
-        Func<SyncLogEntry> entry
-    )
-    {
-        var config = MappingTestData.Strict(mappings: [mapping()]);
-        var success = Expected<MappingSuccess>(entry: entry(), config: config, logger: _logger);
-        Assert.Null(success.Entries[0].MappedPayload);
-        return success;
-    }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private global::Nimblesite.Sync.Core.MappingSuccess ApplyMappingToEntry(

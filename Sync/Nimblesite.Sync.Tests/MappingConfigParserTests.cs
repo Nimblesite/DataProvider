@@ -1,3 +1,5 @@
+using static global::Tests.Shared.ResultAssertions;
+
 namespace Nimblesite.Sync.Tests;
 
 /// <summary>
@@ -123,7 +125,7 @@ public sealed partial class MappingConfigParserTests
         global::Nimblesite.Sync.Core.MappingDirection value1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix6(input0: VerifySharedChecks2, value0: value0, value1: value1);
     }
 

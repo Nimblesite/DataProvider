@@ -1,8 +1,6 @@
 // Implements [CI-TEST-INDEPENDENT-SCHEMA-DATA].
 // Pure immutable fixture definitions; assertions and database workflows remain analysed.
 
-
-
 namespace Nimblesite.DataProvider.Tests;
 
 public sealed partial class CodeGenerationExtendedE2ETests

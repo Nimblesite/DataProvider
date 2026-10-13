@@ -125,20 +125,9 @@ public partial class LqlFileBasedTests
         );
 
         // Assert — exact fixture set equality for every dialect.
-        Assert.True(
-            lqlFiles.SetEquals(postgreSqlFiles),
-            $"Every LQL test file should have a corresponding PostgreSQL expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(postgreSqlFiles))}; PostgreSQL-only: {string.Join(", ", postgreSqlFiles.Except(lqlFiles))}"
-        );
-
-        Assert.True(
-            lqlFiles.SetEquals(sqlServerFiles),
-            $"Every LQL test file should have a corresponding SQL Server expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqlServerFiles))}; SQL Server-only: {string.Join(", ", sqlServerFiles.Except(lqlFiles))}"
-        );
-
-        Assert.True(
-            lqlFiles.SetEquals(sqliteFiles),
-            $"Every LQL test file should have a corresponding SQLite expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(sqliteFiles))}; SQLite-only: {string.Join(", ", sqliteFiles.Except(lqlFiles))}"
-        );
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: postgreSqlFiles, dialect: "PostgreSQL");
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: sqlServerFiles, dialect: "SQL Server");
+        VerifyFixtureSet(lqlFiles: lqlFiles, dialectFiles: sqliteFiles, dialect: "SQLite");
 
         Assert.Equal(27, lqlFiles.Count);
     }
@@ -234,5 +223,18 @@ public partial class LqlFileBasedTests
         Assert.False(string.IsNullOrWhiteSpace(sql), input2);
 
         return sql;
+    }
+
+    // Implements [LQL-FILE-FIXTURE-SHARED-SET-ASSERTION].
+    private static void VerifyFixtureSet(
+        HashSet<string> lqlFiles,
+        HashSet<string> dialectFiles,
+        string dialect
+    )
+    {
+        Assert.True(
+            lqlFiles.SetEquals(dialectFiles),
+            $"Every LQL test file should have a corresponding {dialect} expected SQL file. LQL-only: {string.Join(", ", lqlFiles.Except(dialectFiles))}; {dialect}-only: {string.Join(", ", dialectFiles.Except(lqlFiles))}"
+        );
     }
 }

@@ -4,16 +4,19 @@ using Nimblesite.Sql.Model;
 namespace Nimblesite.Lql.Core;
 
 /// <summary>
-/// Custom error listener for capturing detailed parse errors with position information for parser
+/// Shared ANTLR error listener with symbol-specific position extraction.
+/// Implements [LQL-PARSER-SHARED-ERROR-LISTENER].
 /// </summary>
-internal sealed class DetailedParserErrorListener : IAntlrErrorListener<IToken>
+internal sealed class DetailedParserErrorListener<TSymbol> : IAntlrErrorListener<TSymbol>
 {
     private readonly List<SqlError> _errors = [];
     private readonly string _source;
+    private readonly Func<TSymbol, (int Start, int Stop)> _position;
 
-    public DetailedParserErrorListener(string source)
+    public DetailedParserErrorListener(string source, Func<TSymbol, (int Start, int Stop)> position)
     {
         _source = source;
+        _position = position;
     }
 
     public IReadOnlyList<SqlError> Errors => _errors;
@@ -21,23 +24,22 @@ internal sealed class DetailedParserErrorListener : IAntlrErrorListener<IToken>
     public void SyntaxError(
         TextWriter output,
         IRecognizer recognizer,
-        IToken offendingSymbol,
+        TSymbol offendingSymbol,
         int line,
         int charPositionInLine,
         string msg,
         RecognitionException e
     )
     {
-        var startIndex = offendingSymbol?.StartIndex ?? 0;
-        var stopIndex = offendingSymbol?.StopIndex ?? 0;
+        var (startIndex, stopIndex) = _position(arg: offendingSymbol);
 
         var error = SqlError.WithDetailedPosition(
-            $"Syntax error: {msg}",
-            line,
-            charPositionInLine,
-            startIndex,
-            stopIndex,
-            _source
+            message: $"Syntax error: {msg}",
+            line: line,
+            column: charPositionInLine,
+            startIndex: startIndex,
+            stopIndex: stopIndex,
+            source: _source
         );
 
         _errors.Add(error);

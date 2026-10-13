@@ -236,6 +236,23 @@ pub(crate) fn verify_staleness(cache: &crate::schema::SchemaCache, secs: u64, st
 }
 
 // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Asserts a default [`SchemaCache`](crate::schema::SchemaCache) is empty and never refreshed.
+pub(crate) fn verify_cache_default_is_empty() {
+    let cache = crate::schema::SchemaCache::default();
+    assert!(cache.is_empty());
+    assert_eq!(cache.table_count(), 0);
+    assert!(cache.table_names().is_empty());
+    assert!(cache.age().is_none());
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Asserts a cache built from tables is non-empty and records its table count.
+pub(crate) fn verify_cache_from_tables(cache: &crate::schema::SchemaCache) {
+    assert!(!cache.is_empty());
+    assert_eq!(cache.table_count(), 2);
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
 /// Asserts [`ColumnInfo::type_description`] for the given column shape.
 pub(crate) fn verify_type_description(
     name: &str,
@@ -269,10 +286,7 @@ pub(crate) fn verify_hover_keyword(word: &str, needle: &str, expect_signature: b
 // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
 /// Asserts schema-aware hover for table `users` reports the table shape and
 /// additionally mentions every string in `extra_detail`.
-pub(crate) fn verify_hover_table(
-    schema: &crate::schema::SchemaCache,
-    extra_detail: &[&str],
-) {
+pub(crate) fn verify_hover_table(schema: &crate::schema::SchemaCache, extra_detail: &[&str]) {
     let info = crate::hover::get_hover_with_schema("users", None, Some(schema)).unwrap();
     assert!(info.title.contains("users"));
     assert!(info.title.contains("Table"));
@@ -300,5 +314,49 @@ pub(crate) fn verify_no_diags_matching(source: &str, needle: &str) {
     assert!(
         matching.is_empty(),
         "unexpected diagnostic matching '{needle}': {matching:?}"
+    );
+}
+
+// Implements [LQL-RUST-NAMED-CASE-MATRICES].
+/// Runs `run` once per named case, asserting each case name is present.
+pub(crate) fn run_named_cases<T, F>(cases: &[(&str, T)], run: F)
+where
+    F: Fn(&T),
+{
+    for (name, input) in cases {
+        assert!(!name.is_empty(), "Scenario name must be present");
+        run(input);
+    }
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Asserts `source` lexes to `open` open and `close` close parentheses.
+pub(crate) fn verify_lex_tokens_parens(source: &str, open: usize, close: usize) {
+    use lql_parser::tokens::{lex_tokens, token_types, tokens_of_type};
+    let tokens = lex_tokens(source);
+    assert_eq!(tokens_of_type(&tokens, token_types::OPEN_PAREN).len(), open);
+    assert_eq!(
+        tokens_of_type(&tokens, token_types::CLOSE_PAREN).len(),
+        close
+    );
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Asserts the token structure for `source` matches the expected positions.
+pub(crate) fn verify_token_structure(
+    source: &str,
+    comment_lines: &[usize],
+    pipe_count: usize,
+    lines_ending_open_paren: &[usize],
+    lines_starting_close_paren: &[usize],
+) {
+    use lql_parser::tokens::get_token_structure;
+    let structure = get_token_structure(source);
+    assert_eq!(structure.comment_lines, comment_lines);
+    assert_eq!(structure.pipe_positions.len(), pipe_count);
+    assert_eq!(structure.lines_ending_open_paren, lines_ending_open_paren);
+    assert_eq!(
+        structure.lines_starting_close_paren,
+        lines_starting_close_paren
     );
 }

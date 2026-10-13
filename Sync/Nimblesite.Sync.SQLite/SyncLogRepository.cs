@@ -23,9 +23,8 @@ public static class SyncLogRepository
         SqliteConnection connection,
         long fromVersion,
         int batchSize
-    )
-    {
-        return SyncCommandExecution.Read<SqliteException, SyncLogListResult>(
+    ) =>
+        SyncCommandExecution.FetchSyncLogChanges<SqliteConnection, SqliteException>(
             connection: connection,
             setSql: command =>
                 command.CommandText = global::Nimblesite
@@ -33,32 +32,12 @@ public static class SyncLogRepository
                     .SQLite
                     .MappingStateRepository
                     .SqlSpecification24,
-            parameters: () => [("@fromVersion", fromVersion), ("@batchSize", batchSize)],
-            read: command =>
-            {
-                return new SyncLogListOk(
-                    SyncCommandExecution.ReadRows<SyncLogEntry>(
-                        command: command,
-                        read: row => new SyncLogEntry(
-                            Version: row.GetInt64(0),
-                            TableName: row.GetString(1),
-                            PkValue: row.GetString(2),
-                            Operation: ParseOperation(row.GetString(3)),
-                            Payload: row.IsDBNull(4) ? null : row.GetString(4),
-                            Origin: row.GetString(5),
-                            Timestamp: row.GetString(6)
-                        )
-                    )
-                );
-            },
-            failure: ex =>
-            {
-                return new SyncLogListError(
-                    new SyncErrorDatabase($"Failed to fetch changes: {ex.Message}")
-                );
-            }
+            batchParameterName: "@batchSize",
+            fromVersion: fromVersion,
+            batchSize: batchSize,
+            fallback: SyncOperation.Insert,
+            failurePrefix: "Failed to fetch changes"
         );
-    }
 
     /// <summary>
     /// Gets the last server version from sync state.
@@ -144,13 +123,4 @@ public static class SyncLogRepository
             setSql: command => command.CommandText = "SELECT COUNT(*) FROM _sync_log",
             failurePrefix: "Failed to get entry count"
         );
-
-    private static SyncOperation ParseOperation(string operation) =>
-        operation.ToLowerInvariant() switch
-        {
-            "insert" => SyncOperation.Insert,
-            "update" => SyncOperation.Update,
-            "delete" => SyncOperation.Delete,
-            _ => SyncOperation.Insert,
-        };
 }

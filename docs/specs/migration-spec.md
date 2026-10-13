@@ -1254,3 +1254,23 @@ INSERT, UPDATE and DELETE policies share the applicability check and trigger-emi
 ### Shared managed SQLite trigger reads [MIG-SQLITE-SHARED-MANAGED-TRIGGER-READS]
 
 Trigger-name and trigger-definition inspection share command creation, table/pattern parameter binding and reader iteration. Each operation retains its original catalog SQL, row projection, returned list type and resource lifetime.
+
+- **[MIG-INSPECT-SHARED-TABLES]**: Native inspectors share table-result collection: retain successful definitions and log each failed table inspection without aborting subsequent tables.
+
+- **[MIG-FK-ACTION-SQL]**: All migration dialects use one foreign-key action keyword mapping, preserving the original default NO ACTION and every native referential-action keyword.
+
+- **[MIG-FUNCTION-BODY-EXCLUSIVE]**: Both native PostgreSQL DDL paths reuse the existing mutually exclusive body/bodyLql validation and its original failure message.
+
+- **[MIG-PG-DDL-SHARED]**: PostgreSQL DDL generation reuses native identifier quoting and result unwrapping helpers while preserving every generated SQL string and existing error behavior.
+
+- **[MIG-TEST-SHARED-OPERATION-ASSERTIONS]**: Schema diff tests share typed operation-presence assertions and caller predicates; preserve each operation type and every matched field.
+
+- **[RLS-CURRENT-SETTING-REWRITE-ERRORS]**: RLS predicate translation paths share current_setting rewrite outcome handling and preserve the original policy-specific error mapping.
+
+- **[MIG-VERIFY-BEFORE-UP-TO-DATE]**: Before returning the no-operation up-to-date result, the migration CLI verifies the inspected schema against the desired contract.
+
+- **[MIG-CHECK-CONSTRAINT-EXPRESSION-DRIFT]**: Schema diffs retain check-constraint expression replacement operations and their native PostgreSQL application scenarios.
+
+- **[MIG-UNIQUE-CONSTRAINT-DIFF]**: Schema diffs retain unique-constraint identity and column expectations when determining create and drop operations.
+
+- **[MIG-VERIFY-DEFAULTS-AND-GRANTS]**: Integrity verification retains normalized default-expression comparison and grant coverage checks, including order-independent privileges.

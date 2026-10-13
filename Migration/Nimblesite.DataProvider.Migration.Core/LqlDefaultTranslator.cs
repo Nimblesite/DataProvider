@@ -37,15 +37,8 @@ public static partial class LqlDefaultTranslator
             "true" => "true",
             "false" => "false",
 
-            // Numeric literals (pass through)
-            var n when int.TryParse(n, out _) => n,
-            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
-
-            // String literals (already quoted with single quotes)
-            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
-
-            // Function calls (lower, upper, coalesce, etc.)
-            _ => TranslateFunctionCall(lqlExpression, ToPostgresFunction),
+            // Literals and function calls handled identically across platforms.
+            _ => TranslateLiteralOrFunction(lqlExpression, normalized, ToPostgresFunction),
         };
     }
 
@@ -77,15 +70,8 @@ public static partial class LqlDefaultTranslator
             "true" => "1",
             "false" => "0",
 
-            // Numeric literals (pass through)
-            var n when int.TryParse(n, out _) => n,
-            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
-
-            // String literals (already quoted with single quotes)
-            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
-
-            // Function calls
-            _ => TranslateFunctionCall(lqlExpression, ToSqliteFunction),
+            // Literals and function calls handled identically across platforms.
+            _ => TranslateLiteralOrFunction(lqlExpression, normalized, ToSqliteFunction),
         };
     }
 
@@ -95,6 +81,24 @@ public static partial class LqlDefaultTranslator
         + "substr(lower(hex(randomblob(2))),2) || '-' || "
         + "substr('89ab',abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || "
         + "lower(hex(randomblob(6))))";
+
+    private static string TranslateLiteralOrFunction(
+        string lqlExpression,
+        string normalized,
+        Func<string, string[], string> functionTranslator
+    ) =>
+        normalized switch
+        {
+            // Numeric literals (pass through)
+            var n when int.TryParse(n, out _) => n,
+            var d when double.TryParse(d, CultureInfo.InvariantCulture, out _) => d,
+
+            // String literals (already quoted with single quotes)
+            var s when s.StartsWith('\'') && s.EndsWith('\'') => s,
+
+            // Function calls (lower, upper, coalesce, etc.)
+            _ => TranslateFunctionCall(lqlExpression, functionTranslator),
+        };
 
     private static string TranslateFunctionCall(
         string expression,

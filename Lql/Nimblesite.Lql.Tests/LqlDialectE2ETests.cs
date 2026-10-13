@@ -32,25 +32,12 @@ public sealed partial class LqlDialectE2ETests
         var ss = stmt.ToSqlServer();
         var sl = stmt.ToSQLite();
 
-        if (pg is not Result<string, SqlError>.Ok<string, SqlError> pgOk)
-        {
-            Assert.Fail("PostgreSql conversion failed");
-            return default;
-        }
-
-        if (ss is not Result<string, SqlError>.Ok<string, SqlError> ssOk)
-        {
-            Assert.Fail("SqlServer conversion failed");
-            return default;
-        }
-
-        if (sl is not Result<string, SqlError>.Ok<string, SqlError> slOk)
-        {
-            Assert.Fail("SQLite conversion failed");
-            return default;
-        }
-
-        return (pgOk.Value, ssOk.Value, slOk.Value);
+        // Implements [LQL-TEST-SHARED-DIALECT-RESULTS]. Preserve conversion and check order.
+        return (
+            Ok(actual: pg, message: "PostgreSql conversion failed").Value,
+            Ok(actual: ss, message: "SqlServer conversion failed").Value,
+            Ok(actual: sl, message: "SQLite conversion failed").Value
+        );
     }
 
     [Fact]

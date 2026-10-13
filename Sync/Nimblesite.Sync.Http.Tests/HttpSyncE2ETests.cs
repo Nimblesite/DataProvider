@@ -13,32 +13,24 @@ namespace Nimblesite.Sync.Http.Tests;
 /// This is the PROOF that Nimblesite.Sync.Http extension methods work in a real scenario.
 /// </summary>
 public sealed partial class HttpSyncE2ETests
-    : IClassFixture<SyncApiWebApplicationFactory>,
-        IDisposable
+    : HttpSqliteSyncTestFixture,
+        IClassFixture<SyncApiWebApplicationFactory>
 {
     private readonly HttpClient _client;
-    private readonly string _serverDbPath;
-    private readonly SqliteConnection _serverConn;
-    private readonly string _clientDbPath;
-    private readonly SqliteConnection _clientConn;
-    private readonly string _serverOriginId = Guid.NewGuid().ToString();
-    private readonly string _clientOriginId = Guid.NewGuid().ToString();
 
     public HttpSyncE2ETests(SyncApiWebApplicationFactory factory)
+        : base(serverName: "sync_server", clientName: "sync_client", initialize: InitializeDatabase)
     {
         _client = factory.CreateClient();
+    }
 
-        // Create server database
-        (_serverDbPath, _serverConn) = global::Tests.Shared.TempSqliteDatabase.Create(
-            "sync_server"
-        );
-        InitializeDatabase(_serverConn, _serverOriginId);
-
-        // Create client database
-        (_clientDbPath, _clientConn) = global::Tests.Shared.TempSqliteDatabase.Create(
-            "sync_client"
-        );
-        InitializeDatabase(_clientConn, _clientOriginId);
+    /// <summary>Disposes the HTTP client and the SQLite databases.</summary>
+    /// <param name="disposing">True when disposal is driven by the caller.</param>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            _client.Dispose();
+        base.Dispose(disposing);
     }
 
     private static void InitializeDatabase(SqliteConnection conn, string originId)
@@ -179,17 +171,6 @@ public sealed partial class HttpSyncE2ETests
     {
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-    }
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        VerifyReusableWorkflow3(
-            input0: _serverConn,
-            input1: _clientConn,
-            input2: _serverDbPath,
-            input3: _clientDbPath
-        );
     }
 
     /// <summary>
@@ -403,32 +384,6 @@ public sealed partial class HttpSyncE2ETests
         Assert.Equal(2, page.Length);
         Assert.Equal(1L, page[0].GetProperty("version").GetInt64());
         Assert.Equal(2L, page[1].GetProperty("version").GetInt64());
-    }
-
-    // Implements [CI-TEST-SHARED-SCENARIOS].
-    internal static void VerifyReusableWorkflow3(
-        SqliteConnection input0,
-        SqliteConnection input1,
-        string input2,
-        string input3
-    )
-    {
-        input0.Close();
-        input0.Dispose();
-        input1.Close();
-        input1.Dispose();
-
-        try
-        {
-            if (File.Exists(input2))
-                File.Delete(input2);
-            if (File.Exists(input3))
-                File.Delete(input3);
-        }
-        catch
-        {
-            // Ignore cleanup errors
-        }
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

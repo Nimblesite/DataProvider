@@ -48,7 +48,7 @@ public sealed partial class TombstoneManagerTests
         System.Int32 scenario1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         var result = TombstoneManager.RequiresFullResync(
             clientLastVersion: 100,

@@ -38,11 +38,10 @@ public sealed partial class SchemaDiffUniqueConstraintIssue55Tests
                 input0: Dataset_Calculate_AddingCompositeUniqueConstraintToExistingTable_YieldsAddOperation_1,
                 input1: current
             );
-        Assert.Contains(
+        SchemaDiffAssertions.AssertContainsOperation<AddUniqueConstraintOperation>(
             ops,
-            op =>
-                op is AddUniqueConstraintOperation add
-                && add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
+            add =>
+                add.UniqueConstraint.Name == "uq_agent_configs_tenant_name"
                 && add.UniqueConstraint.Columns.SequenceEqual(["tenant_id", "name"])
         );
     }

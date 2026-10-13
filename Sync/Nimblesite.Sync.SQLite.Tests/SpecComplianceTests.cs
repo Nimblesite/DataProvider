@@ -3,7 +3,7 @@
 using System.Diagnostics.CodeAnalysis;
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
-using PersonCommand = global::Tests.Shared.PersonCommandParameters;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -12,19 +12,10 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Every spec section with testable requirements is covered.
 /// NO MOCKS - REAL SQLITE DATABASES ONLY!
 /// </summary>
-public sealed partial class SpecComplianceTests : IDisposable
+public sealed partial class SpecComplianceTests : SqliteSyncTestBase
 {
-    private readonly SqliteConnection _db;
-    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
-        "speccompliancetests"
-    );
-    private readonly string _originId = Guid.NewGuid().ToString();
-
     public SpecComplianceTests()
-    {
-        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
-        CreateTestTable();
-    }
+        : base(name: "speccompliancetests", createSchema: CreateTestTable) { }
 
     #region Section 4: Primary Key Requirements
 
@@ -239,8 +230,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         var matchingChange = Fixture_Spec_S10_Subscriptions_RecordLevelMatching_1();
         var nonMatchingChange = Fixture_Spec_S10_Subscriptions_RecordLevelMatching_2();
 
-        Assert.True(SubscriptionManager.MatchesChange(sub, matchingChange));
-        Assert.False(SubscriptionManager.MatchesChange(sub, nonMatchingChange));
+        AssertMatches(sub, matchingChange, nonMatchingChange);
     }
 
     [Fact]
@@ -259,8 +249,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         var wrongTable = Fixture_Spec_S10_Subscriptions_TableLevelMatchesAllChanges_3();
 
         Assert.True(SubscriptionManager.MatchesChange(sub, change1));
-        Assert.True(SubscriptionManager.MatchesChange(sub, change2));
-        Assert.False(SubscriptionManager.MatchesChange(sub, wrongTable));
+        AssertMatches(sub, change2, wrongTable);
     }
 
     [Fact]
@@ -552,10 +541,7 @@ public sealed partial class SpecComplianceTests : IDisposable
 
         var changes = FetchChanges(0);
         var hash1 = HashVerifier.ComputeBatchHash(changes);
-        var hash2 = HashVerifier.ComputeBatchHash(changes);
-
-        // Same input = same hash
-        Assert.Equal(hash1, hash2);
+        AssertBatchHashStable(changes);
 
         // Hash is 64 hex chars (SHA-256)
         Assert.Equal(64, hash1.Length);
@@ -701,10 +687,10 @@ public sealed partial class SpecComplianceTests : IDisposable
 
     #region Helper Methods
 
-    private void CreateTestTable()
+    private static void CreateTestTable(SqliteConnection db)
     {
         DatabaseCommands.Execute(
-            connection: _db,
+            connection: db,
             configure: command => command.CommandText = Data_CreateTestTable_1
         );
     }
@@ -723,28 +709,11 @@ public sealed partial class SpecComplianceTests : IDisposable
         Assert.Equal(expectRemote ? remote : local, resolution.Winner);
     }
 
-    private void ExecutePerson(string sql, string id, string name, string email)
-    {
-        using var cmd = _db.CreateCommand();
-        cmd.CommandText = sql;
-        PersonCommand.Execute(command: cmd, id: id, name: name, email: email);
-    }
-
     private void InsertPerson(string id, string name, string email) =>
-        ExecutePerson(
-            sql: "INSERT INTO Person (Id, Name, Email) VALUES (@id, @name, @email)",
-            id: id,
-            name: name,
-            email: email
-        );
+        SyncFixtureSqliteHelpers.InsertPerson(db: _db, id: id, name: name, email: email);
 
     private void UpdatePerson(string id, string name, string email) =>
-        ExecutePerson(
-            sql: "UPDATE Person SET Name = @name, Email = @email WHERE Id = @id",
-            id: id,
-            name: name,
-            email: email
-        );
+        SyncFixtureSqliteHelpers.UpdatePerson(db: _db, id: id, name: name, email: email);
 
     private List<SyncLogEntry> InsertAliceAndFetchSingle()
     {
@@ -754,14 +723,7 @@ public sealed partial class SpecComplianceTests : IDisposable
         return changes;
     }
 
-    private void DeletePerson(string id)
-    {
-        DatabaseCommands.Execute(
-            connection: _db,
-            configure: cmd => cmd.CommandText = "DELETE FROM Person WHERE Id = @id",
-            parameters: () => [("@id", id)]
-        );
-    }
+    private void DeletePerson(string id) => DeletePersonWithEmail(db: _db, id: id);
 
     private void SeedInsertUpdateDeleteP1()
     {
@@ -770,12 +732,8 @@ public sealed partial class SpecComplianceTests : IDisposable
         DeletePerson("p1");
     }
 
-    private List<SyncLogEntry> FetchChanges(long fromVersion)
-    {
-        var result = SyncLogRepository.FetchChanges(_db, fromVersion, 1000);
-        Assert.IsType<SyncLogListOk>(result);
-        return [.. (Ok(actual: result)).Value];
-    }
+    private List<SyncLogEntry> FetchChanges(long fromVersion) =>
+        FetchSqliteChanges(_db, fromVersion, 1000);
 
     private BoolSyncResult ApplySingleChange(SyncLogEntry entry) =>
         ChangeApplierSQLite.ApplyChange(_db, entry);
@@ -802,14 +760,6 @@ public sealed partial class SpecComplianceTests : IDisposable
     }
 
     #endregion
-
-    public void Dispose()
-    {
-        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
-            input0: _db,
-            input1: _dbPath
-        );
-    }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     private static SyncBatch VerifySharedChecks2(SqliteConnection input0, int value1)

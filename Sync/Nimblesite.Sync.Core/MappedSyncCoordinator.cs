@@ -187,19 +187,13 @@ public static class MappedSyncCoordinator
                                     TrackMapping(mapped.MappingId, mappingCounts);
 
                                     // Save record hash if using hash strategy
-                                    if (
-                                        mapping?.SyncTracking.Strategy == SyncTrackingStrategy.Hash
-                                        && mapped.MappedPayload is not null
-                                    )
-                                    {
-                                        saveRecordHash(
-                                            SyncTrackingManager.CreateRecordHash(
-                                                mapped.MappingId,
-                                                entry.PkValue,
-                                                mapped.MappedPayload
-                                            )
-                                        );
-                                    }
+                                    SaveRecordHashIfUsingHashStrategy(
+                                        mapping: mapping,
+                                        mappingId: mapped.MappingId,
+                                        pkValue: entry.PkValue,
+                                        mappedPayload: mapped.MappedPayload,
+                                        saveRecordHash: saveRecordHash
+                                    );
                                 }
                                 break;
                         }
@@ -356,19 +350,13 @@ public static class MappedSyncCoordinator
                             MappingDirection.Push
                         );
 
-                        if (
-                            mapping?.SyncTracking.Strategy == SyncTrackingStrategy.Hash
-                            && mapped.MappedPayload is not null
-                        )
-                        {
-                            saveRecordHash(
-                                SyncTrackingManager.CreateRecordHash(
-                                    mapped.MappingId,
-                                    original.PkValue,
-                                    mapped.MappedPayload
-                                )
-                            );
-                        }
+                        SaveRecordHashIfUsingHashStrategy(
+                            mapping: mapping,
+                            mappingId: mapped.MappingId,
+                            pkValue: original.PkValue,
+                            mappedPayload: mapped.MappedPayload,
+                            saveRecordHash: saveRecordHash
+                        );
                     }
                 }
                 return null;
@@ -396,6 +384,26 @@ public static class MappedSyncCoordinator
             },
             failure: failure => new PushResultError(failure)
         );
+    }
+
+    /// <summary>
+    /// Saves a record hash when the mapping uses the hash tracking strategy.
+    /// </summary>
+    private static void SaveRecordHashIfUsingHashStrategy(
+        TableMapping? mapping,
+        string mappingId,
+        string pkValue,
+        string? mappedPayload,
+        Action<RecordHash> saveRecordHash
+    )
+    {
+        if (
+            mapping?.SyncTracking.Strategy == SyncTrackingStrategy.Hash
+            && mappedPayload is not null
+        )
+        {
+            saveRecordHash(SyncTrackingManager.CreateRecordHash(mappingId, pkValue, mappedPayload));
+        }
     }
 
     private static void TrackMapping(string mappingId, Dictionary<string, int> counts)

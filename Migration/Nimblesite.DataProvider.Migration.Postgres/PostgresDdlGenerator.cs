@@ -179,25 +179,39 @@ public static partial class PostgresDdlGenerator
 
     private static void AppendPolicyPredicates(StringBuilder sb, RlsPolicyDefinition policy)
     {
-        // Raw-SQL escape hatch (issue #36) takes precedence over LQL.
-        if (!string.IsNullOrWhiteSpace(policy.UsingSql))
-        {
-            sb.Append(CultureInfo.InvariantCulture, $" USING ({policy.UsingSql})");
-        }
-        else if (!string.IsNullOrWhiteSpace(policy.UsingLql))
-        {
-            var sql = TranslateOrThrow(policy.UsingLql, policy.Name);
-            sb.Append(CultureInfo.InvariantCulture, $" USING ({sql})");
-        }
+        AppendPolicyPredicate(
+            sb: sb,
+            clause: "USING",
+            sql: policy.UsingSql,
+            lql: policy.UsingLql,
+            policyName: policy.Name
+        );
+        AppendPolicyPredicate(
+            sb: sb,
+            clause: "WITH CHECK",
+            sql: policy.WithCheckSql,
+            lql: policy.WithCheckLql,
+            policyName: policy.Name
+        );
+    }
 
-        if (!string.IsNullOrWhiteSpace(policy.WithCheckSql))
+    private static void AppendPolicyPredicate(
+        StringBuilder sb,
+        string clause,
+        string? sql,
+        string? lql,
+        string policyName
+    )
+    {
+        // Raw-SQL escape hatch (issue #36) takes precedence over LQL.
+        if (!string.IsNullOrWhiteSpace(sql))
         {
-            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({policy.WithCheckSql})");
+            sb.Append(CultureInfo.InvariantCulture, $" {clause} ({sql})");
         }
-        else if (!string.IsNullOrWhiteSpace(policy.WithCheckLql))
+        else if (!string.IsNullOrWhiteSpace(lql))
         {
-            var sql = TranslateOrThrow(policy.WithCheckLql, policy.Name);
-            sb.Append(CultureInfo.InvariantCulture, $" WITH CHECK ({sql})");
+            var translated = TranslateOrThrow(lql, policyName);
+            sb.Append(CultureInfo.InvariantCulture, $" {clause} ({translated})");
         }
     }
 
@@ -232,16 +246,18 @@ public static partial class PostgresDdlGenerator
         }
     }
 
-    private static string TranslateOrThrow(string lql, string policyName)
-    {
-        var result = RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, policyName);
-        return result switch
+    private static string TranslateOrThrow(string lql, string policyName) =>
+        UnwrapOrThrow(RlsPredicateTranspiler.Translate(lql, RlsPlatform.Postgres, policyName));
+
+    // Implements [MIG-PG-DDL-SHARED]: DDL generation is a public string-returning
+    // API, so invalid input surfaces as the same InvalidOperationException as before.
+    internal static string UnwrapOrThrow(Outcome.Result<string, MigrationError> result) =>
+        result switch
         {
             Outcome.Result<string, MigrationError>.Ok<string, MigrationError> ok => ok.Value,
             Outcome.Result<string, MigrationError>.Error<string, MigrationError> err =>
                 throw new InvalidOperationException(err.Value.Message),
         };
-    }
 
     private static string RlsOperationsToPgClause(IReadOnlyList<RlsOperation> ops)
     {
@@ -310,25 +326,13 @@ public static partial class PostgresDdlGenerator
         // Add foreign key constraints
         foreach (var fk in table.ForeignKeys)
         {
-            var fkName = (fk.Name ?? $"FK_{table.Name}_{string.Join("_", fk.Columns)}");
-            var fkCols = string.Join(", ", fk.Columns.Select(c => $"\"{c}\""));
-            var refCols = string.Join(", ", fk.ReferencedColumns.Select(c => $"\"{c}\""));
-            var onDelete = ForeignKeyActionToSql(fk.OnDelete);
-            var onUpdate = ForeignKeyActionToSql(fk.OnUpdate);
-            var refTable = fk.ReferencedTable;
-            var refSchema = fk.ReferencedSchema;
-
-            columnDefs.Add(
-                $"CONSTRAINT \"{fkName}\" FOREIGN KEY ({fkCols}) REFERENCES \"{refSchema}\".\"{refTable}\" ({refCols}) ON DELETE {onDelete} ON UPDATE {onUpdate}"
-            );
+            columnDefs.Add(ForeignKeyConstraintClause(fk: fk, tableName: table.Name));
         }
 
         // Add unique constraints
         foreach (var uc in table.UniqueConstraints)
         {
-            var ucName = (uc.Name ?? $"UQ_{table.Name}_{string.Join("_", uc.Columns)}");
-            var ucCols = string.Join(", ", uc.Columns.Select(c => $"\"{c}\""));
-            columnDefs.Add($"CONSTRAINT \"{ucName}\" UNIQUE ({ucCols})");
+            columnDefs.Add(UniqueConstraintClause(uc: uc, tableName: table.Name));
         }
 
         // Add check constraints. Auto-quote bare identifiers in the
@@ -350,12 +354,8 @@ public static partial class PostgresDdlGenerator
         {
             sb.AppendLine(";");
             var unique = index.IsUnique ? "UNIQUE " : "";
-            // Expression indexes use Expressions verbatim, column indexes quote column names
-            var indexItems =
-                index.Expressions.Count > 0
-                    ? string.Join(", ", index.Expressions)
-                    : string.Join(", ", index.Columns.Select(c => $"\"{c}\""));
-            var filter = index.Filter is not null ? $" WHERE {index.Filter}" : "";
+            var indexItems = IndexItems(index);
+            var filter = IndexFilter(index);
             var indexName = index.Name;
             sb.Append(
                 CultureInfo.InvariantCulture,
@@ -431,12 +431,8 @@ public static partial class PostgresDdlGenerator
     private static string GenerateCreateIndex(CreateIndexOperation op)
     {
         var unique = op.Index.IsUnique ? "UNIQUE " : "";
-        // Expression indexes use Expressions verbatim, column indexes quote column names
-        var indexItems =
-            op.Index.Expressions.Count > 0
-                ? string.Join(", ", op.Index.Expressions)
-                : string.Join(", ", op.Index.Columns.Select(c => $"\"{c}\""));
-        var filter = op.Index.Filter is not null ? $" WHERE {op.Index.Filter}" : "";
+        var indexItems = IndexItems(op.Index);
+        var filter = IndexFilter(op.Index);
 
         return $"CREATE {unique}INDEX IF NOT EXISTS \"{op.Index.Name}\" ON \"{op.Schema}\".\"{op.TableName}\" ({indexItems}){filter}";
     }
@@ -480,28 +476,59 @@ public static partial class PostgresDdlGenerator
     private static string SqlLiteral(string value) =>
         $"'{value.Replace("'", "''", StringComparison.Ordinal)}'";
 
-    private static string GenerateAddForeignKey(AddForeignKeyOperation op)
-    {
-        var fk = op.ForeignKey;
-        var fkName = (fk.Name ?? $"FK_{op.TableName}_{string.Join("_", fk.Columns)}");
-        var fkCols = string.Join(", ", fk.Columns.Select(c => $"\"{c}\""));
-        var refCols = string.Join(", ", fk.ReferencedColumns.Select(c => $"\"{c}\""));
-        var onDelete = ForeignKeyActionToSql(fk.OnDelete);
-        var onUpdate = ForeignKeyActionToSql(fk.OnUpdate);
-
-        return $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD CONSTRAINT \"{fkName}\" FOREIGN KEY ({fkCols}) REFERENCES \"{fk.ReferencedSchema}\".\"{fk.ReferencedTable}\" ({refCols}) ON DELETE {onDelete} ON UPDATE {onUpdate}";
-    }
+    private static string GenerateAddForeignKey(AddForeignKeyOperation op) =>
+        $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD {ForeignKeyConstraintClause(fk: op.ForeignKey, tableName: op.TableName)}";
 
     private static string GenerateAddCheckConstraint(AddCheckConstraintOperation op) =>
         $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD CONSTRAINT \"{op.CheckConstraint.Name}\" CHECK ({op.CheckConstraint.Expression})";
 
-    private static string GenerateAddUniqueConstraint(AddUniqueConstraintOperation op)
+    private static string GenerateAddUniqueConstraint(AddUniqueConstraintOperation op) =>
+        $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD {UniqueConstraintClause(uc: op.UniqueConstraint, tableName: op.TableName)}";
+
+    private static string ForeignKeyConstraintClause(ForeignKeyDefinition fk, string tableName)
     {
-        var uc = op.UniqueConstraint;
-        var ucName = (uc.Name ?? $"UQ_{op.TableName}_{string.Join("_", uc.Columns)}");
-        var ucCols = string.Join(", ", uc.Columns.Select(c => $"\"{c}\""));
-        return $"ALTER TABLE \"{op.Schema}\".\"{op.TableName}\" ADD CONSTRAINT \"{ucName}\" UNIQUE ({ucCols})";
+        var fkName = ConstraintName(
+            prefix: "FK",
+            tableName: tableName,
+            name: fk.Name,
+            columns: fk.Columns
+        );
+        var fkCols = QuotedColumns(fk.Columns);
+        var refCols = QuotedColumns(fk.ReferencedColumns);
+        var onDelete = ForeignKeyActionSql.ToSql(fk.OnDelete);
+        var onUpdate = ForeignKeyActionSql.ToSql(fk.OnUpdate);
+        return $"CONSTRAINT \"{fkName}\" FOREIGN KEY ({fkCols}) REFERENCES \"{fk.ReferencedSchema}\".\"{fk.ReferencedTable}\" ({refCols}) ON DELETE {onDelete} ON UPDATE {onUpdate}";
     }
+
+    private static string UniqueConstraintClause(UniqueConstraintDefinition uc, string tableName)
+    {
+        var ucName = ConstraintName(
+            prefix: "UQ",
+            tableName: tableName,
+            name: uc.Name,
+            columns: uc.Columns
+        );
+        var ucCols = QuotedColumns(uc.Columns);
+        return $"CONSTRAINT \"{ucName}\" UNIQUE ({ucCols})";
+    }
+
+    private static string ConstraintName(
+        string prefix,
+        string tableName,
+        string? name,
+        IReadOnlyList<string> columns
+    ) => name ?? $"{prefix}_{tableName}_{string.Join("_", columns)}";
+
+    private static string QuotedColumns(IEnumerable<string> columns) =>
+        string.Join(", ", columns.Select(c => $"\"{c}\""));
+
+    private static string IndexItems(IndexDefinition index) =>
+        index.Expressions.Count > 0
+            ? string.Join(", ", index.Expressions)
+            : QuotedColumns(index.Columns);
+
+    private static string IndexFilter(IndexDefinition index) =>
+        index.Filter is not null ? $" WHERE {index.Filter}" : "";
 
     /// <summary>
     /// Map portable type to PostgreSQL type.
@@ -555,17 +582,6 @@ public static partial class PostgresDdlGenerator
             _ => "TEXT",
         };
 
-    private static string ForeignKeyActionToSql(ForeignKeyAction action) =>
-        action switch
-        {
-            ForeignKeyAction.NoAction => "NO ACTION",
-            ForeignKeyAction.Cascade => "CASCADE",
-            ForeignKeyAction.SetNull => "SET NULL",
-            ForeignKeyAction.SetDefault => "SET DEFAULT",
-            ForeignKeyAction.Restrict => "RESTRICT",
-            _ => "NO ACTION",
-        };
-
     /// <summary>
     /// Wraps any bare identifier in <paramref name="expression"/> that exactly
     /// matches a name in <paramref name="columnNames"/> with double-quotes,
@@ -585,34 +601,18 @@ public static partial class PostgresDdlGenerator
             return expression;
         }
 
-        var sb = new StringBuilder(expression.Length + 16);
-        var i = 0;
-        while (i < expression.Length)
-        {
-            var c = expression[i];
-
-            // Single-quoted string literal — copy verbatim until closing quote.
-            if (expression[i] is '\'' or '"')
-            {
-                i = global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
+        return SqlIdentifierRewriter.Rewrite(
+            source: expression,
+            open: '"',
+            close: '"',
+            copySpecial: (index, sb) =>
+                global::Nimblesite.Lql.Core.QualifierRewriter.CopySqlQuoted(
                     source: expression,
-                    start: i,
+                    start: index,
                     sql: sb
-                );
-                continue;
-            }
-
-            // Identifier candidate (letter or underscore start, then [a-zA-Z0-9_]).
-            if (char.IsLetter(c) || c == '_')
+                ),
+            shouldQuote: (word, start) =>
             {
-                var start = i;
-                i++;
-                i = global::Nimblesite.Lql.Core.QualifierRewriter.IdentifierEnd(
-                    source: expression,
-                    start: i
-                );
-                var word = expression[start..i];
-
                 // Don't quote if the previous non-whitespace char is `.` —
                 // it's already a qualified reference like `tbl.col`.
                 var prevIdx = start - 1;
@@ -621,21 +621,8 @@ public static partial class PostgresDdlGenerator
                     prevIdx--;
                 }
                 var qualified = prevIdx >= 0 && expression[prevIdx] == '.';
-
-                if (!qualified && columnNames.Contains(word))
-                {
-                    sb.Append('"').Append(word).Append('"');
-                }
-                else
-                {
-                    sb.Append(word);
-                }
-                continue;
+                return !qualified && columnNames.Contains(word);
             }
-
-            sb.Append(c);
-            i++;
-        }
-        return sb.ToString();
+        );
     }
 }

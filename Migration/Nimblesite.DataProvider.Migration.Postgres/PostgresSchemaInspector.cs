@@ -42,24 +42,12 @@ public static partial class PostgresSchemaInspector
                 }
             );
 
-            foreach (var tableName in tableNames)
-            {
-                var tableResult = InspectTable(connection, schemaName, tableName, logger);
-                if (tableResult is TableResult.Ok<TableDefinition, MigrationError> ok)
-                {
-                    tables.Add(ok.Value);
-                }
-                else if (
-                    tableResult is TableResult.Error<TableDefinition, MigrationError> tableError
-                )
-                {
-                    logger?.LogWarning(
-                        "Failed to inspect table {Table}: {Error}",
-                        tableName,
-                        tableError.Value
-                    );
-                }
-            }
+            SchemaInspectionSupport.CollectTables(
+                tableNames,
+                tableName => InspectTable(connection, schemaName, tableName, logger),
+                tables,
+                logger
+            );
 
             return new SchemaResult.Ok<SchemaDefinition, MigrationError>(
                 new SchemaDefinition
@@ -261,8 +249,8 @@ public static partial class PostgresSchemaInspector
                             ReferencedTable = refTable,
                             ReferencedSchema = refSchema,
                             ReferencedColumns = refColumns,
-                            OnDelete = ParseForeignKeyAction(deleteRule),
-                            OnUpdate = ParseForeignKeyAction(updateRule),
+                            OnDelete = SchemaYamlScalars.ParseForeignKeyAction(deleteRule),
+                            OnUpdate = SchemaYamlScalars.ParseForeignKeyAction(updateRule),
                         }
                     );
                 }
@@ -364,16 +352,6 @@ public static partial class PostgresSchemaInspector
             _ => new TextType(),
         };
     }
-
-    private static ForeignKeyAction ParseForeignKeyAction(string action) =>
-        action.ToUpperInvariant() switch
-        {
-            "CASCADE" => ForeignKeyAction.Cascade,
-            "SET NULL" => ForeignKeyAction.SetNull,
-            "SET DEFAULT" => ForeignKeyAction.SetDefault,
-            "RESTRICT" => ForeignKeyAction.Restrict,
-            _ => ForeignKeyAction.NoAction,
-        };
 
     private static void InspectUniqueConstraints(
         NpgsqlConnection connection,
@@ -488,44 +466,7 @@ public static partial class PostgresSchemaInspector
 
         var content = indexDef.Substring(parenStart + 1, parenEnd - parenStart - 1);
 
-        // Split by comma, but respect nested parentheses (for function calls)
-        var current = new StringBuilder();
-        var depth = 0;
-
-        foreach (var ch in content)
-        {
-            switch (ch)
-            {
-                case '(':
-                    depth++;
-                    current.Append(ch);
-                    break;
-                case ')':
-                    depth--;
-                    current.Append(ch);
-                    break;
-                case ',' when depth == 0:
-                    var expr = current.ToString().Trim();
-                    if (!string.IsNullOrEmpty(expr))
-                    {
-                        expressions.Add(expr);
-                    }
-                    current.Clear();
-                    break;
-                default:
-                    current.Append(ch);
-                    break;
-            }
-        }
-
-        // Add the last expression
-        var lastExpr = current.ToString().Trim();
-        if (!string.IsNullOrEmpty(lastExpr))
-        {
-            expressions.Add(lastExpr);
-        }
-
-        return expressions;
+        return IndexExpressionSplitter.Split(content);
     }
 
     /// <summary>
@@ -543,9 +484,12 @@ public static partial class PostgresSchemaInspector
         var forced = false;
         using (var enabledCmd = connection.CreateCommand())
         {
-            enabledCmd.CommandText = CatalogQuery_InspectRls_7;
-            enabledCmd.Parameters.AddWithValue("@schema", schemaName);
-            enabledCmd.Parameters.AddWithValue("@table", tableName);
+            PostgresCatalogQuery.Configure(
+                command: enabledCmd,
+                sql: CatalogQuery_InspectRls_7,
+                schema: schemaName,
+                table: tableName
+            );
             using var reader = enabledCmd.ExecuteReader();
             if (reader.Read())
             {
@@ -557,9 +501,12 @@ public static partial class PostgresSchemaInspector
         var policies = new List<RlsPolicyDefinition>();
         using (var polCmd = connection.CreateCommand())
         {
-            polCmd.CommandText = CatalogQuery_InspectRls_8;
-            polCmd.Parameters.AddWithValue("@schema", schemaName);
-            polCmd.Parameters.AddWithValue("@table", tableName);
+            PostgresCatalogQuery.Configure(
+                command: polCmd,
+                sql: CatalogQuery_InspectRls_8,
+                schema: schemaName,
+                table: tableName
+            );
             using var reader = polCmd.ExecuteReader();
             while (reader.Read())
             {
@@ -575,7 +522,7 @@ public static partial class PostgresSchemaInspector
                     {
                         Name = policyName,
                         IsPermissive = permissive,
-                        Operations = [PgCmdToRlsOperation(cmd)],
+                        Operations = [SchemaYamlScalars.ParseRlsOperation(cmd)],
                         Roles = rolesArr.Where(r => r != "public").ToArray(),
                         // pg_policies returns the parsed qual/with_check as
                         // SQL text — round-trip them as raw-SQL escape hatch
@@ -600,15 +547,4 @@ public static partial class PostgresSchemaInspector
             Policies = policies.AsReadOnly(),
         };
     }
-
-    private static RlsOperation PgCmdToRlsOperation(string cmd) =>
-        cmd.ToUpperInvariant() switch
-        {
-            "ALL" => RlsOperation.All,
-            "SELECT" => RlsOperation.Select,
-            "INSERT" => RlsOperation.Insert,
-            "UPDATE" => RlsOperation.Update,
-            "DELETE" => RlsOperation.Delete,
-            _ => RlsOperation.All,
-        };
 }

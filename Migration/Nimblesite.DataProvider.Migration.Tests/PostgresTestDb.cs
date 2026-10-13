@@ -45,6 +45,18 @@ internal static class PostgresTestDb
         DatabaseCommands.Execute(connection: conn, configure: command => command.CommandText = sql);
     }
 
+    /// <summary>Executes a parameterised insert on the connection.</summary>
+    internal static void Insert(
+        NpgsqlConnection connection,
+        string sql,
+        params (string Name, object? Value)[] parameters
+    ) =>
+        DatabaseCommands.Execute(
+            connection: connection,
+            configure: command => command.CommandText = sql,
+            parameters: () => [.. parameters]
+        );
+
     /// <summary>Executes a non-query SQL statement within the given transaction.</summary>
     internal static void Exec(NpgsqlConnection conn, NpgsqlTransaction tx, string sql)
     {

@@ -1,5 +1,4 @@
 using SqlParser;
-using SqlParser.Ast;
 using SqlParser.Dialects;
 using PredicateOk = Outcome.Result<
     string,
@@ -192,21 +191,8 @@ public static partial class PostgresPolicyCatalogNormalizer
             );
     }
 
-    private static string? ParseSelection(string definition)
-    {
-        try
-        {
-            var statements = new Parser().ParseSql(definition, new PostgreSqlDialect());
-            return
-                statements.Count == 1
-                && statements[0] is Statement.Select select
-                && select.Query.Body is SetExpression.SelectExpression body
-                ? body.Select.Selection?.ToSql()
-                : null;
-        }
-        catch (ParserException)
-        {
-            return null;
-        }
-    }
+    private static string? ParseSelection(string definition) =>
+        SqlSelectionExtractor
+            .ParseSingleSelectSelection(definition, new PostgreSqlDialect())
+            ?.ToSql();
 }

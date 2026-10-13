@@ -47,7 +47,10 @@ internal static class LqlCodeParser
 
             // Create lexer
             var lexer = new LqlLexer(inputStream);
-            var lexerErrorListener = new DetailedLexerErrorListener(lqlCode);
+            var lexerErrorListener = new DetailedParserErrorListener<int>(
+                source: lqlCode,
+                position: _ => (0, 0)
+            );
             lexer.RemoveErrorListeners();
             lexer.AddErrorListener(lexerErrorListener);
 
@@ -56,28 +59,23 @@ internal static class LqlCodeParser
 
             // Create parser
             var parser = new LqlParser(tokenStream);
-            var parserErrorListener = new DetailedParserErrorListener(lqlCode);
+            var parserErrorListener = new DetailedParserErrorListener<IToken>(
+                source: lqlCode,
+                position: token => (token?.StartIndex ?? 0, token?.StopIndex ?? 0)
+            );
             parser.RemoveErrorListeners();
             parser.AddErrorListener(parserErrorListener);
 
             // Parse the program
             var programContext = parser.program();
 
-            // Check for lexer errors
-            if (lexerErrorListener.Errors.Count > 0)
-            {
-                return new Result<INode, SqlError>.Error<INode, SqlError>(
-                    lexerErrorListener.Errors[0]
-                );
-            }
-
-            // Check for parser errors
-            if (parserErrorListener.Errors.Count > 0)
-            {
-                return new Result<INode, SqlError>.Error<INode, SqlError>(
-                    parserErrorListener.Errors[0]
-                );
-            }
+            // Implements [LQL-PARSER-SHARED-ERROR-LISTENER]: lexer errors take precedence.
+            var errors =
+                lexerErrorListener.Errors.Count > 0
+                    ? lexerErrorListener.Errors
+                    : parserErrorListener.Errors;
+            if (errors.Count > 0)
+                return new Result<INode, SqlError>.Error<INode, SqlError>(errors[0]);
 
             // Create visitor and visit the parse tree
             // For parsing, we don't need a SQL context - it's only needed for SQL generation

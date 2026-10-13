@@ -275,7 +275,10 @@ fn field_values(result: &Value, key: &str) -> Vec<String> {
 fn hover_value(source: &str, line: u32, character: u32) -> String {
     let result = request_result(source, |c| c.request_hover(DOC_URI, line, character));
     assert!(!result.is_null(), "hover should return info");
-    result["contents"]["value"].as_str().unwrap_or("").to_string()
+    result["contents"]["value"]
+        .as_str()
+        .unwrap_or("")
+        .to_string()
 }
 
 // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
@@ -329,6 +332,27 @@ fn completion_items(source: &str, line: u32, character: u32) -> Vec<Value> {
         .as_array()
         .unwrap()
         .clone()
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Runs a document-symbols request against `source` and returns the raw result.
+fn document_symbols(source: &str) -> Value {
+    request_result(source, |c| c.request_document_symbols(DOC_URI))
+}
+
+// Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+/// Opens `source` on `client`, asserts completions are non-empty, then shuts down.
+fn assert_completions_after_open(
+    client: &mut LspClient,
+    source: &str,
+    line: u32,
+    character: u32,
+    message: &str,
+) {
+    open_on_client(client, source);
+    let items = completion_items_on_client(client, line, character);
+    assert!(!items.is_empty(), "{message}");
+    client.shutdown();
 }
 
 // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
@@ -501,7 +525,9 @@ fn test_hover_on_keyword() {
 #[test]
 fn test_hover_on_non_keyword() {
     // Hover over "users" — no schema, so table hover won't have info
-    let resp = request_response("users |> select(users.id)", |c| c.request_hover(DOC_URI, 0, 2));
+    let resp = request_response("users |> select(users.id)", |c| {
+        c.request_hover(DOC_URI, 0, 2)
+    });
     let result = &resp["result"];
     // Without schema, hovering on a table name may return null
     // This is valid — we just verify no error
@@ -525,9 +551,7 @@ fn test_hover_multiline() {
 
 #[test]
 fn test_document_symbols_let_bindings() {
-    let result = request_result("let x = users |> select(users.id)\nlet y = orders", |c| {
-        c.request_document_symbols(DOC_URI)
-    });
+    let result = document_symbols("let x = users |> select(users.id)\nlet y = orders");
     let symbols = result.as_array().unwrap();
     assert!(symbols.len() >= 2, "should find at least 2 let bindings");
 
@@ -538,9 +562,7 @@ fn test_document_symbols_let_bindings() {
 
 #[test]
 fn test_document_symbols_empty() {
-    let result = request_result("users |> select(users.id)", |c| {
-        c.request_document_symbols(DOC_URI)
-    });
+    let result = document_symbols("users |> select(users.id)");
     let symbols = result.as_array().unwrap();
     // No let bindings = no symbols
     assert!(symbols.is_empty(), "no let bindings means no symbols");
@@ -766,7 +788,9 @@ fn test_initialize_with_ai_config() {
 #[test]
 fn test_hover_on_space_returns_null() {
     // Hover on the space between "users" and "|>"
-    let result = request_result("users |> select(users.id)", |c| c.request_hover(DOC_URI, 0, 5));
+    let result = request_result("users |> select(users.id)", |c| {
+        c.request_hover(DOC_URI, 0, 5)
+    });
     // Space is not on any word, so result should be null
     assert!(
         result.is_null(),
@@ -829,12 +853,13 @@ fn test_completion_with_ai_provider_and_schema_loaded() {
     // Give the schema fetch a moment to populate.
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    open_on_client(&mut client, "users_ai_schema_test |> ");
-
-    let items = completion_items_on_client(&mut client, 0, 24);
-    assert!(!items.is_empty(), "completion must return items");
-
-    client.shutdown();
+    assert_completions_after_open(
+        &mut client,
+        "users_ai_schema_test |> ",
+        0,
+        24,
+        "completion must return items",
+    );
     std::fs::remove_file(&path).ok();
 }
 
@@ -850,16 +875,14 @@ fn test_completion_with_test_slow_provider_times_out() {
         }
     }));
 
-    open_on_client(&mut client, "users |> ");
-
     // Even when AI times out, schema/keyword completions should still be returned.
-    let items = completion_items_on_client(&mut client, 0, 9);
-    assert!(
-        !items.is_empty(),
-        "must still return non-AI completions when AI times out"
+    assert_completions_after_open(
+        &mut client,
+        "users |> ",
+        0,
+        9,
+        "must still return non-AI completions when AI times out",
     );
-
-    client.shutdown();
 }
 
 #[test]
@@ -906,9 +929,7 @@ fn test_initialize_with_connection_string_only_loads_schema() {
 
 #[test]
 fn test_document_symbols_positions() {
-    let result = request_result("let x = users\nlet y = orders", |c| {
-        c.request_document_symbols(DOC_URI)
-    });
+    let result = document_symbols("let x = users\nlet y = orders");
     let symbols = result.as_array().unwrap();
 
     for sym in symbols {

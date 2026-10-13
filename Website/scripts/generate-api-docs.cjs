@@ -59,6 +59,17 @@ function formatTypeName(type) {
   return type.replace(/\x60\d+/g, '').replace(/\{/g, '<').replace(/\}/g, '>').split('.').pop();
 }
 
+function appendTypeTable(md, title, column, items) {
+  if (items.length === 0) return md;
+  md += '## ' + title + '\n\n| ' + column + ' | Description |\n|' + '-'.repeat(column.length + 2) + '|-------------|\n';
+  for (const item of items) {
+    const name = item.name.split('.').pop();
+    const desc = cleanMarkdown(item.summary) || '';
+    md += '| [' + name + '](' + name + '/) | ' + desc.split('\n')[0] + ' |\n';
+  }
+  return md + '\n';
+}
+
 function generateNamespaceMarkdown(doc, types) {
   const nsTypes = types.filter(t => t.namespace === doc.name);
   let md = '---\nlayout: layouts/api.njk\ntitle: "' + doc.name + '"\ndescription: "API documentation for ' + doc.name + ' namespace"\nnamespace: "' + doc.name + '"\ntype: "namespace"\n---\n\n';
@@ -70,45 +81,10 @@ function generateNamespaceMarkdown(doc, types) {
   const interfaces = nsTypes.filter(i => i.type === 'Interface');
   const enums = nsTypes.filter(i => i.type === 'Enum');
 
-  if (classes.length > 0) {
-    md += '## Classes\n\n| Class | Description |\n|-------|-------------|\n';
-    for (const item of classes) {
-      const name = item.name.split('.').pop();
-      const desc = cleanMarkdown(item.summary) || '';
-      md += '| [' + name + '](' + name + '/) | ' + desc.split('\n')[0] + ' |\n';
-    }
-    md += '\n';
-  }
-
-  if (records.length > 0) {
-    md += '## Records\n\n| Record | Description |\n|--------|-------------|\n';
-    for (const item of records) {
-      const name = item.name.split('.').pop();
-      const desc = cleanMarkdown(item.summary) || '';
-      md += '| [' + name + '](' + name + '/) | ' + desc.split('\n')[0] + ' |\n';
-    }
-    md += '\n';
-  }
-
-  if (interfaces.length > 0) {
-    md += '## Interfaces\n\n| Interface | Description |\n|-----------|-------------|\n';
-    for (const item of interfaces) {
-      const name = item.name.split('.').pop();
-      const desc = cleanMarkdown(item.summary) || '';
-      md += '| [' + name + '](' + name + '/) | ' + desc.split('\n')[0] + ' |\n';
-    }
-    md += '\n';
-  }
-
-  if (enums.length > 0) {
-    md += '## Enums\n\n| Enum | Description |\n|------|-------------|\n';
-    for (const item of enums) {
-      const name = item.name.split('.').pop();
-      const desc = cleanMarkdown(item.summary) || '';
-      md += '| [' + name + '](' + name + '/) | ' + desc.split('\n')[0] + ' |\n';
-    }
-    md += '\n';
-  }
+  md = appendTypeTable(md, 'Classes', 'Class', classes);
+  md = appendTypeTable(md, 'Records', 'Record', records);
+  md = appendTypeTable(md, 'Interfaces', 'Interface', interfaces);
+  md = appendTypeTable(md, 'Enums', 'Enum', enums);
 
   return md;
 }

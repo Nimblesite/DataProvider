@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.Lql.Tests;
@@ -53,7 +54,7 @@ public sealed partial class LqlDialectE2ETests
         System.String scenario3
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         var (pg, ss, sl) = VerifySharedChecks1(input0: scenario0);
 
@@ -143,7 +144,7 @@ public sealed partial class LqlDialectE2ETests
         string value2
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseProjectionCaseMatrix1(
             input0: VerifyReusableWorkflow2,
             input1: ConvertToAllDialects,

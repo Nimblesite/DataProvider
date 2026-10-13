@@ -82,7 +82,7 @@ public sealed class PostgresAntlrParser : ISqlParser
                 continue;
 
             var name = next.Text;
-            if (!IsValidIdentifier(name))
+            if (!AntlrSqlParameterExtractor.IsValidParameterName(name))
                 continue;
 
             if (seen.Add(name))
@@ -90,19 +90,5 @@ public sealed class PostgresAntlrParser : ISqlParser
         }
 
         return parameters;
-    }
-
-    private static bool IsValidIdentifier(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return false;
-        if (!char.IsLetter(text[0]) && text[0] != '_')
-            return false;
-        foreach (var c in text)
-        {
-            if (!char.IsLetterOrDigit(c) && c != '_')
-                return false;
-        }
-        return true;
     }
 }

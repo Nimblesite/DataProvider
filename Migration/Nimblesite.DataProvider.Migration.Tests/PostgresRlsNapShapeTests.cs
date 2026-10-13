@@ -17,16 +17,10 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
 {
     protected override string DatabaseName => "rls_nap";
 
-    protected override void OnDatabaseCreated() => BootstrapNapPrelude(Connection);
-
-    /// <summary>
-    /// Mirrors NAP's bootstrap.py — creates the SECURITY DEFINER fn and GUC
-    /// reader fns the policies depend on, plus the non-bypassrls app role.
-    /// </summary>
-    private static void BootstrapNapPrelude(NpgsqlConnection conn)
-    {
-        PostgresTestDb.Exec(conn, Data_BootstrapNapPrelude_1);
-    }
+    // Mirrors NAP's bootstrap.py — creates the SECURITY DEFINER fn and GUC
+    // reader fns the policies depend on, plus the non-bypassrls app role.
+    protected override void OnDatabaseCreated() =>
+        PostgresTestDb.Exec(Connection, Data_BootstrapNapPrelude_1);
 
     private static readonly string[] TenantTableNames =
     [
@@ -182,10 +176,12 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
         );
 
         var current = PostgresTestDb.Inspect(Connection, Logger);
-        var ops = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, renamed, allowDestructive: true, logger: Logger)
-        ).Value;
+        var ops = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: renamed,
+            destructive: true,
+            logger: Logger
+        );
 
         var drops = ops.OfType<DropRlsPolicyOperation>().ToList();
         var creates = ops.OfType<CreateRlsPolicyOperation>().ToList();
@@ -263,10 +259,12 @@ public sealed partial class PostgresRlsNapShapeTests(PostgresContainerFixture fi
         var safeOps = PostgresTestDb.CalculateChanges(Connection, unforced, Logger);
         Assert.DoesNotContain(safeOps, o => o is DisableForceRlsOperation);
 
-        var destructiveOps = (
-            (OperationsResultOk)
-                SchemaDiff.Calculate(current, unforced, allowDestructive: true, logger: Logger)
-        ).Value;
+        var destructiveOps = SchemaDiffAssertions.Diff(
+            current: current,
+            desired: unforced,
+            destructive: true,
+            logger: Logger
+        );
         Assert.Equal(4, destructiveOps.OfType<DisableForceRlsOperation>().Count());
     }
 

@@ -179,9 +179,7 @@ public sealed partial class SqliteExtensionIntegrationTests : IDisposable
     public void PurgeTombstones_RemovesDeletesBeforeVersion()
     {
         // Arrange - Insert some entries
-        using var cmd = InsertLogEntryCommand(
-            Data_PurgeTombstones_RemovesDeletesBeforeVersion_1
-        );
+        using var cmd = InsertLogEntryCommand(Data_PurgeTombstones_RemovesDeletesBeforeVersion_1);
 
         // Get current max version
         // Get current max version

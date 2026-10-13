@@ -28,11 +28,12 @@ public sealed partial class PostgresFunctionBodyLqlTests
     {
         var sql = Body(Data_TranslatePostgresBody_ExistsPipeline_EmitsSelectExists_1);
 
-        Assert.StartsWith("SELECT EXISTS (", sql, StringComparison.Ordinal);
-        ContainsAll(
-            actual: sql,
-            expected: ["FROM tenant_members", "user_id = u", "tenant_id = t"],
-            comparison: StringComparison.Ordinal
+        MigrationAssertions.AssertSqlContains(
+            sql,
+            "SELECT EXISTS (",
+            "FROM tenant_members",
+            "user_id = u",
+            "tenant_id = t"
         );
     }
 

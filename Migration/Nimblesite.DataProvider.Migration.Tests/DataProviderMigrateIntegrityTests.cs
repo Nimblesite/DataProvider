@@ -183,10 +183,7 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
             logger: _logger
         );
 
-        Assert.True(
-            condition: result is MigrationApplyResultOk,
-            userMessage: $"Baseline migration failed: {(result as MigrationApplyResultError)?.Value}"
-        );
+        PostgresTestDb.AssertApplyResult(apply: result);
     }
 
     private (int ExitCode, string Output) RunMigrate(string schemaPath) =>

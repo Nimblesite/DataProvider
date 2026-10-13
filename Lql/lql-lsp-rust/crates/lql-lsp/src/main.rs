@@ -24,6 +24,14 @@ struct LqlBackend {
     ai_config: Mutex<Option<AiConfig>>,
 }
 
+/// Builds an LSP [`Range`] from a start and end line/column pair.
+fn lsp_range(start_line: u32, start_col: u32, end_line: u32, end_col: u32) -> Range {
+    Range {
+        start: Position::new(start_line, start_col),
+        end: Position::new(end_line, end_col),
+    }
+}
+
 impl LqlBackend {
     fn new(client: Client) -> Self {
         Self {
@@ -65,10 +73,7 @@ impl LqlBackend {
                 let (sl, sc) = e.span.start_line_col(source);
                 let (el, ec) = e.span.end_line_col(source);
                 tower_lsp::lsp_types::Diagnostic {
-                    range: Range {
-                        start: Position::new(sl, sc),
-                        end: Position::new(el, ec),
-                    },
+                    range: lsp_range(sl, sc, el, ec),
                     severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
                     source: Some("lql".into()),
                     message: e.message.clone(),
@@ -86,10 +91,7 @@ impl LqlBackend {
                 LqlSeverity::Hint => tower_lsp::lsp_types::DiagnosticSeverity::HINT,
             };
             diags.push(tower_lsp::lsp_types::Diagnostic {
-                range: Range {
-                    start: Position::new(d.line, d.col),
-                    end: Position::new(d.line, d.end_col),
-                },
+                range: lsp_range(d.line, d.col, d.line, d.end_col),
                 severity: Some(severity),
                 source: Some("lql".into()),
                 message: d.message,
@@ -491,10 +493,7 @@ impl LanguageServer for LqlBackend {
                     deprecated: None,
                     location: Location {
                         uri: uri.clone(),
-                        range: Range {
-                            start: Position::new(sym.line, sym.col),
-                            end: Position::new(sym.end_line, sym.end_col),
-                        },
+                        range: lsp_range(sym.line, sym.col, sym.end_line, sym.end_col),
                     },
                     container_name: None,
                 }
@@ -682,12 +681,7 @@ mod tests {
 
     // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
     /// Builds a [`lql_analyzer::ColumnInfo`] with the given shape.
-    fn column(
-        name: &str,
-        sql_type: &str,
-        nullable: bool,
-        pk: bool,
-    ) -> lql_analyzer::ColumnInfo {
+    fn column(name: &str, sql_type: &str, nullable: bool, pk: bool) -> lql_analyzer::ColumnInfo {
         lql_analyzer::ColumnInfo {
             name: name.to_string(),
             sql_type: sql_type.to_string(),
@@ -707,6 +701,24 @@ mod tests {
         let url = Url::parse(uri).unwrap();
         open_doc(service.inner(), &url, source).await;
         completion_labels(service.inner(), &url, position).await
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Opens `uri` with the standard `"users |> "` source and returns labels.
+    async fn open_and_completion_at(service: &LspService<LqlBackend>, uri: &str) -> Vec<String> {
+        open_and_completion_labels(service, uri, "users |> ", Position::new(0, 9)).await
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Asserts `label` is present in `labels`.
+    fn assert_label_present(labels: &[String], label: &str) {
+        assert!(labels.contains(&label.to_string()), "{labels:?}");
+    }
+
+    // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
+    /// Asserts `label` is absent from `labels`.
+    fn assert_label_absent(labels: &[String], label: &str) {
+        assert!(!labels.contains(&label.to_string()), "{labels:?}");
     }
 
     // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
@@ -1157,10 +1169,8 @@ mod tests {
     #[tokio::test]
     async fn test_lsp_completion_no_document() {
         let (service, _socket) = LspService::new(LqlBackend::new);
-        let params = shared_completionparams_0(
-            Url::parse("file:///test.lql").unwrap(),
-            Position::new(0, 0),
-        );
+        let params =
+            shared_completionparams_0(Url::parse("file:///test.lql").unwrap(), Position::new(0, 0));
         let result = service.inner().completion(params).await.unwrap();
         assert!(result.is_none());
     }
@@ -1168,10 +1178,8 @@ mod tests {
     #[tokio::test]
     async fn test_lsp_hover_no_document() {
         let (service, _socket) = LspService::new(LqlBackend::new);
-        let params = shared_hoverparams_1(
-            Url::parse("file:///test.lql").unwrap(),
-            Position::new(0, 0),
-        );
+        let params =
+            shared_hoverparams_1(Url::parse("file:///test.lql").unwrap(), Position::new(0, 0));
         let result = service.inner().hover(params).await.unwrap();
         assert!(result.is_none());
     }
@@ -1770,23 +1778,11 @@ mod tests {
             .set_ai_provider(Arc::new(ai::TestAiProvider))
             .await;
         *service.inner().schema.write().await = Some(independent_schema_data_6());
-        let labels = open_and_completion_labels(
-            &service,
-            "file:///ai_merge.lql",
-            "users |> ",
-            Position::new(0, 9),
-        )
-        .await;
+        let labels = open_and_completion_at(&service, "file:///ai_merge.lql").await;
 
-        assert!(
-            labels.contains(&"ai_suggest_filter".to_string()),
-            "{labels:?}"
-        );
-        assert!(
-            labels.contains(&"ai_suggest_join".to_string()),
-            "{labels:?}"
-        );
-        assert!(labels.contains(&"select".to_string()), "{labels:?}");
+        assert_label_present(&labels, "ai_suggest_filter");
+        assert_label_present(&labels, "ai_suggest_join");
+        assert_label_present(&labels, "select");
     }
 
     #[tokio::test]
@@ -1802,19 +1798,10 @@ mod tests {
             }),
         )
         .await;
-        let labels = open_and_completion_labels(
-            &service,
-            "file:///ai_timeout.lql",
-            "users |> ",
-            Position::new(0, 9),
-        )
-        .await;
+        let labels = open_and_completion_at(&service, "file:///ai_timeout.lql").await;
 
-        assert!(
-            !labels.contains(&"ai_slow_result".to_string()),
-            "{labels:?}"
-        );
-        assert!(labels.contains(&"select".to_string()), "{labels:?}");
+        assert_label_absent(&labels, "ai_slow_result");
+        assert_label_present(&labels, "select");
         let _ = std::fs::remove_file(&db);
     }
 
@@ -1835,8 +1822,8 @@ mod tests {
     fn shared_completionparams_0(uri: Url, position: Position) -> CompletionParams {
         CompletionParams {
             text_document_position: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri },
-                position: position,
+                text_document: TextDocumentIdentifier { uri },
+                position,
             },
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
@@ -1848,8 +1835,8 @@ mod tests {
     fn shared_hoverparams_1(uri: Url, position: Position) -> HoverParams {
         HoverParams {
             text_document_position_params: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri },
-                position: position,
+                text_document: TextDocumentIdentifier { uri },
+                position,
             },
             work_done_progress_params: Default::default(),
         }
@@ -1858,7 +1845,7 @@ mod tests {
     // Implements [LQL-RUST-SHARED-TEST-WORKFLOWS].
     fn shared_documentsymbolparams_2(uri: Url) -> DocumentSymbolParams {
         DocumentSymbolParams {
-            text_document: TextDocumentIdentifier { uri: uri },
+            text_document: TextDocumentIdentifier { uri },
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
         }
@@ -1871,7 +1858,7 @@ mod tests {
     ) -> DocumentFormattingParams {
         DocumentFormattingParams {
             text_document: TextDocumentIdentifier { uri },
-            options: options,
+            options,
             work_done_progress_params: Default::default(),
         }
     }

@@ -40,18 +40,7 @@ public sealed partial class CodeGenerationE2ETests
     }
 
     private static readonly IReadOnlyList<DatabaseColumn> PatientColumns =
-    [
-        ColumnTestData.Create(name: "Id", sqlType: "TEXT", cSharpType: "Guid", isPrimaryKey: true),
-        ColumnTestData.Create(name: "Name", sqlType: "TEXT", cSharpType: "string"),
-        ColumnTestData.Create(name: "Age", sqlType: "INTEGER", cSharpType: "int"),
-        ColumnTestData.Create(
-            name: "Email",
-            sqlType: "TEXT",
-            cSharpType: "string",
-            isNullable: true
-        ),
-        ColumnTestData.Create(name: "IsActive", sqlType: "INTEGER", cSharpType: "bool"),
-    ];
+        CodeGenerationColumnSets.PatientColumns;
 
     private static readonly IReadOnlyList<ParameterInfo> QueryParameters =
     [

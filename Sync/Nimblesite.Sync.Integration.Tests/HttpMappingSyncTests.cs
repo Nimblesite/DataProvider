@@ -15,28 +15,9 @@ namespace Nimblesite.Sync.Integration.Tests;
 /// Uses the shared postgres container; each test gets its own database.
 /// </summary>
 [Collection(PostgresTestSuite.Name)]
-public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixture) : IAsyncLifetime
+public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixture)
+    : PostgresSyncTestFixture(fixture: fixture, databaseName: "mapping_test")
 {
-    private string _postgresConnectionString = null!;
-    private readonly ILogger _logger = NullLogger.Instance;
-    private readonly List<string> _sqliteDbPaths = [];
-
-    public async Task InitializeAsync()
-    {
-        _postgresConnectionString = await fixture
-            .CreateDatabaseConnectionStringAsync("mapping_test")
-            .ConfigureAwait(false);
-    }
-
-    public Task DisposeAsync()
-    {
-        foreach (var dbPath in _sqliteDbPaths)
-        {
-            global::Tests.Shared.TempSqliteDatabase.DeleteIfExists(path: dbPath);
-        }
-        return Task.CompletedTask;
-    }
-
     /// <summary>
     /// Creates SQLite source DB with User table (source schema).
     /// Columns: Id, FullName, EmailAddress (DIFFERENT from target!)
@@ -64,30 +45,8 @@ public sealed partial class HttpMappingSyncTests(PostgresContainerFixture fixtur
     /// Creates Postgres target DB with Customer table (target schema).
     /// Columns: CustomerId, Name, Email, Source, RegisteredDate (DIFFERENT from source!)
     /// </summary>
-    private NpgsqlConnection CreateTargetDb(string originId)
-    {
-        var conn = new NpgsqlConnection(_postgresConnectionString);
-        conn.Open();
-
-        var schemaResult = PostgresSyncSchema.CreateSchema(conn);
-        if (schemaResult is not BoolSyncOk)
-        {
-            throw Dataset_CreateTargetDb_1(schemaResult: schemaResult);
-        }
-
-        var originResult = PostgresSyncSchema.SetOriginId(conn, originId);
-        if (originResult is not BoolSyncOk)
-        {
-            throw new InvalidOperationException($"Failed to set origin ID: {originResult}");
-        }
-
-        // Target schema is DIFFERENT from source!
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = Data_CreateTargetDb_1;
-        cmd.ExecuteNonQuery();
-
-        return conn;
-    }
+    private NpgsqlConnection CreateTargetDb(string originId) =>
+        CreatePostgresSyncDatabase(originId: originId, createTableSql: Data_CreateTargetDb_1);
 
     /// <summary>
     /// Fetches all source changes, maps the first one in the push direction,

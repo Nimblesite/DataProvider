@@ -135,28 +135,7 @@ public sealed partial class HttpMappingSyncTests
 
         // Very long string (10000 chars)
         var longName = new string('A', 10000);
-
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
-
-            global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@id", value: "u-long");
-
-            global::Tests.Shared.DatabaseCommands.Bind(
-                command: cmd,
-                name: "@name",
-                value: longName
-            );
-
-            global::Tests.Shared.DatabaseCommands.Bind(
-                command: cmd,
-                name: "@email",
-                value: "long@example.com"
-            );
-
-            cmd.ExecuteNonQuery();
-        }
+        InsertUserRaw(source: source, id: "u-long", name: longName, email: "long@example.com");
 
         var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
@@ -232,33 +211,24 @@ public sealed partial class HttpMappingSyncTests
 
         // Name contains JSON-like structure
         var jsonLikeName = "{\"first\":\"John\",\"last\":\"Doe\"}";
-
-        using (var cmd = source.CreateCommand())
-        {
-            cmd.CommandText =
-                "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
-
-            global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@id", value: "u-json");
-
-            global::Tests.Shared.DatabaseCommands.Bind(
-                command: cmd,
-                name: "@name",
-                value: jsonLikeName
-            );
-
-            global::Tests.Shared.DatabaseCommands.Bind(
-                command: cmd,
-                name: "@email",
-                value: "json@example.com"
-            );
-
-            cmd.ExecuteNonQuery();
-        }
+        InsertUserRaw(source: source, id: "u-json", name: jsonLikeName, email: "json@example.com");
 
         var mappedEntry = MapFirstChange(source: source, mappingConfig: mappingConfig);
 
         Assert.Contains("name", mappedEntry.MappedPayload);
         // The nested JSON should be preserved as a string value
         Assert.NotNull(mappedEntry.MappedPayload);
+    }
+
+    /// <summary>Inserts a raw User row through the shared parameter binding path.</summary>
+    private static void InsertUserRaw(SqliteConnection source, string id, string name, string email)
+    {
+        using var cmd = source.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO User (Id, FullName, EmailAddress) VALUES (@id, @name, @email)";
+        global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@id", value: id);
+        global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@name", value: name);
+        global::Tests.Shared.DatabaseCommands.Bind(command: cmd, name: "@email", value: email);
+        cmd.ExecuteNonQuery();
     }
 }

@@ -85,7 +85,8 @@ public static class TriggerGenerator
         string tableName,
         ILogger logger
     ) =>
-        TriggerGenerationWorkflow.Create<SqliteException>(
+        TriggerGenerationWorkflow.Create<SqliteConnection, SqliteException>(
+            connection: connection,
             tableName: tableName,
             generate: () =>
                 GenerateTriggersFromSchema(
@@ -93,12 +94,7 @@ public static class TriggerGenerator
                     tableName: tableName,
                     logger: logger
                 ),
-            execute: sql =>
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = sql;
-                cmd.ExecuteNonQuery();
-            },
+            configure: (command, sql) => command.CommandText = sql,
             logger: logger,
             prepare: () =>
                 DropTriggers(connection: connection, tableName: tableName, logger: logger)

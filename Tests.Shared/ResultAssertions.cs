@@ -81,4 +81,8 @@ internal static class ResultAssertions
         foreach (var value in values)
             Xunit.Assert.IsType<T>(@object: value);
     }
+
+    // Implements [CI-TEST-SHARED-NAMED-CASE].
+    internal static void NamedCase(string? caseName) =>
+        Xunit.Assert.False(condition: string.IsNullOrEmpty(value: caseName));
 }

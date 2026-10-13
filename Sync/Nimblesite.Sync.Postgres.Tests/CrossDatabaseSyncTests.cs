@@ -67,9 +67,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: conn,
             configure: command =>
-                command.CommandText = conn is NpgsqlConnection
-                    ? Data_CreateTestTable_1
-                    : Data_CreateTestTable_2
+                command.CommandText =
+                    conn is NpgsqlConnection ? Data_CreateTestTable_1 : Data_CreateTestTable_2
         );
     }
 
@@ -210,9 +209,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         InsertPerson(_pgConn, "bidirB", "PostgresOnly", "postgres@test.com");
 
         // Sync SQLite -> Postgres
-        var sqliteChanges = FetchChanges(_sqliteConn, 0);
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: sqliteChanges, input1: _pgConn, input2: Logger);
+        _ = SyncSqliteChangesToPostgres(fromVersion: 0);
 
         // Sync Postgres -> SQLite
         var pgChanges = FetchChanges(_pgConn, 0);
@@ -241,17 +238,13 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         InsertPerson(_sqliteConn, "upd1", "Original", "orig@test.com");
 
         // Sync to Postgres first
-        var initialChanges = FetchChanges(_sqliteConn, 0);
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: initialChanges, input1: _pgConn, input2: Logger);
+        var initialChanges = SyncSqliteChangesToPostgres(fromVersion: 0);
 
         // Update in SQLite
         UpdatePerson(_sqliteConn, "upd1", "Updated");
 
         // Sync update to Postgres
-        var updateChanges = FetchChanges(_sqliteConn, initialChanges[0].Version);
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: updateChanges, input1: _pgConn, input2: Logger);
+        var updateChanges = SyncSqliteChangesToPostgres(fromVersion: initialChanges[0].Version);
 
         // Verify update propagated
         var person = GetPerson(_pgConn, "upd1");
@@ -263,9 +256,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
     {
         // Insert and sync
         InsertPerson(_sqliteConn, "del1", "ToDelete", "del@test.com");
-        var insertChanges = FetchChanges(_sqliteConn, 0);
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: insertChanges, input1: _pgConn, input2: Logger);
+        var insertChanges = SyncSqliteChangesToPostgres(fromVersion: 0);
 
         // Verify exists in both
         Assert.NotNull(GetPerson(_pgConn, "del1"));
@@ -274,9 +265,7 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         DeletePerson(_sqliteConn, "del1");
 
         // Sync delete
-        var deleteChanges = FetchChanges(_sqliteConn, insertChanges[0].Version);
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: deleteChanges, input1: _pgConn, input2: Logger);
+        var deleteChanges = SyncSqliteChangesToPostgres(fromVersion: insertChanges[0].Version);
 
         // Verify deleted in both
         Assert.Null(GetPerson(_sqliteConn, "del1"));
@@ -376,12 +365,8 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         InsertPerson(_sqliteConn, "hash2", "HashTest2", "h2@test.com");
 
         // Fetch with hash
-        var changes = FetchChanges(_sqliteConn, 0);
+        var changes = SyncSqliteChangesToPostgres(fromVersion: 0);
         var hash = HashVerifier.ComputeBatchHash(changes);
-
-        // Sync to Postgres
-        PostgresSyncSession.EnableSuppression(_pgConn);
-        VerifySharedChecks2(input0: changes, input1: _pgConn, input2: Logger);
 
         // Compute hash from same changes
         var verifyHash = HashVerifier.ComputeBatchHash(changes);
@@ -443,9 +428,10 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: conn,
             configure: cmd =>
-                cmd.CommandText = conn is NpgsqlConnection
-                    ? "UPDATE person SET name = @name WHERE id = @id"
-                    : "UPDATE Person SET Name = @name WHERE Id = @id",
+                cmd.CommandText =
+                    conn is NpgsqlConnection
+                        ? "UPDATE person SET name = @name WHERE id = @id"
+                        : "UPDATE Person SET Name = @name WHERE Id = @id",
             parameters: () => [("@id", id), ("@name", name)]
         );
     }
@@ -455,11 +441,20 @@ public sealed partial class CrossDatabaseSyncTests(PostgresContainerFixture fixt
         DatabaseCommands.Execute(
             connection: conn,
             configure: cmd =>
-                cmd.CommandText = conn is NpgsqlConnection
-                    ? "DELETE FROM person WHERE id = @id"
-                    : "DELETE FROM Person WHERE Id = @id",
+                cmd.CommandText =
+                    conn is NpgsqlConnection
+                        ? "DELETE FROM person WHERE id = @id"
+                        : "DELETE FROM Person WHERE Id = @id",
             parameters: () => [("@id", id)]
         );
+    }
+
+    private IReadOnlyList<SyncLogEntry> SyncSqliteChangesToPostgres(long fromVersion)
+    {
+        var changes = FetchChanges(_sqliteConn, fromVersion);
+        PostgresSyncSession.EnableSuppression(_pgConn);
+        VerifySharedChecks2(input0: changes, input1: _pgConn, input2: Logger);
+        return changes;
     }
 
     private static IReadOnlyList<SyncLogEntry> FetchChanges(NpgsqlConnection conn, long fromVersion)

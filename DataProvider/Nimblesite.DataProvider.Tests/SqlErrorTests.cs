@@ -1,3 +1,4 @@
+using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -16,7 +17,7 @@ public sealed partial class SqlErrorTests
         System.String scenario1
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: scenarioName));
+        NamedCase(caseName: scenarioName);
 
         // Arrange & Act
         var error = new SqlError(scenario0);

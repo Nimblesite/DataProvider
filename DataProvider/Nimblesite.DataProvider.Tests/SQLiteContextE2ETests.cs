@@ -61,14 +61,12 @@ public sealed partial class SQLiteContextE2ETests : IDisposable
         return pipeline;
     }
 
-    private void CreateSchemaAndSeed()
-    {
-        global::Nimblesite.DataProvider.Tests.SqliteTransactionE2ETests.VerifyReusableWorkflow19(
-            configure0: command => command.CommandText = Data_CreateSchemaAndSeed_1,
-            configure1: command => command.CommandText = Data_CreateSchemaAndSeed_2,
-            input0: _connection
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
+            connection: _connection,
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
-    }
 
     [Fact]
     public void ProcessPipeline_SelectFilterOrderLimit_GeneratesCorrectSql()

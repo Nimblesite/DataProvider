@@ -1,6 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 
 using Nimblesite.Lql.SQLite;
+using static global::Tests.Shared.RowAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -21,18 +22,12 @@ public sealed partial class SqlModelE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        DatabaseCommands.Execute(
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
             connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2
         );
-
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
-        );
-    }
 
     [Fact]
     public void SelectStatementBuilder_ComplexWhereConditions_ExecuteCorrectly()
@@ -75,10 +70,16 @@ public sealed partial class SqlModelE2ETests : IDisposable
 
         // Bob (Eng, 105k), Frank (Eng, 120k), Diana (Sales, 6yr), Hank (Sales, 7yr)
         Assert.Equal(4, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Bob" && r.Item2 == 105000);
-        Assert.Contains(rows, r => r.Item1 == "Frank" && r.Item2 == 120000);
-        Assert.Contains(rows, r => r.Item1 == "Diana" && r.Item3 == "Sales");
-        Assert.Contains(rows, r => r.Item1 == "Hank" && r.Item3 == "Sales");
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Bob", 105000.0), ("Frank", 120000.0)]
+        );
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item3),
+            expected: [("Diana", "Sales"), ("Hank", "Sales")]
+        );
     }
 
     [Fact]
@@ -167,9 +168,11 @@ public sealed partial class SqlModelE2ETests : IDisposable
             mapper: r => (r.GetString(0), r.GetInt64(1))
         );
         Assert.Equal(3, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Engineering" && r.Item2 == 3);
-        Assert.Contains(rows, r => r.Item1 == "Sales" && r.Item2 == 3);
-        Assert.Contains(rows, r => r.Item1 == "Marketing" && r.Item2 == 2);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Engineering", 3L), ("Sales", 3L), ("Marketing", 2L)]
+        );
     }
 
     [Fact]
@@ -217,9 +220,11 @@ public sealed partial class SqlModelE2ETests : IDisposable
             mapper: r => (r.GetString(0), r.GetDouble(1))
         );
         Assert.Equal(8, rows.Count); // All 8 employees with their department budget
-        Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 500000);
-        Assert.Contains(rows, r => r.Item1 == "Charlie" && r.Item2 == 300000);
-        Assert.Contains(rows, r => r.Item1 == "Eve" && r.Item2 == 200000);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Alice", 500000.0), ("Charlie", 300000.0), ("Eve", 200000.0)]
+        );
     }
 
     [Fact]
@@ -361,8 +366,7 @@ public sealed partial class SqlModelE2ETests : IDisposable
         // Sales avg = (75k+85k+90k)/3 = 83.33k > 80k
         // Marketing avg = (70k+80k)/2 = 75k < 80k (excluded)
         Assert.Equal(2, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Engineering");
-        Assert.Contains(rows, r => r.Item1 == "Sales");
+        ContainsAll(rows: rows, projection: r => r.Item1, expected: ["Engineering", "Sales"]);
         Assert.DoesNotContain(rows, r => r.Item1 == "Marketing");
     }
 
@@ -386,8 +390,11 @@ public sealed partial class SqlModelE2ETests : IDisposable
 
         // UpdateableColumns (excludes PK, identity, computed)
         Assert.Equal(2, table.UpdateableColumns.Count);
-        Assert.Contains(table.UpdateableColumns, c => c.Name == "Name");
-        Assert.Contains(table.UpdateableColumns, c => c.Name == "Email");
+        ContainsAll(
+            rows: table.UpdateableColumns,
+            projection: c => c.Name,
+            expected: ["Name", "Email"]
+        );
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

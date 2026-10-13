@@ -115,20 +115,17 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        AddIf(
-            condition: !SamePortableType(actual.Type, expected.Type, isSqlite),
-            $"{path}: type expected {expected.Type} but found {actual.Type}",
-            mismatches
-        );
-        AddIf(
-            condition: actual.IsNullable != expected.IsNullable,
-            $"{path}: nullability expected {Nullability(expected)} but found {Nullability(actual)}",
-            mismatches
-        );
-        AddIf(
-            condition: actual.IsIdentity != expected.IsIdentity,
-            $"{path}: identity expected {expected.IsIdentity} but found {actual.IsIdentity}",
-            mismatches
+        AddMismatches(
+            mismatches,
+            (
+                !SamePortableType(actual.Type, expected.Type, isSqlite),
+                $"{path}: type expected {expected.Type} but found {actual.Type}"
+            ),
+            (
+                actual.IsNullable != expected.IsNullable,
+                $"{path}: nullability expected {Nullability(expected)} but found {Nullability(actual)}"
+            ),
+            ValueDrift(path, "identity", expected.IsIdentity, actual.IsIdentity)
         );
         VerifyDefault(actual: actual, expected: expected, path: path, mismatches: mismatches);
     }
@@ -214,35 +211,40 @@ public static class SchemaIntegrityVerifier
     )
     {
         var name = ForeignKeyName(tablePath, expected);
-        AddIf(
-            !SameIdentifiers(actual.Columns, expected.Columns),
-            $"{tablePath}: foreign key {name} columns drifted",
-            mismatches
-        );
-        AddIf(
-            !SameIdentifier(actual.ReferencedTable, expected.ReferencedTable),
-            $"{tablePath}: foreign key {name} referenced table drifted",
-            mismatches
-        );
-        AddIf(
-            !SameSchema(actual.ReferencedSchema, expected.ReferencedSchema),
-            $"{tablePath}: foreign key {name} referenced schema drifted",
-            mismatches
-        );
-        AddIf(
-            !SameIdentifiers(actual.ReferencedColumns, expected.ReferencedColumns),
-            $"{tablePath}: foreign key {name} referenced columns drifted",
-            mismatches
-        );
-        AddIf(
-            actual.OnDelete != expected.OnDelete,
-            $"{tablePath}: foreign key {name} on delete expected {expected.OnDelete} but found {actual.OnDelete}",
-            mismatches
-        );
-        AddIf(
-            actual.OnUpdate != expected.OnUpdate,
-            $"{tablePath}: foreign key {name} on update expected {expected.OnUpdate} but found {actual.OnUpdate}",
-            mismatches
+        AddMismatches(
+            mismatches,
+            Drift(
+                SameIdentifiers(actual.Columns, expected.Columns),
+                tablePath,
+                $"foreign key {name} columns"
+            ),
+            Drift(
+                SameIdentifier(actual.ReferencedTable, expected.ReferencedTable),
+                tablePath,
+                $"foreign key {name} referenced table"
+            ),
+            Drift(
+                SameSchema(actual.ReferencedSchema, expected.ReferencedSchema),
+                tablePath,
+                $"foreign key {name} referenced schema"
+            ),
+            Drift(
+                SameIdentifiers(actual.ReferencedColumns, expected.ReferencedColumns),
+                tablePath,
+                $"foreign key {name} referenced columns"
+            ),
+            ValueDrift(
+                tablePath,
+                $"foreign key {name} on delete",
+                expected.OnDelete,
+                actual.OnDelete
+            ),
+            ValueDrift(
+                tablePath,
+                $"foreign key {name} on update",
+                expected.OnUpdate,
+                actual.OnUpdate
+            )
         );
     }
 
@@ -305,25 +307,21 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        AddIf(
-            actual.IsUnique != expected.IsUnique,
-            $"{tablePath}: index {expected.Name} uniqueness drifted",
-            mismatches
-        );
-        AddIf(
-            !SameIdentifiers(actual.Columns, expected.Columns),
-            $"{tablePath}: index {expected.Name} columns drifted",
-            mismatches
-        );
-        AddIf(
-            !SameSqlSequence(actual.Expressions, expected.Expressions),
-            $"{tablePath}: index {expected.Name} expressions drifted",
-            mismatches
-        );
-        AddIf(
-            !SameSql(actual.Filter, expected.Filter),
-            $"{tablePath}: index {expected.Name} filter drifted",
-            mismatches
+        var name = expected.Name;
+        AddMismatches(
+            mismatches,
+            Drift(actual.IsUnique == expected.IsUnique, tablePath, $"index {name} uniqueness"),
+            Drift(
+                SameIdentifiers(actual.Columns, expected.Columns),
+                tablePath,
+                $"index {name} columns"
+            ),
+            Drift(
+                SameSqlSequence(actual.Expressions, expected.Expressions),
+                tablePath,
+                $"index {name} expressions"
+            ),
+            Drift(SameSql(actual.Filter, expected.Filter), tablePath, $"index {name} filter")
         );
     }
 
@@ -382,15 +380,21 @@ public static class SchemaIntegrityVerifier
         {
             return;
         }
-        AddIf(
-            actual.RowLevelSecurity?.Enabled != expected.RowLevelSecurity.Enabled,
-            $"{TablePath(table: expected)}: row-level security expected {expected.RowLevelSecurity.Enabled} but found {actual.RowLevelSecurity?.Enabled ?? false}",
-            mismatches
-        );
-        AddIf(
-            actual.RowLevelSecurity?.Forced != expected.RowLevelSecurity.Forced,
-            $"{TablePath(table: expected)}: forced row-level security expected {expected.RowLevelSecurity.Forced} but found {actual.RowLevelSecurity?.Forced ?? false}",
-            mismatches
+        var tablePath = TablePath(table: expected);
+        AddMismatches(
+            mismatches,
+            ValueDrift(
+                tablePath,
+                "row-level security",
+                expected.RowLevelSecurity.Enabled,
+                actual.RowLevelSecurity?.Enabled ?? false
+            ),
+            ValueDrift(
+                tablePath,
+                "forced row-level security",
+                expected.RowLevelSecurity.Forced,
+                actual.RowLevelSecurity?.Forced ?? false
+            )
         );
         VerifyRlsPolicies(actual: actual, expected: expected, mismatches: mismatches);
     }
@@ -415,20 +419,24 @@ public static class SchemaIntegrityVerifier
                 {
                     return;
                 }
-                AddIf(
-                    !RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
-                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} USING predicate drifted",
-                    mismatches
-                );
-                AddIf(
-                    !RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
-                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} WITH CHECK predicate drifted",
-                    mismatches
-                );
-                AddIf(
-                    !RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
-                    $"{TablePath(table: expected)}: policy {expectedPolicy.Name} scope drifted",
-                    mismatches
+                var tablePath = TablePath(table: expected);
+                AddMismatches(
+                    mismatches,
+                    Drift(
+                        RlsPolicyPredicates.SameUsing(actualPolicy, expectedPolicy),
+                        tablePath,
+                        $"policy {expectedPolicy.Name} USING predicate"
+                    ),
+                    Drift(
+                        RlsPolicyPredicates.SameWithCheck(actualPolicy, expectedPolicy),
+                        tablePath,
+                        $"policy {expectedPolicy.Name} WITH CHECK predicate"
+                    ),
+                    Drift(
+                        RlsPolicyPredicates.SameScope(actualPolicy, expectedPolicy),
+                        tablePath,
+                        $"policy {expectedPolicy.Name} scope"
+                    )
                 );
             },
             mismatches: mismatches
@@ -458,18 +466,19 @@ public static class SchemaIntegrityVerifier
                 live.Roles.FirstOrDefault(r => SameIdentifier(r.Name, expectedRole.Name)),
             missing: expectedRole => $"role {expectedRole.Name}: missing role",
             verify: (actualRole, expectedRole) =>
-            {
-                AddIf(
-                    actualRole.Login != expectedRole.Login,
-                    $"role {expectedRole.Name}: login drifted",
-                    mismatches
-                );
-                AddIf(
-                    actualRole.BypassRls != expectedRole.BypassRls,
-                    $"role {expectedRole.Name}: bypassRls drifted",
-                    mismatches
-                );
-            },
+                AddMismatches(
+                    mismatches,
+                    Drift(
+                        actualRole.Login == expectedRole.Login,
+                        $"role {expectedRole.Name}",
+                        "login"
+                    ),
+                    Drift(
+                        actualRole.BypassRls == expectedRole.BypassRls,
+                        $"role {expectedRole.Name}",
+                        "bypassRls"
+                    )
+                ),
             mismatches: mismatches
         );
     }
@@ -504,15 +513,10 @@ public static class SchemaIntegrityVerifier
     )
     {
         var path = FunctionPath(function: expected);
-        AddIf(
-            condition: !SameIdentifier(actual: actual.Returns, expected: expected.Returns),
-            message: $"{path}: returns expected {expected.Returns} but found {actual.Returns}",
-            mismatches: mismatches
-        );
-        AddIf(
-            condition: !SameIdentifier(actual: actual.Language, expected: expected.Language),
-            message: $"{path}: language expected {expected.Language} but found {actual.Language}",
-            mismatches: mismatches
+        AddMismatches(
+            mismatches,
+            IdentifierDrift(path, "returns", expected.Returns, actual.Returns),
+            IdentifierDrift(path, "language", expected.Language, actual.Language)
         );
         VerifyFunctionBehavior(
             actual: actual,
@@ -529,20 +533,11 @@ public static class SchemaIntegrityVerifier
         ImmutableArray<string>.Builder mismatches
     )
     {
-        AddIf(
-            condition: !SameIdentifier(actual: actual.Volatility, expected: expected.Volatility),
-            message: $"{path}: volatility expected {expected.Volatility} but found {actual.Volatility}",
-            mismatches: mismatches
-        );
-        AddIf(
-            condition: actual.SecurityDefiner != expected.SecurityDefiner,
-            message: $"{path}: security definer expected {expected.SecurityDefiner} but found {actual.SecurityDefiner}",
-            mismatches: mismatches
-        );
-        AddIf(
-            condition: !SameFunctionBody(actual: actual, expected: expected),
-            message: $"{path}: function body drifted",
-            mismatches: mismatches
+        AddMismatches(
+            mismatches,
+            IdentifierDrift(path, "volatility", expected.Volatility, actual.Volatility),
+            ValueDrift(path, "security definer", expected.SecurityDefiner, actual.SecurityDefiner),
+            Drift(SameFunctionBody(actual: actual, expected: expected), path, "function body")
         );
     }
 
@@ -692,9 +687,7 @@ public static class SchemaIntegrityVerifier
     private static bool SameIdentifiers(
         IReadOnlyList<string> actual,
         IReadOnlyList<string> expected
-    ) =>
-        actual.Count == expected.Count
-        && actual.Zip(expected).All(pair => SameIdentifier(pair.First, pair.Second));
+    ) => SameSequence(actual, expected, SameIdentifier);
 
     private static bool SameIdentifier(string actual, string expected) =>
         string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
@@ -727,9 +720,15 @@ public static class SchemaIntegrityVerifier
     private static bool SameSqlSequence(
         IReadOnlyList<string> actual,
         IReadOnlyList<string> expected
+    ) => SameSequence(actual, expected, (a, b) => SameSql(a, b));
+
+    private static bool SameSequence(
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected,
+        Func<string, string, bool> same
     ) =>
         actual.Count == expected.Count
-        && actual.Zip(expected).All(pair => SameSql(pair.First, pair.Second));
+        && actual.Zip(expected).All(pair => same(pair.First, pair.Second));
 
     private static bool SameSql(string? actual, string? expected) =>
         string.Equals(NormalizeSql(actual), NormalizeSql(expected), StringComparison.Ordinal);
@@ -812,6 +811,47 @@ public static class SchemaIntegrityVerifier
         }
     }
 
+    // Implements [MIG-VERIFY-SHARED-OBJECT-MATCHING]: one comparison/message shape
+    // for the "<field> drifted" checks so every verifier stays consistent.
+    private static (bool Condition, string Message) Drift(
+        bool same,
+        string path,
+        string description
+    ) => (!same, $"{path}: {description} drifted");
+
+    private static (bool Condition, string Message) IdentifierDrift(
+        string path,
+        string field,
+        string expected,
+        string actual
+    ) =>
+        (
+            !SameIdentifier(actual: actual, expected: expected),
+            $"{path}: {field} expected {expected} but found {actual}"
+        );
+
+    private static (bool Condition, string Message) ValueDrift<T>(
+        string path,
+        string field,
+        T expected,
+        T actual
+    ) =>
+        (
+            !EqualityComparer<T>.Default.Equals(x: actual, y: expected),
+            $"{path}: {field} expected {expected} but found {actual}"
+        );
+
+    private static void AddMismatches(
+        ImmutableArray<string>.Builder mismatches,
+        params (bool Condition, string Message)[] checks
+    )
+    {
+        foreach (var (condition, message) in checks)
+        {
+            AddIf(condition, message, mismatches);
+        }
+    }
+
     private static string TablePath(TableDefinition table) => $"{table.Schema}.{table.Name}";
 
     private static string FunctionPath(PostgresFunctionDefinition function) =>
@@ -825,15 +865,22 @@ public static class SchemaIntegrityVerifier
     private static string UniqueConstraintName(
         string tableName,
         UniqueConstraintDefinition unique
-    ) =>
-        string.IsNullOrWhiteSpace(unique.Name)
-            ? $"UQ_{tableName}_{string.Join("_", unique.Columns)}"
-            : unique.Name;
+    ) => SchemaConstraintName("UQ", tableName, unique.Name, unique.Columns);
 
     private static string ForeignKeyName(string tableName, ForeignKeyDefinition foreignKey) =>
-        string.IsNullOrWhiteSpace(foreignKey.Name)
-            ? $"FK_{tableName}_{string.Join("_", foreignKey.Columns)}"
-            : foreignKey.Name;
+        SchemaConstraintName("FK", tableName, foreignKey.Name, foreignKey.Columns);
+
+    // Implements [MIG-VERIFY-SHARED-OBJECT-MATCHING]: unnamed constraints get the
+    // same platform-independent name the DDL generators assign.
+    private static string SchemaConstraintName(
+        string prefix,
+        string tableName,
+        string? name,
+        IReadOnlyList<string> columns
+    ) =>
+        string.IsNullOrWhiteSpace(name)
+            ? $"{prefix}_{tableName}_{string.Join("_", columns)}"
+            : name;
 
     // Implements [MIG-VERIFY-SHARED-OBJECT-MATCHING].
     private static void VerifyExpected<T>(

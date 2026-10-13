@@ -2,6 +2,7 @@
 
 using static global::Tests.Shared.ResultAssertions;
 using static global::Tests.Shared.StringAssertions;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -129,8 +130,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = SyncSchema.GetOriginId(_db);
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<StringSyncOk>(actual: result);
-        Assert.Equal(OriginId, (Ok(actual: result)).Value);
+        EqualValue(expected: OriginId, actual: result);
     }
 
     [Fact]
@@ -143,8 +143,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = SyncSchema.GetOriginId(_db);
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<StringSyncOk>(actual: result);
-        Assert.Equal("", (Ok(actual: result)).Value);
+        EqualValue(expected: "", actual: result);
     }
 
     [Theory]
@@ -397,8 +396,7 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var result = TriggerGenerator.GetTableColumns(_db, "NonExistent");
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<ColumnInfoListOk>(actual: result);
-        Assert.Empty((Ok(actual: result)).Value);
+        EmptyList(actual: result);
     }
 
     [Fact]
@@ -630,17 +628,10 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         SyncSchema.CreateSchema(_db);
 
         // Act & Assert
-        SyncSessionManager.EnableSuppression(_db);
-        Assert.True((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
-
-        SyncSessionManager.DisableSuppression(_db);
-        Assert.False((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
-
-        SyncSessionManager.EnableSuppression(_db);
-        Assert.True((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
-
-        SyncSessionManager.DisableSuppression(_db);
-        Assert.False((Ok(actual: SyncSessionManager.IsSuppressionActive(_db))).Value);
+        ToggleSuppression(enable: true);
+        ToggleSuppression(enable: false);
+        ToggleSuppression(enable: true);
+        ToggleSuppression(enable: false);
     }
 
     #endregion
@@ -736,6 +727,18 @@ public sealed partial class SchemaAndTriggerTests : IDisposable
         var pkValue = input0(arg1: input1, arg2: value0, arg3: value1, arg4: value2, arg5: value3);
         Assert.NotNull(pkValue);
         return pkValue;
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS].
+    private void ToggleSuppression(bool enable)
+    {
+        _ = enable
+            ? SyncSessionManager.EnableSuppression(_db)
+            : SyncSessionManager.DisableSuppression(_db);
+        AssertOkValue(
+            SyncSessionManager.IsSuppressionActive(_db),
+            value => Assert.Equal(enable, value)
+        );
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].

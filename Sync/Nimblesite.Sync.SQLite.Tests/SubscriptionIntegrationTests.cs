@@ -1,3 +1,5 @@
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
+
 namespace Nimblesite.Sync.SQLite.Tests;
 
 /// <summary>
@@ -44,8 +46,7 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
         );
 
         // Act & Assert
-        Assert.True(SubscriptionManager.MatchesChange(sub, matchingChange));
-        Assert.False(SubscriptionManager.MatchesChange(sub, nonMatchingChange));
+        AssertMatches(sub, matchingChange, nonMatchingChange);
     }
 
     /// <summary>
@@ -70,8 +71,7 @@ public sealed partial class SubscriptionIntegrationTests : IDisposable
         // Act & Assert
         Assert.True(SubscriptionManager.MatchesChange(sub, insertChange));
         Assert.True(SubscriptionManager.MatchesChange(sub, updateChange));
-        Assert.True(SubscriptionManager.MatchesChange(sub, deleteChange));
-        Assert.False(SubscriptionManager.MatchesChange(sub, otherTableChange));
+        AssertMatches(sub, deleteChange, otherTableChange);
     }
 
     /// <summary>

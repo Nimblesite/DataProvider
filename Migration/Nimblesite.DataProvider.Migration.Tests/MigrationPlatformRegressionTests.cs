@@ -67,11 +67,14 @@ public sealed partial record MigrationPlatformRegressionTests
         Assert.False(ColumnIsNullable(target, "topup", "tenant_id"));
         AssertTableExists(target, "tenants", expected: true);
         Assert.False(ColumnIsNullable(target, "tenants", "id"));
-        var foreignKey = Assert.Single(ReadForeignKeys(target, "topup"));
-        Assert.Equal("tenant_id", foreignKey.Column);
-        Assert.Equal("tenants", foreignKey.ReferencedTable);
-        Assert.Equal("id", foreignKey.ReferencedColumn);
-        Assert.Equal("CASCADE", NormalizedDeleteAction(foreignKey.OnDelete));
+        AssertForeignKeyShape(
+            target,
+            table: "topup",
+            column: "tenant_id",
+            referencedTable: "tenants",
+            referencedColumn: "id",
+            onDelete: "CASCADE"
+        );
     }
 
     // Implements [MIG-DIFF-FOREIGN-KEY]. Regression: #79 and #80.

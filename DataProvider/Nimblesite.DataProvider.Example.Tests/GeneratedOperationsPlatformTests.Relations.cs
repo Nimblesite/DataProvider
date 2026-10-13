@@ -27,19 +27,28 @@ public sealed partial class GeneratedOperationsPlatformTests
             Guid.NewGuid(),
             Guid.NewGuid()
         );
-        using (var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false))
-        {
-            await InsertRelationsAsync(transaction, ids).ConfigureAwait(false);
-            await transaction.CommitAsync().ConfigureAwait(false);
-        }
+        await InTransaction(
+                connection: connection,
+                body: transaction => InsertRelationsAsync(transaction, ids)
+            )
+            .ConfigureAwait(false);
         AssertInsertedRelations(connection, ids);
 
-        using (var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false))
-        {
-            await UpdateRelationsAsync(transaction, ids).ConfigureAwait(false);
-            await transaction.CommitAsync().ConfigureAwait(false);
-        }
+        await InTransaction(
+                connection: connection,
+                body: transaction => UpdateRelationsAsync(transaction, ids)
+            )
+            .ConfigureAwait(false);
         AssertUpdatedRelations(connection, ids);
+    }
+
+    // Implements [CI-TEST-SHARED-SCENARIOS]: one commit-on-success transaction
+    // wrapper shared by the insert and update relation workflows.
+    private static async Task InTransaction(DbConnection connection, Func<DbTransaction, Task> body)
+    {
+        using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        await body(transaction).ConfigureAwait(false);
+        await transaction.CommitAsync().ConfigureAwait(false);
     }
 
     private static async Task InsertRelationsAsync(DbTransaction tx, RelationIds ids)

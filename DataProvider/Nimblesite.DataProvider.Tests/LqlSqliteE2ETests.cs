@@ -2,6 +2,7 @@
 
 using Nimblesite.Lql.Core;
 using Nimblesite.Lql.SQLite;
+using static global::Tests.Shared.RowAssertions;
 using static global::Tests.Shared.StringAssertions;
 
 namespace Nimblesite.DataProvider.Tests;
@@ -22,25 +23,13 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private void CreateSchemaAndSeed()
-    {
-        DatabaseCommands.Execute(
+    private void CreateSchemaAndSeed() =>
+        SqliteSchemaSetup.Apply(
             connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_1
+            command => command.CommandText = Data_CreateSchemaAndSeed_1,
+            command => command.CommandText = Data_CreateSchemaAndSeed_2,
+            command => command.CommandText = Data_CreateSchemaAndSeed_3
         );
-
-        // Seed users
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_2
-        );
-
-        // Seed orders
-        DatabaseCommands.Execute(
-            connection: _connection,
-            configure: command => command.CommandText = Data_CreateSchemaAndSeed_3
-        );
-    }
 
     private static LqlStatement AssertParseOk(string lqlCode)
     {
@@ -95,9 +84,8 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
             {
                 var rows = ok.Value;
                 Assert.Equal(5, rows.Count);
-                Assert.Contains(rows, r => r.Item2 == "Alice");
-                Assert.Contains(rows, r => r.Item2 == "Bob");
-                Assert.Contains(rows, r => r.Item3 == "diana@test.com");
+                ContainsAll(rows: rows, projection: r => r.Item2, expected: ["Alice", "Bob"]);
+                ContainsAll(rows: rows, projection: r => r.Item3, expected: ["diana@test.com"]);
             }
         );
     }
@@ -118,9 +106,7 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
         // Alice (30), Charlie (45), Diana (35) are > 25
         Assert.Equal(3, rows.Count);
         Assert.All(rows, r => Assert.True(r.Item2 > 25));
-        Assert.Contains(rows, r => r.Item1 == "Alice");
-        Assert.Contains(rows, r => r.Item1 == "Charlie");
-        Assert.Contains(rows, r => r.Item1 == "Diana");
+        ContainsAll(rows: rows, projection: r => r.Item1, expected: ["Alice", "Charlie", "Diana"]);
     }
 
     [Fact]
@@ -159,10 +145,11 @@ public sealed partial class LqlSqliteE2ETests : IDisposable
 
         // 7 orders across users with matching IDs
         Assert.Equal(7, rows.Count);
-        Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 150.00);
-        Assert.Contains(rows, r => r.Item1 == "Alice" && r.Item2 == 75.50);
-        Assert.Contains(rows, r => r.Item1 == "Bob" && r.Item2 == 200.00);
-        Assert.Contains(rows, r => r.Item1 == "Diana" && r.Item2 == 300.00);
+        ContainsAll(
+            rows: rows,
+            projection: r => (r.Item1, r.Item2),
+            expected: [("Alice", 150.00), ("Alice", 75.50), ("Bob", 200.00), ("Diana", 300.00)]
+        );
     }
 
     [Fact]

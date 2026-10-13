@@ -56,6 +56,32 @@ internal static class SyncCommandExecution
         );
 
     // Implements [SYNC-REPOSITORY-SHARED-READS].
+    internal static SyncLogListResult FetchSyncLogChanges<TConnection, TException>(
+        TConnection connection,
+        Action<DbCommand> setSql,
+        string batchParameterName,
+        long fromVersion,
+        int batchSize,
+        SyncOperation fallback,
+        string failurePrefix
+    )
+        where TConnection : DbConnection
+        where TException : Exception =>
+        Read<TException, SyncLogListResult>(
+            connection: connection,
+            setSql: setSql,
+            parameters: () => [("@fromVersion", fromVersion), (batchParameterName, batchSize)],
+            read: command => new SyncLogListOk(
+                ReadRows<SyncLogEntry>(
+                    command: command,
+                    read: row => SyncLogEntryFactory.Read(reader: row, fallback: fallback)
+                )
+            ),
+            failure: exception => new SyncLogListError(
+                new SyncErrorDatabase($"{failurePrefix}: {exception.Message}")
+            )
+        );
+
     internal static TResult Read<TException, TResult>(
         DbConnection connection,
         Action<DbCommand> setSql,

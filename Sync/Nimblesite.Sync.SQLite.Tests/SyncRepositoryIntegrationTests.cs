@@ -1,6 +1,7 @@
 // Implements [CI-TEST-SHARED-COMMAND].
 
 using static global::Tests.Shared.ResultAssertions;
+using static global::Tests.Shared.SyncFixtureSqliteHelpers;
 
 namespace Nimblesite.Sync.SQLite.Tests;
 
@@ -9,25 +10,21 @@ namespace Nimblesite.Sync.SQLite.Tests;
 /// Tests SyncClientRepository, SyncLogRepository, and SubscriptionRepository.
 /// NO MOCKS - real SQLite databases only!
 /// </summary>
-public sealed partial class SyncRepositoryIntegrationTests : IDisposable
+public sealed partial class SyncRepositoryIntegrationTests : SqliteSyncTestBase
 {
-    private readonly SqliteConnection _db;
-    private readonly string _dbPath = global::Tests.Shared.TempSqliteDatabase.PathFor(
-        "syncrepositoryintegrationtests"
-    );
-    private readonly string _originId = Guid.NewGuid().ToString();
     private const string Timestamp = "2025-01-01T00:00:00.000Z";
 
     public SyncRepositoryIntegrationTests()
-    {
-        _db = global::Tests.Shared.TempSqliteDatabase.OpenSync(path: _dbPath, origin: _originId);
+        : base(name: "syncrepositoryintegrationtests", createSchema: CreateSchema) { }
 
+    private static void CreateSchema(SqliteConnection db)
+    {
         // Create test table with triggers
         DatabaseCommands.Execute(
-            connection: _db,
+            connection: db,
             configure: command => command.CommandText = Data_Shared_1
         );
-        TriggerGenerator.CreateTriggers(_db, "Person", NullLogger.Instance);
+        TriggerGenerator.CreateTriggers(db, "Person", NullLogger.Instance);
     }
 
     #region SyncClientRepository Tests
@@ -39,8 +36,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetAll(_db);
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SyncClientListOk>(actual: result);
-        Assert.Empty((Ok(actual: result)).Value);
+        EmptyList(actual: result);
     }
 
     [Fact]
@@ -96,8 +92,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncClientRepository.GetByOrigin(_db, "nonexistent");
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SyncClientOk>(actual: result);
-        Assert.Null((Ok(actual: result)).Value);
+        NullValue(actual: result);
     }
 
     [Fact]
@@ -137,7 +132,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         > value0
     )
     {
-        Assert.False(condition: string.IsNullOrEmpty(value: caseName));
+        NamedCase(caseName: caseName);
         ExerciseOperationCaseMatrix1(input0: _db, input1: VerifyReusableWorkflow6, value0: value0);
     }
 
@@ -185,8 +180,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SyncLogRepository.FetchChanges(_db, 0, 100);
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SyncLogListOk>(actual: result);
-        Assert.Empty((Ok(actual: result)).Value);
+        EmptyList(actual: result);
     }
 
     [Fact]
@@ -248,9 +242,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_Insert_LogsUpdate()
     {
         // Arrange
-        var entries = VerifyPersonMutation(
-            command =>
-                command.CommandText = "UPDATE Person SET Name = 'Alice Updated' WHERE Id = 'p1'"
+        var entries = VerifyPersonMutation(command =>
+            command.CommandText = "UPDATE Person SET Name = 'Alice Updated' WHERE Id = 'p1'"
         );
         Assert.Equal(SyncOperation.Update, entries[0].Operation);
     }
@@ -259,8 +252,8 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     public void SyncLogRepository_Delete_LogsTombstone()
     {
         // Arrange
-        var entries = VerifyPersonMutation(
-            command => command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
+        var entries = VerifyPersonMutation(command =>
+            command.CommandText = "DELETE FROM Person WHERE Id = 'p1'"
         );
         Assert.Equal(SyncOperation.Delete, entries[0].Operation);
         Assert.Null(entries[0].Payload); // Tombstone has no payload
@@ -338,8 +331,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetAll(_db);
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionListOk>(actual: result);
-        Assert.Empty((Ok(actual: result)).Value);
+        EmptyList(actual: result);
     }
 
     [Fact]
@@ -380,8 +372,7 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
         var result = SubscriptionRepository.GetById(_db, "nonexistent");
 
         // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<SubscriptionOk>(actual: result);
-        Assert.Null((Ok(actual: result)).Value);
+        NullValue(actual: result);
     }
 
     [Fact]
@@ -520,14 +511,6 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
 
     #endregion
 
-    public void Dispose()
-    {
-        global::Nimblesite.Sync.SQLite.Tests.EndToEndSyncTests.VerifyReusableWorkflow5(
-            input0: _db,
-            input1: _dbPath
-        );
-    }
-
     // Implements [CI-TEST-SHARED-SCENARIOS].
     internal static IReadOnlyList<SyncLogEntry> VerifyReusableWorkflow3(
         SqliteConnection input0,
@@ -553,20 +536,16 @@ public sealed partial class SyncRepositoryIntegrationTests : IDisposable
     }
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
-    internal static void VerifyReusableWorkflow6(Outcome.Result<long, SyncError> input0, int value0)
-    {
-        // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<LongSyncOk>(actual: input0);
-        Assert.Equal(value0, (Ok(actual: input0)).Value);
-    }
+    internal static void VerifyReusableWorkflow6(
+        Outcome.Result<long, SyncError> input0,
+        int value0
+    ) => EqualValue<long, SyncError>(expected: value0, actual: input0);
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
-    internal static void VerifyReusableWorkflow7(Outcome.Result<int, SyncError> input0, int value0)
-    {
-        // Assert
-        _ = global::Tests.Shared.ResultAssertions.Expected<IntSyncOk>(actual: input0);
-        Assert.Equal(value0, (Ok(actual: input0)).Value);
-    }
+    internal static void VerifyReusableWorkflow7(
+        Outcome.Result<int, SyncError> input0,
+        int value0
+    ) => EqualValue(expected: value0, actual: input0);
 
     // Implements [CI-TEST-SHARED-SCENARIOS].
     internal static void VerifyReusableWorkflow8(

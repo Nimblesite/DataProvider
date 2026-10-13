@@ -14,22 +14,14 @@ public static class PredicateBuilder
     /// </summary>
     /// <typeparam name="T">The type being filtered</typeparam>
     /// <returns>Expression that always evaluates to true</returns>
-    public static Expression<Func<T, bool>> True<T>()
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        return Expression.Lambda<Func<T, bool>>(Expression.Constant(true), parameter);
-    }
+    public static Expression<Func<T, bool>> True<T>() => Constant<T>(value: true);
 
     /// <summary>
     /// Creates a predicate that always returns false (empty set).
     /// </summary>
     /// <typeparam name="T">The type being filtered</typeparam>
     /// <returns>Expression that always evaluates to false</returns>
-    public static Expression<Func<T, bool>> False<T>()
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        return Expression.Lambda<Func<T, bool>>(Expression.Constant(false), parameter);
-    }
+    public static Expression<Func<T, bool>> False<T>() => Constant<T>(value: false);
 
     /// <summary>
     /// Combines two predicates using logical OR operation.
@@ -41,15 +33,7 @@ public static class PredicateBuilder
     public static Expression<Func<T, bool>> Or<T>(
         this Expression<Func<T, bool>> expr1,
         Expression<Func<T, bool>> expr2
-    )
-    {
-        var parameter = expr1.Parameters[0];
-        var expr2Body = new ParameterReplacer(expr2.Parameters[0], parameter).Visit(expr2.Body);
-        return Expression.Lambda<Func<T, bool>>(
-            Expression.OrElse(expr1.Body, expr2Body!),
-            parameter
-        );
-    }
+    ) => Combine(expr1: expr1, expr2: expr2, combine: Expression.OrElse);
 
     /// <summary>
     /// Combines two predicates using logical AND operation.
@@ -61,15 +45,7 @@ public static class PredicateBuilder
     public static Expression<Func<T, bool>> And<T>(
         this Expression<Func<T, bool>> expr1,
         Expression<Func<T, bool>> expr2
-    )
-    {
-        var parameter = expr1.Parameters[0];
-        var expr2Body = new ParameterReplacer(expr2.Parameters[0], parameter).Visit(expr2.Body);
-        return Expression.Lambda<Func<T, bool>>(
-            Expression.AndAlso(expr1.Body, expr2Body!),
-            parameter
-        );
-    }
+    ) => Combine(expr1: expr1, expr2: expr2, combine: Expression.AndAlso);
 
     /// <summary>
     /// Negates a predicate using logical NOT operation.
@@ -81,6 +57,33 @@ public static class PredicateBuilder
     {
         var negated = Expression.Not(expr.Body);
         return Expression.Lambda<Func<T, bool>>(negated, expr.Parameters);
+    }
+
+    // Implements [DP-SQL-MODEL-SHARED-PREDICATE-COMBINATION].
+    private static Expression<Func<T, bool>> Constant<T>(bool value)
+    {
+        var parameter = Expression.Parameter(type: typeof(T), name: "x");
+        return Expression.Lambda<Func<T, bool>>(
+            body: Expression.Constant(value: value),
+            parameters: [parameter]
+        );
+    }
+
+    private static Expression<Func<T, bool>> Combine<T>(
+        Expression<Func<T, bool>> expr1,
+        Expression<Func<T, bool>> expr2,
+        Func<Expression, Expression, BinaryExpression> combine
+    )
+    {
+        var parameter = expr1.Parameters[0];
+        var expr2Body = new ParameterReplacer(
+            oldParameter: expr2.Parameters[0],
+            newParameter: parameter
+        ).Visit(node: expr2.Body);
+        return Expression.Lambda<Func<T, bool>>(
+            body: combine(arg1: expr1.Body, arg2: expr2Body),
+            parameters: [parameter]
+        );
     }
 
     /// <summary>
