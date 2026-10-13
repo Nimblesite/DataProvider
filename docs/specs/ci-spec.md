@@ -45,6 +45,27 @@ fails when credentials are missing or invalid, and never falls back after an
 OIDC login failure. The supported Azure credential option is passed directly to
 the pinned VSCE CLI. Retrying publication skips already published packages.
 
+## Target Frameworks [BUILD-MULTI-TARGET]
+
+`Directory.Build.props` sets `<TargetFrameworks>net9.0;net10.0</TargetFrameworks>`
+for every project: the libraries, the `DataProvider`, `Lql` and
+`DataProviderMigrate` dotnet tools, the examples and the tests. NuGet packages
+carry both `lib/net9.0` and `lib/net10.0`, and every test project runs on both
+runtimes. Two projects opt out with an empty `TargetFrameworks`: the Blazor
+WebAssembly LQL website, deployed once on net9.0, and the h5
+`Nimblesite.Reporting.React` project, which h5 transpiles only from
+netstandard2.1. Packages that ship one framework per major version, such as
+`Microsoft.AspNetCore.Mvc.Testing`, are referenced per target framework.
+
+The self-contained Native AOT `DataProviderMigrate` binary ships one runtime,
+.NET 10 (LTS), so `make aot` and the release publish pass `-f net10.0`.
+`make test` reads every per-framework coverage report and gates on the lowest
+line rate.
+
+netstandard2.1 is not a target. Migration and Sync depend on SqlParserCS,
+Npgsql and Microsoft.Data.SqlClient, which ship no netstandard build. The other
+libraries use .NET 6+ APIs that would need polyfills and a separate test harness.
+
 ## Rust Coverage Instrumentation [CI-RUST-COVERAGE]
 
 `make test` and CI use Tarpaulin's LLVM engine explicitly on every platform.
