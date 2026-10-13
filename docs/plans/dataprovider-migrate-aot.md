@@ -67,6 +67,17 @@ binary (cannot load arbitrary external managed DLLs). Decision required:
 - Option B: drop `export` from the CLI entirely.
 Default to **A** unless the user says otherwise.
 
+### [MIG-AOT-SQLSERVER] Microsoft.Data.SqlClient is not AOT compatible
+`Microsoft.Data.SqlClient` (6.0.1 and 7.1.1) produces `IL2104`/`IL3053` trim and AOT
+errors, and pulls in `System.Data` XML serialization and `ConfigurationManager`.
+- **DONE.** As with `[MIG-AOT-EXPORT]`, the native binary compiles out the SQL Server
+  provider: `DataProviderMigrate.csproj` references `Migration.SqlServer` only when
+  `PublishAot` is not set, and `--provider sqlserver` reports that the provider is
+  unavailable in the native build. SQL Server migrations remain in the managed
+  `dotnet tool` and the NuGet packages. `NativeAotMigrateSmokeTests` asserts the message.
+- `[MIG-AOT-CI]`: `ci.yml` runs `make aot` and the native smoke tests on every PR, so
+  an AOT regression fails the PR instead of the release.
+
 ### [MIG-AOT-NPGSQL] Npgsql trim/AOT cleanliness
 Npgsql 9 is largely AOT-friendly but may emit trim warnings for type mapping.
 Capture and resolve any `IL2xxx`/`IL3xxx` from Npgsql; add a trim feature switch or
