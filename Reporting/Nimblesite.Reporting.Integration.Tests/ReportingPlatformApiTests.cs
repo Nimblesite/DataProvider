@@ -13,7 +13,7 @@ using Nimblesite.DataProvider.Migration.Tests;
 
 namespace Nimblesite.Reporting.Integration.Tests;
 
-[Collection(ReportingPlatformCollection.Name)]
+[Collection(ReportingPlatformCollectionDefinition.Name)]
 [Trait("Category", "E2E")]
 public sealed record ReportingPlatformApiTests
 {
@@ -116,9 +116,11 @@ public sealed record ReportingPlatformApiTests
 
     private static async Task AssertUnauthorizedEndpointsAsync(HttpClient client, string apiUrl)
     {
-        using var list = await client.GetAsync($"{apiUrl}/api/reports").ConfigureAwait(false);
+        using var list = await client
+            .GetAsync(new Uri($"{apiUrl}/api/reports"))
+            .ConfigureAwait(false);
         using var metadata = await client
-            .GetAsync($"{apiUrl}/api/reports/platform-contract")
+            .GetAsync(new Uri($"{apiUrl}/api/reports/platform-contract"))
             .ConfigureAwait(false);
         using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
@@ -126,7 +128,7 @@ public sealed record ReportingPlatformApiTests
             "application/json"
         );
         using var execution = await client
-            .PostAsync($"{apiUrl}/api/reports/platform-contract/execute", request)
+            .PostAsync(new Uri($"{apiUrl}/api/reports/platform-contract/execute"), request)
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, metadata.StatusCode);
@@ -227,7 +229,7 @@ public sealed record ReportingPlatformApiTests
     private static async Task AssertReportJourneyAsync(HttpClient client, string apiUrl)
     {
         using var listResponse = await client
-            .GetAsync($"{apiUrl}/api/reports")
+            .GetAsync(new Uri($"{apiUrl}/api/reports"))
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         Assert.Equal("application/json", listResponse.Content.Headers.ContentType?.MediaType);
@@ -243,7 +245,7 @@ public sealed record ReportingPlatformApiTests
         Assert.Empty(listed.GetProperty("parameters").EnumerateArray());
 
         using var metadataResponse = await client
-            .GetAsync($"{apiUrl}/api/reports/platform-contract")
+            .GetAsync(new Uri($"{apiUrl}/api/reports/platform-contract"))
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, metadataResponse.StatusCode);
         var metadataJson = await metadataResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -266,7 +268,7 @@ public sealed record ReportingPlatformApiTests
         var secondRows = await ExecuteAndReadRowsAsync(client, apiUrl).ConfigureAwait(false);
         Assert.Equal(firstRows, secondRows);
         using var missing = await client
-            .GetAsync($"{apiUrl}/api/reports/does-not-exist")
+            .GetAsync(new Uri($"{apiUrl}/api/reports/does-not-exist"))
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using var missingRequest = new StringContent(
@@ -275,7 +277,7 @@ public sealed record ReportingPlatformApiTests
             "application/json"
         );
         using var missingExecution = await client
-            .PostAsync($"{apiUrl}/api/reports/does-not-exist/execute", missingRequest)
+            .PostAsync(new Uri($"{apiUrl}/api/reports/does-not-exist/execute"), missingRequest)
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.NotFound, missingExecution.StatusCode);
     }
@@ -288,7 +290,7 @@ public sealed record ReportingPlatformApiTests
             "application/json"
         );
         using var response = await client
-            .PostAsync($"{apiUrl}/api/reports/platform-contract/execute", request)
+            .PostAsync(new Uri($"{apiUrl}/api/reports/platform-contract/execute"), request)
             .ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var result = JsonDocument.Parse(

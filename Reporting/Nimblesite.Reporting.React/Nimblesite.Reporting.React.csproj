@@ -1,6 +1,8 @@
 <Project Sdk="h5.Target/25.11.62725">
   <PropertyGroup>
     <OutputType>Library</OutputType>
+    <!-- h5 transpiles to JavaScript from netstandard2.1 only. [BUILD-MULTI-TARGET] -->
+    <TargetFrameworks></TargetFrameworks>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>

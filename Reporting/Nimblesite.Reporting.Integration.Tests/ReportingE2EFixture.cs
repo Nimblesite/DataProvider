@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Playwright;
 using Nimblesite.DataProvider.Migration.Core;
@@ -66,28 +65,28 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
 
         // 2. Start Reporting.Api as a real host
         _apiHost = CreateApiHost();
-        await _apiHost.StartAsync();
+        await _apiHost.StartAsync().ConfigureAwait(false);
         var apiServer = _apiHost.Services.GetRequiredService<IServer>();
         var apiAddresses = apiServer.Features.Get<IServerAddressesFeature>();
         ApiUrl = apiAddresses!.Addresses.First();
         Console.WriteLine($"[E2E] Reporting.Api started on {ApiUrl}");
 
         // 3. Verify API is reachable
-        await WaitForApiAsync(ApiUrl, "/api/reports");
+        await WaitForApiAsync(ApiUrl, "/api/reports").ConfigureAwait(false);
 
         // 4. Start frontend static file host for React renderer
         _frontendHost = CreateFrontendHost();
-        await _frontendHost.StartAsync();
+        await _frontendHost.StartAsync().ConfigureAwait(false);
         var frontendServer = _frontendHost.Services.GetRequiredService<IServer>();
         var frontendAddresses = frontendServer.Features.Get<IServerAddressesFeature>();
         FrontendUrl = frontendAddresses!.Addresses.First();
         Console.WriteLine($"[E2E] React renderer hosted on {FrontendUrl}");
 
         // 5. Launch Playwright + Chromium
-        Playwright = await Microsoft.Playwright.Playwright.CreateAsync();
-        Browser = await Playwright.Chromium.LaunchAsync(
-            new BrowserTypeLaunchOptions { Headless = true }
-        );
+        Playwright = await Microsoft.Playwright.Playwright.CreateAsync().ConfigureAwait(false);
+        Browser = await Playwright
+            .Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true })
+            .ConfigureAwait(false);
         Console.WriteLine("[E2E] Playwright browser launched");
     }
 
@@ -96,7 +95,7 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
         try
         {
             if (Browser is not null)
-                await Browser.CloseAsync();
+                await Browser.CloseAsync().ConfigureAwait(false);
         }
         catch
         { /* best-effort cleanup */
@@ -106,7 +105,7 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
         try
         {
             if (_frontendHost is not null)
-                await _frontendHost.StopAsync(TimeSpan.FromSeconds(5));
+                await _frontendHost.StopAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         }
         catch
         { /* best-effort cleanup */
@@ -116,7 +115,7 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
         try
         {
             if (_apiHost is not null)
-                await _apiHost.StopAsync(TimeSpan.FromSeconds(5));
+                await _apiHost.StopAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         }
         catch
         { /* best-effort cleanup */
@@ -142,15 +141,17 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
     public async Task<IPage> CreatePageAsync()
     {
         // The report viewer calls the bearer-protected API ([REPORT-AUTH-BEARER]).
-        var page = await Browser!.NewPageAsync(
-            new BrowserNewPageOptions
-            {
-                ExtraHTTPHeaders = new Dictionary<string, string>
+        var page = await Browser!
+            .NewPageAsync(
+                new BrowserNewPageOptions
                 {
-                    ["Authorization"] = $"Bearer {GatekeeperTestTokens.Create()}",
-                },
-            }
-        );
+                    ExtraHTTPHeaders = new Dictionary<string, string>
+                    {
+                        ["Authorization"] = $"Bearer {GatekeeperTestTokens.Create()}",
+                    },
+                }
+            )
+            .ConfigureAwait(false);
         page.Console += (_, msg) => Console.WriteLine($"[BROWSER {msg.Type}] {msg.Text}");
         page.PageError += (_, err) => Console.WriteLine($"[PAGE ERROR] {err}");
         return page;
@@ -161,17 +162,18 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
     /// </summary>
     public async Task<IPage> CreateReportPageAsync(string reportId = "")
     {
-        var page = await CreatePageAsync();
+        var page = await CreatePageAsync().ConfigureAwait(false);
 
         // Inject the API base URL config before any script runs
         await page.AddInitScriptAsync(
-            $@"window.reportConfig = {{
+                $@"window.reportConfig = {{
                 apiBaseUrl: '{ApiUrl}',
                 reportId: '{reportId}'
             }};"
-        );
+            )
+            .ConfigureAwait(false);
 
-        await page.GotoAsync(FrontendUrl);
+        await page.GotoAsync(FrontendUrl).ConfigureAwait(false);
         return page;
     }
 
@@ -259,19 +261,20 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("ASPNETCORE_URLS", null);
 
         var wwwrootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-        var fileProvider = new PhysicalFileProvider(wwwrootPath);
 
+        // The host owns (and disposes) the web root's file provider.
         return Host.CreateDefaultBuilder()
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseUrls("http://127.0.0.1:0");
+                webBuilder.UseWebRoot(wwwrootPath);
                 webBuilder.Configure(app =>
                 {
                     app.UseCors(policy =>
                         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()
                     );
-                    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
-                    app.UseStaticFiles(new StaticFileOptions { FileProvider = fileProvider });
+                    app.UseDefaultFiles();
+                    app.UseStaticFiles();
                 });
                 webBuilder.ConfigureServices(services =>
                 {
@@ -289,14 +292,16 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
         {
             try
             {
-                var response = await client.GetAsync($"{baseUrl}{endpoint}");
+                using var response = await client
+                    .GetAsync(new Uri($"{baseUrl}{endpoint}"))
+                    .ConfigureAwait(false);
                 if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
                     return;
             }
             catch
             { /* API not ready yet */
             }
-            await Task.Delay(500);
+            await Task.Delay(500).ConfigureAwait(false);
         }
         throw new TimeoutException($"Reporting API at {baseUrl} did not start within 30 seconds");
     }
@@ -307,4 +312,4 @@ public sealed class ReportingE2EFixture : IAsyncLifetime
 /// All tests share ONE fixture instance. Tests run sequentially.
 /// </summary>
 [CollectionDefinition("Reporting E2E")]
-public sealed class ReportingE2ECollection : ICollectionFixture<ReportingE2EFixture>;
+public sealed class ReportingE2ECollectionDefinition : ICollectionFixture<ReportingE2EFixture>;

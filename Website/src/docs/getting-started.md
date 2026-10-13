@@ -8,7 +8,7 @@ This walkthrough takes you from an empty folder to a running, type-safe database
 
 ## Prerequisites
 
-- **.NET 10 SDK** or later
+- **.NET 9 or .NET 10 SDK**
 - A terminal
 
 No database server required — we use SQLite.
