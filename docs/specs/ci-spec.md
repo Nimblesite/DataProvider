@@ -29,9 +29,31 @@ every version assertion and dry-run immutability check.
 
 ### Publishing Preflight [CI-RELEASE-PREFLIGHT]
 
-Manual Release runs take a version and verify manifests,
-CI, and the CodeQL security gate on the selected commit. Publishing jobs require
+Manual Release runs take a version and verify manifests, NuGet trusted
+publishing, CI, and the CodeQL security gate on the selected commit. Publishing jobs require
 a tag push, so manual preflight cannot upload packages or release assets.
+
+### NuGet Trusted Publishing [CI-RELEASE-NUGET-OIDC]
+
+NuGet packages publish without a stored API key. `publish-nuget` uses the pinned
+`NuGet/login` action to exchange a short-lived GitHub OIDC token for a nuget.org
+API key that lasts about an hour. The nuget.org trusted-publishing policy belongs
+to the `Nimblesite` organization and matches repository `Nimblesite/DataProvider`,
+workflow `release.yml` and environment `release`. The `nuget-oidc-preflight` job
+performs the same exchange before any job publishes. A missing or mismatched policy
+therefore fails the release, and the manual preflight, before NuGet packages or
+GitHub Release binaries ship.
+
+### Homebrew and Scoop [CI-RELEASE-BREW-SCOOP]
+
+Stable tags (no prerelease suffix) update `lql-lsp` and `dataprovider-migrate` in
+`Nimblesite/homebrew-tap` (`Formula/`) and `Nimblesite/scoop-bucket` (`bucket/`).
+GitHub has no OIDC path for pushing to another repository, so these jobs use the
+Nimblesite org secret `BREW_SCOOP_PAT`, which the other Nimblesite repositories
+that publish there also use. Formulae install the complete archive into `libexec`
+and expose the binary through an exec script, because the Native AOT migration CLI
+loads SQLite's native library from its own directory. Both products push to the
+same repositories from parallel jobs, so each push rebases and retries.
 
 ### Marketplace Authentication [SWR-VSIX-PUBLISH-AUTH]
 

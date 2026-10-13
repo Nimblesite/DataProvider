@@ -690,6 +690,10 @@ dotnet run --project Migration/DataProviderMigrate/DataProviderMigrate.csproj --
 | `--type`, `-t` | Yes | Fully qualified schema type name |
 | `--output`, `-o` | Yes | YAML file path to write |
 
+`DataProviderMigrate --version` (or `-V`) prints the release version stamped from the tag,
+for example `0.11.0`, without build metadata. The Homebrew formula test runs it against the
+native binary.
+
 Schema export types MUST expose either a static `Definition` property returning `SchemaDefinition` or a static `Build()` method returning `SchemaDefinition`.
 
 #### 7.4.2 YAML-Only Migration Input [MIG-CLI-YAML-ONLY]
