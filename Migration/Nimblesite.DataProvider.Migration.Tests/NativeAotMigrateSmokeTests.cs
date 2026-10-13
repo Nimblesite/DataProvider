@@ -108,6 +108,18 @@ public sealed partial class NativeAotMigrateSmokeTests
         );
     }
 
+    [SkippableFact]
+    public void NativeBinary_Version_PrintsReleaseVersion()
+    {
+        var bin = RequireNativeBinary();
+
+        // Implements [MIG-CLI-COMMANDS]: the Homebrew formula test runs `--version`.
+        var result = RunRaw(bin, ["--version"]);
+
+        Assert.True(result.ExitCode == 0, userMessage: result.Output);
+        Assert.Matches(@"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$", result.Output.Trim());
+    }
+
     private static string RequireNativeBinary()
     {
         var bin = NativeBinaryPath();
