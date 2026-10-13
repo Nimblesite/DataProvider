@@ -57,6 +57,7 @@ Spec: `[CI-DESLOP]`. Read the [docs](https://deslop.live/docs/for-ai/). False po
   - `fused < 0.6` or empty → proceed and write the new code.
 - **AFTER you change code** → call **`rescan`**, then **`top-offenders`** (worst clusters by severity) and **`cluster-by-id`** (full members + signals for a cluster you intend to merge). Use **`report-for-file`** / **`report-for-range`** to inspect a specific file or selection. Call **`schema-doc`** once per session to learn the report shape.
 - **NEVER game the gate.** Do not silence findings by widening `max_duplication_percent`, marking code `hidden`, or splitting it into trivially different shapes.
+- **Preserve SQL Server support.** Deduplication must retain the DataProvider, LQL, and Migration SQL Server projects and their functionality. Never delete or exclude their implementation to lower duplication.
 
 The duplication budget lives in committed `.deslop.toml` (`max_duplication_percent`). CI runs `deslop .` and the build **TANKS** (exit 3) if duplication exceeds it. The threshold ratchets **DOWN only** — lower it in the same PR when you reduce duplication; never raise it without written justification.
 

@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Nimblesite.DataProvider.Core;
 using Outcome;
 
 namespace Nimblesite.DataProvider.SqlServer.SchemaInspection;
@@ -6,7 +7,7 @@ namespace Nimblesite.DataProvider.SqlServer.SchemaInspection;
 /// <summary>
 /// SQL Server implementation of schema inspection
 /// </summary>
-internal sealed class SqlServerSchemaInspector : ISchemaInspector
+internal sealed class SqlServerSchemaInspector
 {
     private readonly string _connectionString;
 
@@ -198,7 +199,7 @@ internal sealed class SqlServerSchemaInspector : ISchemaInspector
                         _ => SqlNVarCharMax,
                     };
 
-                    var csharpType = SqlServerTypeToCSharpType(sqlType, isNullable);
+                    var csharpType = MapSqlTypeToCSharpType(sqlType, isNullable);
 
                     columns.Add(
                         new DatabaseColumn
@@ -329,7 +330,7 @@ internal sealed class SqlServerSchemaInspector : ISchemaInspector
             var isIdentity = reader.GetInt32(8) == 1;
             var isComputed = reader.GetInt32(9) == 1;
 
-            var csharpType = SqlServerTypeToCSharpType(dataType, isNullable);
+            var csharpType = MapSqlTypeToCSharpType(dataType, isNullable);
 
             columns.Add(
                 new DatabaseColumn
@@ -351,7 +352,7 @@ internal sealed class SqlServerSchemaInspector : ISchemaInspector
         return columns.AsReadOnly();
     }
 
-    private static string SqlServerTypeToCSharpType(string sqlType, bool isNullable)
+    internal static string MapSqlTypeToCSharpType(string sqlType, bool isNullable)
     {
         var csharpType = sqlType.ToLowerInvariant() switch
         {

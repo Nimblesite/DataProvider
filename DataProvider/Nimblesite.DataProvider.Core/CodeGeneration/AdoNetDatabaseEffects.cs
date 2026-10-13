@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using Nimblesite.Sql.Model;
 using Outcome;
@@ -31,6 +32,11 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
 
     private readonly Func<string, DbConnection> _connectionFactory;
     private readonly TypeMapper _typeMapper;
+
+    /// <summary>
+    /// Gets the reader behavior used when discovering query column metadata.
+    /// </summary>
+    public CommandBehavior SchemaBehavior { get; init; } = CommandBehavior.Default;
 
     /// <summary>
     /// Creates a new <see cref="AdoNetDatabaseEffects"/>.
@@ -79,7 +85,9 @@ public sealed class AdoNetDatabaseEffects : IDatabaseEffects
 
             BindDummyParameters(command, parameters);
 
-            using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            using var reader = await command
+                .ExecuteReaderAsync(SchemaBehavior)
+                .ConfigureAwait(false);
             var columns = ReadColumns(reader);
             return Ok(columns);
         }

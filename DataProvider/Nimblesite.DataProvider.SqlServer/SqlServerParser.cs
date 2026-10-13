@@ -5,7 +5,8 @@ using Outcome;
 namespace Nimblesite.DataProvider.SqlServer;
 
 /// <summary>
-/// SQL Server specific parser implementation using SqlParserCS
+/// SQL Server specific parser implementation using the official
+/// Microsoft.SqlServer.TransactSql.ScriptDom (ScriptDom) parser
 /// </summary>
 internal sealed class SqlServerParser : ISqlParser
 {
@@ -16,7 +17,5 @@ internal sealed class SqlServerParser : ISqlParser
     /// </summary>
     /// <param name="sql">The SQL text to parse.</param>
     /// <returns>A Result containing either a SelectStatement or an error message.</returns>
-    public Result<SelectStatement, string> ParseSql(string sql) =>
-        // Use the SqlParserCS library which supports multiple SQL dialects
-        _parser.ParseSql(sql);
+    public Result<SelectStatement, string> ParseSql(string sql) => _parser.ParseSql(sql);
 }

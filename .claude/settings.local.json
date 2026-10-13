@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(make fmt-check *)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(git diff *)",
+      "Bash(gh pr *)"
     ]
   },
   "autoMemoryEnabled": false

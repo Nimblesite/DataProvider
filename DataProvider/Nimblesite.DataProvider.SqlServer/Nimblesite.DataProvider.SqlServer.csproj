@@ -19,6 +19,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.1" />
+    <!-- Official Microsoft SQL Server parser (ScriptDom) - the only legal way to parse T-SQL -->
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="161.8812.0" />
     <PackageReference Remove="SqlParserCS" />
   </ItemGroup>
   <ItemGroup>
