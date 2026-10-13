@@ -48,6 +48,7 @@ jobs:
           repository: ${{ inputs.bucket_repo }}
           token: ${{ secrets.bucket_token }}
           path: bucket
+          fetch-depth: 0
       - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: 22
@@ -92,4 +93,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "bucket/${MANIFEST_NAME}.json"
           git commit -m "Update ${MANIFEST_NAME} to ${VERSION}" || exit 0
-          git push
+          # lql-lsp and DataProviderMigrate publish to the same repository from parallel
+          # jobs, so a push can lose the race; rebase onto the other job's commit and retry.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+            git pull --rebase
+          done
+          echo "::error::Could not push ${MANIFEST_NAME} to the bucket after 5 attempts." >&2
+          exit 1

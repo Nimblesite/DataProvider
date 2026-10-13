@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Reflection;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
@@ -38,6 +39,11 @@ public static partial class Program
         if (args.Length == 0 || args[0] is "--help" or "-h")
         {
             return ShowTopLevelUsage();
+        }
+
+        if (args[0] is "--version" or "-V")
+        {
+            return ShowVersion();
         }
 
         var command = args[0];
@@ -542,6 +548,19 @@ public static partial class Program
 
     // ── Usage / Errors ───────────────────────────────────────────────────
 
+    // Implements [MIG-CLI-COMMANDS]: prints the release version (the tag stamped into
+    // <Version>) without build metadata. The Homebrew formula test asserts it.
+    private static int ShowVersion()
+    {
+        var version =
+            typeof(Program)
+                .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion
+            ?? "unknown";
+        Console.WriteLine(version.Split('+')[0]);
+        return 0;
+    }
+
     private static int ShowTopLevelUsage()
     {
         Console.WriteLine(
@@ -555,6 +574,7 @@ public static partial class Program
             Usage:
               DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres|sqlserver]
               DataProviderMigrate export --assembly assembly.dll --type Namespace.SchemaClass --output schema.yaml
+              DataProviderMigrate --version
 
             Run 'DataProviderMigrate <command> --help' for command-specific options.
             """
