@@ -1,10 +1,8 @@
 using System.Collections.Immutable;
-using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
 using Nimblesite.DataProvider.Migration.SQLite;
-using Nimblesite.DataProvider.Migration.SqlServer;
 using Npgsql;
 using SchemaIntegrityResultError = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -142,12 +140,16 @@ public static partial class Program
                 args.AllowDestructive,
                 args.Phase
             ),
+#if AOT
+            "sqlserver" or "mssql" => ShowSqlServerUnavailable(),
+#else
             "sqlserver" or "mssql" => MigrateSqlServerDatabase(
                 schema,
                 args.OutputPath,
                 args.AllowDestructive,
                 args.Phase
             ),
+#endif
             _ => ShowProviderError(args.Provider),
         };
     }
@@ -242,42 +244,6 @@ public static partial class Program
         catch (Exception ex)
         {
             Console.WriteLine($"Error: PostgreSQL connection/migration failed: {ex}");
-            return 1;
-        }
-    }
-
-    // Implements [MIG-SQLSERVER].
-    private static int MigrateSqlServerDatabase(
-        SchemaDefinition schema,
-        string connectionString,
-        bool allowDestructive,
-        MigratePhase phase
-    )
-    {
-        try
-        {
-            using var connection = new SqlConnection(connectionString);
-            connection.Open();
-            Console.WriteLine("Connected to SQL Server database");
-
-            return ApplyDiff(
-                schema,
-                allowDestructive,
-                phase,
-                () => SqlServerSchemaInspector.Inspect(connection),
-                ops =>
-                    MigrationRunner.Apply(
-                        connection,
-                        ops,
-                        SqlServerDdlGenerator.Generate,
-                        new MigrationOptions { AllowDestructive = allowDestructive }
-                    ),
-                (_, desired) => SqlServerSchemaNormalizer.Normalize(desired)
-            );
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: SQL Server connection/migration failed: {ex}");
             return 1;
         }
     }

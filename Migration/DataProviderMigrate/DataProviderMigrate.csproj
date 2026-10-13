@@ -46,6 +46,12 @@
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.Core\Nimblesite.DataProvider.Migration.Core.csproj" />
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.SQLite\Nimblesite.DataProvider.Migration.SQLite.csproj" />
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.Postgres\Nimblesite.DataProvider.Migration.Postgres.csproj" />
+  </ItemGroup>
+
+  <!-- Implements [MIG-AOT-SQLSERVER]. Microsoft.Data.SqlClient is not trim or Native
+       AOT compatible, so only the managed `dotnet tool` build carries the SQL Server
+       provider; the native binary reports it as unavailable. -->
+  <ItemGroup Condition="'$(PublishAot)' != 'true'">
     <ProjectReference Include="..\Nimblesite.DataProvider.Migration.SqlServer\Nimblesite.DataProvider.Migration.SqlServer.csproj" />
   </ItemGroup>
 </Project>

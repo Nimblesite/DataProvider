@@ -88,6 +88,26 @@ public sealed partial class NativeAotMigrateSmokeTests
         Assert.Contains("not available in the native", result.Output, StringComparison.Ordinal);
     }
 
+    [SkippableFact]
+    public void NativeBinary_SqlServerProvider_ReportsUnsupported()
+    {
+        var bin = RequireNativeBinary();
+        var (schemaPath, _) = WriteFixtures();
+
+        // Implements [MIG-AOT-SQLSERVER]: the SQL Server provider is compiled out of the native build.
+        var result = RunRaw(
+            bin,
+            ["migrate", "--schema", schemaPath, "--output", "Server=x", "--provider", "sqlserver"]
+        );
+
+        Assert.True(result.ExitCode != 0, userMessage: result.Output);
+        Assert.Contains(
+            "'sqlserver' provider is not available in the native",
+            result.Output,
+            StringComparison.Ordinal
+        );
+    }
+
     private static string RequireNativeBinary()
     {
         var bin = NativeBinaryPath();

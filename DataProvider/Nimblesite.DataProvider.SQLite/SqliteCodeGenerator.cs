@@ -16,11 +16,6 @@ namespace Nimblesite.DataProvider.SQLite;
 [Generator]
 public sealed class SqliteCodeGenerator : IIncrementalGenerator
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     /// <summary>
     /// Generates C# source for a SQL file using real database metadata.
     /// Delegates to <see cref="SqlAntlrCodeGenerator.GenerateCodeWithMetadata"/>
@@ -260,9 +255,9 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
             {
                 try
                 {
-                    config = JsonSerializer.Deserialize<SourceGeneratorDataProviderConfiguration>(
-                        configContent!,
-                        JsonOptions
+                    config = JsonSerializer.Deserialize(
+                        configContent,
+                        SqliteGeneratorJsonContext.Default.SourceGeneratorDataProviderConfiguration
                     );
                 }
                 catch (JsonException ex)
@@ -495,9 +490,9 @@ public sealed class SqliteCodeGenerator : IIncrementalGenerator
                     {
                         try
                         {
-                            groupingConfig = JsonSerializer.Deserialize<GroupingConfig>(
-                                groupingText!,
-                                JsonOptions
+                            groupingConfig = JsonSerializer.Deserialize(
+                                groupingText,
+                                SqliteGeneratorJsonContext.Default.GroupingConfig
                             );
                         }
                         catch (JsonException ex)
