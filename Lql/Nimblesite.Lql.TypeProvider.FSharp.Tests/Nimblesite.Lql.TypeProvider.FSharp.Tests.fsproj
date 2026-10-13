@@ -39,8 +39,10 @@
     <ProjectReference Include="../Nimblesite.Lql.TypeProvider.FSharp.Tests.Data/Nimblesite.Lql.TypeProvider.FSharp.Tests.Data.csproj" />
   </ItemGroup>
 
+  <!-- The build target below builds each tool for this build's TargetFramework, so run
+       that framework's output. [BUILD-MULTI-TARGET] -->
   <PropertyGroup>
-    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/net9.0/DataProviderMigrate.dll</DataProviderMigrateToolDll>
+    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/$(TargetFramework)/DataProviderMigrate.dll</DataProviderMigrateToolDll>
   </PropertyGroup>
 
   <Target Name="BuildMigrationTool" BeforeTargets="CreateTestDatabase">
