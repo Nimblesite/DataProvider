@@ -19,7 +19,7 @@
     "@playwright/test": "^1.47.0",
     "@types/node": "^25.6.0",
     "http-server": "^14.1.1",
-    "markdown-it": "^14.2.0",
+    "markdown-it": "^14.3.3",
     "markdown-it-anchor": "^9.2.0"
   },
   "dependencies": {
