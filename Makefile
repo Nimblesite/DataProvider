@@ -304,7 +304,7 @@ _aot_dotnet:
 ifeq ($(OS),Windows_NT)
 AOT_SMOKE_DB := $(TEMP)\dataprovider_aot_smoke.db
 else
-AOT_SMOKE_DB := $(shell printf '%s' "$${TMPDIR:-/tmp}")dataprovider_aot_smoke.db
+AOT_SMOKE_DB := $(patsubst %/,%,$(shell printf '%s' "$${TMPDIR:-/tmp}"))/dataprovider_aot_smoke.db
 endif
 
 # --- RUST (LQL LSP) ---

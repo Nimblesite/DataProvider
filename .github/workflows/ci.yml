@@ -103,6 +103,21 @@ jobs:
           make _test_dotnet DOTNET_TEST_PROJECTS="DataProvider/Nimblesite.DataProvider.Tests
           DataProvider/Nimblesite.DataProvider.Example.Tests"
 
+      # Implements [MIG-AOT-CI]: the release ships DataProviderMigrate as a Native AOT
+      # binary, so every PR proves that publish and the native smoke tests still pass.
+      - name: Install Linux AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Native AOT publish + smoke migrate (DataProviderMigrate)
+        run: make aot RID=linux-x64
+
+      - name: Native AOT smoke tests (DataProviderMigrate)
+        env:
+          DATAPROVIDERMIGRATE_AOT_BIN: ${{ github.workspace }}/Migration/DataProviderMigrate/bin/Release/net9.0/linux-x64/publish/DataProviderMigrate
+        run: >-
+          dotnet test Migration/Nimblesite.DataProvider.Migration.Tests
+          --filter "FullyQualifiedName~NativeAotMigrateSmokeTests"
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()

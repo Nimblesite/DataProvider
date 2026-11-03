@@ -375,7 +375,9 @@ public static partial class RlsPredicateTranspiler
                     nextIdx++;
                 }
                 var isCall = nextIdx < predicate.Length && predicate[nextIdx] == '(';
-                return qualified || afterCast || isCall || IsKeyword(word) || IsBuiltinExpr(word);
+                return !(
+                    qualified || afterCast || isCall || IsKeyword(word) || IsBuiltinExpr(word)
+                );
             }
         );
 

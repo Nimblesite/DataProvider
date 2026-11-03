@@ -50,6 +50,7 @@ jobs:
           repository: ${{ inputs.tap_repo }}
           token: ${{ secrets.tap_token }}
           path: tap
+          fetch-depth: 0
       - name: Write formula
         shell: bash
         working-directory: tap
@@ -73,8 +74,12 @@ jobs:
             version "${VERSION}"
             sha256 "${SHA256}"
 
+            # The archive is the complete publish output: the Native AOT migration CLI
+            # loads SQLite's native library from its own directory. libexec keeps the
+            # archive together and the bin script runs the binary from there.
             def install
-              bin.install "${BINARY_NAME}"
+              libexec.install Dir["*"]
+              bin.write_exec_script libexec/"${BINARY_NAME}"
             end
 
             test do
@@ -94,4 +99,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "Formula/${FORMULA_NAME}.rb"
           git commit -m "Update ${FORMULA_NAME} to ${VERSION}" || exit 0
-          git push
+          # lql-lsp and DataProviderMigrate publish to the same repository from parallel
+          # jobs, so a push can lose the race; rebase onto the other job's commit and retry.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+            git pull --rebase
+          done
+          echo "::error::Could not push ${FORMULA_NAME} to the tap after 5 attempts." >&2
+          exit 1

@@ -98,18 +98,42 @@ jobs:
       actions: read
       contents: read
 
+  # ── NuGet trusted-publishing preflight [CI-RELEASE-NUGET-OIDC] ─────────────
+  # Proves the nuget.org trusted-publishing policy accepts this workflow BEFORE any
+  # job publishes, so a missing or mismatched policy stops the release (and the
+  # manual preflight) instead of leaving binaries released without packages.
+  nuget-oidc-preflight:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The policy is scoped to Environment=release; the OIDC token carries that
+    # claim only when the job is bound to the environment.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: NuGet login (OIDC trusted publishing)
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          # The nuget.org organization that owns the packages and the policy.
+          user: Nimblesite
+
   # ── NuGet packages ────────────────────────────────────────────────────────
+  # KEYLESS: exchanges a short-lived GitHub OIDC token for a ~1h nuget.org API key.
+  # No long-lived NuGet API key is stored. Implements [CI-RELEASE-NUGET-OIDC].
   publish-nuget:
     if: >-
       github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
       needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
-      needs.codeql-gate.result == 'success'
-    needs: [prepare, ci-gate, codeql-gate]
+      needs.codeql-gate.result == 'success' && needs.nuget-oidc-preflight.result == 'success'
+    needs: [prepare, ci-gate, codeql-gate, nuget-oidc-preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -125,16 +149,18 @@ jobs:
       - name: Pack solution
         shell: bash
         run: dotnet pack DataProvider.sln -c Release -o ./nupkgs
+      # Minted after packing, immediately before the push, so it cannot expire in transit.
+      - name: NuGet login (OIDC trusted publishing)
+        id: nuget_login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: Nimblesite
       - name: Push packages to NuGet
         shell: bash
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${NUGET_API_KEY:-}" ]; then
-            echo "::error::NUGET_API_KEY secret is not set." >&2
-            exit 1
-          fi
           shopt -s nullglob
           packages=(./nupkgs/*.nupkg)
           if [ ${#packages[@]} -eq 0 ]; then
@@ -153,8 +179,8 @@ jobs:
     if: >-
       github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
       needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
-      needs.codeql-gate.result == 'success'
-    needs: [prepare, ci-gate, codeql-gate]
+      needs.codeql-gate.result == 'success' && needs.nuget-oidc-preflight.result == 'success'
+    needs: [prepare, ci-gate, codeql-gate, nuget-oidc-preflight]
     uses: ./.github/workflows/release-binary-multiplatform.yml
     with:
       binary_name: lql-lsp
@@ -169,8 +195,8 @@ jobs:
     if: >-
       github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') &&
       needs.prepare.result == 'success' && needs.ci-gate.result == 'success' &&
-      needs.codeql-gate.result == 'success'
-    needs: [prepare, ci-gate, codeql-gate]
+      needs.codeql-gate.result == 'success' && needs.nuget-oidc-preflight.result == 'success'
+    needs: [prepare, ci-gate, codeql-gate, nuget-oidc-preflight]
     uses: ./.github/workflows/release-dotnet-aot-multiplatform.yml
     with:
       binary_name: DataProviderMigrate
@@ -207,6 +233,9 @@ jobs:
           echo "win32_x64=${win}" >> "$GITHUB_OUTPUT"
 
   # ── Homebrew tap ──────────────────────────────────────────────────────────
+  # Implements [CI-RELEASE-BREW-SCOOP]. GitHub has no OIDC path for pushing to another
+  # repository, so the tap and bucket use the Nimblesite org secret BREW_SCOOP_PAT,
+  # shared with every Nimblesite repository that publishes to them.
   publish-brew:
     needs: [prepare, checksums]
     if: >-
@@ -214,7 +243,7 @@ jobs:
       needs.checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-brew-tap.yml
     with:
-      tap_repo: Nimblesite/homebrew-lql
+      tap_repo: Nimblesite/homebrew-tap
       formula_name: lql-lsp
       version: ${{ needs.prepare.outputs.version }}
       asset_url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/lql-lsp-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz
@@ -223,7 +252,7 @@ jobs:
       homepage: https://github.com/Nimblesite/DataProvider
       description: Lambda Query Language LSP server
     secrets:
-      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      tap_token: ${{ secrets.BREW_SCOOP_PAT }}
 
   # ── Scoop bucket ──────────────────────────────────────────────────────────
   publish-scoop:
@@ -233,7 +262,7 @@ jobs:
       needs.checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-scoop-bucket.yml
     with:
-      bucket_repo: Nimblesite/scoop-lql
+      bucket_repo: Nimblesite/scoop-bucket
       manifest_name: lql-lsp
       version: ${{ needs.prepare.outputs.version }}
       url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/lql-lsp-${{ needs.prepare.outputs.version }}-win32-x64.zip
@@ -242,7 +271,7 @@ jobs:
       homepage: https://github.com/Nimblesite/DataProvider
       description: Lambda Query Language LSP server
     secrets:
-      bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+      bucket_token: ${{ secrets.BREW_SCOOP_PAT }}
 
   # ── Migration CLI checksums (from its own signed SHA256SUMS) [MIG-AOT-CI] ──
   dotnet-checksums:
@@ -278,7 +307,7 @@ jobs:
       needs.dotnet-checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-brew-tap.yml
     with:
-      tap_repo: Nimblesite/homebrew-lql
+      tap_repo: Nimblesite/homebrew-tap
       formula_name: dataprovider-migrate
       version: ${{ needs.prepare.outputs.version }}
       asset_url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/DataProviderMigrate-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz
@@ -287,7 +316,7 @@ jobs:
       homepage: https://github.com/Nimblesite/DataProvider
       description: DataProvider database schema migration CLI (YAML → SQLite/PostgreSQL)
     secrets:
-      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      tap_token: ${{ secrets.BREW_SCOOP_PAT }}
 
   # ── Scoop bucket (migration CLI) ──────────────────────────────────────────
   publish-scoop-migrate:
@@ -297,7 +326,7 @@ jobs:
       needs.dotnet-checksums.result == 'success' && needs.prepare.outputs.prerelease == 'false'
     uses: ./.github/workflows/publish-scoop-bucket.yml
     with:
-      bucket_repo: Nimblesite/scoop-lql
+      bucket_repo: Nimblesite/scoop-bucket
       manifest_name: dataprovider-migrate
       version: ${{ needs.prepare.outputs.version }}
       url: https://github.com/Nimblesite/DataProvider/releases/download/v${{ needs.prepare.outputs.version }}/DataProviderMigrate-${{ needs.prepare.outputs.version }}-win32-x64.zip
@@ -306,7 +335,7 @@ jobs:
       homepage: https://github.com/Nimblesite/DataProvider
       description: DataProvider database schema migration CLI (YAML → SQLite/PostgreSQL)
     secrets:
-      bucket_token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+      bucket_token: ${{ secrets.BREW_SCOOP_PAT }}
 
   # ── Per-platform VSIX → VS Code Marketplace ───────────────────────────────
   # Disabled at the user's request. [SWR-VSIX-PUBLISH-AUTH]

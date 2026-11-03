@@ -143,6 +143,11 @@ jobs:
           file: ${{ steps.pkg.outputs.archive }}
           format: cyclonedx-json
           output-file: ${{ steps.pkg.outputs.archive }}.cdx.json
+          # The publish job attaches every SBOM in dist/. Attaching here races it: once
+          # the release exists, this read-only job fails trying to replace the asset.
+          upload-release-assets: false
+          # The archive's SBOM ships in this job's own artifact below.
+          upload-artifact: false
       - name: Attest build provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
@@ -168,6 +173,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
+          # Only this workflow's binaries: an unfiltered download pulls every artifact in
+          # the calling release run (Deslop reports, the other binary family) into dist/.
+          pattern: ${{ inputs.binary_name }}-*
           path: dist
           merge-multiple: true
       # Own signed checksum file (separate from the Rust binary's SHA256SUMS) so

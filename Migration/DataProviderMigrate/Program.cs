@@ -1,10 +1,9 @@
 using System.Collections.Immutable;
-using Microsoft.Data.SqlClient;
+using System.Reflection;
 using Microsoft.Data.Sqlite;
 using Nimblesite.DataProvider.Migration.Core;
 using Nimblesite.DataProvider.Migration.Postgres;
 using Nimblesite.DataProvider.Migration.SQLite;
-using Nimblesite.DataProvider.Migration.SqlServer;
 using Npgsql;
 using SchemaIntegrityResultError = Outcome.Result<
     System.Collections.Immutable.ImmutableArray<string>,
@@ -40,6 +39,11 @@ public static partial class Program
         if (args.Length == 0 || args[0] is "--help" or "-h")
         {
             return ShowTopLevelUsage();
+        }
+
+        if (args[0] is "--version" or "-V")
+        {
+            return ShowVersion();
         }
 
         var command = args[0];
@@ -142,12 +146,16 @@ public static partial class Program
                 args.AllowDestructive,
                 args.Phase
             ),
+#if AOT
+            "sqlserver" or "mssql" => ShowSqlServerUnavailable(),
+#else
             "sqlserver" or "mssql" => MigrateSqlServerDatabase(
                 schema,
                 args.OutputPath,
                 args.AllowDestructive,
                 args.Phase
             ),
+#endif
             _ => ShowProviderError(args.Provider),
         };
     }
@@ -274,42 +282,6 @@ public static partial class Program
             $"Error: PostgreSQL migration supports exactly one target schema; found: {string.Join(", ", schemas)}"
         );
         return null;
-    }
-
-    // Implements [MIG-SQLSERVER].
-    private static int MigrateSqlServerDatabase(
-        SchemaDefinition schema,
-        string connectionString,
-        bool allowDestructive,
-        MigratePhase phase
-    )
-    {
-        try
-        {
-            using var connection = new SqlConnection(connectionString);
-            connection.Open();
-            Console.WriteLine("Connected to SQL Server database");
-
-            return ApplyDiff(
-                schema,
-                allowDestructive,
-                phase,
-                () => SqlServerSchemaInspector.Inspect(connection),
-                ops =>
-                    MigrationRunner.Apply(
-                        connection,
-                        ops,
-                        SqlServerDdlGenerator.Generate,
-                        new MigrationOptions { AllowDestructive = allowDestructive }
-                    ),
-                (_, desired) => SqlServerSchemaNormalizer.Normalize(desired)
-            );
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: SQL Server connection/migration failed: {ex}");
-            return 1;
-        }
     }
 
     /// <summary>
@@ -606,6 +578,19 @@ public static partial class Program
 
     // ── Usage / Errors ───────────────────────────────────────────────────
 
+    // Implements [MIG-CLI-COMMANDS]: prints the release version (the tag stamped into
+    // <Version>) without build metadata. The Homebrew formula test asserts it.
+    private static int ShowVersion()
+    {
+        var version =
+            typeof(Program)
+                .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion
+            ?? "unknown";
+        Console.WriteLine(version.Split('+')[0]);
+        return 0;
+    }
+
     private static int ShowTopLevelUsage()
     {
         Console.WriteLine(
@@ -619,6 +604,7 @@ public static partial class Program
             Usage:
               DataProviderMigrate migrate --schema schema.yaml --output database.db [--provider sqlite|postgres|sqlserver]
               DataProviderMigrate export --assembly assembly.dll --type Namespace.SchemaClass --output schema.yaml
+              DataProviderMigrate --version
 
             Run 'DataProviderMigrate <command> --help' for command-specific options.
             """

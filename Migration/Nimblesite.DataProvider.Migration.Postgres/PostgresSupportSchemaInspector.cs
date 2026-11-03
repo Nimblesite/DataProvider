@@ -133,7 +133,8 @@ internal static partial class PostgresSupportSchemaInspector
                         OwnerRole = reader.GetString(10),
                         SearchPath = ParseSearchPathConfig(reader.IsDBNull(11) ? null : reader.GetString(11)),
                         RevokePublicExecute = reader.GetBoolean(9),
-                        ExecuteRoles = reader.GetValue(12) as string[] ?? [],                    }
+                        ExecuteRoles = reader.GetValue(12) as string[] ?? [],
+                    }
                 );
             }
         );

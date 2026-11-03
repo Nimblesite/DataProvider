@@ -25,6 +25,9 @@ internal static class MigrationCliConsole
             )
         );
 
+    internal static (int ExitCode, string Output) Run(params string[] args) =>
+        Invoke(run: () => DataProviderMigrate.Program.Main(args: args));
+
     internal static string WriteTempSchemaFile(string prefix, string contents)
     {
         var schemaPath = Path.Combine(Path.GetTempPath(), $"{prefix}-{Guid.NewGuid():N}.yaml");
