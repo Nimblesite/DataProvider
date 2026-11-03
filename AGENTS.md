@@ -44,6 +44,7 @@ Implements `[CI-DESLOP]`. Read [docs](https://deslop.live/docs/for-ai/); report 
   - `fused < 0.6` or empty: proceed.
 - After changes: `rescan` → `top-offenders` (severity-ranked); `cluster-by-id` for merge candidates' full members/signals. Inspect with `report-for-file` / `report-for-range`; read `schema-doc` once per session.
 - Never evade the gate through budget increases, `hidden` code, or trivial variations.
+- Preserve SQL Server support: deduplication must retain the DataProvider, LQL, and Migration SQL Server projects and their functionality; never delete or exclude their implementation to lower duplication.
 
 `.deslop.toml`: `max_duplication_percent`; CI: `deslop .`, exit 3 when exceeded. Lower the threshold with duplication reductions in the same PR; increases require written justification.
 
