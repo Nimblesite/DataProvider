@@ -1,4 +1,3 @@
-using SqlParser;
 using SqlParser.Dialects;
 using PredicateOk = Outcome.Result<
     string,
@@ -26,16 +25,30 @@ public static partial class PostgresPolicyCatalogNormalizer
     /// used for desired predicates. Implements [RLS-DIFF] and issue #119.
     /// PostgreSQL 15 qualifies view columns differently from pg_policies;
     /// normalizing both preserves correlated references and subquery shadowing.
+    /// Implements [MIG-POSTGRES-CUSTOM-SCHEMA]: the inspected schema is the
+    /// caller's choice; "public" remains the default for compatibility.
     /// </summary>
-    public static SchemaResult Inspect(NpgsqlConnection connection)
+    public static SchemaResult Inspect(NpgsqlConnection connection, string schemaName = "public")
     {
-        var result = PostgresSchemaInspector.Inspect(connection: connection, schemaName: "public");
+        var result = PostgresSchemaInspector.Inspect(
+            connection: connection,
+            schemaName: schemaName
+        );
         return result is SchemaOk ok
             ? Normalize(connection: connection, live: ok.Value, desired: ok.Value)
             : result;
     }
 
-    /// <summary>Canonicalize policies on tables that already exist.</summary>
+    /// <summary>
+    /// Canonicalize policies and catalog-equivalent expressions on tables that
+    /// already exist. Implements [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]:
+    /// PostgreSQL deparses check-constraint and partial-index predicates
+    /// differently from the YAML text (literal ::text casts, dropped redundant
+    /// parentheses, <c>INTERVAL '24 hours'</c> as <c>'24:00:00'::interval</c>).
+    /// Both the live and desired forms pass through PostgreSQL's own parser
+    /// via a temporary view, so comparison is semantic, never textual — and a
+    /// genuinely different predicate still compares different.
+    /// </summary>
     public static SchemaResult Normalize(
         NpgsqlConnection connection,
         SchemaDefinition live,
@@ -70,13 +83,64 @@ public static partial class PostgresPolicyCatalogNormalizer
         TableDefinition table
     )
     {
-        if (table.RowLevelSecurity is not { } rls)
+        var normalized = table with
         {
-            return table;
-        }
-        var policies = rls.Policies.Select(p => NormalizePolicy(connection, table, p)).ToArray();
-        return table with { RowLevelSecurity = rls with { Policies = policies } };
+            Columns = NormalizeColumns(connection, table),
+            CheckConstraints = NormalizeChecks(connection, table),
+            Indexes = NormalizeIndexes(connection, table),
+        };
+        return normalized.RowLevelSecurity is not { } rls
+            ? normalized
+            : normalized with
+            {
+                RowLevelSecurity = rls with
+                {
+                    Policies = rls
+                        .Policies.Select(p => NormalizePolicy(connection, table, p))
+                        .ToArray()
+                }
+            };
     }
+
+    private static ColumnDefinition[] NormalizeColumns(
+        NpgsqlConnection connection,
+        TableDefinition table
+    ) =>
+        table.Columns
+            .Select(c =>
+                c.CheckConstraint is null
+                    ? c
+                    : c with { CheckConstraint = Canonicalize(connection, table, c.CheckConstraint) }
+            )
+            .ToArray();
+
+    private static CheckConstraintDefinition[] NormalizeChecks(
+        NpgsqlConnection connection,
+        TableDefinition table
+    ) =>
+        table.CheckConstraints
+            .Select(cc => cc with
+            {
+                Expression = Canonicalize(connection, table, cc.Expression)
+            })
+            .ToArray();
+
+    private static IndexDefinition[] NormalizeIndexes(
+        NpgsqlConnection connection,
+        TableDefinition table
+    ) =>
+        table.Indexes
+            .Select(i =>
+                i.Filter is null ? i : i with { Filter = Canonicalize(connection, table, i.Filter) }
+            )
+            .ToArray();
+
+    private static string Canonicalize(
+        NpgsqlConnection connection,
+        TableDefinition table,
+        string expression
+    ) =>
+        CanonicalizeClause(connection, table, expression, lql: null, name: table.Name) ?? expression;
 
     private static RlsPolicyDefinition NormalizePolicy(
         NpgsqlConnection connection,
@@ -191,8 +255,15 @@ public static partial class PostgresPolicyCatalogNormalizer
             );
     }
 
-    private static string? ParseSelection(string definition) =>
-        SqlSelectionExtractor
-            .ParseSingleSelectSelection(definition, new PostgreSqlDialect())
-            ?.ToSql();
+    private static string? ParseSelection(string definition)
+    {
+        var selection = SqlSelectionExtractor.ParseSingleSelectSelection(
+            definition,
+            new PostgreSqlDialect()
+        );
+        // Implements [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]: render the
+        // parsed predicate in the canonical form instead of raw ToSql(), which
+        // prints operator tokens like Plus instead of +.
+        return selection is null ? null : PostgresCheckExpressionNormalizer.RenderCanonical(selection);
+    }
 }

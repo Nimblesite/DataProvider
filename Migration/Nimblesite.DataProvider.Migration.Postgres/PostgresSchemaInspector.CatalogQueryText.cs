@@ -46,7 +46,8 @@ public static partial class PostgresSchemaInspector
              LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ord.attnum
              WHERE ord.attnum > 0) AS column_names,
             (SELECT bool_or(ord.attnum = 0)
-             FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)) AS has_expressions
+             FROM unnest(ix.indkey) WITH ORDINALITY AS ord(attnum, n)) AS has_expressions,
+            pg_get_expr(ix.indpred, ix.indrelid, true) AS index_filter
         FROM pg_class t
         JOIN pg_index ix ON t.oid = ix.indrelid
         JOIN pg_class i ON i.oid = ix.indexrelid

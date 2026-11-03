@@ -33,4 +33,26 @@ public partial class SchemaSupportYamlSerializerTests
             runAs: supabase_admin
         tables: []
         """;
+
+    // Implements [RLS-PG-FUNCTION-SECURITY].
+    private const string Data_FromYaml_PostgresFunctionOwnerAndSearchPath_NormalizesPinnedCatalog_1 = """
+        name: nap_owner
+        functions:
+          - schema: public
+            name: owned_with_path
+            returns: boolean
+            body: SELECT true
+            ownerRole: nap_fn_owner
+            searchPath: [pg_catalog, registry]
+          - schema: public
+            name: owned_default_path
+            returns: boolean
+            body: SELECT true
+            ownerRole: nap_fn_owner
+          - schema: public
+            name: unmanaged
+            returns: boolean
+            body: SELECT true
+        tables: []
+        """;
 }

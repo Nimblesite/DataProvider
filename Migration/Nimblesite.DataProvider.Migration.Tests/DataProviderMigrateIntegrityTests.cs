@@ -129,6 +129,150 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
         }
     }
 
+    /// <summary>
+    /// Implements [MIG-POSTGRES-CUSTOM-SCHEMA]: the CLI must inspect the schema the
+    /// YAML declares, not a hardcoded "public", so migrating into a custom schema
+    /// and re-running succeeds with zero operations and a truthful up-to-date claim.
+    /// </summary>
+    [Fact]
+    public void Migrate_CustomSchemaFirstRunAppliesAndRerunReportsZeroOperations()
+    {
+        ExecuteNonQuery(sql: "CREATE SCHEMA IF NOT EXISTS registry");
+        var schemaPath = WriteTempSchemaFile(contents: Data_CustomRegistrySchemaYaml_1);
+
+        try
+        {
+            var first = RunMigrate(schemaPath: schemaPath);
+            VerifyReusableWorkflow15(
+                input0: first,
+                value0: 0,
+                value1: "Migration completed successfully"
+            );
+
+            var second = RunMigrate(schemaPath: schemaPath);
+            VerifyReusableWorkflow15(
+                input0: second,
+                value0: 0,
+                value1: "Schema is up to date — no operations needed"
+            );
+        }
+        finally
+        {
+            File.Delete(path: schemaPath);
+        }
+    }
+
+    /// <summary>
+    /// Implements [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]: the actual Osprey
+    /// package-registry schema declares partial unique indexes and check
+    /// constraints whose catalog forms differ textually from the YAML
+    /// (literal ::text casts, dropped redundant parens, INTERVAL '24 hours'
+    /// read back as '24:00:00'::interval). Both sides must be canonicalized
+    /// through PostgreSQL's own parser so the first run applies and the rerun
+    /// verifies clean with zero operations.
+    /// </summary>
+    [Fact]
+    public void Migrate_OspreyRegistryOwnershipSchemaAppliesAndRerunReportsZeroOperations()
+    {
+        ExecuteNonQuery(sql: "CREATE SCHEMA IF NOT EXISTS registry");
+        var schemaPath = WriteTempSchemaFile(
+            contents: Data_OspreyRegistryOwnershipSchemaYaml_1
+        );
+
+        try
+        {
+            var first = RunMigrate(schemaPath: schemaPath);
+            VerifyReusableWorkflow15(
+                input0: first,
+                value0: 0,
+                value1: "Migration completed successfully"
+            );
+
+            var second = RunMigrate(schemaPath: schemaPath);
+            VerifyReusableWorkflow15(
+                input0: second,
+                value0: 0,
+                value1: "Schema is up to date — no operations needed"
+            );
+        }
+        finally
+        {
+            File.Delete(path: schemaPath);
+        }
+    }
+
+    /// <summary>
+    /// Implements [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]: catalog
+    /// equivalence must not swallow real predicate changes. A semantically
+    /// different interval ('12 hours' vs '24 hours') and a different partial
+    /// index filter ('pending' vs 'active') must produce operations instead of
+    /// a false "up to date" verdict.
+    /// </summary>
+    [Fact]
+    public void Migrate_GenuinelyDifferentPredicatesAreNotTreatedAsEquivalent()
+    {
+        ExecuteNonQuery(sql: "CREATE SCHEMA IF NOT EXISTS registry");
+        var schemaPath = WriteTempSchemaFile(
+            contents: Data_OspreyRegistryOwnershipSchemaYaml_1
+        );
+        var tamperedPath = WriteTempSchemaFile(
+            contents: Data_OspreyRegistryOwnershipTamperedPredicatesYaml_1
+        );
+
+        try
+        {
+            VerifyReusableWorkflow15(
+                input0: RunMigrate(schemaPath: schemaPath),
+                value0: 0,
+                value1: "Migration completed successfully"
+            );
+
+            var tampered = RunMigrate(schemaPath: tamperedPath);
+            Assert.Equal(expected: 0, actual: tampered.ExitCode);
+            Assert.DoesNotContain(
+                expectedSubstring: "Schema is up to date — no operations needed",
+                actualString: tampered.Output,
+                comparisonType: StringComparison.Ordinal
+            );
+            Assert.Contains(
+                expectedSubstring: "Phase: all — applying",
+                actualString: tampered.Output,
+                comparisonType: StringComparison.Ordinal
+            );
+        }
+        finally
+        {
+            File.Delete(path: schemaPath);
+            File.Delete(path: tamperedPath);
+        }
+    }
+
+    /// <summary>
+    /// Implements [MIG-POSTGRES-CUSTOM-SCHEMA]: tables spanning multiple target
+    /// schemas cannot be merged into one inspection; the CLI must reject
+    /// explicitly instead of silently verifying only one schema.
+    /// </summary>
+    [Fact]
+    public void Migrate_MultipleTargetSchemasIsRejectedExplicitly()
+    {
+        var schemaPath = WriteTempSchemaFile(contents: Data_TwoSchemaYaml_1);
+
+        try
+        {
+            var result = RunMigrate(schemaPath: schemaPath);
+            Assert.Equal(expected: 1, actual: result.ExitCode);
+            Assert.Contains(
+                expectedSubstring: "Error: PostgreSQL migration supports exactly one target schema",
+                actualString: result.Output,
+                comparisonType: StringComparison.Ordinal
+            );
+        }
+        finally
+        {
+            File.Delete(path: schemaPath);
+        }
+    }
+
     private static SchemaDefinition CreateAgentConfigsSchema(bool nameIsNullable) =>
         Schema
             .Define(name: "nap")
@@ -184,6 +328,13 @@ public sealed partial class DataProviderMigrateIntegrityTests(PostgresContainerF
         );
 
         PostgresTestDb.AssertApplyResult(apply: result);
+    }
+
+    private void ExecuteNonQuery(string sql)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
     }
 
     private (int ExitCode, string Output) RunMigrate(string schemaPath) =>

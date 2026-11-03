@@ -3,6 +3,22 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class SchemaSupportYamlSerializerTests
 {
+    // Implements [RLS-PG-FUNCTION-SECURITY].
+    private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresFunctionOwner_EmitsOwnerAndExplicitSchemasOnly_1() =>
+        SchemaTestData.Schema(
+            name: "nap_owner_yaml",
+            functions:
+            [
+                SchemaTestData.PostgresFunction(
+                    name: "is_member",
+                    returns: "boolean",
+                    body: "SELECT true",
+                    ownerRole: "nap_fn_owner",
+                    searchPath: ["pg_catalog", "registry"]
+                ),
+            ]
+        );
+
     private static global::Nimblesite.DataProvider.Migration.Core.SchemaDefinition Fixture_ToYaml_PostgresSupportObjects_OmitsSemanticDefaults_1() =>
         SchemaTestData.Schema(
             name: "nap",

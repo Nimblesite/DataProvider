@@ -210,40 +210,70 @@ public static partial class Program
             connection.Open();
             Console.WriteLine("Connected to PostgreSQL database");
 
-            return ApplyDiff(
-                schema,
-                allowDestructive,
-                phase,
-                () => PostgresPolicyCatalogNormalizer.Inspect(connection: connection),
-                ops =>
-                    MigrationRunner.Apply(
-                        connection,
-                        ops,
-                        PostgresDdlGenerator.Generate,
-                        new MigrationOptions { AllowDestructive = allowDestructive },
-                        verifyBeforeCommit: () =>
-                            VerifySchemaIntegrity(
-                                schema,
-                                phase,
-                                () =>
-                                    PostgresPolicyCatalogNormalizer.Inspect(connection: connection),
-                                (live, target) =>
-                                    PostgresPolicyCatalogNormalizer.Normalize(
-                                        connection,
-                                        live,
-                                        target
-                                    )
-                            ) == 0
-                    ),
-                (live, target) =>
-                    PostgresPolicyCatalogNormalizer.Normalize(connection, live, target)
-            );
+            var targetSchema = ResolvePostgresTargetSchema(schema: schema);
+            return targetSchema is null
+                ? 1
+                : ApplyDiff(
+                    schema,
+                    allowDestructive,
+                    phase,
+                    () => PostgresPolicyCatalogNormalizer.Inspect(connection, targetSchema),
+                    ops =>
+                        MigrationRunner.Apply(
+                            connection,
+                            ops,
+                            PostgresDdlGenerator.Generate,
+                            new MigrationOptions { AllowDestructive = allowDestructive },
+                            verifyBeforeCommit: () =>
+                                VerifySchemaIntegrity(
+                                    schema,
+                                    phase,
+                                    () =>
+                                        PostgresPolicyCatalogNormalizer.Inspect(
+                                            connection,
+                                            targetSchema
+                                        ),
+                                    (live, target) =>
+                                        PostgresPolicyCatalogNormalizer.Normalize(
+                                            connection,
+                                            live,
+                                            target
+                                        )
+                                ) == 0
+                        ),
+                    (live, target) =>
+                        PostgresPolicyCatalogNormalizer.Normalize(connection, live, target)
+                );
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error: PostgreSQL connection/migration failed: {ex}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Implements [MIG-POSTGRES-CUSTOM-SCHEMA]: one migration inspects exactly
+    /// one schema. Derive it from the declared tables, functions and grants;
+    /// spanning multiple schemas cannot be merged into a single inspection, so
+    /// reject explicitly instead of silently verifying only one of them.
+    /// </summary>
+    private static string? ResolvePostgresTargetSchema(SchemaDefinition schema)
+    {
+        var schemas = schema
+            .Tables.Select(t => t.Schema)
+            .Concat(schema.Functions.Select(f => f.Schema))
+            .Concat(schema.Grants.Select(g => g.Schema))
+            .Distinct()
+            .ToArray();
+        if (schemas.Length == 1)
+        {
+            return schemas[0];
+        }
+        Console.WriteLine(
+            $"Error: PostgreSQL migration supports exactly one target schema; found: {string.Join(", ", schemas)}"
+        );
+        return null;
     }
 
     // Implements [MIG-SQLSERVER].

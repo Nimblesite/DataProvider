@@ -38,6 +38,7 @@ public static partial class PostgresDdlGenerator
     private static string GenerateCreateOrReplaceFunction(CreateOrReplaceFunctionOperation op)
     {
         var function = op.Function;
+        PostgresFunctionSupportValidation.EnsureValid(function);
         var functionName = $"{QuoteIdent(function.Schema)}.{QuoteIdent(function.Name)}";
         var argumentDeclarations = string.Join(
             ", ",
@@ -61,6 +62,7 @@ public static partial class PostgresDdlGenerator
         sb.AppendLine("AS $function$");
         sb.AppendLine(body);
         sb.Append("$function$");
+        AppendOwnerSecurity(sb, function, signature);
 
         if (function.RevokePublicExecute)
         {
@@ -81,6 +83,29 @@ public static partial class PostgresDdlGenerator
         }
 
         return sb.ToString();
+    }
+
+    // Implements [RLS-PG-FUNCTION-SECURITY]: CREATE OR REPLACE never changes
+    // ownership or proconfig, so a declared owner is applied explicitly and the
+    // search path is pinned, pg_catalog first.
+    private static void AppendOwnerSecurity(
+        StringBuilder sb,
+        PostgresFunctionDefinition function,
+        string signature
+    )
+    {
+        if (function.OwnerRole is not { Length: > 0 } ownerRole)
+        {
+            return;
+        }
+
+        sb.AppendLine(";");
+        sb.Append(CultureInfo.InvariantCulture, $"ALTER FUNCTION {signature} OWNER TO {QuoteIdent(ownerRole)}");
+        sb.AppendLine(";");
+        sb.Append(
+            CultureInfo.InvariantCulture,
+            $"ALTER FUNCTION {signature} SET search_path = {QuoteIdentList(function.SearchPath)}"
+        );
     }
 
     private static string GenerateGrantPrivileges(PostgresGrantDefinition grant) =>

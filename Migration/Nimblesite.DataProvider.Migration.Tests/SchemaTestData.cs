@@ -94,6 +94,8 @@ internal static class SchemaTestData
         string body = "",
         string? bodyLql = null,
         IReadOnlyList<string>? executeRoles = null,
+        string? ownerRole = null,
+        IReadOnlyList<string>? searchPath = null,
         bool revokePublicExecute = true
     ) =>
         new()
@@ -108,6 +110,8 @@ internal static class SchemaTestData
             Body = body,
             BodyLql = bodyLql,
             ExecuteRoles = executeRoles ?? [],
+            OwnerRole = ownerRole,
+            SearchPath = searchPath ?? [],
             RevokePublicExecute = revokePublicExecute,
         };
 

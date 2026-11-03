@@ -74,6 +74,14 @@ internal static partial class PostgresSupportSchemaInspector
                     END AS volatility,
                     p.prosecdef,
                     p.prosrc,
+                    owner.rolname AS owner_role,
+                    (
+                        SELECT config.entry
+                        FROM pg_proc pc,
+                            unnest(pc.proconfig) AS config(entry)
+                        WHERE pc.oid = p.oid AND config.entry LIKE 'search_path=%'
+                        LIMIT 1
+                    ) AS search_path_config,
                     NOT EXISTS (
                         SELECT 1
                         FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
@@ -93,6 +101,7 @@ internal static partial class PostgresSupportSchemaInspector
                 FROM pg_proc p
                 JOIN pg_namespace n ON n.oid = p.pronamespace
                 JOIN pg_language l ON l.oid = p.prolang
+                JOIN pg_roles owner ON owner.oid = p.proowner
                 WHERE n.nspname = @schema
                   -- [MIG-TRIGGER-PG]: trigger guard functions are owned by the
                   -- trigger lifecycle; reading them back would make destructive
@@ -121,9 +130,10 @@ internal static partial class PostgresSupportSchemaInspector
                         Volatility = reader.GetString(6),
                         SecurityDefiner = reader.GetBoolean(7),
                         Body = reader.GetString(8),
+                        OwnerRole = reader.GetString(10),
+                        SearchPath = ParseSearchPathConfig(reader.IsDBNull(11) ? null : reader.GetString(11)),
                         RevokePublicExecute = reader.GetBoolean(9),
-                        ExecuteRoles = reader.GetValue(10) as string[] ?? [],
-                    }
+                        ExecuteRoles = reader.GetValue(12) as string[] ?? [],                    }
                 );
             }
         );
@@ -154,6 +164,22 @@ internal static partial class PostgresSupportSchemaInspector
         );
         return grants.AsReadOnly();
     }
+
+    // Implements [RLS-PG-FUNCTION-SECURITY]: proconfig stores GUC entries such as
+    // `search_path=pg_catalog, "app"`; entries are unquoted with the same rules
+    // QuoteIdent applies. Absent config keeps the function's existing schemas.
+    internal static IReadOnlyList<string> ParseSearchPathConfig(string? config) =>
+        config is null || !config.StartsWith("search_path=", StringComparison.Ordinal)
+            ? []
+            : config["search_path=".Length..]
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(Unquote)
+                .ToList();
+
+    private static string Unquote(string entry) =>
+        entry.Length >= 2 && entry.StartsWith('"') && entry.EndsWith('"')
+            ? entry[1..^1].Replace("\"\"", "\"", StringComparison.Ordinal)
+            : entry;
 
     private static ReadOnlyCollection<PostgresFunctionArgumentDefinition> ToArguments(
         string[] argNames,

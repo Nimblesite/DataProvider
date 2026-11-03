@@ -61,7 +61,13 @@ internal static class PostgresCheckExpressionNormalizer
         }
     }
 
-    private static string RenderCanonical(Expression expression)
+    /// <summary>
+    /// Canonical rendering shared with [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]:
+    /// both live catalog predicates and desired YAML predicates pass through
+    /// PostgreSQL's parser, and the resulting AST is rendered here so the two
+    /// sides compare in one canonical form.
+    /// </summary>
+    internal static string RenderCanonical(Expression expression)
     {
         var simplified = Simplify(expression);
         var rewritten = TryRewriteAnyArrayToIn(simplified);
@@ -214,6 +220,30 @@ internal static class PostgresCheckExpressionNormalizer
 
     private static string RenderOp(BinaryOperator op)
     {
+        if (op == BinaryOperator.Plus)
+        {
+            return "+";
+        }
+        if (op == BinaryOperator.Minus)
+        {
+            return "-";
+        }
+        if (op == BinaryOperator.Multiply)
+        {
+            return "*";
+        }
+        if (op == BinaryOperator.Divide)
+        {
+            return "/";
+        }
+        if (op == BinaryOperator.Modulo)
+        {
+            return "%";
+        }
+        if (op == BinaryOperator.StringConcat)
+        {
+            return "||";
+        }
         if (op == BinaryOperator.PGRegexMatch)
         {
             return "~";

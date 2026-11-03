@@ -187,8 +187,15 @@ public static partial class PostgresSchemaInspector
                     var indexName = reader.GetString(0);
                     var isUnique = reader.GetBoolean(1);
                     var indexDef = reader.GetString(2);
+                    var dbg = reader.IsDBNull(3) ? "<null>" : $"{reader.GetValue(3)}";
                     var columnNames = reader.IsDBNull(3) ? [] : (string[])reader.GetValue(3);
                     var hasExpressions = reader.IsDBNull(4) ? false : reader.GetBoolean(4);
+                    // Implements [MIG-POSTGRES-CATALOG-EQUIVALENT-EXPRESSIONS]:
+                    // a partial index without its WHERE predicate in the live
+                    // model is invisible to diff and verification.
+                    var filter = reader.IsDBNull(5)
+                        ? null
+                        : PostgresCheckExpressionNormalizer.Normalize(reader.GetString(5));
 
                     if (hasExpressions)
                     {
@@ -201,6 +208,7 @@ public static partial class PostgresSchemaInspector
                                 Name = indexName,
                                 Expressions = expressions.AsReadOnly(),
                                 IsUnique = isUnique,
+                                Filter = filter,
                             }
                         );
                     }
@@ -213,6 +221,7 @@ public static partial class PostgresSchemaInspector
                                 Name = indexName,
                                 Columns = columnNames.ToList().AsReadOnly(),
                                 IsUnique = isUnique,
+                                Filter = filter,
                             }
                         );
                     }

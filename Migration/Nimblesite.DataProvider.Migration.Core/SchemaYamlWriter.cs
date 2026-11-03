@@ -183,6 +183,8 @@ internal static class SchemaYamlWriter
         StrOpt(e, "body", f.Body);
         StrOpt(e, "bodyLql", f.BodyLql);
         WriteStrSeq(e, "executeRoles", f.ExecuteRoles);
+        StrOpt(e, "ownerRole", f.OwnerRole);
+        WriteStrSeq(e, "searchPath", f.SearchPath.Skip(1).ToList());
         BoolExcept(
             e: e,
             key: "revokePublicExecute",

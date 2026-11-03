@@ -47,6 +47,47 @@ public sealed partial class PostgresSupportDdlTests
     }
 
     [Fact]
+    public void Generate_CreateOrReplaceFunction_EmitsOwnerAndPinnedSearchPath()
+    {
+        var ddl = PostgresDdlGenerator.Generate(
+            Dataset_Generate_CreateOrReplaceFunction_EmitsOwnerAndPinnedSearchPath_1()
+        );
+
+        ContainsAll(
+            actual: ddl,
+            expected:
+            [
+                "ALTER FUNCTION \"public\".\"is_member\"() OWNER TO \"nap_fn_owner\"",
+                "ALTER FUNCTION \"public\".\"is_member\"() SET search_path = \"pg_catalog\", \"registry\"",
+                "REVOKE EXECUTE ON FUNCTION \"public\".\"is_member\"() FROM PUBLIC",
+            ],
+            comparison: StringComparison.Ordinal
+        );
+    }
+
+    // Implements [RLS-PG-FUNCTION-SECURITY]: unsafe declarations fail loudly.
+    [Theory]
+    [InlineData("x; DROP TABLE y", "pg_catalog")]
+    [InlineData("a.b", "pg_catalog")]
+    [InlineData("ok_role", "pg_catalog, public -- comment")]
+    [InlineData("ok_role", null)]
+    [InlineData(null, "pg_catalog")]
+    public void Generate_CreateOrReplaceFunction_RejectsUnsafeDeclarations(
+        string? ownerRole,
+        string? searchPath
+    )
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            PostgresDdlGenerator.Generate(
+                Dataset_Generate_CreateOrReplaceFunction_RejectsUnsafeDeclarations_1(
+                    ownerRole: ownerRole,
+                    searchPath: searchPath is null ? null : [.. searchPath.Split(", ")]
+                )
+            )
+        );
+    }
+
+    [Fact]
     public void Generate_GrantPrivileges_EmitsAllTablesInSchemaGrant()
     {
         var ddl = PostgresDdlGenerator.Generate(

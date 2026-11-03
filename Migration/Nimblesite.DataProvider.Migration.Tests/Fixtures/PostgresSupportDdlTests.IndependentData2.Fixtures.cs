@@ -4,6 +4,32 @@ namespace Nimblesite.DataProvider.Migration.Tests;
 
 public partial class PostgresSupportDdlTests
 {
+    // Implements [RLS-PG-FUNCTION-SECURITY].
+    private static global::Nimblesite.DataProvider.Migration.Core.CreateOrReplaceFunctionOperation Dataset_Generate_CreateOrReplaceFunction_EmitsOwnerAndPinnedSearchPath_1() =>
+        new CreateOrReplaceFunctionOperation(
+            SchemaTestData.PostgresFunction(
+                name: "is_member",
+                returns: "boolean",
+                body: "SELECT true",
+                ownerRole: "nap_fn_owner",
+                searchPath: ["pg_catalog", "registry"]
+            )
+        );
+
+    private static global::Nimblesite.DataProvider.Migration.Core.CreateOrReplaceFunctionOperation Dataset_Generate_CreateOrReplaceFunction_RejectsUnsafeDeclarations_1(
+        string? ownerRole,
+        IReadOnlyList<string>? searchPath
+    ) =>
+        new CreateOrReplaceFunctionOperation(
+            SchemaTestData.PostgresFunction(
+                name: "is_member",
+                returns: "boolean",
+                body: "SELECT true",
+                ownerRole: ownerRole,
+                searchPath: searchPath
+            )
+        );
+
     private static global::Nimblesite.DataProvider.Migration.Core.CreateOrAlterRoleOperation Dataset_Generate_CreateOrAlterRole_EmitsNoLoginNoBypassRlsAndMembershipGrant_1() =>
         new CreateOrAlterRoleOperation(
             SchemaTestData.PostgresRole(name: "app_user", grantTo: ["postgres"])

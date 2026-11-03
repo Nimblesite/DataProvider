@@ -39,6 +39,33 @@ public sealed partial class SchemaSupportYamlSerializerTests
     }
 
     [Fact]
+    public void FromYaml_PostgresFunctionOwnerAndSearchPath_NormalizesPinnedCatalog()
+    {
+        var schema = SchemaYamlSerializer.FromYaml(
+            Data_FromYaml_PostgresFunctionOwnerAndSearchPath_NormalizesPinnedCatalog_1
+        );
+
+        Assert.Equal("nap_fn_owner", schema.Functions[0].OwnerRole);
+        Assert.Equal(["pg_catalog", "registry"], schema.Functions[0].SearchPath);
+        Assert.Equal(["pg_catalog"], schema.Functions[1].SearchPath);
+        Assert.Null(schema.Functions[2].OwnerRole);
+        Assert.Empty(schema.Functions[2].SearchPath);
+    }
+
+    [Fact]
+    public void ToYaml_PostgresFunctionOwner_EmitsOwnerAndExplicitSchemasOnly()
+    {
+        var yaml = global::Nimblesite.DataProvider.Migration.Tests.TriggerYamlSerializerTests.VerifyCrossClassChecks6(
+            input0: Fixture_ToYaml_PostgresFunctionOwner_EmitsOwnerAndExplicitSchemasOnly_1
+        );
+
+        Assert.Contains("ownerRole: nap_fn_owner", yaml, StringComparison.Ordinal);
+        Assert.Contains("searchPath:", yaml, StringComparison.Ordinal);
+        Assert.Contains("- registry", yaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("- pg_catalog", yaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ToYaml_PostgresGrantRunAs_EmitsRunAs()
     {
         var yaml =

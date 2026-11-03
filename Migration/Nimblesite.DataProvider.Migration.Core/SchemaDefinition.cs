@@ -85,6 +85,22 @@ public sealed record PostgresFunctionDefinition
     /// <summary>Roles granted EXECUTE on this function.</summary>
     public IReadOnlyList<string> ExecuteRoles { get; init; } = [];
 
+    /// <summary>
+    /// Role that must own this function. When declared, the generated DDL emits
+    /// <c>ALTER FUNCTION ... OWNER TO</c> plus a pinned <c>SET search_path</c>.
+    /// Null (default) preserves existing ownership and search path. Implements
+    /// [RLS-PG-FUNCTION-SECURITY].
+    /// </summary>
+    public string? OwnerRole { get; init; }
+
+    /// <summary>
+    /// Effective <c>search_path</c> pinned on this function. Managed only when
+    /// <see cref="OwnerRole" /> is declared; the first entry is always
+    /// <c>pg_catalog</c> followed by explicitly declared safe schemas.
+    /// Implements [RLS-PG-FUNCTION-SECURITY].
+    /// </summary>
+    public IReadOnlyList<string> SearchPath { get; init; } = [];
+
     /// <summary>Whether PUBLIC execute must be revoked.</summary>
     public bool RevokePublicExecute { get; init; } = true;
 }

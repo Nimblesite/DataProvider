@@ -107,8 +107,23 @@ public static partial class SchemaDiff
             || current.SecurityDefiner != desired.SecurityDefiner
             || current.RevokePublicExecute != desired.RevokePublicExecute
             || FunctionBodyForDiff(current) != FunctionBodyForDiff(desired)
-            || !currentExecuteRoles.SetEquals(desired.ExecuteRoles);
+            || !currentExecuteRoles.SetEquals(desired.ExecuteRoles)
+            || OwnerOrSearchPathDrifted(current, desired);
     }
+
+    // Implements [RLS-PG-FUNCTION-SECURITY]: ownership and search-path pinning are
+    // managed only when declared; undeclared functions keep existing state.
+    private static bool OwnerOrSearchPathDrifted(
+        PostgresFunctionDefinition current,
+        PostgresFunctionDefinition desired
+    ) =>
+        desired.OwnerRole is { Length: > 0 }
+        && (
+            !string.Equals(current.OwnerRole, desired.OwnerRole, StringComparison.OrdinalIgnoreCase)
+            || !current
+                .SearchPath.Select(s => s.ToLowerInvariant())
+                .SequenceEqual(desired.SearchPath.Select(s => s.ToLowerInvariant()))
+        );
 
     private static string FunctionBodyForDiff(PostgresFunctionDefinition function)
     {

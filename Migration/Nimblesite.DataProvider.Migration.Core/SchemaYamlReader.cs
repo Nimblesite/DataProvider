@@ -231,9 +231,20 @@ internal static class SchemaYamlReader
             Body = ReadString(map, "body") ?? string.Empty,
             BodyLql = ReadString(map, "bodyLql"),
             ExecuteRoles = ReadStringList(map, "executeRoles"),
+            OwnerRole = ReadString(map, "ownerRole"),
+            SearchPath = ReadFunctionSearchPath(map),
             RevokePublicExecute = ReadBool(map, "revokePublicExecute") ?? true,
         };
     }
+
+    // Implements [RLS-PG-FUNCTION-SECURITY]: a declared owner pins the function
+    // search path; pg_catalog always leads, explicit safe schemas follow.
+    private static IReadOnlyList<string> ReadFunctionSearchPath(YamlMappingNode map) =>
+        ReadStringList(map, "searchPath") is { Length: > 0 } declared
+            ? ["pg_catalog", .. declared.Where(s => !s.Equals("pg_catalog", StringComparison.Ordinal))]
+            : ReadString(map, "ownerRole") is { Length: > 0 }
+                ? ["pg_catalog"]
+                : [];
 
     private static PostgresFunctionArgumentDefinition ReadFunctionArgument(YamlNode node)
     {
