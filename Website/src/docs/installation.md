@@ -81,11 +81,11 @@ dotnet add package Nimblesite.DataProvider.Migration.SQLite
 
 ## 3. Requirements
 
-- **.NET 10 SDK** or later
+- **.NET 9 or .NET 10 SDK**. Every package and tool targets both `net9.0` and `net10.0`.
 - C# latest language version
 - `<Nullable>enable</Nullable>`
 
-Add the following to your `.csproj`:
+Add the following to your `.csproj` (`net9.0` works too):
 
 ```xml
 <PropertyGroup>

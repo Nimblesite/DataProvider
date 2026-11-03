@@ -1,6 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -26,9 +25,11 @@
     <AdditionalFiles Include="DataProvider.json" />
   </ItemGroup>
 
+  <!-- The build target below builds each tool for this build's TargetFramework, so run
+       that framework's output. [BUILD-MULTI-TARGET] -->
   <PropertyGroup>
-    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/net9.0/DataProviderMigrate.dll</DataProviderMigrateToolDll>
-    <DataProviderToolDll>$(MSBuildThisFileDirectory)../../DataProvider/DataProvider/bin/$(Configuration)/net10.0/DataProvider.dll</DataProviderToolDll>
+    <DataProviderMigrateToolDll>$(MSBuildThisFileDirectory)../../Migration/DataProviderMigrate/bin/$(Configuration)/$(TargetFramework)/DataProviderMigrate.dll</DataProviderMigrateToolDll>
+    <DataProviderToolDll>$(MSBuildThisFileDirectory)../../DataProvider/DataProvider/bin/$(Configuration)/$(TargetFramework)/DataProvider.dll</DataProviderToolDll>
   </PropertyGroup>
 
   <Target Name="BuildCodegenTools" BeforeTargets="CreateDatabaseSchema">

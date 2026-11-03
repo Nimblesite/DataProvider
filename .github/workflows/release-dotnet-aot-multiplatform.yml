@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet publish "${{ inputs.project }}" \
-            -c Release -r "${{ matrix.rid }}" \
+            -c Release -f net10.0 -r "${{ matrix.rid }}" \
             -p:PublishAot=true -p:InvariantGlobalization=true \
             --self-contained \
             -o "${GITHUB_WORKSPACE}/aot-out"

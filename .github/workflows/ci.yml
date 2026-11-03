@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Projects target a mix of net9.0, net10.0 and netstandard2.1, so both SDKs
+  # Projects target both net9.0 and net10.0 ([BUILD-MULTI-TARGET]), so both SDKs
   # are installed everywhere .NET builds (see the setup-dotnet steps below).
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -113,7 +113,7 @@ jobs:
 
       - name: Native AOT smoke tests (DataProviderMigrate)
         env:
-          DATAPROVIDERMIGRATE_AOT_BIN: ${{ github.workspace }}/Migration/DataProviderMigrate/bin/Release/net9.0/linux-x64/publish/DataProviderMigrate
+          DATAPROVIDERMIGRATE_AOT_BIN: ${{ github.workspace }}/Migration/DataProviderMigrate/bin/Release/net10.0/linux-x64/publish/DataProviderMigrate
         run: >-
           dotnet test Migration/Nimblesite.DataProvider.Migration.Tests
           --filter "FullyQualifiedName~NativeAotMigrateSmokeTests"

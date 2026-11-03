@@ -208,16 +208,21 @@ _test_dotnet:
 	    echo "FAIL [$$SRC_KEY]: Tests failed ($$test_proj)"; \
 	    exit 1; \
 	  fi; \
-	  COBERTURA=$$(find "$$test_proj/TestResults" -name "coverage.cobertura.xml" -type f 2>/dev/null | head -1); \
-	  if [ -z "$$COBERTURA" ]; then \
+	  COBERTURA_FILES=$$(find "$$test_proj/TestResults" -name "coverage.cobertura.xml" -type f 2>/dev/null); \
+	  if [ -z "$$COBERTURA_FILES" ]; then \
 	    echo "FAIL [$$SRC_KEY]: No coverage file produced ($$test_proj)"; \
 	    exit 1; \
 	  fi; \
-	  LINE_RATE=$$(sed -n 's/.*line-rate="\([0-9.]*\)".*/\1/p' "$$COBERTURA" | head -1); \
-	  if [ -z "$$LINE_RATE" ]; then \
-	    echo "FAIL [$$SRC_KEY]: Could not parse line-rate from $$COBERTURA"; \
-	    exit 1; \
-	  fi; \
+	  LINE_RATE=""; \
+	  for COBERTURA in $$COBERTURA_FILES; do \
+	    RATE=$$(sed -n 's/.*line-rate="\([0-9.]*\)".*/\1/p' "$$COBERTURA" | head -1); \
+	    if [ -z "$$RATE" ]; then \
+	      echo "FAIL [$$SRC_KEY]: Could not parse line-rate from $$COBERTURA"; \
+	      exit 1; \
+	    fi; \
+	    echo "  Coverage report $$COBERTURA: line-rate $$RATE"; \
+	    if [ -z "$$LINE_RATE" ] || [ "$$(echo "$$RATE < $$LINE_RATE" | bc -l)" = "1" ]; then LINE_RATE=$$RATE; fi; \
+	  done; \
 	  COVERAGE=$$(echo "$$LINE_RATE * 100" | bc -l); \
 	  COVERAGE_FMT=$$(printf "%.2f" $$COVERAGE); \
 	  echo ""; \
@@ -277,24 +282,26 @@ _setup_dotnet:
 # as a black-box smoke test against a throwaway SQLite database. Implements
 # [MIG-AOT-CI]. RID auto-detects per platform; override with `make aot RID=...`.
 AOT_PROJ := Migration/DataProviderMigrate/DataProviderMigrate.csproj
+# The native binary is self-contained, so it ships one runtime: .NET 10 (LTS). [BUILD-MULTI-TARGET]
+AOT_TFM := net10.0
 ifeq ($(OS),Windows_NT)
 RID ?= win-x64
-AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate.exe
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/$(AOT_TFM)/$(RID)/publish/DataProviderMigrate.exe
 else ifeq ($(shell uname -s),Darwin)
 ifeq ($(shell uname -m),arm64)
 RID ?= osx-arm64
 else
 RID ?= osx-x64
 endif
-AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/$(AOT_TFM)/$(RID)/publish/DataProviderMigrate
 else
 RID ?= linux-x64
-AOT_EXE := Migration/DataProviderMigrate/bin/Release/net9.0/$(RID)/publish/DataProviderMigrate
+AOT_EXE := Migration/DataProviderMigrate/bin/Release/$(AOT_TFM)/$(RID)/publish/DataProviderMigrate
 endif
 
 _aot_dotnet:
 	@echo "==> Publishing Native AOT ($(RID))..."
-	dotnet publish $(AOT_PROJ) -c Release -r $(RID) -p:PublishAot=true --self-contained $(DOTNET_BUILD_FLAGS)
+	dotnet publish $(AOT_PROJ) -c Release -f $(AOT_TFM) -r $(RID) -p:PublishAot=true --self-contained $(DOTNET_BUILD_FLAGS)
 	@echo "==> Native smoke test: migrate example schema to SQLite..."
 	$(AOT_EXE) migrate --schema Migration/DataProviderMigrate/example-schema.yaml \
 	  --output $(AOT_SMOKE_DB) --provider sqlite

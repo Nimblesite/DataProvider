@@ -16,7 +16,8 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- Every project builds for both runtimes unless it opts out. [BUILD-MULTI-TARGET] -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

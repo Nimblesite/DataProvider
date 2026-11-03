@@ -27,7 +27,7 @@ public sealed class ReportingApiTests
         using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
-        var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports");
+        var response = await client.GetAsync(new Uri($"{_fixture.ApiUrl}/api/reports"));
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -58,7 +58,9 @@ public sealed class ReportingApiTests
         using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
-        var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports/e2e-products");
+        var response = await client.GetAsync(
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products")
+        );
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -97,7 +99,7 @@ public sealed class ReportingApiTests
         using var client = ReportingE2EFixture.CreateApiClient();
 
         // Act
-        var response = await client.GetAsync($"{_fixture.ApiUrl}/api/reports/nonexistent");
+        var response = await client.GetAsync(new Uri($"{_fixture.ApiUrl}/api/reports/nonexistent"));
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -108,7 +110,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -116,7 +118,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -163,7 +165,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -171,7 +173,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -214,7 +216,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -222,7 +224,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -261,7 +263,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -269,7 +271,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -295,7 +297,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -303,7 +305,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -343,7 +345,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -351,7 +353,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 
@@ -384,7 +386,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -392,7 +394,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/does-not-exist/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/does-not-exist/execute"),
             request
         );
 
@@ -405,7 +407,7 @@ public sealed class ReportingApiTests
     {
         // Arrange
         using var client = ReportingE2EFixture.CreateApiClient();
-        var request = new StringContent(
+        using var request = new StringContent(
             """{"parameters": {}, "format": "json"}""",
             Encoding.UTF8,
             "application/json"
@@ -413,7 +415,7 @@ public sealed class ReportingApiTests
 
         // Act
         var response = await client.PostAsync(
-            $"{_fixture.ApiUrl}/api/reports/e2e-products/execute",
+            new Uri($"{_fixture.ApiUrl}/api/reports/e2e-products/execute"),
             request
         );
 

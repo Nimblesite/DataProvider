@@ -4,7 +4,7 @@ namespace Nimblesite.Reporting.Integration.Tests;
 
 // Implements [MIG-TEST-CROSS-PLATFORM]: container startup is lazy per provider.
 [CollectionDefinition(Name)]
-public sealed record ReportingPlatformCollection
+public sealed record ReportingPlatformCollectionDefinition
     : ICollectionFixture<MigrationPostgresContainerFixture>,
         ICollectionFixture<SqlServerContainerFixture>
 {
