@@ -63,6 +63,63 @@ public sealed partial class PostgresColumnCheckConstraintTests(PostgresContainer
         }
     }
 
+    [Fact]
+    public void MigrateCli_WhenCheckedColumnAddedToExistingTable_AddsConstraintOnceAndRerunsClean()
+    {
+        // Implements [MIG-PG-NAMED-COLUMN-CHECK-CONSTRAINT] and
+        // [MIG-EXISTING-DATABASE-UPGRADE]: regression for GH #103/#96/#69, where
+        // adding a checked column to an existing PostgreSQL table emitted both an
+        // inline column CHECK and a separate ADD CONSTRAINT for the same name.
+        using var connection = fixture.CreateDatabase(namePrefix: "checked_column_upgrade");
+        var initialPath = MigrationCliConsole.WriteTempSchemaFile(
+            prefix: "checked-column-initial",
+            contents: Data_MigrateCli_WhenCheckedColumnAddedToExistingTable_AddsConstraintOnceAndRerunsClean_1
+        );
+        var upgradedPath = MigrationCliConsole.WriteTempSchemaFile(
+            prefix: "checked-column-upgraded",
+            contents: Data_MigrateCli_WhenCheckedColumnAddedToExistingTable_AddsConstraintOnceAndRerunsClean_2
+        );
+
+        try
+        {
+            AssertMigrated(connection, initialPath, "Schema integrity check passed");
+            AssertMigrated(connection, upgradedPath, "Schema integrity check passed");
+            AssertMigrated(connection, upgradedPath, "Schema is up to date — no operations needed");
+
+            Assert.Equal(1L, CheckConstraintCount(connection));
+        }
+        finally
+        {
+            File.Delete(initialPath);
+            File.Delete(upgradedPath);
+        }
+    }
+
+    private static void AssertMigrated(
+        NpgsqlConnection connection,
+        string schemaPath,
+        string expected
+    )
+    {
+        var result = MigrationCliConsole.Migrate(
+            schemaPath: schemaPath,
+            provider: "postgres",
+            output: connection.ConnectionString
+        );
+
+        Assert.True(result.ExitCode == 0, userMessage: result.Output);
+        Assert.Contains(expected, result.Output, StringComparison.Ordinal);
+    }
+
+    private static long CheckConstraintCount(NpgsqlConnection connection) =>
+        Assert.IsType<long>(
+            global::Tests.Shared.DatabaseCommands.Scalar(
+                connection: connection,
+                configure: command => command.CommandText = Data_CheckConstraintCount_1,
+                parameters: () => [("schema", SchemaName)]
+            )
+        );
+
     private static string[] ConstraintNames(NpgsqlConnection connection)
     {
         using var command = connection.CreateCommand();

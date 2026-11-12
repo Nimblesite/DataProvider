@@ -35,6 +35,58 @@ public partial class PostgresColumnCheckConstraintTests
                   - sha256
         """;
 
+    // GH #103/#96/#69: existing table before the checked column is added.
+    private const string Data_MigrateCli_WhenCheckedColumnAddedToExistingTable_AddsConstraintOnceAndRerunsClean_1 = """
+        name: issue103
+        tables:
+          - schema: public
+            name: documents
+            columns:
+              - name: id
+                type: Uuid
+                isNullable: false
+              - name: title
+                type: Text
+                isNullable: false
+            primaryKey:
+              columns:
+                - id
+        """;
+
+    // GH #103/#96/#69: same table with the checked column that previously got
+    // both an inline column CHECK and a separate ALTER TABLE ADD CONSTRAINT.
+    private const string Data_MigrateCli_WhenCheckedColumnAddedToExistingTable_AddsConstraintOnceAndRerunsClean_2 = """
+        name: issue103
+        tables:
+          - schema: public
+            name: documents
+            columns:
+              - name: id
+                type: Uuid
+                isNullable: false
+              - name: title
+                type: Text
+                isNullable: false
+              - name: status
+                type: Text
+                isNullable: false
+                checkConstraintName: documents_status_chk
+                checkConstraint: status IN ('draft','published')
+            primaryKey:
+              columns:
+                - id
+        """;
+
+    private const string Data_CheckConstraintCount_1 = """
+        SELECT COUNT(*)
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = @schema
+        AND t.relname = 'documents'
+        AND c.contype = 'c'
+        """;
+
     private const string Data_ConstraintNames_1 = """
         SELECT c.conname
         FROM pg_constraint c
